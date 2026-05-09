@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+# Builds
+.next/
+dist/
+build/
+*.tsbuildinfo
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+# Logs
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+# Docker
+docker-data/
+# Test
+coverage/
+.nyc_output/
+# Secrets safety net
+*.pem
+*.key
+secrets/

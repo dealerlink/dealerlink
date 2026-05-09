@@ -1,0 +1,900 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dealerlink — Stack Architecture v4</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B0F1A;
+    --ink-2:#1A2030;
+    --paper:#F7F7F4;
+    --paper-2:#EFEFEA;
+    --line:#E3E3DC;
+    --line-2:#D5D5CC;
+    --mute:#6B7280;
+    --mute-2:#94928A;
+    --accent:#3730A3;
+    --accent-2:#4F46E5;
+    --accent-soft:#EEF2FF;
+    --emerald:#047857;
+    --emerald-soft:#ECFDF5;
+    --amber:#B45309;
+    --amber-soft:#FFFBEB;
+    --rose:#B91C1C;
+    --rose-soft:#FEF2F2;
+    --tile:#FBFBF8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:#E8E8E2;}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    color:var(--ink);
+    font-feature-settings:"ss01","cv11";
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:48px 24px 80px;
+  }
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace; font-feature-settings:"tnum","zero";}
+  .tnum{font-variant-numeric:tabular-nums;}
+  .serif-i{font-family:'Inter',serif; font-style:italic; font-weight:400;}
+  .titlecaps{font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--mute);font-weight:500;}
+  .hairline{box-shadow:inset 0 0 0 1px var(--line);}
+  .hairline-b{border-bottom:1px solid var(--line);}
+  .hairline-t{border-top:1px solid var(--line);}
+  .hairline-r{border-right:1px solid var(--line);}
+  .hairline-l{border-left:1px solid var(--line);}
+
+  .canvas{
+    max-width:1440px;
+    margin:0 auto;
+    background:var(--paper);
+    border:1px solid var(--line);
+    box-shadow:0 1px 0 rgba(0,0,0,0.05), 0 30px 60px -20px rgba(0,0,0,0.18);
+  }
+
+  /* ========== HEADER ========== */
+  .ab-head{
+    padding:22px 32px 20px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    border-bottom:1px solid var(--line);
+    background:#FBFBF8;
+  }
+  .ab-eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:#5A5A52;
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    margin-bottom:6px;
+  }
+  .ab-num{
+    font-family:'Inter',serif;
+    font-style:italic;
+    font-weight:400;
+    font-size:22px;
+    color:#1A2030;
+    text-transform:none;
+    letter-spacing:0;
+  }
+  .ab-title{
+    font-family:'Inter',serif;
+    font-style:italic;
+    font-weight:400;
+    font-size:32px;
+    color:#1A2030;
+    line-height:1.1;
+    letter-spacing:-0.01em;
+  }
+  .ab-meta{
+    text-align:right;
+    display:flex;
+    gap:24px;
+  }
+  .ab-meta > div{display:flex;flex-direction:column;gap:2px;}
+  .ab-meta .v{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);}
+  .ab-meta .v.em{color:var(--emerald);}
+
+  /* ========== MAIN CANVAS ========== */
+  .stage{
+    padding:28px 32px;
+    background:
+      linear-gradient(to right, rgba(11,15,26,0.025) 1px, transparent 1px) 0 0 / 24px 24px,
+      linear-gradient(to bottom, rgba(11,15,26,0.025) 1px, transparent 1px) 0 0 / 24px 24px,
+      var(--paper);
+  }
+
+  /* ========== METRIC STRIP ========== */
+  .metrics{
+    display:grid;
+    grid-template-columns:repeat(6, 1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    border-radius:6px;
+    overflow:hidden;
+    margin-bottom:18px;
+  }
+  .metric{
+    background:#fff;
+    padding:14px 16px;
+  }
+  .metric-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--mute);
+    margin-bottom:6px;
+  }
+  .metric-value{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:20px;
+    font-weight:500;
+    color:var(--ink);
+    letter-spacing:-0.02em;
+    line-height:1;
+  }
+  .metric-sub{
+    font-size:11px;
+    color:var(--mute);
+    margin-top:4px;
+  }
+
+  /* ========== LAYER ========== */
+  .layer{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    margin-bottom:14px;
+    overflow:hidden;
+    position:relative;
+  }
+  .layer-head{
+    padding:12px 16px 11px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    border-bottom:1px solid var(--line);
+    background:#FBFBF8;
+  }
+  .layer-num{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--mute-2);
+    width:22px;
+    letter-spacing:0.04em;
+  }
+  .layer-name{
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+  }
+  .layer-tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    color:var(--mute);
+    padding:2px 7px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+  }
+  .layer-spacer{flex:1;}
+  .layer-summary{
+    font-family:'Inter',serif;
+    font-style:italic;
+    font-size:13px;
+    color:var(--mute);
+    font-weight:400;
+  }
+
+  .layer-body{
+    padding:16px;
+    display:grid;
+    gap:10px;
+  }
+  .row-2{grid-template-columns:1fr 1fr;}
+  .row-3{grid-template-columns:repeat(3, 1fr);}
+  .row-4{grid-template-columns:repeat(4, 1fr);}
+  .row-5{grid-template-columns:repeat(5, 1fr);}
+  .row-6{grid-template-columns:repeat(6, 1fr);}
+  .row-7{grid-template-columns:repeat(7, 1fr);}
+
+  /* ========== TILE ========== */
+  .tile{
+    background:var(--tile);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 12px 11px;
+    position:relative;
+    transition:all 0.15s ease;
+  }
+  .tile.accent{
+    background:var(--accent-soft);
+    border-color:#C7D2FE;
+  }
+  .tile.ink{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:#fff;
+  }
+  .tile.ink .tile-label{color:rgba(255,255,255,0.55);}
+  .tile.ink .tile-name{color:#fff;}
+  .tile.ink .tile-note{color:rgba(255,255,255,0.7);}
+  .tile.em{background:var(--emerald-soft);border-color:#A7F3D0;}
+  .tile.am{background:var(--amber-soft);border-color:#FCD34D;}
+  .tile.ro{background:var(--rose-soft);border-color:#FCA5A5;}
+
+  .tile-head{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-bottom:8px;
+  }
+  .tile-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9.5px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--mute);
+    font-weight:500;
+  }
+  .tile-spacer{flex:1;}
+  .tile-dot{
+    width:5px;
+    height:5px;
+    border-radius:50%;
+    background:var(--accent);
+  }
+  .tile-name{
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+    margin-bottom:4px;
+    line-height:1.25;
+  }
+  .tile-note{
+    font-size:11px;
+    color:var(--mute);
+    line-height:1.45;
+  }
+
+  /* ========== FLOW INDICATORS ========== */
+  .flow{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:22px;
+    margin:-7px 0;
+    position:relative;
+    z-index:1;
+  }
+  .flow-line{
+    width:1px;
+    background:var(--line-2);
+  }
+  .flow-arrow{
+    width:0;
+    height:0;
+    border-left:4px solid transparent;
+    border-right:4px solid transparent;
+    border-top:5px solid var(--mute-2);
+  }
+
+  /* ========== LOGGING SURFACE — special grouping ========== */
+  .log-section{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .log-section .layer-head{background:#FAF8F2; border-bottom:1px solid var(--line);}
+
+  .log-grid{
+    padding:16px;
+    display:grid;
+    grid-template-columns:repeat(7, 1fr);
+    gap:10px;
+  }
+
+  .log-tile{
+    background:#FAF8F2;
+    border:1px solid #E6E2D4;
+    border-radius:6px;
+    padding:11px 11px 10px;
+    position:relative;
+  }
+  .log-tile-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--mute);
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:5px;
+  }
+  .log-tile-label .new-dot{
+    width:5px;height:5px;border-radius:50%;background:var(--emerald);
+  }
+  .log-tile-name{
+    font-size:12.5px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    color:var(--ink);
+    margin-bottom:3px;
+    line-height:1.2;
+  }
+  .log-tile-meta{
+    font-size:10.5px;
+    color:var(--mute);
+    line-height:1.4;
+  }
+  .log-tile-meta .ret{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9.5px;
+    color:var(--accent);
+    display:block;
+    margin-top:5px;
+    padding-top:5px;
+    border-top:1px dashed #D5D1C2;
+  }
+
+  /* ========== SIDEBAR — EXTERNAL SERVICES ========== */
+  .external-rail{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+    margin-bottom:14px;
+  }
+  .rail-head{
+    padding:12px 16px 11px;
+    border-bottom:1px solid var(--line);
+    background:#FBFBF8;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .rail-body{
+    padding:16px;
+    display:grid;
+    gap:10px;
+  }
+
+  /* ========== LEGEND / FOOTER ========== */
+  .ab-foot{
+    padding:16px 32px 18px;
+    border-top:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:22px;
+    background:#FBFBF8;
+    flex-wrap:wrap;
+  }
+  .legend-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:11.5px;
+    color:var(--mute);
+  }
+  .legend-swatch{
+    width:14px;
+    height:14px;
+    border-radius:3px;
+    border:1px solid var(--line);
+  }
+  .legend-swatch.ink{background:var(--ink);border-color:var(--ink);}
+  .legend-swatch.accent{background:var(--accent-soft);border-color:#C7D2FE;}
+  .legend-swatch.em{background:var(--emerald-soft);border-color:#A7F3D0;}
+  .legend-swatch.tile{background:var(--tile);}
+  .legend-swatch.log{background:#FAF8F2;border-color:#E6E2D4;}
+
+  .ab-foot-spacer{flex:1;}
+  .ab-foot-mono{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--mute);
+  }
+
+  /* ========== ANNOTATION ========== */
+  .annot{
+    position:absolute;
+    top:-8px;
+    right:14px;
+    background:var(--ink);
+    color:#fff;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    padding:3px 7px;
+    border-radius:3px;
+    line-height:1;
+  }
+  .annot.em{background:var(--emerald);}
+  .annot.am{background:var(--amber);}
+  .annot.new{background:var(--emerald);}
+</style>
+</head>
+<body>
+
+<div class="canvas">
+
+  <!-- ============ HEADER ============ -->
+  <div class="ab-head">
+    <div>
+      <div class="ab-eyebrow">
+        <span>Architecture</span>
+        <span style="color:var(--line-2)">·</span>
+        <span class="ab-num">v4 · with observability + audit</span>
+      </div>
+      <h1 class="ab-title">Dealerlink stack <span style="color:var(--mute);font-weight:400">— a single Postgres, two processes,<br/>a complete logging surface, and the smallest viable set of services.</span></h1>
+    </div>
+    <div class="ab-meta">
+      <div>
+        <span class="titlecaps">Services</span>
+        <span class="v">5</span>
+      </div>
+      <div>
+        <span class="titlecaps">Processes</span>
+        <span class="v">2</span>
+      </div>
+      <div>
+        <span class="titlecaps">Log streams</span>
+        <span class="v">8</span>
+      </div>
+      <div>
+        <span class="titlecaps">Phase 1</span>
+        <span class="v em">~3.5 wks</span>
+      </div>
+      <div>
+        <span class="titlecaps">Pilot host</span>
+        <span class="v">$40/mo</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STAGE ============ -->
+  <div class="stage">
+
+    <!-- Headline metrics -->
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Frontend</div>
+        <div class="metric-value">Next.js</div>
+        <div class="metric-sub">App Router · RSC · TS</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Database</div>
+        <div class="metric-value">Postgres 16</div>
+        <div class="metric-sub">Data + queue + auth + 6 logs</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Tenant isolation</div>
+        <div class="metric-value">RLS</div>
+        <div class="metric-sub">All tables, all logs</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">PDF pipeline</div>
+        <div class="metric-value">Puppeteer</div>
+        <div class="metric-sub">Isolated worker process</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Observability</div>
+        <div class="metric-value">4-tool</div>
+        <div class="metric-sub">Errors · uptime · infra · app logs</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Hosting</div>
+        <div class="metric-value">DO · BLR</div>
+        <div class="metric-sub">App Platform + managed PG</div>
+      </div>
+    </div>
+
+    <!-- ============ LAYER 01 — CLIENT ============ -->
+    <div class="layer">
+      <div class="layer-head">
+        <span class="layer-num">01</span>
+        <span class="layer-name">Client</span>
+        <span class="layer-tag">browser</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">12 screens · dense operator UI · 1440px desktop-first, responsive</span>
+      </div>
+      <div class="layer-body row-6">
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Framework</span><span class="tile-spacer"></span><span class="tile-dot"></span></div>
+          <div class="tile-name">Next.js 14</div>
+          <div class="tile-note">App Router, Server Components, Server Actions</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Components</span></div>
+          <div class="tile-name">shadcn/ui</div>
+          <div class="tile-note">Radix primitives, restyled to design tokens</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Styling</span></div>
+          <div class="tile-name">Tailwind v3</div>
+          <div class="tile-note">Tokens lifted from prototype CSS vars</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Typography</span></div>
+          <div class="tile-name">Inter + Plex Mono</div>
+          <div class="tile-note">Italic Inter for editorial; tnum on all numerics</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Tables</span></div>
+          <div class="tile-name">TanStack Table</div>
+          <div class="tile-note">+ Virtual for 50K+ inventory serials</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Drag-drop</span></div>
+          <div class="tile-name">dnd-kit</div>
+          <div class="tile-note">9-column pipeline kanban</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Charts</span></div>
+          <div class="tile-name">Tremor + SVG</div>
+          <div class="tile-note">Tremor dashboards, hand SVG for sparklines</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Forms</span></div>
+          <div class="tile-name">RHF + Zod</div>
+          <div class="tile-note">Live tax recalc; schemas shared with server</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Server cache</span></div>
+          <div class="tile-name">TanStack Query</div>
+          <div class="tile-note">Optimistic stage moves, background sync</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Client state</span></div>
+          <div class="tile-name">React Context</div>
+          <div class="tile-note">Tweaks panel, sidebar, theme. No Zustand.</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">RPC</span></div>
+          <div class="tile-name">tRPC</div>
+          <div class="tile-note">Search, exports, dashboard reads</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Number fmt</span></div>
+          <div class="tile-name">Intl + ₹ utility</div>
+          <div class="tile-note">en-IN locale; lakh/crore auto-scale</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="flow-line" style="height:8px"></div>
+        <div class="flow-arrow"></div>
+      </div>
+    </div>
+
+    <!-- ============ LAYER 02 — APPLICATION ============ -->
+    <div class="layer">
+      <div class="layer-head">
+        <span class="layer-num">02</span>
+        <span class="layer-name">Application</span>
+        <span class="layer-tag">node 20 · process 1</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">Server Actions handle forms · tRPC handles queries · access middleware writes audit logs</span>
+      </div>
+      <div class="layer-body row-6">
+        <div class="tile ink">
+          <div class="tile-head"><span class="tile-label">Runtime</span><span class="tile-spacer"></span><span class="tile-dot" style="background:#fff"></span></div>
+          <div class="tile-name">Next.js · Node 20</div>
+          <div class="tile-note">Single deployable; SSR + Server Actions + tRPC</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Auth</span></div>
+          <div class="tile-name">Lucia</div>
+          <div class="tile-note">Sessions in PG; hooks emit auth events</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">ORM</span></div>
+          <div class="tile-name">Drizzle</div>
+          <div class="tile-note">TS-first migrations; readable SQL output</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Validation</span></div>
+          <div class="tile-name">Zod</div>
+          <div class="tile-note">Same schemas client + server</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Access middleware</span><span class="tile-spacer"></span><span class="tile-dot" style="background:var(--emerald)"></span></div>
+          <div class="tile-name">Audit hooks</div>
+          <div class="tile-note">Writes access_log on sensitive routes</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Domain logic</span></div>
+          <div class="tile-name">12 modules</div>
+          <div class="tile-note">Dealers, pipeline, inventory, GST, dispatch…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="flow-line" style="height:8px"></div>
+        <div class="flow-arrow"></div>
+      </div>
+    </div>
+
+    <!-- ============ LAYER 03 — WORKERS ============ -->
+    <div class="layer">
+      <div class="layer-head">
+        <span class="layer-num">03</span>
+        <span class="layer-name">Workers</span>
+        <span class="layer-tag">node 20 · process 2 · pm2</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">Isolated process · Chromium memory leaks contained · same Droplet</span>
+      </div>
+      <div class="layer-body row-5">
+        <div class="tile am">
+          <div class="annot am">isolated</div>
+          <div class="tile-head"><span class="tile-label">PDF render</span></div>
+          <div class="tile-name">Puppeteer</div>
+          <div class="tile-note">Quotation, PI, Tax Invoice — same React component</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Job runner</span></div>
+          <div class="tile-name">pg-boss</div>
+          <div class="tile-note">Postgres-backed queue · no Redis</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Email send</span></div>
+          <div class="tile-name">Resend dispatcher</div>
+          <div class="tile-note">React Email templates · webhook → delivery log</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Schedulers</span></div>
+          <div class="tile-name">Cron handlers</div>
+          <div class="tile-note">Low-stock · payment overdue · quote expiry</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Document log</span><span class="tile-spacer"></span><span class="tile-dot" style="background:var(--emerald)"></span></div>
+          <div class="tile-name">Generation hooks</div>
+          <div class="tile-note">Writes document_log on every PDF created</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="flow-line" style="height:8px"></div>
+        <div class="flow-arrow"></div>
+      </div>
+    </div>
+
+    <!-- ============ LAYER 04 — DATA ============ -->
+    <div class="layer">
+      <div class="layer-head">
+        <span class="layer-num">04</span>
+        <span class="layer-name">Data</span>
+        <span class="layer-tag">postgres 16 · managed</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">One database does it all — application data, queue, auth, search</span>
+      </div>
+      <div class="layer-body row-4">
+        <div class="tile accent">
+          <div class="annot">primary</div>
+          <div class="tile-head"><span class="tile-label">Tables</span></div>
+          <div class="tile-name">Application data</div>
+          <div class="tile-note">12 modules; tenant_id + RLS on every row</div>
+        </div>
+        <div class="tile accent">
+          <div class="tile-head"><span class="tile-label">Queue</span></div>
+          <div class="tile-name">pg-boss tables</div>
+          <div class="tile-note">Jobs, schedules, archive — all in Postgres</div>
+        </div>
+        <div class="tile accent">
+          <div class="tile-head"><span class="tile-label">Auth store</span></div>
+          <div class="tile-name">Lucia sessions</div>
+          <div class="tile-note">Users, sessions, roles · 4 fixed roles</div>
+        </div>
+        <div class="tile accent">
+          <div class="tile-head"><span class="tile-label">Search</span></div>
+          <div class="tile-name">pg_trgm + GIN</div>
+          <div class="tile-note">Dealer name, GSTIN, serial lookup</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ LOGGING SURFACE — NEW ============ -->
+    <div class="log-section">
+      <div class="layer-head">
+        <span class="layer-num">04a</span>
+        <span class="layer-name">Logging surface</span>
+        <span class="layer-tag">postgres + axiom</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">Every log table is tenant_id + RLS · admins see only their tenant's logs · 8 streams total</span>
+      </div>
+      <div class="log-grid">
+        <div class="log-tile">
+          <div class="log-tile-label">Domain audit</div>
+          <div class="log-tile-name">audit_log</div>
+          <div class="log-tile-meta">Order, Payment, Dispatch, Inventory · before/after diffs<span class="ret">retain · forever</span></div>
+        </div>
+        <div class="log-tile">
+          <div class="log-tile-label">Email content</div>
+          <div class="log-tile-name">email_log</div>
+          <div class="log-tile-meta">Inbound + outbound bodies · BRD Module M9<span class="ret">retain · forever</span></div>
+        </div>
+        <div class="log-tile">
+          <div class="log-tile-label"><span class="new-dot"></span>Auth events</div>
+          <div class="log-tile-name">auth_events</div>
+          <div class="log-tile-meta">Login, logout, failed pwd, IP, UA<span class="ret">retain · 1 year</span></div>
+        </div>
+        <div class="log-tile">
+          <div class="log-tile-label"><span class="new-dot"></span>Email delivery</div>
+          <div class="log-tile-name">email_delivery_log</div>
+          <div class="log-tile-meta">Resend webhooks · sent/delivered/bounced<span class="ret">retain · 90 days</span></div>
+        </div>
+        <div class="log-tile">
+          <div class="log-tile-label"><span class="new-dot"></span>Sensitive access</div>
+          <div class="log-tile-name">access_log</div>
+          <div class="log-tile-meta">Dealer view, payment view, exports · GDPR-ready<span class="ret">retain · 1 year</span></div>
+        </div>
+        <div class="log-tile">
+          <div class="log-tile-label"><span class="new-dot"></span>Document gen</div>
+          <div class="log-tile-name">document_log</div>
+          <div class="log-tile-meta">Every Quote/PI/Invoice · GST audit trail<span class="ret">retain · forever</span></div>
+        </div>
+        <div class="log-tile">
+          <div class="log-tile-label"><span class="new-dot"></span>App stdout/err</div>
+          <div class="log-tile-name">Axiom</div>
+          <div class="log-tile-meta">Both Node processes · structured JSON<span class="ret">retain · 30 days</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ EXTERNAL SERVICES + OBSERVABILITY ============ -->
+  <div class="stage" style="padding-top:0;">
+
+    <!-- External services -->
+    <div class="external-rail">
+      <div class="rail-head">
+        <span class="layer-num">05</span>
+        <span class="layer-name">External services</span>
+        <span class="layer-tag">3rd-party</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">The smallest viable set — anything more is Phase 2</span>
+      </div>
+      <div class="rail-body row-3">
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">Email · in + out</span></div>
+          <div class="tile-name">Resend</div>
+          <div class="tile-note">Outbound transactional + inbound webhooks for BCC-to-CRM</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">File storage</span></div>
+          <div class="tile-name">DO Spaces</div>
+          <div class="tile-note">S3-compatible · India region · invoices &amp; attachments</div>
+        </div>
+        <div class="tile">
+          <div class="tile-head"><span class="tile-label">CI/CD</span></div>
+          <div class="tile-name">GitHub Actions</div>
+          <div class="tile-note">Auto-deploy main → DigitalOcean App Platform</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Observability -->
+    <div class="external-rail">
+      <div class="rail-head">
+        <span class="layer-num">06</span>
+        <span class="layer-name">Observability &amp; monitoring</span>
+        <span class="layer-tag">all free tier</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">Errors · uptime · infrastructure · application logs · queue health</span>
+      </div>
+      <div class="rail-body row-5">
+        <div class="tile">
+          <div class="annot new">new</div>
+          <div class="tile-head"><span class="tile-label">Errors + APM</span></div>
+          <div class="tile-name">Sentry</div>
+          <div class="tile-note">Frontend + both Node processes · perf traces enabled</div>
+        </div>
+        <div class="tile">
+          <div class="annot new">new</div>
+          <div class="tile-head"><span class="tile-label">Uptime</span></div>
+          <div class="tile-name">Better Stack</div>
+          <div class="tile-note">Pings /health every 30s · SMS/Slack alerts · status page</div>
+        </div>
+        <div class="tile">
+          <div class="annot new">new</div>
+          <div class="tile-head"><span class="tile-label">Infra metrics</span></div>
+          <div class="tile-name">DO Monitoring</div>
+          <div class="tile-note">CPU, RAM, disk, bandwidth · built-in, alerts on thresholds</div>
+        </div>
+        <div class="tile">
+          <div class="annot new">new</div>
+          <div class="tile-head"><span class="tile-label">App logs</span></div>
+          <div class="tile-name">Axiom</div>
+          <div class="tile-note">Structured stdout/stderr from web + worker · 30d retention</div>
+        </div>
+        <div class="tile">
+          <div class="annot new">new</div>
+          <div class="tile-head"><span class="tile-label">Health endpoint</span></div>
+          <div class="tile-name">/health</div>
+          <div class="tile-note">DB ping · queue depth · worker heartbeat · last-email-received</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deferred -->
+    <div class="external-rail">
+      <div class="rail-head">
+        <span class="layer-num" style="color:var(--mute-2)">07</span>
+        <span class="layer-name" style="color:var(--mute)">Deferred to Phase 2</span>
+        <span class="layer-tag">not built</span>
+        <span class="layer-spacer"></span>
+        <span class="layer-summary">Architecture preserves clean migration paths to each of these</span>
+      </div>
+      <div class="rail-body row-6">
+        <div class="tile" style="opacity:0.55;">
+          <div class="tile-head"><span class="tile-label">Cache</span></div>
+          <div class="tile-name">Redis</div>
+          <div class="tile-note">Add when jobs &gt; 1k/day or shared session store needed</div>
+        </div>
+        <div class="tile" style="opacity:0.55;">
+          <div class="tile-head"><span class="tile-label">Search</span></div>
+          <div class="tile-name">Meilisearch</div>
+          <div class="tile-note">When pg_trgm slows on 100K+ serials</div>
+        </div>
+        <div class="tile" style="opacity:0.55;">
+          <div class="tile-head"><span class="tile-label">Auth</span></div>
+          <div class="tile-name">SSO via Lucia</div>
+          <div class="tile-note">Google / Microsoft providers when enterprise lands</div>
+        </div>
+        <div class="tile" style="opacity:0.55;">
+          <div class="tile-head"><span class="tile-label">Analytics</span></div>
+          <div class="tile-name">PostHog</div>
+          <div class="tile-note">When multi-tenant data justifies session replay</div>
+        </div>
+        <div class="tile" style="opacity:0.55;">
+          <div class="tile-head"><span class="tile-label">Orchestration</span></div>
+          <div class="tile-name">DOKS / k8s</div>
+          <div class="tile-note">When tenant count crosses 5+ or per-tenant scaling matters</div>
+        </div>
+        <div class="tile" style="opacity:0.55;">
+          <div class="tile-head"><span class="tile-label">Build</span></div>
+          <div class="tile-name">Turborepo</div>
+          <div class="tile-note">When package count &gt; 10 or builds &gt; 2 min</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FOOTER ============ -->
+  <div class="ab-foot">
+    <div class="legend-item"><span class="legend-swatch ink"></span><span>Primary process</span></div>
+    <div class="legend-item"><span class="legend-swatch accent"></span><span>Postgres surface</span></div>
+    <div class="legend-item"><span class="legend-swatch log"></span><span>Logging tables</span></div>
+    <div class="legend-item"><span class="legend-swatch tile"></span><span>Library / framework</span></div>
+    <div class="legend-item"><span class="legend-swatch em"></span><span>New in v4</span></div>
+    <div class="ab-foot-spacer"></div>
+    <div class="ab-foot-mono">Dealerlink · Phase 1 · multi-tenant SaaS · operational cost ~$40/mo</div>
+  </div>
+
+</div>
+
+</body>
+</html>
