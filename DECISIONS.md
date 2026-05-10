@@ -11,7 +11,7 @@
 **Date:** May 2026
 **Status:** Locked
 **Decided by:** Product owner
-**Supersedes:** Earlier working names "DistroFlow" (BRD draft) and "Dealerlink" (interim brand)
+**Supersedes:** Earlier working names "DistroFlow" (BRD draft) and "Distribyte" (interim brand)
 
 ### Decision
 The product is named **Dealerlink**. The primary domain is **`dealerlink.in`** (Indian ccTLD).
@@ -30,7 +30,7 @@ The product is named **Dealerlink**. The primary domain is **`dealerlink.in`** (
 | DO Spaces bucket | `dealerlink-prod` |
 
 ### Alternatives considered
-- **Dealerlink** (interim) → previously chosen, then reconsidered
+- **Distribyte** (interim) → previously chosen, then reconsidered in favor of Dealerlink
 - **DistroFlow** (original BRD working title) → replaced before Phase 1 build
 - **`.com` TLD** → considered but `.in` was chosen to signal India-first market positioning
 - **`.co.in`** → less premium feel than `.in`, rejected
@@ -38,13 +38,13 @@ The product is named **Dealerlink**. The primary domain is **`dealerlink.in`** (
 ### Why this matters
 - The `.in` ccTLD reinforces India-market focus, aligning with Phase 1 GST/INR/en-IN constraints (ADR-004, ADR-005)
 - "Dealerlink" describes the value chain (distributor ↔ dealer relationships) more precisely than the prior names
-- All previous brand references (Dealerlink, DistroFlow) are deprecated; treat as typos and silently correct in any output
+- All previous brand references (Distribyte, DistroFlow) are deprecated; treat as typos and silently correct in any output
 
 ### Consequences
 - All artifacts (CLAUDE.md, DECISIONS.md, architecture HTML, prototype files, BRD) renamed to use Dealerlink
 - DNS, accounts, and infrastructure must be provisioned under `dealerlink.in` (was queued under the prior brand — restart that step)
 - Any code, environment variables, database names, or commit messages using the old brand are corrected to Dealerlink
-- The "do not propagate the old name" rule from `CLAUDE.md` §0 now covers two prior names: DistroFlow and Dealerlink
+- The "do not propagate the old name" rule from `CLAUDE.md` §0 now covers two prior names: DistroFlow and Distribyte
 
 ---
 

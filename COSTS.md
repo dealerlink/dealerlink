@@ -155,7 +155,7 @@ At realistic Phase 1 volumes:
 | 5 | $250 | $50 |
 | 10 (Phase 2 scale) | $500 | $50 |
 
-Distribyte is cheap to operate at low tenant counts and stays roughly flat per tenant as you scale, with a small step-up around the Kubernetes migration. Pricing your SaaS at $50–100/tenant/month gives you a healthy margin from tenant #2 onward.
+Dealerlink is cheap to operate at low tenant counts and stays roughly flat per tenant as you scale, with a small step-up around the Kubernetes migration. Pricing your SaaS at $50–100/tenant/month gives you a healthy margin from tenant #2 onward.
 
 ---
 
