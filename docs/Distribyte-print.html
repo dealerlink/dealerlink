@@ -1,0 +1,1420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Distribyte — Distributor CRM</title>
+<meta name="viewport" content="width=1440" />
+<style id="print-overrides">
+@page { size: 1500px 940px; margin: 0; }
+@media print {
+  html, body { background: #fff !important; }
+  body * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  /* hide canvas chrome */
+  .canvas > header { display: none !important; }
+  .canvas { background: #fff !important; }
+  .ab-label, .ab-title { display: none !important; }
+  /* stack artboards vertically, one per page */
+  .canvas > div.flex.gap-12 {
+    display: block !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .canvas > div.flex.gap-12 > div {
+    page-break-after: always;
+    break-after: page;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .canvas > div.flex.gap-12 > div:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .artboard {
+    box-shadow: none !important;
+    border: none !important;
+    width: 1500px !important;
+    height: 940px !important;
+    overflow: hidden !important;
+  }
+  /* hide tweaks panel */
+  .twk-panel, [class*="twk-"] { display: none !important; }
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" data-presets="env,react" src="tweaks-panel.jsx"></script>
+<style>
+  :root{
+    --ink:#0B0F1A;
+    --ink-2:#1A2030;
+    --paper:#F7F7F4;
+    --paper-2:#EFEFEA;
+    --line:#E3E3DC;
+    --line-2:#D5D5CC;
+    --mute:#6B7280;
+    --mute-2:#94928A;
+    --accent:#3730A3;       /* deep indigo */
+    --accent-2:#4F46E5;
+    --emerald:#047857;
+    --amber:#B45309;
+    --rose:#B91C1C;
+    --tile:#FBFBF8;
+  }
+  html,body{background:#E8E8E2;}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    color:var(--ink);
+    font-feature-settings:"ss01","cv11";
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace; font-feature-settings:"tnum","zero";}
+  .tnum{font-variant-numeric:tabular-nums;}
+  .serif-i{font-family:'Instrument Serif',serif; font-style:italic;}
+  .hairline{box-shadow:inset 0 0 0 1px var(--line);}
+  .hairline-b{border-bottom:1px solid var(--line);}
+  .hairline-t{border-top:1px solid var(--line);}
+  .hairline-r{border-right:1px solid var(--line);}
+  .hairline-l{border-left:1px solid var(--line);}
+  .ticked{background-image:linear-gradient(to right,var(--line) 1px,transparent 1px); background-size:8px 100%;}
+  .grid-bg{
+    background-color:var(--paper);
+    background-image:
+      linear-gradient(to right, rgba(11,15,26,0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(11,15,26,0.04) 1px, transparent 1px);
+    background-size:24px 24px;
+  }
+  .dot{width:6px;height:6px;border-radius:9999px;display:inline-block;}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;font-size:11px;line-height:18px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);}
+  .chip.ghost{background:transparent;}
+  .chip.solid{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .kbd{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:1px 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;background:#fff;color:var(--mute);}
+  .num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
+  .titlecaps{font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--mute);font-weight:500;}
+  .row-h{height:56px;}
+  .btn{height:36px;padding:0 12px;border-radius:6px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--ink);}
+  .btn:hover{background:var(--paper-2);}
+  .btn-pri{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn-pri:hover{background:#000;}
+  .btn-acc{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn-acc:hover{background:var(--accent-2);}
+  .btn-sm{height:28px;padding:0 10px;font-size:12px;border-radius:5px;}
+  .icon-btn{height:32px;width:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--mute);}
+  .icon-btn:hover{background:var(--paper-2);color:var(--ink);}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:5px;font-size:13px;color:#C9CAD3;}
+  .nav-item:hover{background:rgba(255,255,255,0.05);color:#fff;}
+  .nav-item.active{background:rgba(255,255,255,0.08);color:#fff;}
+  .nav-item .num-side{margin-left:auto;font-size:10.5px;color:#7C7E89;}
+  .nav-item.active .num-side{color:#A8A9B3;}
+
+  /* canvas */
+  .canvas{
+    background-color:#E8E8E2;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(0,0,0,0.18) 1px, transparent 0);
+    background-size:18px 18px;
+  }
+  .artboard{
+    width:1440px;
+    background:var(--paper);
+    box-shadow:0 1px 0 rgba(0,0,0,0.05), 0 30px 60px -20px rgba(0,0,0,0.18);
+    border:1px solid var(--line);
+    overflow:hidden;
+  }
+  .ab-label{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#5A5A52;font-family:'IBM Plex Mono',monospace;display:flex;align-items:baseline;gap:10px;}
+  .ab-num{font-family:'Instrument Serif',serif;font-style:italic;font-size:22px;color:#1A2030;text-transform:none;letter-spacing:0;}
+  .ab-title{font-family:'Instrument Serif',serif;font-style:italic;font-size:34px;color:#1A2030;line-height:1;}
+
+  /* small bar chart util */
+  .bar{background:var(--ink);}
+  .bar.acc{background:var(--accent);}
+  .bar.lite{background:#CFCFC6;}
+  .bar.em{background:var(--emerald);}
+  .bar.am{background:var(--amber);}
+  .bar.ro{background:var(--rose);}
+
+  /* table sticky header look */
+  .table-head{background:#FBFBF8;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--mute);}
+  .row:hover{background:#FBFBF8;}
+
+  /* status dots */
+  .s-em{background:var(--emerald);}
+  .s-am{background:var(--amber);}
+  .s-ro{background:var(--rose);}
+  .s-in{background:var(--accent);}
+  .s-mu{background:#9CA3AF;}
+
+  /* funnel bars */
+  .fbar{background:linear-gradient(90deg, var(--ink), #2A2F40);}
+
+  /* pipeline column hairlines */
+  .col-hair{background:var(--paper);box-shadow:inset 1px 0 0 var(--line);}
+
+  /* avatar */
+  .av{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:9999px;font-size:10px;font-weight:600;letter-spacing:0.04em;color:#fff;}
+
+  /* preview paper */
+  .paper{background:#FFF;box-shadow:0 1px 0 rgba(0,0,0,0.04),0 12px 30px -12px rgba(0,0,0,0.18);}
+
+  /* skeleton row option (unused but documented) */
+  .skel{background:linear-gradient(90deg,#EEEEE7,#F5F5EE,#EEEEE7);background-size:200% 100%;animation:sk 1.6s linear infinite;}
+  @keyframes sk{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+
+  details > summary{list-style:none; cursor:pointer;}
+  details > summary::-webkit-details-marker{display:none;}
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+
+const { useState, useEffect, useRef, useMemo, useContext, createContext } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "userName": "Akshay Mittal",
+  "company": "Mittal Distributors",
+  "greeting": "Good morning"
+}/*EDITMODE-END*/;
+
+const TweakCtx = createContext(TWEAK_DEFAULTS);
+const useTweakValues = () => useContext(TweakCtx);
+// shim so existing inline references `tweaks.userName` keep working in JSX scope
+let tweaks = TWEAK_DEFAULTS;
+
+/* ============================================================
+   PRIMITIVES
+============================================================ */
+const Icon = ({name, size=16, className=""}) => (
+  <i data-lucide={name} style={{width:size,height:size}} className={className}></i>
+);
+
+const Avatar = ({initials, color="#3730A3"}) => (
+  <span className="av" style={{background:color}}>{initials}</span>
+);
+
+const Chip = ({children, tone="default", dot}) => {
+  const tones = {
+    default: "bg-white border-[#E3E3DC] text-[#0B0F1A]",
+    ink: "bg-[#0B0F1A] border-[#0B0F1A] text-white",
+    em: "bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46]",
+    am: "bg-[#FFFBEB] border-[#FCD34D] text-[#92400E]",
+    ro: "bg-[#FEF2F2] border-[#FCA5A5] text-[#991B1B]",
+    in: "bg-[#EEF2FF] border-[#C7D2FE] text-[#3730A3]",
+    mu: "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]",
+  };
+  const dotCls = {em:"#10B981", am:"#F59E0B", ro:"#EF4444", in:"#4F46E5", mu:"#9CA3AF", ink:"#fff", default:"#0B0F1A"}[tone];
+  return (
+    <span className={`inline-flex items-center gap-[6px] px-2 h-[20px] rounded-[4px] border text-[11px] font-medium ${tones[tone]}`}>
+      {dot && <span className="dot" style={{background:dotCls}}></span>}
+      {children}
+    </span>
+  );
+};
+
+const Section = ({eyebrow, title, right, children}) => (
+  <section className="bg-white hairline rounded-[8px]">
+    <header className="flex items-end justify-between px-5 pt-4 pb-3 hairline-b">
+      <div>
+        {eyebrow && <div className="titlecaps">{eyebrow}</div>}
+        <h3 className="text-[15px] font-semibold tracking-[-0.01em] mt-1">{title}</h3>
+      </div>
+      <div className="flex items-center gap-2">{right}</div>
+    </header>
+    {children}
+  </section>
+);
+
+/* ============================================================
+   APP CHROME — sidebar + topbar shared across screens
+============================================================ */
+const NAV = [
+  {key:"home", label:"Overview", icon:"layout-dashboard", count:"" },
+  {key:"pipe", label:"Pipeline", icon:"git-branch", count:"42" },
+  {key:"deal", label:"Dealers", icon:"users-round", count:"218" },
+  {key:"prod", label:"Catalog", icon:"package", count:"86" },
+  {key:"inv",  label:"Inventory", icon:"box", count:"4,812" },
+  {key:"quot", label:"Quotations", icon:"file-text", count:"19" },
+  {key:"ord",  label:"Orders", icon:"receipt", count:"34" },
+  {key:"pay",  label:"Payments", icon:"banknote", count:"" },
+  {key:"dis",  label:"Dispatch", icon:"truck", count:"7" },
+  {key:"rep",  label:"Reports", icon:"bar-chart-3", count:"" },
+];
+
+const Sidebar = ({active}) => {
+  const tweaks = useTweakValues();
+  const initials = tweaks.userName.split(' ').map(w=>w[0]).slice(0,2).join('');
+  return (
+  <aside className="w-[232px] shrink-0 bg-[#0B0F1A] text-white flex flex-col" style={{minHeight:"100%"}}>
+    <div className="px-4 pt-4 pb-3 flex items-center gap-2.5">
+      <div className="relative h-[26px] w-[26px] rounded-[6px] bg-white flex items-center justify-center">
+        <span className="absolute inset-[3px] rounded-[3px] border border-[#0B0F1A]"></span>
+        <span className="absolute h-[2px] w-[12px] bg-[#0B0F1A]" style={{transform:"rotate(-32deg)"}}></span>
+        <span className="absolute h-[2px] w-[8px] bg-[#0B0F1A]" style={{transform:"rotate(-32deg) translate(0, 6px)"}}></span>
+      </div>
+      <div className="leading-tight">
+        <div className="text-[14px] font-semibold tracking-[-0.01em]">Distribyte</div>
+        <div className="text-[10.5px] text-[#7C7E89] mono">{tweaks.company.toLowerCase().replace(/\s+/g,'-')}</div>
+      </div>
+      <button className="ml-auto icon-btn !text-[#7C7E89] hover:!bg-white/5"><Icon name="chevrons-left" size={14}/></button>
+    </div>
+
+    <div className="px-3 pt-2">
+      <div className="flex items-center gap-2 h-[32px] px-2 rounded-[5px] bg-white/5 text-[12px] text-[#9FA1AB]">
+        <Icon name="search" size={13}/>
+        <span>Quick find</span>
+        <span className="ml-auto kbd !bg-transparent !border-white/15 !text-[#9FA1AB]">⌘K</span>
+      </div>
+    </div>
+
+    <nav className="px-2 pt-3 flex flex-col gap-[1px]">
+      {NAV.map(n=>(
+        <a key={n.key} className={`nav-item ${active===n.key?'active':''}`}>
+          <Icon name={n.icon} size={15}/>
+          <span>{n.label}</span>
+          {n.count && <span className="num-side mono">{n.count}</span>}
+        </a>
+      ))}
+    </nav>
+
+    <div className="mt-auto px-3 pb-3 pt-4 border-t border-white/8">
+      <div className="text-[10.5px] mono text-[#7C7E89] uppercase tracking-[0.08em] mb-2 px-1">Books · FY 25–26</div>
+      <div className="rounded-[6px] bg-white/5 p-3">
+        <div className="flex items-baseline justify-between">
+          <div className="text-[10.5px] text-[#9FA1AB] uppercase tracking-[0.1em]">Quota MTD</div>
+          <div className="mono text-[11px] text-[#A8A9B3]">68%</div>
+        </div>
+        <div className="mt-2 h-[3px] bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-white rounded-full" style={{width:"68%"}}></div>
+        </div>
+        <div className="mt-2 text-[12px] mono">₹3.42 Cr <span className="text-[#7C7E89]">/ ₹5.00 Cr</span></div>
+      </div>
+      <div className="mt-3 flex items-center gap-2 px-1">
+                <Avatar initials={tweaks.userName.split(' ').map(w=>w[0]).slice(0,2).join('')} color="#3730A3"/>
+        <div className="leading-tight">
+          <div className="text-[12px]">{tweaks.userName}</div>
+          <div className="text-[10.5px] text-[#7C7E89] mono">admin · sales</div>
+        </div>
+        <button className="ml-auto icon-btn !text-[#7C7E89] hover:!bg-white/5"><Icon name="settings" size={14}/></button>
+      </div>
+    </div>
+  </aside>
+  );
+};
+
+const Topbar = ({crumbs=[], right=null}) => (
+  <div className="h-[52px] hairline-b bg-[#FBFBF8] flex items-center px-5 gap-3">
+    <div className="flex items-center gap-2 text-[12.5px] text-[#6B7280]">
+      {crumbs.map((c,i)=>(
+        <React.Fragment key={i}>
+          {i>0 && <Icon name="chevron-right" size={12}/>}
+          <span className={i===crumbs.length-1?"text-[#0B0F1A] font-medium":""}>{c}</span>
+        </React.Fragment>
+      ))}
+    </div>
+    <div className="ml-auto flex items-center gap-2">
+      {right}
+      <div className="hairline-l h-6 mx-1"></div>
+      <button className="icon-btn relative">
+        <Icon name="bell" size={15}/>
+        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{background:"var(--accent)"}}></span>
+      </button>
+      <button className="icon-btn"><Icon name="moon" size={15}/></button>
+      <button className="icon-btn"><Icon name="circle-help" size={15}/></button>
+    </div>
+  </div>
+);
+
+/* ============================================================
+   SHELL — common page frame
+============================================================ */
+const Shell = ({active, crumbs, topRight, children}) => (
+  <div className="flex" style={{height:900}}>
+    <Sidebar active={active}/>
+    <div className="flex-1 flex flex-col min-w-0 bg-[#F7F7F4]">
+      <Topbar crumbs={crumbs} right={topRight}/>
+      <div className="flex-1 overflow-hidden">{children}</div>
+    </div>
+  </div>
+);
+
+/* ============================================================
+   1) DASHBOARD
+============================================================ */
+const KPI = ({label, value, unit, delta, deltaTone, sparkline, sub}) => (
+  <div className="bg-white hairline rounded-[8px] p-5 flex flex-col gap-3 relative overflow-hidden">
+    <div className="flex items-center justify-between">
+      <div className="titlecaps">{label}</div>
+      <Icon name="arrow-up-right" size={14} className="text-[#9CA3AF]"/>
+    </div>
+    <div className="flex items-baseline gap-1.5">
+      {unit && <span className="text-[14px] text-[#6B7280] mono">{unit}</span>}
+      <span className="num text-[30px] font-semibold tracking-[-0.02em] leading-none">{value}</span>
+    </div>
+    <div className="flex items-end justify-between gap-2">
+      <div className="text-[11.5px] text-[#6B7280]">{sub}</div>
+      <div className="flex items-end gap-[3px] h-[26px]">
+        {sparkline.map((h,i)=>(
+          <span key={i} className="bar" style={{width:4, height:`${h}%`, opacity: i===sparkline.length-1?1:0.3+i*0.06}}></span>
+        ))}
+      </div>
+    </div>
+    <div className="hairline-t pt-2.5 flex items-center gap-2">
+      <span className={`mono text-[11.5px] ${deltaTone==="em"?"text-[#047857]":deltaTone==="ro"?"text-[#B91C1C]":"text-[#6B7280]"}`}>
+        {delta}
+      </span>
+      <span className="text-[11.5px] text-[#94928A]">vs last period</span>
+    </div>
+  </div>
+);
+
+const FUNNEL = [
+  {n:1, name:"Lead Identified",   count:14, value:"82.40 L"},
+  {n:2, name:"Requirement",       count:11, value:"94.10 L"},
+  {n:3, name:"Quotation Sent",    count: 9, value:"1.18 Cr"},
+  {n:4, name:"Negotiation",       count: 6, value:"86.50 L"},
+  {n:5, name:"Order Confirmed",   count: 5, value:"72.20 L"},
+  {n:6, name:"Payment Pending",   count: 4, value:"54.60 L"},
+  {n:7, name:"Ready for Dispatch",count: 3, value:"41.80 L"},
+  {n:8, name:"Dispatched",        count: 7, value:"96.10 L"},
+  {n:9, name:"Closed",            count:11, value:"1.42 Cr"},
+];
+
+const ACTIVITY = [
+  {t:"09:42", who:"AK", whoColor:"#0F766E", txt:<>Anjali Kapoor moved <b>Surya Solar Solutions</b> from <i>Negotiation</i> to <i>Order Confirmed</i></>, tag:"pipeline"},
+  {t:"09:18", who:"DV", whoColor:"#9D174D", txt:<>Dispatch reserved <b>184 serials</b> for ORD-2611 (Uma Trading Co)</>, tag:"inventory"},
+  {t:"08:55", who:"RM", whoColor:"#3730A3", txt:<>Payment of <b>₹14,82,000</b> reconciled against PI-1108 — Green Power EPC</>, tag:"accounts"},
+  {t:"Yest.", who:"NP", whoColor:"#7C2D12", txt:<>Quotation <b>QT-0921</b> sent to Shanti Agrovet · 540 Wp Mono · 320 nos</>, tag:"sales"},
+  {t:"Yest.", who:"AK", whoColor:"#0F766E", txt:<>Risk flag raised on <b>Veer Renewables</b> — credit limit breach by ₹6.20 L</>, tag:"risk"},
+  {t:"Yest.", who:"DV", whoColor:"#9D174D", txt:<>LR <span className="mono">MH-12-DR-7740</span> generated for ORD-2598</>, tag:"dispatch"},
+];
+
+const TASKS = [
+  {due:"Today, 4 PM", title:"Call back — Aarav Solar Pvt Ltd",  meta:"Negotiation · QT-0917", urgent:true},
+  {due:"Today",       title:"Send revised quote to Surya Solar", meta:"Stage 4 · ₹38.20 L"},
+  {due:"Tomorrow",    title:"Follow up payment — Green Power EPC", meta:"Overdue 12d · ₹14.82 L", urgent:true},
+  {due:"02 May",      title:"Confirm dispatch slot — Uma Trading", meta:"184 panels · Mumbai"},
+  {due:"03 May",      title:"Reconcile UTR — HDFC ******2204", meta:"₹6,40,000"},
+];
+
+const TOP_DEALERS = [
+  {name:"Uma Trading Co",        city:"Mumbai, MH",     value:"47.80 L", deals:8, trend:[20,38,30,55,50,72,88]},
+  {name:"Surya Solar Solutions", city:"Bengaluru, KA",  value:"38.20 L", deals:5, trend:[10,18,25,22,40,38,62]},
+  {name:"Green Power EPC",       city:"Coimbatore, TN", value:"31.40 L", deals:6, trend:[40,30,22,28,18,32,44]},
+  {name:"Shanti Agrovet",        city:"Guwahati, AS",   value:"22.10 L", deals:4, trend:[12,20,16,24,22,30,28]},
+  {name:"Veer Renewables",       city:"Jaipur, RJ",     value:"19.60 L", deals:3, trend:[8,14,18,12,20,16,22]},
+];
+
+const Dashboard = () => {
+  const tweaks = useTweakValues();
+  return (
+  <Shell
+    active="home"
+    crumbs={[tweaks.company,"Overview"]}
+    topRight={
+      <div className="flex items-center gap-2">
+        <div className="chip ghost"><Icon name="calendar" size={12}/> May 01 → May 06, 2026</div>
+        <button className="btn btn-sm"><Icon name="filter" size={13}/> Filters</button>
+        <button className="btn btn-sm btn-pri"><Icon name="plus" size={13}/> New deal</button>
+      </div>
+    }>
+    <div className="h-full overflow-auto px-6 py-5">
+      {/* hero strip */}
+      <div className="flex items-end justify-between mb-5">
+        <div>
+          <div className="titlecaps">Wednesday · 06 May 2026</div>
+          <h1 className="text-[28px] font-semibold tracking-[-0.02em] mt-1">
+            {tweaks.greeting}, {tweaks.userName.split(' ')[0]}. <span className="serif-i text-[#6B7280] font-normal">Six things need your attention today.</span>
+          </h1>
+        </div>
+        <div className="flex items-center gap-5">
+          <div className="text-right">
+            <div className="titlecaps">Books closed</div>
+            <div className="num text-[14px]">Apr 30 · 18:42 IST</div>
+          </div>
+          <div className="hairline-l h-10"></div>
+          <div className="text-right">
+            <div className="titlecaps">Reconciled</div>
+            <div className="num text-[14px] text-[#047857]">98.4%</div>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-4 gap-3">
+        <KPI label="Open deals"             value="42"     unit=""  delta="+6 this wk"  deltaTone="em" sub="₹4.18 Cr pipeline" sparkline={[28,32,40,36,52,60,72,68,84]}/>
+        <KPI label="Revenue · MTD"          value="3.42"   unit="₹"    delta="+18.4%"     deltaTone="em" sub="Goal ₹5.00 Cr · 8 days left" sparkline={[22,30,28,40,46,52,58,64,72]}/>
+        <KPI label="Inventory value"        value="9.62"   unit="₹" delta="−4.1%"      deltaTone="ro" sub="4,812 panels · 6 SKUs" sparkline={[80,78,72,70,66,62,60,58,56]}/>
+        <KPI label="Outstanding"            value="1.84"   unit="₹"    delta="+₹26 L"     deltaTone="ro" sub="11 dealers · 3 overdue 60d+" sparkline={[40,42,46,50,52,58,64,68,72]}/>
+      </div>
+
+      {/* main grid */}
+      <div className="grid grid-cols-12 gap-3 mt-3">
+        {/* funnel */}
+        <div className="col-span-8">
+          <Section
+            eyebrow="Sales pipeline"
+            title="9-stage funnel · weighted ₹4.18 Cr"
+            right={
+              <div className="flex items-center gap-2">
+                <div className="chip"><span className="dot s-em"></span>This wk</div>
+                <div className="chip ghost text-[#6B7280]"><span className="dot s-mu"></span>Last wk</div>
+                <button className="icon-btn"><Icon name="more-horizontal" size={14}/></button>
+              </div>
+            }>
+            <div className="px-5 py-4">
+              <div className="flex flex-col gap-[6px]">
+                {FUNNEL.map((f,i)=>{
+                  const max = 1.42;
+                  const v = parseFloat(f.value);
+                  const w = Math.max(7, (v/max)*100);
+                  return (
+                    <div key={f.n} className="flex items-center gap-3 group">
+                      <div className="w-[22px] mono text-[11px] text-[#94928A] text-right">{String(f.n).padStart(2,'0')}</div>
+                      <div className="w-[150px] text-[12.5px] text-[#0B0F1A]">{f.name}</div>
+                      <div className="flex-1 h-[22px] relative bg-[#F0F0E9] rounded-[3px] overflow-hidden">
+                        <div className="absolute inset-y-0 left-0 fbar rounded-[3px]" style={{width:`${w}%`}}></div>
+                        <div className="absolute inset-0 flex items-center justify-end pr-2.5">
+                          <span className="num text-[11px] text-[#0B0F1A]" style={{mixBlendMode:"difference",color:"#fff"}}>₹{f.value}</span>
+                        </div>
+                      </div>
+                      <div className="w-[60px] text-right num text-[12px] text-[#1A2030]">{f.count} <span className="text-[#94928A]">deals</span></div>
+                      <Icon name="chevron-right" size={12} className="text-[#9CA3AF]"/>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* footer summary */}
+              <div className="hairline-t mt-4 pt-3 grid grid-cols-4 gap-4">
+                <div>
+                  <div className="titlecaps">Win rate · 30d</div>
+                  <div className="num text-[18px] mt-0.5">38.2%</div>
+                </div>
+                <div>
+                  <div className="titlecaps">Avg cycle</div>
+                  <div className="num text-[18px] mt-0.5">14.6 <span className="text-[12px] text-[#6B7280]">days</span></div>
+                </div>
+                <div>
+                  <div className="titlecaps">Avg deal size</div>
+                  <div className="num text-[18px] mt-0.5">₹9.94 L</div>
+                </div>
+                <div>
+                  <div className="titlecaps">Stuck &gt; 7d</div>
+                  <div className="num text-[18px] mt-0.5 text-[#B45309]">11 <span className="text-[12px] text-[#94928A]">deals</span></div>
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* top dealers */}
+          <div className="mt-3">
+            <Section eyebrow="Leaderboard" title="Top dealers · last 30 days"
+              right={<button className="btn btn-sm">View all <Icon name="arrow-right" size={12}/></button>}>
+              <table className="w-full">
+                <thead>
+                  <tr className="table-head">
+                    <th className="text-left font-medium px-5 py-2 w-[8px]">#</th>
+                    <th className="text-left font-medium py-2">Dealer</th>
+                    <th className="text-left font-medium py-2">City</th>
+                    <th className="text-right font-medium py-2">Deals</th>
+                    <th className="text-right font-medium py-2 pr-3">Trend</th>
+                    <th className="text-right font-medium py-2 pr-5">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TOP_DEALERS.map((d,i)=>(
+                    <tr key={i} className="row hairline-b last:border-0">
+                      <td className="px-5 py-3 num text-[11px] text-[#94928A]">{String(i+1).padStart(2,'0')}</td>
+                      <td className="py-3 text-[13px] font-medium">{d.name}</td>
+                      <td className="py-3 text-[12.5px] text-[#6B7280]">{d.city}</td>
+                      <td className="py-3 num text-right text-[12.5px]">{d.deals}</td>
+                      <td className="py-3 pr-3">
+                        <div className="flex items-end justify-end gap-[2px] h-[22px]">
+                          {d.trend.map((h,j)=>(
+                            <span key={j} className="bar" style={{width:4,height:`${h}%`,opacity:0.4+j*0.08}}></span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-5 num text-right text-[13px] font-medium">₹{d.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Section>
+          </div>
+        </div>
+
+        {/* right rail */}
+        <div className="col-span-4 flex flex-col gap-3">
+          <Section eyebrow="Today" title="Tasks & follow-ups"
+            right={<button className="btn btn-sm"><Icon name="plus" size={12}/> Add</button>}>
+            <ul>
+              {TASKS.map((t,i)=>(
+                <li key={i} className="px-5 py-3 hairline-b last:border-0 flex items-start gap-3">
+                  <input type="checkbox" className="mt-1 rounded-[3px] border-[#D5D5CC] text-[#0B0F1A] focus:ring-0"/>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-medium leading-tight">{t.title}</span>
+                      {t.urgent && <span className="dot s-ro"></span>}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-[11.5px] text-[#6B7280]">
+                      <span className="mono">{t.due}</span>
+                      <span>·</span>
+                      <span>{t.meta}</span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Section>
+
+          <Section eyebrow="Activity" title="Live feed"
+            right={<button className="icon-btn"><Icon name="filter" size={13}/></button>}>
+            <ul>
+              {ACTIVITY.map((a,i)=>(
+                <li key={i} className="px-5 py-3 hairline-b last:border-0 flex gap-3">
+                  <div className="flex flex-col items-center pt-0.5">
+                    <Avatar initials={a.who} color={a.whoColor}/>
+                    {i<ACTIVITY.length-1 && <span className="w-px flex-1 bg-[#E3E3DC] mt-1"></span>}
+                  </div>
+                  <div className="flex-1 min-w-0 pb-1">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="mono text-[10.5px] text-[#94928A]">{a.t}</span>
+                      <Chip tone="mu">{a.tag}</Chip>
+                    </div>
+                    <div className="text-[12.5px] leading-snug text-[#1A2030]">{a.txt}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        </div>
+      </div>
+
+      <div className="h-6"></div>
+    </div>
+  </Shell>
+  );
+};
+
+/* ============================================================
+   2) PIPELINE (Kanban)
+============================================================ */
+const STAGES = [
+  {n:1, name:"Lead Identified",    count:14, value:"82.40 L"},
+  {n:2, name:"Requirement",        count:11, value:"94.10 L"},
+  {n:3, name:"Quotation Sent",     count: 9, value:"1.18 Cr"},
+  {n:4, name:"Negotiation",        count: 6, value:"86.50 L"},
+  {n:5, name:"Order Confirmed",    count: 5, value:"72.20 L"},
+  {n:6, name:"Payment Pending",    count: 4, value:"54.60 L"},
+  {n:7, name:"Ready for Dispatch", count: 3, value:"41.80 L"},
+  {n:8, name:"Dispatched",         count: 7, value:"96.10 L"},
+  {n:9, name:"Closed",             count:11, value:"1.42 Cr"},
+];
+
+const DEALS_BY_STAGE = {
+  1: [
+    {dealer:"Pioneer Solar Pvt", city:"Pune", value:"6.40 L", products:"540 Wp Mono · 120", days:2, owner:"NP", oc:"#7C2D12", risk:null},
+    {dealer:"Aarav Energy",      city:"Indore", value:"4.20 L", products:"600 Wp TOPCon · 70", days:4, owner:"AK", oc:"#0F766E", risk:null},
+    {dealer:"Volt Mart",         city:"Surat", value:"9.10 L", products:"610 Wp NDCR · 150", days:1, owner:"NP", oc:"#7C2D12", risk:null},
+  ],
+  2: [
+    {dealer:"Shanti Agrovet",     city:"Guwahati", value:"12.40 L", products:"540 Wp Mono · 320", days:3, owner:"AK", oc:"#0F766E", risk:null},
+    {dealer:"Helios Renewables",  city:"Hyderabad", value:"7.80 L",  products:"580 Wp Bifacial · 130", days:6, owner:"RM", oc:"#3730A3", risk:"med"},
+  ],
+  3: [
+    {dealer:"Surya Solar Solutions", city:"Bengaluru", value:"38.20 L", products:"610 Wp NDCR · 600", days:2, owner:"AK", oc:"#0F766E", risk:null, hot:true},
+    {dealer:"Sunfield Power",        city:"Vadodara",  value:"11.60 L", products:"600 Wp TOPCon · 200", days:5, owner:"NP", oc:"#7C2D12", risk:null},
+  ],
+  4: [
+    {dealer:"Aarav Solar Pvt Ltd", city:"Jaipur",   value:"22.40 L", products:"610 Wp NDCR · 360", days:9, owner:"NP", oc:"#7C2D12", risk:"high", hot:true},
+    {dealer:"Veer Renewables",     city:"Lucknow",  value:"14.10 L", products:"540 Wp Mono · 280", days:12,owner:"RM", oc:"#3730A3", risk:"high"},
+  ],
+  5: [
+    {dealer:"Uma Trading Co",       city:"Mumbai", value:"47.80 L", products:"610 Wp NDCR · 760", days:1, owner:"AK", oc:"#0F766E", risk:null, hot:true},
+    {dealer:"Green Power EPC",      city:"Coimbatore", value:"14.82 L", products:"600 Wp TOPCon · 240", days:3, owner:"NP", oc:"#7C2D12", risk:null},
+  ],
+  6: [
+    {dealer:"Green Power EPC",      city:"Coimbatore", value:"14.82 L", products:"PI-1108 · pending", days:14, owner:"RM", oc:"#3730A3", risk:"high"},
+    {dealer:"Helios Renewables",    city:"Hyderabad",  value:"7.80 L",  products:"PI-1112 · partial", days:5,  owner:"RM", oc:"#3730A3"},
+  ],
+  7: [
+    {dealer:"Uma Trading Co",  city:"Mumbai",     value:"47.80 L", products:"760 panels reserved", days:0, owner:"DV", oc:"#9D174D"},
+    {dealer:"Sunfield Power",  city:"Vadodara",   value:"11.60 L", products:"200 panels reserved", days:1, owner:"DV", oc:"#9D174D"},
+  ],
+  8: [
+    {dealer:"Surya Solar Solutions", city:"Bengaluru", value:"38.20 L", products:"LR MH-12-DR-7740", days:2, owner:"DV", oc:"#9D174D"},
+    {dealer:"Pioneer Solar Pvt",     city:"Pune",      value:"6.40 L",  products:"LR GJ-05-AB-1102", days:1, owner:"DV", oc:"#9D174D"},
+  ],
+  9: [
+    {dealer:"Sunfield Power",       city:"Vadodara",   value:"22.10 L", products:"Delivered · 28 Apr", days:8, owner:"DV", oc:"#9D174D"},
+    {dealer:"Aarav Energy",         city:"Indore",     value:"4.20 L",  products:"Delivered · 22 Apr", days:14,owner:"DV", oc:"#9D174D"},
+  ],
+};
+
+const DealCard = ({d}) => (
+  <article className="bg-white hairline rounded-[6px] p-3 group hover:shadow-[0_8px_24px_-12px_rgba(11,15,26,0.18)] transition cursor-grab">
+    <header className="flex items-start gap-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          {d.hot && <span className="dot s-ro" title="hot"></span>}
+          <h4 className="text-[13px] font-semibold tracking-[-0.005em] truncate">{d.dealer}</h4>
+        </div>
+        <div className="text-[11px] text-[#6B7280] mt-0.5 flex items-center gap-1.5">
+          <Icon name="map-pin" size={10}/> {d.city}
+        </div>
+      </div>
+      <Avatar initials={d.owner} color={d.oc}/>
+    </header>
+    <div className="mt-2 flex items-baseline justify-between">
+      <span className="num text-[16px] font-semibold tracking-[-0.01em]">₹{d.value}</span>
+      {d.risk==="high" && <Chip tone="ro" dot>credit</Chip>}
+      {d.risk==="med" && <Chip tone="am" dot>watch</Chip>}
+    </div>
+    <div className="text-[11.5px] text-[#4B5563] mt-1.5 leading-snug truncate">{d.products}</div>
+    <div className="hairline-t mt-2.5 pt-2 flex items-center justify-between">
+      <span className="mono text-[10.5px] text-[#94928A]">{d.days===0 ? "today" : `${d.days}d in stage`}</span>
+      <div className="flex items-center gap-1 text-[#9CA3AF]">
+        <Icon name="paperclip" size={11}/>
+        <Icon name="message-circle" size={11}/>
+        <Icon name="more-horizontal" size={11}/>
+      </div>
+    </div>
+  </article>
+);
+
+const Pipeline = () => {
+  const tweaks = useTweakValues();
+  return (
+  <Shell
+    active="pipe"
+    crumbs={[tweaks.company,"Pipeline"]}
+    topRight={
+      <div className="flex items-center gap-2">
+        <div className="flex items-center hairline rounded-[6px] bg-white">
+          <button className="btn btn-sm !border-0 !bg-[#0B0F1A] !text-white !rounded-[6px]"><Icon name="kanban-square" size={13}/> Board</button>
+          <button className="btn btn-sm !border-0 !rounded-[6px]"><Icon name="list" size={13}/> List</button>
+          <button className="btn btn-sm !border-0 !rounded-[6px]"><Icon name="calendar" size={13}/> Forecast</button>
+        </div>
+        <button className="btn btn-sm btn-acc"><Icon name="plus" size={13}/> New deal</button>
+      </div>
+    }>
+    <div className="h-full flex flex-col">
+      {/* control bar */}
+      <div className="px-6 py-3 hairline-b flex items-center gap-3 bg-[#FBFBF8]">
+        <div>
+          <div className="titlecaps">Pipeline · all owners</div>
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em] mt-0.5">
+            70 active deals <span className="serif-i text-[#6B7280] font-normal text-[20px]"> moving through nine stages</span>
+          </h1>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="chip"><Icon name="users" size={12}/> All owners <Icon name="chevron-down" size={12}/></div>
+          <div className="chip"><Icon name="calendar" size={12}/> Last 30 days <Icon name="chevron-down" size={12}/></div>
+          <div className="chip"><Icon name="indian-rupee" size={12}/> Any value <Icon name="chevron-down" size={12}/></div>
+          <div className="chip ink"><span className="dot s-ro"></span> Hot only</div>
+          <button className="icon-btn"><Icon name="settings-2" size={14}/></button>
+        </div>
+      </div>
+
+      {/* stage rail */}
+      <div className="overflow-x-auto flex-1">
+        <div className="flex" style={{minWidth: STAGES.length*286}}>
+          {STAGES.map((s,i)=>(
+            <div key={s.n} className="w-[286px] shrink-0 col-hair flex flex-col">
+              <div className="px-3 pt-3 pb-2 sticky top-0 bg-[#F7F7F4] hairline-b">
+                <div className="flex items-center gap-2">
+                  <span className="mono text-[10.5px] text-[#94928A]">{String(s.n).padStart(2,'0')}</span>
+                  <h3 className="text-[12.5px] font-semibold tracking-[-0.005em]">{s.name}</h3>
+                  <span className="ml-auto chip">{s.count}</span>
+                </div>
+                <div className="mt-1.5 flex items-baseline justify-between">
+                  <span className="num text-[15px] font-semibold">₹{s.value}</span>
+                  <span className="mono text-[10.5px] text-[#94928A]">total</span>
+                </div>
+                <div className="mt-1.5 h-[2px] bg-[#E3E3DC] rounded-full overflow-hidden">
+                  <div className="h-full bg-[#0B0F1A]" style={{width:`${10+i*8}%`}}></div>
+                </div>
+              </div>
+
+              <div className="p-2 flex flex-col gap-2 overflow-y-auto">
+                {(DEALS_BY_STAGE[s.n]||[]).map((d,j)=>(
+                  <DealCard key={j} d={d}/>
+                ))}
+                {/* skeleton add */}
+                <button className="hairline rounded-[6px] py-2.5 text-[12px] text-[#6B7280] hover:bg-white flex items-center justify-center gap-1.5 border-dashed">
+                  <Icon name="plus" size={12}/> Add deal
+                </button>
+                {/* phantom drag preview on stage 4 */}
+                {s.n===4 && (
+                  <div className="hairline rounded-[6px] p-3 border-dashed bg-[#FFFBEB]">
+                    <div className="text-[11px] mono text-[#92400E] uppercase tracking-[0.08em]">Drop here</div>
+                    <div className="text-[12.5px] text-[#92400E] mt-1">Move "Surya Solar Solutions" to Negotiation</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </Shell>
+  );
+};
+
+/* ============================================================
+   3) DEALER MASTER
+============================================================ */
+const DEALERS = [
+  {name:"Uma Trading Co",          gst:"27AABCU9603R1ZM", city:"Mumbai",     state:"MH", type:"EPC",       cat:"A", risk:"Low",    last:"02 May 2026", value:"47.80 L", deals:8,  status:"active"},
+  {name:"Surya Solar Solutions",   gst:"29AAACS1429N1Z2", city:"Bengaluru",  state:"KA", type:"Installer", cat:"A", risk:"Low",    last:"01 May 2026", value:"38.20 L", deals:5,  status:"active"},
+  {name:"Green Power EPC",         gst:"33AABCG3201Q1Z9", city:"Coimbatore", state:"TN", type:"EPC",       cat:"B", risk:"High",   last:"24 Apr 2026", value:"31.40 L", deals:6,  status:"active", flag:"overdue"},
+  {name:"Shanti Agrovet",          gst:"18AAFCS7820L1ZK", city:"Guwahati",   state:"AS", type:"Developer", cat:"B", risk:"Medium", last:"28 Apr 2026", value:"22.10 L", deals:4,  status:"active"},
+  {name:"Veer Renewables",         gst:"08AABCV1199K1Z4", city:"Jaipur",     state:"RJ", type:"Installer", cat:"C", risk:"High",   last:"19 Apr 2026", value:"19.60 L", deals:3,  status:"active", flag:"credit"},
+  {name:"Helios Renewables",       gst:"36AAACH8820B1Z0", city:"Hyderabad",  state:"TG", type:"Developer", cat:"B", risk:"Medium", last:"16 Apr 2026", value:"17.80 L", deals:4,  status:"active"},
+  {name:"Sunfield Power",          gst:"24AABCS6612K1Z7", city:"Vadodara",   state:"GJ", type:"Installer", cat:"A", risk:"Low",    last:"15 Apr 2026", value:"15.40 L", deals:3,  status:"active"},
+  {name:"Pioneer Solar Pvt",       gst:"27AAFCP3402N1ZJ", city:"Pune",       state:"MH", type:"EPC",       cat:"B", risk:"Low",    last:"12 Apr 2026", value:"12.10 L", deals:2,  status:"active"},
+  {name:"Aarav Energy",            gst:"23AABCA9911C1ZX", city:"Indore",     state:"MP", type:"Developer", cat:"C", risk:"Medium", last:"10 Apr 2026", value:"9.40 L",  deals:2,  status:"active"},
+  {name:"Volt Mart",               gst:"24AAFCV2202G1ZL", city:"Surat",      state:"GJ", type:"Installer", cat:"C", risk:"Low",    last:"06 Apr 2026", value:"8.20 L",  deals:1,  status:"active"},
+  {name:"Bharat Power Traders",    gst:"19AAFCB7710M1ZB", city:"Kolkata",    state:"WB", type:"Other",     cat:"C", risk:"High",   last:"22 Mar 2026", value:"3.20 L",  deals:1,  status:"blacklisted"},
+];
+
+const RiskCell = ({r}) => {
+  if(r==="Low")  return <Chip tone="em" dot>Low</Chip>;
+  if(r==="Medium") return <Chip tone="am" dot>Medium</Chip>;
+  return <Chip tone="ro" dot>High</Chip>;
+};
+
+const Dealers = () => {
+  const tweaks = useTweakValues();
+  const [selected, setSelected] = useState([2]);
+  const checked = selected.length;
+  return (
+  <Shell
+    active="deal"
+    crumbs={[tweaks.company,"Dealers"]}
+    topRight={
+      <div className="flex items-center gap-2">
+        <button className="btn btn-sm"><Icon name="upload" size={13}/> Import</button>
+        <button className="btn btn-sm"><Icon name="download" size={13}/> Export</button>
+        <button className="btn btn-sm btn-pri"><Icon name="plus" size={13}/> Add dealer</button>
+      </div>
+    }>
+    <div className="h-full flex">
+      {/* main list */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* header */}
+        <div className="px-6 py-4 hairline-b">
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="titlecaps">Master · 218 dealers</div>
+              <h1 className="text-[26px] font-semibold tracking-[-0.02em] mt-1">
+                Dealer book <span className="serif-i text-[#6B7280] font-normal">across 14 states</span>
+              </h1>
+            </div>
+            <div className="flex items-center gap-5">
+              <div>
+                <div className="titlecaps">Active</div>
+                <div className="num text-[16px] mt-0.5">204 <span className="text-[12px] text-[#6B7280]">/ 218</span></div>
+              </div>
+              <div>
+                <div className="titlecaps">Cat A</div>
+                <div className="num text-[16px] mt-0.5">38</div>
+              </div>
+              <div>
+                <div className="titlecaps">Avg cycle</div>
+                <div className="num text-[16px] mt-0.5">21d</div>
+              </div>
+              <div>
+                <div className="titlecaps">High risk</div>
+                <div className="num text-[16px] mt-0.5 text-[#B91C1C]">12</div>
+              </div>
+            </div>
+          </div>
+          {/* search + chips */}
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            <div className="hairline rounded-[6px] bg-white flex items-center h-[36px] px-3 gap-2 w-[320px]">
+              <Icon name="search" size={14} className="text-[#6B7280]"/>
+              <input placeholder="Search by name, GST, city" className="flex-1 text-[13px] bg-transparent outline-none placeholder:text-[#94928A]"/>
+              <span className="kbd">/</span>
+            </div>
+            <div className="chip"><span className="text-[#6B7280]">Type</span> <span className="font-medium">EPC, Installer +1</span> <Icon name="chevron-down" size={12}/></div>
+            <div className="chip"><span className="text-[#6B7280]">Category</span> <span className="font-medium">A, B</span> <Icon name="chevron-down" size={12}/></div>
+            <div className="chip"><span className="text-[#6B7280]">Risk</span> <span className="font-medium">Any</span> <Icon name="chevron-down" size={12}/></div>
+            <div className="chip"><span className="text-[#6B7280]">State</span> <span className="font-medium">14</span> <Icon name="chevron-down" size={12}/></div>
+            <div className="chip"><span className="text-[#6B7280]">Status</span> <span className="font-medium">Active</span> <Icon name="chevron-down" size={12}/></div>
+            <button className="ml-auto text-[12px] text-[#6B7280] hover:text-[#0B0F1A]">Clear all</button>
+          </div>
+        </div>
+
+        {/* selection bar */}
+        {checked>0 && (
+          <div className="px-6 py-2 bg-[#0B0F1A] text-white flex items-center gap-3 text-[12.5px]">
+            <Icon name="check-square" size={14}/>
+            <span>{checked} dealer selected</span>
+            <span className="text-white/40">·</span>
+            <button className="hover:underline">Add tag</button>
+            <button className="hover:underline">Change category</button>
+            <button className="hover:underline">Export selection</button>
+            <button className="hover:underline">Send email</button>
+            <button className="ml-auto text-white/60 hover:text-white" onClick={()=>setSelected([])}>Clear</button>
+          </div>
+        )}
+
+        {/* table */}
+        <div className="flex-1 overflow-auto">
+          <table className="w-full">
+            <thead className="sticky top-0 z-10">
+              <tr className="table-head">
+                <th className="text-left font-medium px-5 py-3 w-[34px]"><input type="checkbox" className="rounded-[3px] border-[#D5D5CC] focus:ring-0"/></th>
+                <th className="text-left font-medium py-3 w-[28%]">Dealer</th>
+                <th className="text-left font-medium py-3">GSTIN</th>
+                <th className="text-left font-medium py-3">Location</th>
+                <th className="text-left font-medium py-3">Type</th>
+                <th className="text-left font-medium py-3">Cat</th>
+                <th className="text-left font-medium py-3">Risk</th>
+                <th className="text-right font-medium py-3">Lifetime</th>
+                <th className="text-left font-medium py-3 pl-3">Last purchase</th>
+                <th className="text-left font-medium py-3 w-[40px]"></th>
+              </tr>
+            </thead>
+            <tbody className="text-[13px]">
+              {DEALERS.map((d,i)=>{
+                const isOn = selected.includes(i);
+                const isFocused = i===2;
+                return (
+                <tr key={i} className={`row hairline-b row-h ${isFocused?"bg-[#FBFBF8]":""}`}>
+                  <td className="px-5">
+                    <input type="checkbox" checked={isOn} onChange={()=>setSelected(s=> s.includes(i)? s.filter(x=>x!==i): [...s,i])} className="rounded-[3px] border-[#D5D5CC] focus:ring-0"/>
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-[6px] bg-[#0B0F1A] text-white flex items-center justify-center text-[11px] font-semibold tracking-wide mono">
+                        {d.name.split(' ').slice(0,2).map(w=>w[0]).join('')}
+                      </div>
+                      <div>
+                        <div className="font-medium tracking-[-0.005em] flex items-center gap-2">
+                          {d.name}
+                          {d.flag==="overdue" && <Chip tone="ro" dot>overdue ₹14.82L</Chip>}
+                          {d.flag==="credit" && <Chip tone="am" dot>credit 92%</Chip>}
+                          {d.status==="blacklisted" && <Chip tone="mu">blacklisted</Chip>}
+                        </div>
+                        <div className="text-[11.5px] text-[#6B7280] mono mt-0.5">{d.deals} active deals</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="mono text-[12px] text-[#1A2030]">{d.gst}</td>
+                  <td>
+                    <div>{d.city}</div>
+                    <div className="text-[11px] text-[#6B7280] mono">{d.state}</div>
+                  </td>
+                  <td><Chip>{d.type}</Chip></td>
+                  <td><span className={`mono text-[12px] font-semibold ${d.cat==="A"?"text-[#0B0F1A]":d.cat==="B"?"text-[#3730A3]":"text-[#6B7280]"}`}>{d.cat}</span></td>
+                  <td><RiskCell r={d.risk}/></td>
+                  <td className="text-right num">₹{d.value}</td>
+                  <td className="pl-3 text-[12.5px] mono text-[#1A2030]">{d.last}</td>
+                  <td><button className="icon-btn"><Icon name="more-horizontal" size={14}/></button></td>
+                </tr>
+              )})}
+            </tbody>
+          </table>
+        </div>
+
+        {/* footer */}
+        <div className="hairline-t px-6 py-3 flex items-center text-[12px] text-[#6B7280] bg-[#FBFBF8]">
+          <span>Showing 11 of 218</span>
+          <div className="ml-auto flex items-center gap-1">
+            <button className="icon-btn"><Icon name="chevron-left" size={14}/></button>
+            <span className="mono">1 / 20</span>
+            <button className="icon-btn"><Icon name="chevron-right" size={14}/></button>
+          </div>
+        </div>
+      </div>
+
+      {/* detail rail (peek) */}
+      <aside className="w-[420px] hairline-l bg-white flex flex-col">
+        <div className="p-5 hairline-b">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="mono text-[10.5px] text-[#94928A]">D-00134</span>
+                <Chip tone="ro" dot>High risk</Chip>
+              </div>
+              <h2 className="text-[20px] font-semibold tracking-[-0.02em] mt-1">Green Power EPC</h2>
+              <div className="text-[12.5px] text-[#6B7280] mt-0.5">Coimbatore, Tamil Nadu · onboarded 14 Aug 2024</div>
+            </div>
+            <button className="icon-btn"><Icon name="external-link" size={14}/></button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div>
+              <div className="titlecaps">Lifetime</div>
+              <div className="num text-[18px] font-semibold mt-0.5">₹31.40 L</div>
+            </div>
+            <div>
+              <div className="titlecaps">Outstanding</div>
+              <div className="num text-[18px] font-semibold mt-0.5 text-[#B91C1C]">₹14.82 L</div>
+            </div>
+            <div>
+              <div className="titlecaps">Credit limit</div>
+              <div className="num text-[18px] font-semibold mt-0.5">₹16.00 L</div>
+            </div>
+          </div>
+          <div className="mt-2 text-[11.5px] text-[#B91C1C] flex items-center gap-1.5">
+            <Icon name="alert-triangle" size={12}/> 92.6% utilised · 12 days overdue on PI-1108
+          </div>
+        </div>
+
+        {/* tabs */}
+        <div className="px-5 hairline-b flex items-center gap-5 text-[12.5px]">
+          {["Overview","Deals","Orders","Payments","Emails","Notes"].map((t,i)=>(
+            <button key={t} className={`py-2.5 ${i===0?"text-[#0B0F1A] border-b-2 border-[#0B0F1A] font-medium":"text-[#6B7280]"}`}>
+              {t}{i===1 && <span className="ml-1 mono text-[10.5px] text-[#94928A]">6</span>}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-5 overflow-auto flex-1 flex flex-col gap-4">
+          <div>
+            <div className="titlecaps mb-2">KYC & contact</div>
+            <dl className="grid grid-cols-3 gap-y-2 text-[12.5px]">
+              <dt className="text-[#6B7280]">GSTIN</dt><dd className="col-span-2 mono">33AABCG3201Q1Z9</dd>
+              <dt className="text-[#6B7280]">PAN</dt><dd className="col-span-2 mono">AABCG3201Q</dd>
+              <dt className="text-[#6B7280]">Contact</dt><dd className="col-span-2">M. Sundaram · +91 98430 12340</dd>
+              <dt className="text-[#6B7280]">Email</dt><dd className="col-span-2">accounts@greenpower-epc.in</dd>
+              <dt className="text-[#6B7280]">Address</dt><dd className="col-span-2 leading-snug">42, NSR Road, Saibaba Colony,<br/>Coimbatore — 641011</dd>
+            </dl>
+          </div>
+
+          <div>
+            <div className="titlecaps mb-2">Purchase rhythm</div>
+            <div className="flex items-end gap-1 h-[64px]">
+              {[28,42,36,55,48,62,70,52,78,66,84,30].map((h,i)=>(
+                <div key={i} className="flex-1 bg-[#E3E3DC] relative rounded-t-[2px]" style={{height:`${h}%`}}>
+                  <div className={`absolute inset-x-0 bottom-0 ${i===11?"bg-[#B91C1C]":"bg-[#0B0F1A]"} rounded-t-[2px]`} style={{height:`${h*0.7}%`}}></div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-1 flex justify-between mono text-[10px] text-[#94928A]">
+              <span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="titlecaps">Recent orders</div>
+              <button className="text-[11.5px] text-[#3730A3]">View all</button>
+            </div>
+            <ul className="hairline rounded-[6px]">
+              {[
+                {id:"ORD-2598", d:"24 Apr", v:"14.82 L", s:"Payment pending", tone:"ro"},
+                {id:"ORD-2541", d:"02 Apr", v:"8.40 L",  s:"Delivered", tone:"em"},
+                {id:"ORD-2487", d:"18 Mar", v:"6.20 L",  s:"Delivered", tone:"em"},
+              ].map((o,i)=>(
+                <li key={i} className="flex items-center px-3 h-[44px] hairline-b last:border-0 text-[12.5px]">
+                  <span className="mono w-[80px]">{o.id}</span>
+                  <span className="text-[#6B7280] w-[60px] mono">{o.d}</span>
+                  <span className="num font-medium flex-1">₹{o.v}</span>
+                  <Chip tone={o.tone} dot>{o.s}</Chip>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <div className="titlecaps mb-2">Tags</div>
+            <div className="flex flex-wrap gap-1.5">
+              <Chip>Cat-B</Chip>
+              <Chip tone="in">EPC</Chip>
+              <Chip>South · TN</Chip>
+              <Chip tone="ro" dot>watch-credit</Chip>
+              <Chip tone="mu">+ add</Chip>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </Shell>
+  );
+};
+
+/* ============================================================
+   4) QUOTATION BUILDER
+============================================================ */
+const QUOTE_LINES = [
+  {sku:"PRM-610-NDCR", model:"Premier 610 Wp NDCR TOPCON", hsn:"85414300", qty:480, rate:18900, disc:4,  gst:12},
+  {sku:"PRM-540-MONO", model:"Premier 540 Wp Mono Half-cut", hsn:"85414300", qty:120, rate:14600, disc:2,  gst:12},
+  {sku:"ADN-580-BIF",  model:"Adani 580 Wp Bifacial Glass", hsn:"85414300", qty: 80, rate:17800, disc:0,  gst:12},
+];
+
+const fmtINR = (n) => {
+  // Indian formatting (lakh/crore)
+  const x = Math.round(n);
+  const s = x.toString();
+  if(s.length<=3) return s;
+  const last3 = s.slice(-3);
+  const rest = s.slice(0,-3);
+  const formatted = rest.replace(/\B(?=(\d{2})+(?!\d))/g,",") + "," + last3;
+  return formatted;
+};
+
+const QuotationBuilder = () => {
+  const tweaks = useTweakValues();
+  const lines = QUOTE_LINES.map(l=>{
+    const gross = l.qty*l.rate;
+    const discAmt = gross*l.disc/100;
+    const taxable = gross-discAmt;
+    const tax = taxable*l.gst/100;
+    const total = taxable + tax;
+    return {...l, gross, discAmt, taxable, tax, total};
+  });
+  const subTotal = lines.reduce((a,l)=>a+l.gross,0);
+  const totalDisc = lines.reduce((a,l)=>a+l.discAmt,0);
+  const taxable = lines.reduce((a,l)=>a+l.taxable,0);
+  const tax = lines.reduce((a,l)=>a+l.tax,0);
+  const grand = taxable+tax;
+
+  return (
+  <Shell
+    active="quot"
+    crumbs={[tweaks.company,"Quotations","QT-0921 · Draft"]}
+    topRight={
+      <div className="flex items-center gap-2">
+        <span className="mono text-[11px] text-[#94928A]">Auto-saved · 09:42</span>
+        <button className="btn btn-sm"><Icon name="eye" size={13}/> Preview</button>
+        <button className="btn btn-sm"><Icon name="save" size={13}/> Save draft</button>
+        <button className="btn btn-sm btn-acc"><Icon name="send" size={13}/> Send to dealer</button>
+      </div>
+    }>
+    <div className="h-full flex">
+      {/* builder */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-auto">
+        <div className="px-7 pt-6 pb-4">
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="mono text-[11px] text-[#94928A]">QT-0921 · v3</span>
+                <Chip tone="am" dot>Draft</Chip>
+              </div>
+              <h1 className="text-[28px] font-semibold tracking-[-0.02em] mt-1">
+                New quotation <span className="serif-i text-[#6B7280] font-normal">for Surya Solar Solutions</span>
+              </h1>
+            </div>
+            <div className="text-right">
+              <div className="titlecaps">Grand total</div>
+              <div className="num text-[28px] font-semibold tracking-[-0.02em] mt-0.5">₹{fmtINR(grand)}</div>
+              <div className="mono text-[11.5px] text-[#6B7280] mt-0.5">Valid till 20 May 2026</div>
+            </div>
+          </div>
+
+          {/* progress steps */}
+          <div className="mt-5 flex items-center gap-1 text-[12px] mono">
+            {["Dealer","Line items","Tax & terms","Review"].map((s,i)=>(
+              <React.Fragment key={s}>
+                <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[5px] ${i===1?"bg-[#0B0F1A] text-white":"text-[#6B7280] hairline"}`}>
+                  <span className="text-[10.5px]">0{i+1}</span>
+                  <span>{s}</span>
+                </div>
+                {i<3 && <span className="flex-shrink-0 w-6 h-px bg-[#D5D5CC]"></span>}
+              </React.Fragment>
+            ))}
+            <div className="ml-auto flex items-center gap-2 text-[#6B7280] normal-case">
+              <Icon name="users" size={13}/> Owner: <span className="text-[#0B0F1A]">A. Kapoor</span>
+            </div>
+          </div>
+        </div>
+
+        {/* dealer card */}
+        <div className="px-7">
+          <div className="bg-white hairline rounded-[8px] p-5 flex items-start gap-5">
+            <div className="w-[44px] h-[44px] rounded-[8px] bg-[#0B0F1A] text-white flex items-center justify-center font-semibold mono">SS</div>
+            <div className="flex-1 grid grid-cols-4 gap-x-6 gap-y-1">
+              <div className="col-span-2">
+                <div className="text-[15px] font-semibold tracking-[-0.005em]">Surya Solar Solutions</div>
+                <div className="text-[12px] text-[#6B7280] mono mt-0.5">29AAACS1429N1Z2 · Cat A · Installer</div>
+              </div>
+              <div>
+                <div className="titlecaps">Bill to</div>
+                <div className="text-[12.5px] mt-0.5 leading-snug">14, Industrial Area, Peenya<br/>Bengaluru — 560058, KA</div>
+              </div>
+              <div>
+                <div className="titlecaps">Ship to</div>
+                <div className="text-[12.5px] mt-0.5 leading-snug">Plot 7, Hosur Road<br/>Electronic City — 560100, KA</div>
+              </div>
+            </div>
+            <button className="icon-btn"><Icon name="pencil-line" size={14}/></button>
+          </div>
+
+          {/* tax origin alert */}
+          <div className="mt-2 flex items-center gap-2 text-[11.5px] text-[#3730A3] bg-[#EEF2FF] hairline rounded-[6px] px-3 py-2">
+            <Icon name="info" size={13}/>
+            <span>Distributor (MH) → Dealer (KA): inter-state · <span className="mono font-semibold">IGST 12%</span> applied. Switching dealer state will recalculate.</span>
+          </div>
+        </div>
+
+        {/* line items */}
+        <div className="px-7 mt-4">
+          <Section eyebrow="Line items" title="3 products · 680 units" right={
+            <div className="flex items-center gap-2">
+              <button className="btn btn-sm"><Icon name="package-search" size={13}/> Browse catalog</button>
+              <button className="btn btn-sm btn-pri"><Icon name="plus" size={13}/> Add line</button>
+            </div>
+          }>
+            <table className="w-full text-[12.5px]">
+              <thead>
+                <tr className="table-head">
+                  <th className="text-left font-medium pl-5 py-2.5 w-[8px]">#</th>
+                  <th className="text-left font-medium py-2.5">Product</th>
+                  <th className="text-right font-medium py-2.5">Qty</th>
+                  <th className="text-right font-medium py-2.5">Rate</th>
+                  <th className="text-right font-medium py-2.5">Disc%</th>
+                  <th className="text-right font-medium py-2.5">Taxable</th>
+                  <th className="text-right font-medium py-2.5">GST</th>
+                  <th className="text-right font-medium py-2.5 pr-5">Line total</th>
+                  <th className="w-[36px]"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((l,i)=>(
+                  <tr key={i} className="hairline-b">
+                    <td className="pl-5 py-3 mono text-[11px] text-[#94928A]">{String(i+1).padStart(2,'0')}</td>
+                    <td className="py-3">
+                      <div className="font-medium">{l.model}</div>
+                      <div className="mono text-[11px] text-[#6B7280] mt-0.5">{l.sku} · HSN {l.hsn}</div>
+                    </td>
+                    <td className="num text-right font-medium">{l.qty}</td>
+                    <td className="num text-right">₹{fmtINR(l.rate)}</td>
+                    <td className="num text-right">{l.disc}%</td>
+                    <td className="num text-right">₹{fmtINR(l.taxable)}</td>
+                    <td className="num text-right">{l.gst}%</td>
+                    <td className="num text-right pr-5 font-semibold">₹{fmtINR(l.total)}</td>
+                    <td><button className="icon-btn"><Icon name="x" size={13}/></button></td>
+                  </tr>
+                ))}
+                <tr>
+                  <td colSpan="9" className="px-5 py-3">
+                    <button className="text-[12.5px] text-[#3730A3] hover:underline flex items-center gap-1.5">
+                      <Icon name="plus" size={12}/> Add another line · or paste from clipboard
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* totals */}
+            <div className="hairline-t bg-[#FBFBF8] grid grid-cols-12">
+              <div className="col-span-7 px-5 py-4 hairline-r">
+                <div className="titlecaps mb-2">Terms & notes</div>
+                <textarea
+                  defaultValue="Prices ex-warehouse, Mumbai. Lead time 7–10 working days from PI confirmation. Warranty as per Premier Energies linear performance warranty. Payment: 30% advance, 70% before dispatch."
+                  className="w-full text-[12.5px] leading-relaxed bg-transparent outline-none resize-none text-[#1A2030]" rows="4"></textarea>
+              </div>
+              <div className="col-span-5 px-5 py-4">
+                <dl className="text-[12.5px] flex flex-col gap-1.5">
+                  <div className="flex justify-between"><dt className="text-[#6B7280]">Sub-total</dt><dd className="num">₹{fmtINR(subTotal)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-[#6B7280]">Discount</dt><dd className="num text-[#B45309]">− ₹{fmtINR(totalDisc)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-[#6B7280]">Taxable value</dt><dd className="num">₹{fmtINR(taxable)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-[#6B7280]">IGST · 12%</dt><dd className="num">₹{fmtINR(tax)}</dd></div>
+                  <div className="hairline-t pt-2 mt-1 flex justify-between items-baseline">
+                    <dt className="text-[13px] font-semibold">Grand total</dt>
+                    <dd className="num text-[20px] font-semibold tracking-[-0.01em]">₹{fmtINR(grand)}</dd>
+                  </div>
+                  <div className="text-[10.5px] text-[#6B7280] mono">{`(Rupees one crore twenty-eight lakh forty-three thousand only)`}</div>
+                </dl>
+              </div>
+            </div>
+          </Section>
+        </div>
+
+        <div className="h-6"></div>
+      </div>
+
+      {/* preview pane */}
+      <aside className="w-[480px] hairline-l bg-[#EFEFEA] flex flex-col">
+        <div className="px-5 py-3 hairline-b bg-[#F7F7F4] flex items-center gap-2">
+          <Icon name="file-text" size={14} className="text-[#6B7280]"/>
+          <span className="text-[12.5px] font-medium">Live preview</span>
+          <span className="mono text-[10.5px] text-[#94928A]">QT-0921.pdf · A4</span>
+          <div className="ml-auto flex items-center gap-1">
+            <button className="icon-btn"><Icon name="zoom-out" size={13}/></button>
+            <span className="mono text-[11px] text-[#6B7280]">82%</span>
+            <button className="icon-btn"><Icon name="zoom-in" size={13}/></button>
+            <button className="icon-btn"><Icon name="download" size={13}/></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-5">
+          <div className="paper hairline mx-auto" style={{width:380, fontSize:10}}>
+            <div className="p-5">
+              <div className="flex items-start justify-between border-b border-[#0B0F1A] pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-[18px] h-[18px] rounded-[3px] bg-[#0B0F1A]"></div>
+                    <span className="font-semibold text-[12px] tracking-tight">{tweaks.company}</span>
+                  </div>
+                  <div className="text-[8.5px] text-[#6B7280] mt-1 leading-snug">
+                    101 Mittal Industrial Estate, Andheri (E)<br/>
+                    Mumbai — 400059, Maharashtra<br/>
+                    GSTIN 27AABCM4441P1ZJ
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[14px] font-semibold tracking-[-0.01em]">QUOTATION</div>
+                  <div className="mono text-[8px] text-[#6B7280] mt-0.5">QT-0921 / 26-27</div>
+                  <div className="mono text-[8px] text-[#6B7280]">06 May 2026</div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-3 text-[8.5px]">
+                <div>
+                  <div className="text-[#6B7280] uppercase tracking-[0.08em] text-[7.5px]">Bill to</div>
+                  <div className="font-semibold mt-0.5">Surya Solar Solutions</div>
+                  <div className="leading-snug text-[#1A2030]">14, Industrial Area, Peenya<br/>Bengaluru — 560058, Karnataka<br/>GSTIN 29AAACS1429N1Z2</div>
+                </div>
+                <div>
+                  <div className="text-[#6B7280] uppercase tracking-[0.08em] text-[7.5px]">Ship to</div>
+                  <div className="leading-snug text-[#1A2030] mt-0.5">Plot 7, Hosur Road<br/>Electronic City — 560100<br/>Karnataka</div>
+                </div>
+              </div>
+
+              <table className="w-full mt-3 text-[8px]">
+                <thead>
+                  <tr className="border-y border-[#0B0F1A]">
+                    <th className="text-left py-1.5 font-semibold">Description</th>
+                    <th className="text-right py-1.5 font-semibold w-[28px]">Qty</th>
+                    <th className="text-right py-1.5 font-semibold w-[40px]">Rate</th>
+                    <th className="text-right py-1.5 font-semibold w-[50px]">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l,i)=>(
+                    <tr key={i} className="border-b border-[#E3E3DC]">
+                      <td className="py-1.5">
+                        <div className="font-medium">{l.model}</div>
+                        <div className="mono text-[6.5px] text-[#6B7280]">HSN {l.hsn}</div>
+                      </td>
+                      <td className="num text-right">{l.qty}</td>
+                      <td className="num text-right">{fmtINR(l.rate)}</td>
+                      <td className="num text-right">{fmtINR(l.taxable)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mt-3 flex justify-end">
+                <table className="text-[8.5px]" style={{width:"60%"}}>
+                  <tbody>
+                    <tr><td className="text-[#6B7280] py-0.5">Taxable</td><td className="num text-right">₹{fmtINR(taxable)}</td></tr>
+                    <tr><td className="text-[#6B7280] py-0.5">IGST 12%</td><td className="num text-right">₹{fmtINR(tax)}</td></tr>
+                    <tr className="border-t border-[#0B0F1A]"><td className="font-semibold py-1">Grand total</td><td className="num text-right font-semibold">₹{fmtINR(grand)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 text-[8px] text-[#1A2030] leading-snug">
+                <div className="text-[#6B7280] uppercase tracking-[0.08em] text-[7.5px] mb-1">Terms</div>
+                Prices ex-warehouse, Mumbai. Lead time 7–10 working days from PI confirmation. Payment: 30% advance, 70% before dispatch.
+              </div>
+
+              <div className="mt-6 grid grid-cols-2 gap-3 text-[8px]">
+                <div>
+                  <div className="border-t border-[#0B0F1A] pt-1 text-[#6B7280]">Authorised signatory</div>
+                  <div className="mt-3 serif-i text-[12px] text-[#1A2030]">{tweaks.userName}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[#6B7280]">{tweaks.company} Pvt Ltd</div>
+                  <div className="mono text-[6.5px] text-[#94928A] mt-0.5">Page 1 of 1 · QT-0921</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </Shell>
+  );
+};
+
+/* ============================================================
+   CANVAS
+============================================================ */
+const Artboard = ({n, label, name, w=1440, h=900, children}) => (
+  <div className="flex flex-col gap-3" data-screen-label={`${String(n).padStart(2,'0')} ${name}`}>
+    <div className="flex items-baseline justify-between">
+      <div className="ab-label">
+        <span className="ab-num">{String(n).padStart(2,'0')}</span>
+        <span>{label}</span>
+        <span className="text-[#9C9B91]">· {w}×{h}</span>
+      </div>
+      <div className="ab-title">{name}</div>
+    </div>
+    <div className="artboard" style={{width:w, height:h}}>
+      {children}
+    </div>
+  </div>
+);
+
+const App = () => {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  useEffect(()=>{ if(window.lucide) window.lucide.createIcons(); });
+  return (
+    <TweakCtx.Provider value={tweaks}>
+    <div className="canvas min-h-screen">
+      {/* canvas header */}
+      <header className="px-10 pt-10 pb-6 max-w-[1440px]">
+        <div className="flex items-center gap-2 text-[11px] mono text-[#5A5A52] uppercase tracking-[0.14em]">
+          <span className="dot" style={{background:"#0B0F1A"}}></span>
+          Distribyte · UI exploration · v0.3
+        </div>
+        <h1 className="font-[Instrument_Serif] italic text-[68px] leading-[0.95] mt-3 text-[#0B0F1A]" style={{fontFamily:"'Instrument Serif',serif",fontStyle:"italic"}}>
+          A distributor's<br/>operating console.
+        </h1>
+        <p className="mt-4 max-w-[640px] text-[14px] leading-relaxed text-[#3F3F38]">
+          Four anchor screens for <b>{tweaks.company}</b> — built around the rhythms of solar panel sale: pipeline discipline, serial-tracked stock, GST-correct paperwork, and dealer health at a glance. Inter for surface, IBM Plex Mono for every number that has to add up. Slate ink on warm paper; one indigo accent reserved for forward action.
+        </p>
+        <div className="mt-5 flex items-center gap-2 text-[11.5px] text-[#5A5A52]">
+          <span className="chip">01 · Overview</span>
+          <span className="chip">02 · Pipeline</span>
+          <span className="chip">03 · Dealer master</span>
+          <span className="chip">04 · Quotation builder</span>
+          <span className="ml-3 mono text-[10.5px]">scroll →</span>
+        </div>
+      </header>
+
+      <div className="flex gap-12 px-10 pb-20 overflow-x-auto">
+        <Artboard n={1} label="HOME · OVERVIEW"          name="Dashboard">         <Dashboard/>          </Artboard>
+        <Artboard n={2} label="DEALS · PIPELINE"         name="Sales pipeline">    <Pipeline/>           </Artboard>
+        <Artboard n={3} label="CRM · DEALER MASTER"      name="Dealer book">       <Dealers/>            </Artboard>
+        <Artboard n={4} label="DOCS · QUOTATION BUILDER" name="New quotation">     <QuotationBuilder/>   </Artboard>
+      </div>
+
+      <TweaksPanel>
+        <TweakSection label="Identity"/>
+        <TweakText label="Your name" value={tweaks.userName} onChange={v=>setTweak('userName',v)}/>
+        <TweakText label="Company"   value={tweaks.company}  onChange={v=>setTweak('company',v)}/>
+        <TweakRadio label="Greeting" value={tweaks.greeting}
+          options={["Good morning","Good afternoon","Hey"]}
+          onChange={v=>setTweak('greeting',v)}/>
+      </TweaksPanel>
+    </div>
+    </TweakCtx.Provider>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+// auto-print after fonts + render settle
+(async () => {
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch(e){}
+  await new Promise(r => setTimeout(r, 800));
+  window.print();
+})();
+
+</script>
+</body>
+</html>
