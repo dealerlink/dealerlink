@@ -5,6 +5,7 @@
 > **Time required:** 30–60 minutes depending on what's already installed.
 >
 > **Companion files:**
+>
 > - `CLAUDE.md` — implementation guide
 > - `README.md` — project overview and daily commands
 > - `docker-compose.yml` — service definitions
@@ -14,13 +15,13 @@
 
 ## Prerequisites
 
-| Tool | Required version | Why |
-|---|---|---|
-| **Node.js** | v20.x LTS | Application runtime (web + workers) |
-| **pnpm** | v9.x | Package manager (faster than npm, workspace-aware) |
-| **Docker Desktop** | Any recent | Local Postgres + pgAdmin via docker-compose |
-| **Git** | Any recent | Source control |
-| **PowerShell 7** *(Windows only)* | v7.x | Modern shell with cross-platform compatibility |
+| Tool                              | Required version | Why                                                |
+| --------------------------------- | ---------------- | -------------------------------------------------- |
+| **Node.js**                       | v20.x LTS        | Application runtime (web + workers)                |
+| **pnpm**                          | v9.x             | Package manager (faster than npm, workspace-aware) |
+| **Docker Desktop**                | Any recent       | Local Postgres + pgAdmin via docker-compose        |
+| **Git**                           | Any recent       | Source control                                     |
+| **PowerShell 7** _(Windows only)_ | v7.x             | Modern shell with cross-platform compatibility     |
 
 ### Optional but recommended
 
@@ -139,6 +140,7 @@ cd dealerlink
 ```
 
 If SSH isn't configured, use HTTPS:
+
 ```bash
 git clone https://github.com/<your-username>/dealerlink.git
 ```
@@ -158,6 +160,7 @@ docker compose up -d
 ```
 
 This starts two containers:
+
 - `dealerlink-postgres` on port 5432
 - `dealerlink-pgadmin` on port 5050 (UI for inspecting the DB)
 
@@ -242,11 +245,11 @@ pnpm dev:all
 
 Open in your browser:
 
-| URL | What you should see |
-|---|---|
-| http://localhost:3000 | Dealerlink login screen |
-| http://localhost:5050 | pgAdmin login (use `dev@dealerlink.local` / `dev_password_change_me`) |
-| http://localhost:3000/api/health | JSON with `status: "ok"` and DB/queue checks |
+| URL                              | What you should see                                                   |
+| -------------------------------- | --------------------------------------------------------------------- |
+| http://localhost:3000            | Dealerlink login screen                                               |
+| http://localhost:5050            | pgAdmin login (use `dev@dealerlink.local` / `dev_password_change_me`) |
+| http://localhost:3000/api/health | JSON with `status: "ok"` and DB/queue checks                          |
 
 Sign in with the seeded admin credentials (printed by the seed script).
 
@@ -254,39 +257,40 @@ Sign in with the seeded admin credentials (printed by the seed script).
 
 ## Daily Commands
 
-| Command | What it does |
-|---|---|
-| `pnpm dev` | Start Next.js web app |
-| `pnpm dev:workers` | Start workers process |
-| `pnpm dev:all` | Start both concurrently |
-| `pnpm typecheck` | Run TypeScript type checking |
-| `pnpm lint` | Run ESLint |
-| `pnpm test` | Run Vitest unit tests |
-| `pnpm test:e2e` | Run Playwright E2E tests |
-| `pnpm db:migrate` | Apply pending migrations |
-| `pnpm db:rollback` | Roll back the last migration |
-| `pnpm db:seed` | Reset and seed sample data |
-| `pnpm db:studio` | Open Drizzle Studio (visual DB browser) |
-| `docker compose up -d` | Start Postgres + pgAdmin |
-| `docker compose down` | Stop Postgres + pgAdmin (preserves data) |
+| Command                  | What it does                                    |
+| ------------------------ | ----------------------------------------------- |
+| `pnpm dev`               | Start Next.js web app                           |
+| `pnpm dev:workers`       | Start workers process                           |
+| `pnpm dev:all`           | Start both concurrently                         |
+| `pnpm typecheck`         | Run TypeScript type checking                    |
+| `pnpm lint`              | Run ESLint                                      |
+| `pnpm test`              | Run Vitest unit tests                           |
+| `pnpm test:e2e`          | Run Playwright E2E tests                        |
+| `pnpm db:migrate`        | Apply pending migrations                        |
+| `pnpm db:rollback`       | Roll back the last migration                    |
+| `pnpm db:seed`           | Reset and seed sample data                      |
+| `pnpm db:studio`         | Open Drizzle Studio (visual DB browser)         |
+| `docker compose up -d`   | Start Postgres + pgAdmin                        |
+| `docker compose down`    | Stop Postgres + pgAdmin (preserves data)        |
 | `docker compose down -v` | Stop and **delete all DB data** (use with care) |
-| `pnpm format` | Auto-format all files with Prettier |
+| `pnpm format`            | Auto-format all files with Prettier             |
 
 ---
 
 ## Common Issues
 
-| Issue | Fix |
-|---|---|
-| **Port 5432 already in use** | You have another Postgres running. Stop it, OR change port in `docker-compose.yml` to `5433:5432` and update `DATABASE_URL` |
-| **Docker daemon not running** | Start Docker Desktop; on Linux: `sudo systemctl start docker` |
-| **`pnpm: command not found`** | Restart terminal, or `source ~/.zshrc` / `source ~/.bashrc` |
-| **Permission errors on Linux Docker** | `sudo usermod -aG docker $USER` then logout/login |
-| **pgAdmin can't connect to "postgres"** | In pgAdmin add server, use host = `host.docker.internal` (Mac/Win) or container name `postgres` |
-| **`pnpm install` is slow on Windows** | Add Defender exclusion for `node_modules` (see Windows section above) |
-| **Migrations fail with "permission denied for schema public"** | RLS may be blocking; check that the migration role has `BYPASSRLS` or runs as superuser |
-| **Worker keeps restarting** | Check `pnpm dev:workers` output; usually missing env var or DB connection issue |
-| **Hot reload not working in Next.js** | Try restarting the dev server; on Windows, file system events can be flaky in WSL paths |
+| Issue                                                               | Fix                                                                                                                                                          |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Port 5432 already in use**                                        | You have another Postgres running. Stop it, OR change port in `docker-compose.yml` to `5433:5432` and update `DATABASE_URL`                                  |
+| **Docker daemon not running**                                       | Start Docker Desktop; on Linux: `sudo systemctl start docker`                                                                                                |
+| **`pnpm: command not found`**                                       | Restart terminal, or `source ~/.zshrc` / `source ~/.bashrc`                                                                                                  |
+| **Permission errors on Linux Docker**                               | `sudo usermod -aG docker $USER` then logout/login                                                                                                            |
+| **pgAdmin can't connect to "postgres"**                             | In pgAdmin add server, use host = `host.docker.internal` (Mac/Win) or container name `postgres`                                                              |
+| **`pnpm install` is slow on Windows**                               | Add Defender exclusion for `node_modules` (see Windows section above)                                                                                        |
+| **Migrations fail with "permission denied for schema public"**      | RLS may be blocking; check that the migration role has `BYPASSRLS` or runs as superuser                                                                      |
+| **Worker keeps restarting**                                         | Check `pnpm dev:workers` output; usually missing env var or DB connection issue                                                                              |
+| **Hot reload not working in Next.js**                               | Try restarting the dev server; on Windows, file system events can be flaky in WSL paths                                                                      |
+| **`pnpm.ps1 cannot be loaded because running scripts is disabled`** | PowerShell execution policy blocks unsigned scripts. Fix: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` (one-time, no admin needed) |
 
 ---
 
@@ -317,6 +321,7 @@ The repo includes `.vscode/extensions.json` recommending:
 VS Code will prompt to install these on first open. Click "Install All" for the best experience.
 
 The repo also includes `.vscode/settings.json` with sensible defaults:
+
 - Format on save (Prettier)
 - ESLint auto-fix on save
 - Tailwind class-name sorting
@@ -355,4 +360,4 @@ Compare-Object (Get-Content .env.example | Where-Object {$_ -notmatch '^#'} | So
 
 ---
 
-*Last updated: May 2026 · Phase 1 setup*
+_Last updated: May 2026 · Phase 1 setup_
