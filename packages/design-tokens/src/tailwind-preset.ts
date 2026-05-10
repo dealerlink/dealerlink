@@ -1,8 +1,7 @@
 // Tailwind preset — used in apps/web/tailwind.config.ts
-// Typed loosely because tailwindcss is a devDep of apps/web, not this package.
+import type { Config } from 'tailwindcss';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const dealerlinkPreset: Record<string, any> = {
+export const dealerlinkPreset: Partial<Config> = {
   theme: {
     extend: {
       colors: {

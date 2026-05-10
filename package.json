@@ -14,9 +14,11 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter web test:e2e",
-    "db:migrate": "pnpm --filter db migrate",
-    "db:seed": "pnpm --filter db seed",
-    "db:studio": "pnpm --filter db studio",
+    "db:generate": "pnpm --filter @dealerlink/db db:generate",
+    "db:migrate": "pnpm --filter @dealerlink/db db:migrate",
+    "db:rollback": "pnpm --filter @dealerlink/db db:rollback",
+    "db:seed": "pnpm --filter @dealerlink/db db:seed",
+    "db:studio": "pnpm --filter @dealerlink/db db:studio",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -31,7 +33,11 @@
     "typescript": "^5.7.3"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,css,md,yaml,yml}": [
+    "*.{ts,tsx,js,jsx}": [
+      "prettier --write",
+      "eslint --max-warnings=0 --no-error-on-unmatched-pattern"
+    ],
+    "*.{json,css,md,yaml,yml}": [
       "prettier --write"
     ]
   }

@@ -1,2 +1,3 @@
-// Drizzle ORM schema + client — implemented in Day 2
-export {};
+export * from './schema';
+export { db, adminDb, closeDbConnection, type DrizzleDb } from './client';
+export { withTenant, withTenantUser, type DrizzleTx } from './with-tenant';

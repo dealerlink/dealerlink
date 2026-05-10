@@ -8,18 +8,32 @@ interface BreadcrumbItem {
   href?: string;
 }
 
+interface ShellUser {
+  fullName: string;
+  role: string;
+  email: string;
+}
+
+interface ShellTenant {
+  displayName: string;
+  slug: string;
+}
+
 interface ShellProps {
   crumbs?: BreadcrumbItem[];
   topRight?: ReactNode;
+  user: ShellUser;
+  tenant: ShellTenant | null;
   children: ReactNode;
 }
 
-export function Shell({ crumbs, topRight, children }: ShellProps) {
+export function Shell({ crumbs, topRight, user, tenant, children }: ShellProps) {
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      <Sidebar user={user} tenant={tenant} />
       <div className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--paper)' }}>
         <Topbar
+          user={user}
           {...(crumbs !== undefined && { crumbs })}
           {...(topRight !== undefined && { right: topRight })}
         />

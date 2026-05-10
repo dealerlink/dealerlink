@@ -1,8 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-
 import {
   BarChart3,
   Banknote,
@@ -16,32 +13,38 @@ import {
   Truck,
   UsersRound,
 } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Overview', icon: LayoutDashboard, href: '/dashboard', count: '' },
-  { key: 'pipeline', label: 'Pipeline', icon: GitBranch, href: '/pipeline', count: '42' },
-  { key: 'dealers', label: 'Dealers', icon: UsersRound, href: '/dealers', count: '218' },
-  { key: 'catalog', label: 'Catalog', icon: Package, href: '/catalog', count: '86' },
-  { key: 'inventory', label: 'Inventory', icon: Box, href: '/inventory', count: '4,812' },
-  { key: 'quotations', label: 'Quotations', icon: FileText, href: '/quotations', count: '19' },
-  { key: 'orders', label: 'Orders', icon: Receipt, href: '/orders', count: '34' },
+  { key: 'pipeline', label: 'Pipeline', icon: GitBranch, href: '/pipeline', count: '' },
+  { key: 'dealers', label: 'Dealers', icon: UsersRound, href: '/dealers', count: '' },
+  { key: 'catalog', label: 'Catalog', icon: Package, href: '/catalog', count: '' },
+  { key: 'inventory', label: 'Inventory', icon: Box, href: '/inventory', count: '' },
+  { key: 'quotations', label: 'Quotations', icon: FileText, href: '/quotations', count: '' },
+  { key: 'orders', label: 'Orders', icon: Receipt, href: '/orders', count: '' },
   { key: 'payments', label: 'Payments', icon: Banknote, href: '/payments', count: '' },
-  { key: 'dispatch', label: 'Dispatch', icon: Truck, href: '/dispatch', count: '7' },
+  { key: 'dispatch', label: 'Dispatch', icon: Truck, href: '/dispatch', count: '' },
   { key: 'reports', label: 'Reports', icon: BarChart3, href: '/reports', count: '' },
 ] as const;
 
-// Placeholder — real tenant data comes from auth context in Day 2
-const PLACEHOLDER = {
-  tenantName: 'Demo Solar Distributors',
-  tenantSlug: 'demo-solar-distributors',
-  userName: 'Akshay Mittal',
-  userRole: 'admin · sales',
-  quotaMtd: 68,
-  quotaValue: '₹3.42 Cr',
-  quotaTarget: '₹5.00 Cr',
-};
+interface SidebarUser {
+  fullName: string;
+  role: string;
+}
+
+interface SidebarTenant {
+  displayName: string;
+  slug: string;
+}
+
+interface SidebarProps {
+  user: SidebarUser;
+  tenant: SidebarTenant | null;
+}
 
 function DealerlinkLogo() {
   return (
@@ -67,10 +70,10 @@ function UserAvatar({ initials }: { initials: string }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ user, tenant }: SidebarProps) {
   const pathname = usePathname();
 
-  const initials = PLACEHOLDER.userName
+  const initials = user.fullName
     .split(' ')
     .map((w) => w[0] ?? '')
     .slice(0, 2)
@@ -85,22 +88,13 @@ export function Sidebar() {
       <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
         <DealerlinkLogo />
         <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-[14px] font-semibold tracking-[-0.01em]">Dealerlink</div>
-          <div className="mono truncate text-[10.5px] text-[#7C7E89]">{PLACEHOLDER.tenantSlug}</div>
+          <div className="truncate text-[14px] font-semibold tracking-[-0.01em]">
+            {tenant?.displayName ?? 'Dealerlink'}
+          </div>
+          <div className="mono truncate text-[10.5px] text-[#7C7E89]">
+            {tenant ? `${tenant.slug}.dealerlink.in` : 'dealerlink.in'}
+          </div>
         </div>
-        <button className="icon-btn flex-shrink-0 !text-[#7C7E89] hover:!bg-white/5">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="m11 17-5-5 5-5" />
-            <path d="m18 17-5-5 5-5" />
-          </svg>
-        </button>
       </div>
 
       {/* Quick find */}
@@ -143,33 +137,13 @@ export function Sidebar() {
         </Link>
       </nav>
 
-      {/* Quota widget + user footer */}
+      {/* User footer */}
       <div className="mt-auto border-t border-white/[0.08] px-3 pb-3 pt-4">
-        <div className="mono mb-2 px-1 text-[10.5px] uppercase tracking-[0.08em] text-[#7C7E89]">
-          Books · FY 25–26
-        </div>
-        <div className="rounded-[6px] bg-white/5 p-3">
-          <div className="flex items-baseline justify-between">
-            <div className="text-[10.5px] uppercase tracking-[0.1em] text-[#9FA1AB]">Quota MTD</div>
-            <div className="mono text-[11px] text-[#A8A9B3]">{PLACEHOLDER.quotaMtd}%</div>
-          </div>
-          <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-white"
-              style={{ width: `${PLACEHOLDER.quotaMtd}%` }}
-            />
-          </div>
-          <div className="mono mt-2 text-[12px]">
-            {PLACEHOLDER.quotaValue}{' '}
-            <span className="text-[#7C7E89]">/ {PLACEHOLDER.quotaTarget}</span>
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center gap-2 px-1">
+        <div className="flex items-center gap-2 px-1">
           <UserAvatar initials={initials} />
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[12px]">{PLACEHOLDER.userName}</div>
-            <div className="mono truncate text-[10.5px] text-[#7C7E89]">{PLACEHOLDER.userRole}</div>
+            <div className="truncate text-[12px]">{user.fullName}</div>
+            <div className="mono truncate text-[10.5px] text-[#7C7E89]">{user.role}</div>
           </div>
           <Link
             href="/settings"
