@@ -1,0 +1,24 @@
+/* Dealerlink Design Tokens
+   Single source of truth — imported into apps/web/app/globals.css
+   and exposed via the Tailwind preset.
+*/
+:root {
+  --ink: #0b0f1a;
+  --ink-2: #1a2030;
+  --paper: #f7f7f4;
+  --paper-2: #efefea;
+  --line: #e3e3dc;
+  --line-2: #d5d5cc;
+  --mute: #6b7280;
+  --mute-2: #94928a;
+  --accent: #3730a3;
+  --accent-2: #4f46e5;
+  --accent-soft: #eef2ff;
+  --emerald: #047857;
+  --amber: #b45309;
+  --rose: #b91c1c;
+  --tile: #fbfbf8;
+  --sidebar-width: 232px;
+  --topbar-height: 52px;
+  --row-height: 56px;
+}

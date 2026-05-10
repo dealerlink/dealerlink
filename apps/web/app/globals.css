@@ -1,0 +1,273 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===================================================================
+   DESIGN TOKENS
+   Source of truth for all colour, spacing, and typographic decisions.
+   These variables are referenced by Tailwind (tailwind.config.ts) and
+   consumed directly in component styles via var(--token-name).
+=================================================================== */
+:root {
+  /* Ink — primary text / dark surface */
+  --ink: #0b0f1a;
+  --ink-2: #1a2030;
+
+  /* Paper — page / card backgrounds */
+  --paper: #f7f7f4;
+  --paper-2: #efefea;
+
+  /* Line — borders and dividers */
+  --line: #e3e3dc;
+  --line-2: #d5d5cc;
+
+  /* Muted — secondary text */
+  --mute: #6b7280;
+  --mute-2: #94928a;
+
+  /* Accent — deep indigo, primary emphasis */
+  --accent: #3730a3;
+  --accent-2: #4f46e5;
+  --accent-soft: #eef2ff;
+
+  /* Semantic status */
+  --emerald: #047857;
+  --amber: #b45309;
+  --rose: #b91c1c;
+
+  /* Tile — subtly-off-white table header / sticky surfaces */
+  --tile: #fbfbf8;
+
+  /* Sidebar */
+  --sidebar-bg: #0b0f1a;
+  --sidebar-width: 232px;
+
+  /* Topbar */
+  --topbar-height: 52px;
+
+  /* Spacing / layout */
+  --row-height: 56px;
+}
+
+/* ===================================================================
+   BASE RESETS
+=================================================================== */
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===================================================================
+   TYPOGRAPHY UTILITIES
+   These complement the Tailwind config — use via className
+=================================================================== */
+@layer utilities {
+  /* Monospace — for every number, ID, timestamp, GSTIN */
+  .mono {
+    font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+    font-feature-settings: 'tnum', 'zero';
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Italic Inter — for editorial moments (dashboard greeting, etc.)
+     CLAUDE.md §5: Italic Inter replaces Instrument Serif from prototype */
+  .editorial {
+    font-style: italic;
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+
+  /* Title caps — section eyebrows, table headers */
+  .titlecaps {
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mute);
+    font-weight: 500;
+  }
+
+  /* Hairline borders — NEVER drop shadows on cards */
+  .hairline {
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .hairline-b {
+    border-bottom: 1px solid var(--line);
+  }
+  .hairline-t {
+    border-top: 1px solid var(--line);
+  }
+  .hairline-r {
+    border-right: 1px solid var(--line);
+  }
+  .hairline-l {
+    border-left: 1px solid var(--line);
+  }
+
+  /* Row height — dense table rows */
+  .row-h {
+    height: var(--row-height);
+  }
+
+  /* Status dots */
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .s-em {
+    background: var(--emerald);
+  }
+  .s-am {
+    background: var(--amber);
+  }
+  .s-ro {
+    background: var(--rose);
+  }
+  .s-in {
+    background: var(--accent);
+  }
+  .s-mu {
+    background: #9ca3af;
+  }
+  .s-ink {
+    background: var(--ink);
+  }
+
+  /* Skeleton animation */
+  .skel {
+    background: linear-gradient(90deg, #eeeee7, #f5f5ee, #eeeee7);
+    background-size: 200% 100%;
+    animation: skeleton 1.6s linear infinite;
+  }
+}
+
+/* ===================================================================
+   NAV ITEM (sidebar)
+=================================================================== */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: #c9cad3;
+  cursor: pointer;
+  user-select: none;
+  transition: background 100ms;
+}
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.nav-item .nav-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  color: #7c7e89;
+}
+.nav-item.active .nav-count {
+  color: #a8a9b3;
+}
+
+/* ===================================================================
+   CHIP
+=================================================================== */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ink);
+}
+.chip.ghost {
+  background: transparent;
+}
+.chip.solid {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+/* ===================================================================
+   TABLE
+=================================================================== */
+.table-head {
+  background: var(--tile);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.table-row:hover {
+  background: var(--tile);
+}
+
+/* ===================================================================
+   AVATAR
+=================================================================== */
+.av {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+/* ===================================================================
+   ICON BUTTON
+=================================================================== */
+.icon-btn {
+  height: 32px;
+  width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--mute);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.icon-btn:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+
+/* ===================================================================
+   SKELETON ANIMATION
+=================================================================== */
+@keyframes skeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
