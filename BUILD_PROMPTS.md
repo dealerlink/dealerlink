@@ -687,7 +687,249 @@ Mark **B.4** as ✅, add today's date, append to changelog:
 
 ## Day 5 — Dealer Master + Product Catalog + Inventory Schema
 
-_Will be added when Day 4 is complete. Day 5 ships the first three business modules — Dealer Master CRUD, Product Catalog, and the Inventory schema (procurement happens Day 6). This is where the system starts to do real distributor work._
+**Goal:** Ship the first three business modules. By end of day, tenant users (Admin, Sales, Accounts, Dispatch) can manage dealers and products through real CRUD UIs. The inventory schema is in place but procurement and serial-level operations come on Day 6.
+
+This is the **first day Claude Code touches the tenantAction() contract for real business logic** — every subsequent business module follows the patterns set today.
+
+**Estimated time:** 6–7 hours of Claude Code work + ~1 hour of your verification
+
+**Deliverable:** Working Dealer Master and Product Catalog pages. Both with list, detail, create, edit, deactivate flows. Inventory schema migrated and ready for Day 6.
+
+### Prompt for Claude Code
+
+```
+You are implementing Day 5 of the Dealerlink build. Days 1–4 shipped successfully (foundation, auth, tenancy, operator admin). Now the system starts doing real distributor work.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md (especially §3 stack, §5 data model, §10 auth & roles, §11 critical workflows, §13 sample data, §19 standards)
+2. BRD §2 (Dealer Master), §3 (Product Catalog), §4 (Inventory data model)
+3. docs/Distribyte.html — visual prototype for Dealers (table density, status pills, filter chips), Catalog (card grid for products)
+4. docs/screens-extra.jsx — Inventory screen reference (for tomorrow's Day 6, but informs the schema today)
+5. Day 4 commit 62c568b — review the tenant detail page structure; reuse those patterns for dealer detail / product detail
+
+DAY 5 SCOPE:
+
+Phase 1 — Dealer Master schema
+1. Create packages/db/src/schema/dealer.ts with fields per BRD §2:
+   - id, tenant_id, standard audit columns (created_at, created_by, updated_at, updated_by)
+   - Identity: dealer_code (auto-generated, format DL-<6 digit zero-padded sequence per tenant), legal_name, display_name, contact_person, phone, alt_phone, email, alt_email
+   - Address: address_line1, address_line2, city, state, pincode, country (default 'IN')
+   - Compliance: gstin, pan
+   - Classification: type ('retailer' | 'wholesaler' | 'installer' | 'epc' | 'other'), category ('A' | 'B' | 'C'), risk_level ('low' | 'medium' | 'high')
+   - Commercial terms: credit_limit (decimal 12,2, nullable), credit_period_days (integer, default from tenant_settings), discount_percent (decimal 5,2, default 0)
+   - Status: status ('active' | 'inactive' | 'on_hold'), inactivated_at, inactivated_reason
+   - Misc: notes (text), tags (text[], for free-form labels)
+2. Indexes:
+   - PRIMARY KEY (id)
+   - UNIQUE (tenant_id, dealer_code)
+   - UNIQUE (tenant_id, gstin) WHERE gstin IS NOT NULL (partial unique — GSTIN optional)
+   - Index on (tenant_id, status) for list queries
+   - Index on (tenant_id, lower(legal_name) text_pattern_ops) and (tenant_id, gstin) for search (use pg_trgm)
+   - GIN index on (tenant_id, tags) for tag-based filtering
+3. RLS policy: tenant_isolation
+4. Apply audit trigger
+5. Document counter row needs to exist for 'dealer' doc_type — add to seed and to tenant creation
+6. Generate Drizzle migration; verify the migration runs cleanly
+
+Phase 2 — Product Catalog schema
+7. Create packages/db/src/schema/product.ts with fields per BRD §3:
+   - id, tenant_id, standard audit columns
+   - Identity: sku (tenant-unique, manually entered), name, description, manufacturer (text, e.g., 'Premier Energies'), model (text)
+   - Tax: hsn_code (text, required, must be valid HSN format), gst_rate (decimal 5,2 — 5.00, 12.00, 18.00, 28.00 per BRD)
+   - Classification: category (text — e.g., 'Solar Panel', 'Inverter', 'Battery'), subcategory (text — e.g., 'TOPCon', 'Bifacial', 'Mono PERC')
+   - Specs (JSONB for vertical-specific fields per CLAUDE.md §16 extensibility): { wattage: 540, voltage: 41.2, cells: 144, warranty_years: 25, ... }
+   - Pricing: mrp (decimal 12,2), default_purchase_price (decimal 12,2, nullable), default_selling_price (decimal 12,2, nullable)
+   - Inventory hints: requires_serial (boolean, default true for solar panels; false for accessories), unit_of_measure (text, default 'Nos')
+   - Status: status ('active' | 'inactive' | 'discontinued')
+8. Indexes: UNIQUE (tenant_id, sku), index on (tenant_id, status, category), pg_trgm index on name + manufacturer + model
+9. RLS, audit trigger
+10. Generate migration
+
+Phase 3 — Inventory schema (data model only; procurement is Day 6)
+11. Create packages/db/src/schema/inventory.ts per BRD §4 and CLAUDE.md §11:
+    - inventory_items table:
+      - id, tenant_id, standard audit columns
+      - product_id (FK), serial_number (text, required IF product.requires_serial, can be NULL for non-serialized items)
+      - status enum: 'in_stock' | 'reserved' | 'dispatched' | 'delivered' | 'returned' | 'damaged' | 'lost'
+      - location: warehouse_code (text), bin (text, optional)
+      - procurement: procurement_id (FK to procurements table — created in Day 6 stub today), procurement_date, purchase_price (decimal 12,2)
+      - reservation: reserved_for_order_id (FK to orders, nullable — orders table doesn't exist yet, FK deferred)
+      - reserved_for_dealer_id (FK to dealers, nullable)
+      - reserved_at (timestamp, nullable)
+      - dispatch: dispatched_at, dispatch_id (FK to dispatches, deferred)
+      - delivery: delivered_at, delivered_to (text, recipient name)
+      - flags: warranty_start_date, warranty_end_date, notes
+    - UNIQUE constraint: (tenant_id, serial_number) WHERE serial_number IS NOT NULL (per CLAUDE.md §5)
+    - Indexes: (tenant_id, status, product_id), (tenant_id, product_id, status), pg_trgm on serial_number
+12. Create the procurements table stub (will be fleshed out Day 6):
+    - id, tenant_id, audit columns
+    - procurement_date, supplier_name (text — manufacturer name for now; can become a relation in Phase 2), invoice_number, invoice_date, total_amount
+    - status enum: 'draft' | 'confirmed' | 'received'
+13. RLS on both tables
+14. Audit trigger on inventory_items (NOT on procurements yet — apply when finalized in Day 6)
+15. Generate migration
+
+Phase 4 — Dealer Master CRUD
+16. Create apps/web/lib/actions/dealers/ with tenantAction()-wrapped Server Actions:
+    - createDealer (admin, sales)
+    - updateDealer (admin, sales — but credit_limit + credit_period_days + discount_percent require admin)
+    - deactivateDealer (admin only) — sets status='inactive', inactivated_at=now(), captures reason
+    - reactivateDealer (admin only)
+    - bulkImportDealers (admin only) — CSV upload, validates each row, atomic transaction, returns per-row results
+17. Create tRPC procedures for queries:
+    - listDealers — paginated, filterable (status, type, category, risk_level, state, tags), searchable (legal_name, gstin, dealer_code via pg_trgm)
+    - getDealerById — includes recent activity (created/updated audit entries)
+    - searchDealers — for typeahead use in other modules (returns id, display_name, gstin, state, status)
+18. Dealer list page at app/(app)/dealers/page.tsx:
+    - Match prototype's dense table (56px row height)
+    - Columns: code, name + gstin, type, category, risk pill, credit limit, credit period, status pill, last activity
+    - Toolbar: search bar (debounced 250ms), filter chips, "+ New dealer" button (visible to admin + sales)
+    - Pagination: 50 per page with virtualized scrolling (TanStack Virtual) for performance with large dealer lists
+    - Empty state with illustration matching design tokens
+    - Row click navigates to detail page
+19. Dealer detail page at app/(app)/dealers/[id]/page.tsx:
+    - Hero section: dealer code (mono), legal name, status pill, action buttons (Edit, Deactivate)
+    - Tabs (or sections): Overview (all fields), Commercial Terms, Activity (audit log entries for this dealer — uses access_log + audit_log), Notes
+    - Inline-edit pattern from Day 4 (section-by-section editing)
+    - "Access logged" indicator since viewing a dealer writes to access_log
+20. Dealer create page at app/(app)/dealers/new/page.tsx:
+    - Multi-section form (Identity, Contact, Address, Compliance, Classification, Commercial Terms)
+    - Live GSTIN validation
+    - State dropdown with full Indian state list
+    - PAN auto-derive from GSTIN
+    - Submit → redirect to detail page
+
+Phase 5 — Product Catalog CRUD
+21. Server Actions in apps/web/lib/actions/products/:
+    - createProduct (admin only — products are commercially sensitive)
+    - updateProduct (admin only)
+    - deactivateProduct, reactivateProduct, discontinueProduct (admin only)
+    - bulkImportProducts (admin only) — CSV upload
+22. tRPC procedures:
+    - listProducts — paginated, filterable (status, category, subcategory, manufacturer)
+    - getProductById — includes inventory summary (in_stock count, reserved count) when inventory data exists
+    - searchProducts — typeahead for quotations/orders
+23. Product list page at app/(app)/catalog/page.tsx:
+    - Match prototype: card grid view (NOT a table) per design — each product card shows: image placeholder, name + manufacturer, SKU (mono), HSN + GST chip, MRP (mono, tabular figures), status pill
+    - Toggle between Grid view and Table view (user preference, stored in localStorage)
+    - Toolbar: search, filter chips (category, manufacturer, status), "+ New product" (admin only)
+24. Product detail page at app/(app)/catalog/[id]/page.tsx:
+    - Same inline-edit pattern
+    - Specs section renders the JSONB spec object with sensible labels (use a helper to convert keys: wattage → "Wattage (W)", warranty_years → "Warranty (years)")
+    - "Allowed in inventory" toggle (the requires_serial flag, with explanation)
+    - Inventory summary card (placeholder, will populate Day 6+)
+25. Product create page:
+    - SKU validation (tenant-unique, no whitespace)
+    - HSN format validation (4-8 digits)
+    - GST rate dropdown (5/12/18/28 only per BRD)
+    - Specs editor: friendly JSONB UI — start with common fields based on category (when category is "Solar Panel", auto-suggest wattage/voltage/cells/warranty fields)
+
+Phase 6 — Seed data expansion
+26. Update packages/db/src/seeds/ to add per CLAUDE.md §13:
+    - 3 manufacturers worth of products: Premier Energies (panels 400W-650W TOPCon + Bifacial), Adani Solar (panels Mono PERC), Vikram Solar (panels Bifacial). ~20 product SKUs total per tenant.
+    - 20 dealers per tenant, spread across:
+      - States: MH, AS, KA, TN, GJ, UP, RJ (mix of intra-state and inter-state vs each tenant's home state)
+      - Types: 10 retailer, 5 wholesaler, 3 installer, 2 EPC
+      - Categories: 5 A-category (large), 10 B-category, 5 C-category
+      - Risk levels: 3 high, 5 medium, 12 low
+      - Realistic Indian names (use a curated list, not Faker's English-only names)
+      - Real GSTIN format with valid checksums
+      - ~50% have credit terms set, rest don't
+27. Re-run pnpm db:seed and verify counts
+
+Phase 7 — Bulk import
+28. Both dealer and product bulk import use the same pattern:
+    - CSV upload via a dedicated page (/dealers/import, /catalog/import)
+    - Show CSV template download link
+    - Parse client-side with PapaParse, show preview (first 10 rows)
+    - On confirm, send rows server-side in batches of 100
+    - Server processes in a single transaction; partial failure rolls back entire import (atomic)
+    - Returns per-row result: ok / error with message
+    - Display results in a result table with "Download error report" CSV
+29. Validation per row uses the same Zod schema as the single-create form; reuse the schemas
+
+Phase 8 — Activity (audit) view
+30. Each dealer and product detail page has an "Activity" tab that lists audit_log entries for that entity (filtered by tenant_id + entity_type + entity_id)
+31. Format: timestamp (mono), user name + role badge, action (created/updated/deactivated), changed fields (collapsible diff for updates)
+32. Limited to last 50 entries; "View full history" link for more (Day 16 polish)
+
+Phase 9 — Tests
+33. Unit tests for Server Actions: createDealer, updateDealer with role checks, bulkImportDealers (success + partial failure rollback)
+34. Same for products
+35. Integration tests verifying RLS still holds: tenant A's dealers cannot be seen by tenant B
+36. Integration test for dealer search using pg_trgm — verify fuzzy match works
+37. CSV import test with a fixture CSV (10 dealers, 1 with bad GSTIN) — verify atomic rollback
+38. All previous tests still pass
+
+Phase 10 — Documentation
+39. Update CLAUDE.md if any new patterns emerged (likely: the JSONB specs editor pattern, the bulk-import pattern)
+40. Add 2 new runbooks to docs/RUNBOOKS.md: "Bulk importing dealers from a legacy system" and "Updating product GST rates after a tax change"
+
+Phase 11 — Verification
+41. pnpm typecheck, pnpm lint, pnpm build, pnpm test — all green
+42. Manual smoke test as admin@demo.test:
+    - /dealers shows 20 dealers from seed; filter by category B shows ~10
+    - Search "Solar" in dealer list → results within 250ms debounce
+    - Click a dealer → detail page with all sections, audit tab shows the seed creation
+    - Edit credit_limit on a dealer → verify audit_log entry + access_log entry written
+    - Try editing credit_limit as sales@demo.test → blocked with friendly error (role enforcement)
+    - /catalog shows 20 products as a grid; toggle to table view
+    - Search "TOPCon" → filters to panels with that subcategory
+    - Create new product with realistic specs → appears in list
+    - Try creating product as sales@demo.test → blocked
+    - Bulk import 5 dealers from a CSV (use the downloaded template) → results show 5 successes
+    - Bulk import a CSV with 1 invalid GSTIN → entire batch rolls back; error report shows the offending row
+43. Verify across two tenants: log in to demo, create dealer; log in to sample, confirm no demo dealers visible
+44. Commit with: feat(modules): day 5 — dealer master + product catalog + inventory schema
+
+GUARDRAILS:
+- All mutations use tenantAction() — never bypass with raw db calls
+- Role checks: products are admin-only, dealers allow sales for most edits except commercial terms
+- All money columns use decimal(12,2) — NEVER float for currency (per CLAUDE.md §19)
+- HSN codes must validate (4-8 digits, numeric only)
+- GST rates are restricted to {5, 12, 18, 28} — enforce with a check constraint AND a Zod enum
+- Dealer code generation must be atomic and tenant-scoped (use the document_counters mechanism from Day 2's schema)
+- Bulk imports are atomic (entire transaction or nothing) — do NOT allow partial imports in Phase 1
+- The inventory schema must accommodate the Day 6 procurement flow; review CLAUDE.md §11 and BRD §4 before finalizing the columns
+
+WHEN DONE:
+- Print a summary
+- List deviations with reasons
+- Print test counts: total tests, new tests added today
+- Confirm role-based access enforced server-side (not just UI)
+- Suggest the commit message
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+- [ ] All quality gates pass: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test`
+- [ ] `/dealers` shows ~20 dealers per tenant in a dense table
+- [ ] Dealer search returns results in <300ms even on slow connection
+- [ ] Dealer detail page opens with all sections + activity tab populated
+- [ ] Edit a dealer's credit limit as admin → success; as sales → blocked
+- [ ] `/catalog` shows ~20 products in card grid; toggle to table works
+- [ ] Product detail shows specs (e.g., "Wattage (W): 540")
+- [ ] Create product as admin → success; as sales → blocked
+- [ ] Bulk import 5 dealers from CSV → all 5 land
+- [ ] Bulk import a CSV with 1 bad row → entire import rolls back
+- [ ] Switch to sample tenant → demo's dealers/products are not visible (RLS)
+- [ ] audit_log has rows for each create/update; access_log has rows for each detail view
+
+### Update PROJECT_PLAN.md after Day 5
+
+Mark **B.5** as ✅, add today's date, append to changelog:
+
+```markdown
+| YYYY-MM-DD | B.5 Day 5 complete — dealer master + product catalog + inventory schema; first business modules using tenantAction contract | — |
+```
+
+This closes **Week 1**. You'll have all foundation work done + 2 business modules running on top of it.
+
+---
+
+## Day 6 — Inventory Procurement + Serial Entry + Status Transitions
+
+_Will be added when Day 5 is complete. Day 6 fleshes out the inventory module: bulk procurement intake, per-serial entry, status state machine (in_stock → reserved → dispatched → delivered), inventory dashboard._
 
 ---
 
