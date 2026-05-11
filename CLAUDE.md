@@ -86,21 +86,21 @@ These are **not up for debate** during Phase 1. If a library would be a better f
 
 ### Frontend
 
-| Concern       | Pick                                                 | Notes                                                                   |
-| ------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| Framework     | **Next.js 14** App Router                            | Server Components by default, Client Components only when needed        |
-| Language      | **TypeScript strict**                                | `noUncheckedIndexedAccess` enabled                                      |
-| Components    | **shadcn/ui**                                        | Copy components into `components/ui/`; restyle to design tokens         |
-| Styling       | **Tailwind v3**                                      | All design tokens as CSS variables in `globals.css`                     |
-| Fonts         | **Inter** + **IBM Plex Mono** via `next/font`        | Italic Inter replaces Instrument Serif from prototype                   |
-| Tables        | **TanStack Table v8** + **TanStack Virtual**         | Virtualize anything > 100 rows                                          |
-| Drag-drop     | **dnd-kit**                                          | Pipeline kanban only                                                    |
-| Charts        | **Tremor** + custom SVG                              | No Recharts directly. Sparklines/funnel = hand SVG                      |
-| Forms         | **react-hook-form** + **Zod**                        | Schemas live in `lib/schemas/` and are imported by both client + server |
-| Server cache  | **TanStack Query**                                   | Wrap tRPC; optimistic updates on stage moves                            |
-| Client state  | **React Context**                                    | Tweaks panel + sidebar collapse only. **No Zustand.**                   |
-| RPC           | **tRPC**                                             | For queries; mutations should prefer Server Actions                     |
-| Number format | `Intl.NumberFormat('en-IN')` + `formatINR()` utility | Auto-scale lakh/crore                                                   |
+| Concern       | Pick                                                                                                                     | Notes                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Framework     | **Next.js 14** App Router                                                                                                | Server Components by default, Client Components only when needed                                                 |
+| Language      | **TypeScript strict**                                                                                                    | `noUncheckedIndexedAccess` enabled                                                                               |
+| Components    | **shadcn/ui**                                                                                                            | Copy components into `components/ui/`; restyle to design tokens                                                  |
+| Styling       | **Tailwind v3**                                                                                                          | All design tokens as CSS variables in `globals.css`                                                              |
+| Fonts         | **Inter** + **IBM Plex Mono** via `next/font`                                                                            | Italic Inter replaces Instrument Serif from prototype                                                            |
+| Tables        | **TanStack Table v8** + **TanStack Virtual**                                                                             | Virtualize anything > 100 rows                                                                                   |
+| Drag-drop     | **dnd-kit**                                                                                                              | Pipeline kanban only                                                                                             |
+| Charts        | **Tremor** + custom SVG                                                                                                  | No Recharts directly. Sparklines/funnel = hand SVG                                                               |
+| Forms         | **react-hook-form** + **Zod**                                                                                            | Schemas live in `lib/schemas/` and are imported by both client + server                                          |
+| Server cache  | **TanStack Query**                                                                                                       | Wrap tRPC; optimistic updates on stage moves                                                                     |
+| Client state  | **React Context**                                                                                                        | Tweaks panel + sidebar collapse only. **No Zustand.**                                                            |
+| RPC           | **Server Components + typed query helpers (`lib/queries/`)** for reads; **Server Actions + `tenantAction()`** for writes | tRPC removed Day 5 — redundant when Server Components do typed queries natively. ADR-011 captures the rationale. |
+| Number format | `Intl.NumberFormat('en-IN')` + `formatINR()` utility                                                                     | Auto-scale lakh/crore                                                                                            |
 
 ### Backend
 
