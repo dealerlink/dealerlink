@@ -71,13 +71,13 @@
 
 ### Week 1 — Foundation (Days 1–5)
 
-| #   | Day   | Deliverable                                                                 | Status | Date       | Notes                                                                |
-| --- | ----- | --------------------------------------------------------------------------- | ------ | ---------- | -------------------------------------------------------------------- |
-| B.1 | Day 1 | Repo scaffold, design tokens, fonts, base layout (Sidebar + Topbar + Shell) | ✅     | 2026-05-10 | 63 files, commit d364ad7. Two follow-ups carried to Day 2 (R.5, R.6) |
-| B.2 | Day 2 | Drizzle schema (tenant, user, role) + Lucia auth + login screen             | ⏳     |            |                                                                      |
-| B.3 | Day 3 | RLS policies, tenant middleware, audit log triggers, seed scripts           | ⏳     |            |                                                                      |
-| B.4 | Day 4 | Tenant provisioning admin app (admin.dealerlink.in route group)             | ⏳     |            |                                                                      |
-| B.5 | Day 5 | Dealer Master CRUD + Product Catalog + Inventory schema                     | ⏳     |            |                                                                      |
+| #   | Day   | Deliverable                                                                 | Status | Date       | Notes                                                                                                                                                   |
+| --- | ----- | --------------------------------------------------------------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B.1 | Day 1 | Repo scaffold, design tokens, fonts, base layout (Sidebar + Topbar + Shell) | ✅     | 2026-05-10 | 63 files, commit d364ad7. Two follow-ups carried to Day 2 (R.5, R.6)                                                                                    |
+| B.2 | Day 2 | Drizzle schema (tenant, user, role) + Lucia auth + login screen             | ✅     | 2026-05-11 | Initial commit included Lucia snake_case bug; fixed in 81613de with full audit. 4 similar latent bugs caught and fixed. Prop types widened at boundary. |
+| B.3 | Day 3 | RLS policies, tenant middleware, audit log triggers, seed scripts           | ⏳     |            |                                                                                                                                                         |
+| B.4 | Day 4 | Tenant provisioning admin app (admin.dealerlink.in route group)             | ⏳     |            |                                                                                                                                                         |
+| B.5 | Day 5 | Dealer Master CRUD + Product Catalog + Inventory schema                     | ⏳     |            |                                                                                                                                                         |
 
 ### Week 2 — Core Operations (Days 6–10)
 
@@ -215,15 +215,18 @@ These items, if delayed, push the whole timeline:
 
 ## Risks & Open Items
 
-| #   | Risk / Open item                                                                                                                | Owner       | Status                                                   |
-| --- | ------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------- |
-| R.1 | Prototype files still labeled "Distribyte"; Claude Code must silently rename to "Dealerlink" during implementation              | Claude Code | Mitigated via CLAUDE.md §0                               |
-| R.2 | Puppeteer memory leaks under bulk PDF generation                                                                                | Dev         | Mitigated via worker process isolation + 100-job restart |
-| R.3 | Postgres storage growth from email body logging                                                                                 | Dev         | Mitigated by moving large bodies to Spaces in Phase 2    |
-| R.4 | First tenant onboarding requires manual provisioning (no self-serve in Phase 1)                                                 | Operator    | Acceptable; admin app makes it 5 min                     |
-| R.5 | ESLint not in pre-commit hook (pnpm strict isolation issue with parserOptions.project)                                          | Dev         | To fix in Day 2 Phase 9                                  |
-| R.6 | tailwind-preset uses Record<string, any> instead of Partial<Config>                                                             | Dev         | To fix in Day 2 Phase 10                                 |
-| R.7 | PowerShell ExecutionPolicy blocked pnpm scripts on Windows; resolved with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` | Dev         | Resolved — note for any other Windows contributor        |
+| #    | Risk / Open item                                                                                                                                                                                                                                      | Owner                      | Status                                                   |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------- |
+| R.1  | Prototype files still labeled "Distribyte"; Claude Code must silently rename to "Dealerlink" during implementation                                                                                                                                    | Claude Code                | Mitigated via CLAUDE.md §0                               |
+| R.2  | Puppeteer memory leaks under bulk PDF generation                                                                                                                                                                                                      | Dev                        | Mitigated via worker process isolation + 100-job restart |
+| R.3  | Postgres storage growth from email body logging                                                                                                                                                                                                       | Dev                        | Mitigated by moving large bodies to Spaces in Phase 2    |
+| R.4  | First tenant onboarding requires manual provisioning (no self-serve in Phase 1)                                                                                                                                                                       | Operator                   | Acceptable; admin app makes it 5 min                     |
+| R.5  | ~~ESLint not in pre-commit hook~~                                                                                                                                                                                                                     | Resolved in Day 2 Phase 9  |
+| R.6  | ~~tailwind-preset uses Record<string, any>~~                                                                                                                                                                                                          | Resolved in Day 2 Phase 10 |
+| R.7  | PowerShell ExecutionPolicy blocked pnpm scripts on Windows; resolved with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`                                                                                                                       | Dev                        | Resolved — note for any other Windows contributor        |
+| R.8  | Lucia DatabaseUserAttributes is dev-supplied; TypeScript can't validate against actual library output. Misconfig caused full audit of 4 components. Mitigation: prop types widened at boundary. Phase 2: add runtime Zod validation at auth boundary. | Dev                        | Phase 2 hygiene                                          |
+| R.9  | No integration test exercising Lucia's session contract; bug only surfaced via UI crash. Phase 2: add an auth-contract test.                                                                                                                          | Dev                        | Phase 2 hygiene                                          |
+| R.10 | Pattern of unguarded .split/.charAt/.toUpperCase on user/tenant fields keeps recurring. ESLint plugin to detect this could help.                                                                                                                      | Dev                        | Phase 2 if it recurs                                     |
 
 ---
 
@@ -231,14 +234,15 @@ These items, if delayed, push the whole timeline:
 
 Append a dated entry every time you complete a task or change a status.
 
-| Date       | Change                                                                                                           | By  |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- | --- |
-| 2026-05-09 | PROJECT_PLAN.md created                                                                                          | —   |
-| 2026-05-09 | Stage 0 marked complete (8/8)                                                                                    | —   |
-| 2026-05-09 | Stage A marked complete (9/10 active, A.10 parked)                                                               | —   |
-| 2026-05-10 | B.1 Day 1 complete — 63 files, monorepo + design system + base layout, all 3 quality gates green, commit d364ad7 | —   |
-| 2026-05-10 | PowerShell execution policy fix documented in R.7                                                                | —   |
-|            |                                                                                                                  |     |
+| Date       | Change                                                                                                                                                                             | By  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| 2026-05-09 | PROJECT_PLAN.md created                                                                                                                                                            | —   |
+| 2026-05-09 | Stage 0 marked complete (8/8)                                                                                                                                                      | —   |
+| 2026-05-09 | Stage A marked complete (9/10 active, A.10 parked)                                                                                                                                 | —   |
+| 2026-05-10 | B.1 Day 1 complete — 63 files, monorepo + design system + base layout, all 3 quality gates green, commit d364ad7                                                                   | —   |
+| 2026-05-10 | PowerShell execution policy fix documented in R.7                                                                                                                                  | —   |
+| 2026-05-11 | B.2 Day 2 complete — Drizzle schema, RLS, Lucia auth, login (Aurora), seed (9 users), dashboard greeting. Initial Lucia snake_case bug caught and fixed via audit. Commit 81613de. | —   |
+|            |                                                                                                                                                                                    |     |
 
 ---
 
