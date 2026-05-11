@@ -30,6 +30,7 @@ BEGIN
   LOOP
     IF k = 'password_hash'
        OR k = 'inbound_email_token'
+       OR k = 'token'
        OR k LIKE '%_secret'
        OR k LIKE '%_token'
     THEN
@@ -58,6 +59,17 @@ BEGIN
   IF v_read_only IS NOT NULL THEN
     RAISE EXCEPTION 'Mutations are not allowed in read-only context (operator impersonation)'
       USING ERRCODE = '42501';
+  END IF;
+
+  -- Tenant DELETE: skip the audit INSERT. We would otherwise insert an
+  -- audit_log row whose tenant_id points at a just-deleted tenant; the
+  -- FK check would fire BEFORE the ON DELETE CASCADE cleans audit_log,
+  -- and would fail (see Day 4 tenant-provisioning tests). The cascade
+  -- removes any prior audit rows for this tenant anyway, so we'd lose
+  -- the tombstone either way — recording the DELETE belongs in the
+  -- operator-action access_log when tenant deletion ships.
+  IF TG_OP = 'DELETE' AND TG_TABLE_NAME = 'tenants' THEN
+    RETURN OLD;
   END IF;
 
   v_user := app_current_user();
@@ -114,6 +126,14 @@ BEGIN
     END IF;
   END IF;
 
+  -- DELETE flowing in via tenant cascade: the parent tenant row is gone
+  -- before this trigger fires on its children (tenant_settings, users,
+  -- access_log, etc.), so the audit_log FK would fail. Skip — the
+  -- cascade is wiping the audit row anyway.
+  IF TG_OP = 'DELETE' AND NOT EXISTS (SELECT 1 FROM tenants WHERE id = v_tenant) THEN
+    RETURN OLD;
+  END IF;
+
   INSERT INTO audit_log (
     tenant_id, entity_type, entity_id, action,
     before, after, changed_by, ip, user_agent
@@ -141,4 +161,19 @@ CREATE TRIGGER audit_trg
 DROP TRIGGER IF EXISTS audit_trg ON users;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON users
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 4: tenant_settings edits are operator-driven (gstin, bank, address,
+-- logo, doc prefixes, defaults). Every change becomes an audit row.
+DROP TRIGGER IF EXISTS audit_trg ON tenant_settings;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON tenant_settings
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 4: inbound_token_history captures the OLD token when an operator
+-- rotates. Audit so the rotation event itself is logged (in addition to
+-- the tenant_settings.inbound_email_token UPDATE which is also audited).
+DROP TRIGGER IF EXISTS audit_trg ON inbound_token_history;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON inbound_token_history
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();

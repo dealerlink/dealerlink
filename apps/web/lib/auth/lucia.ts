@@ -23,6 +23,7 @@ const userAttributesSchema = z.object({
   role: z.enum(['admin', 'sales', 'accounts', 'dispatch', 'operator']),
   fullName: z.string().min(1),
   status: z.enum(['active', 'invited', 'suspended', 'deleted']),
+  mustChangePassword: z.boolean(),
 });
 
 export type UserAttributes = z.infer<typeof userAttributesSchema>;
@@ -66,6 +67,7 @@ declare module 'lucia' {
       role: 'admin' | 'sales' | 'accounts' | 'dispatch' | 'operator';
       fullName: string;
       status: 'active' | 'invited' | 'suspended' | 'deleted';
+      mustChangePassword: boolean;
     };
   }
 }

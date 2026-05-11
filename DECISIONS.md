@@ -310,7 +310,7 @@ Tenant routing is the foundation of the multi-tenant architecture. The choice af
 
 ### Context
 
-Day 2 shipped a silent bug: Lucia's `getUserAttributes` read snake_case keys (`data.full_name`) from a Drizzle row that returns camelCase (`data.fullName`). Every attribute was `undefined`. The Sidebar crashed several files downstream when it called `.split` on the missing name. TypeScript was happy — the `DatabaseUserAttributes` module declaration matched what we _expected_ the row to look like, not what Drizzle actually returns.
+Day 2 shipped a silent bug: Lucia's `getUserAttributes` read snake*case keys (`data.full_name`) from a Drizzle row that returns camelCase (`data.fullName`). Every attribute was `undefined`. The Sidebar crashed several files downstream when it called `.split` on the missing name. TypeScript was happy — the `DatabaseUserAttributes` module declaration matched what we \_expected* the row to look like, not what Drizzle actually returns.
 
 The shape of the row Drizzle returns is a runtime fact, not a compile-time one. Type declarations cannot detect drift between them.
 
@@ -354,6 +354,53 @@ Any auth-flow boundary that bridges the database to user-facing code is a high-v
 - Adding a column to `users` requires a corresponding update to `userAttributesSchema`. Forgetting causes a loud, traceable error rather than silent corruption.
 - We have a place to put cross-cutting attribute coercion (lowercasing email, trimming whitespace) if it's ever needed.
 - The cost is one Zod parse per session validation — negligible.
+
+---
+
+## ADR-010 — Temporary-password + must-rotate flow for operator-provisioned users
+
+**Date:** 2026-05-11
+**Status:** Accepted
+
+### Context
+
+Day 4 ships operator-driven tenant provisioning (ADR-002). When an operator creates a tenant or adds a user, the user has not yet chosen a password — and operators must not learn or store one for them. Two competing constraints:
+
+1. The user has to be able to log in immediately, so we need a credential to hand off.
+2. That credential must not become a persistent password that lingers in operator inboxes or password managers.
+
+A magic-link flow would resolve this cleanly but adds a token-validation surface, a 15-minute window mailer, and a new failure mode (expired link). Phase 1 isn't ready to invest in that infrastructure.
+
+### Decision
+
+Operator-provisioned users receive a **12-character temporary password** generated server-side and delivered via the welcome email. The user's row carries `users.must_change_password = true`. The login flow accepts that password once; on the next request, the user is forced through a password-rotation screen before reaching the rest of the app.
+
+The temporary password format is:
+
+- 12 characters
+- ≥1 uppercase letter, ≥1 lowercase, ≥1 digit, ≥1 of `!@#$%&*`
+- Random alphabet excludes visually-ambiguous glyphs (`I`, `O`, `l`, `0`, `1`)
+- Each character drawn from a cryptographically strong source (`crypto.randomInt`)
+
+Generation lives in `apps/web/lib/admin/credentials.ts`. The plaintext value is stored briefly in `email_delivery_log.meta.temporaryPassword` so the worker can render the email; the dispatch helper strips it from `meta` on success. No long-term plaintext copy exists.
+
+### Alternatives considered
+
+- **Magic-link sign-up** (token in URL) → cleaner UX, but adds a token table, an expiry job, and a "link expired — request another" UI surface. Defer to Phase 2.
+- **Email a reset URL instead of a password** → equivalent to magic-link with extra steps.
+- **OAuth / SSO** → out of scope for Phase 1 (ADR doesn't exist; would require operator decisions on IdPs).
+- **Operator picks the password** → operators handle plaintext credentials for every tenant; unacceptable from a least-privilege standpoint.
+
+### Why this matters
+
+Onboarding speed is one of Day 4's success criteria (<2 minutes from operator click to admin logged in). Temporary passwords are the lowest-friction option that doesn't compromise the don't-store-plaintext rule. The `must_change_password` gate ensures the temporary credential is single-use in practice.
+
+### Consequences
+
+- A new boolean column on `users` (`must_change_password`) and a corresponding field on the Lucia user attributes schema (ADR-009).
+- The login flow has to render a password-rotation screen when the flag is set; users cannot dismiss it.
+- `email_delivery_log.meta` may briefly contain a plaintext password while a delivery is queued. The audit trigger's `%_token` / `password_hash` redaction does not cover it; mitigation is the worker stripping the field on `status='sent'` and the row's RLS scope being limited to its tenant.
+- Reset-password flow (Phase 5 in the Day 4 build) uses the same machinery: new temp password, `must_change_password=true`, sessions invalidated, email queued.
 
 ---
 

@@ -1,4 +1,13 @@
-import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant';
 
@@ -17,6 +26,10 @@ export const users = pgTable(
     role: userRole().notNull(),
     fullName: text().notNull(),
     status: userStatus().notNull().default('active'),
+    // True when the user must rotate their password on next login. Set when
+    // an operator provisions or resets a tenant user; cleared on successful
+    // password change.
+    mustChangePassword: boolean().notNull().default(false),
     lastAuthEventAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

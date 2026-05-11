@@ -53,7 +53,7 @@ const TENANT_SEEDS: TenantSeed[] = [
     legalName: 'Demo Solar Distributors Pvt Ltd',
     displayName: 'Demo Solar Distributors',
     state: 'Maharashtra',
-    gstin: '27AABCD1234E1Z5',
+    gstin: '27AABCD1234E1Z8',
     pan: 'AABCD1234E',
     bank: {
       name: 'HDFC Bank',
@@ -73,7 +73,7 @@ const TENANT_SEEDS: TenantSeed[] = [
     legalName: 'Sample Industrial Co Pvt Ltd',
     displayName: 'Sample Industrial Co',
     state: 'Karnataka',
-    gstin: '29AABCS9999P1Z2',
+    gstin: '29AABCS9999P1ZY',
     pan: 'AABCS9999P',
     bank: {
       name: 'ICICI Bank',
@@ -108,6 +108,9 @@ async function main() {
     TRUNCATE TABLE
       auth_events,
       audit_log,
+      access_log,
+      email_delivery_log,
+      inbound_token_history,
       sessions,
       document_counters,
       tenant_settings,

@@ -354,7 +354,7 @@ These are mandatory. Each has its own table (or external system) and writer patt
 | 1   | **Domain audit** (`audit_log`)            | Postgres | Postgres triggers on Order, Payment, Dispatch, Inventory | Forever                     |
 | 2   | **Email content** (`email_log`)           | Postgres | Outbound from app, inbound from Resend webhook           | Forever                     |
 | 3   | **Auth events** (`auth_events`)           | Postgres | Lucia hooks: login, logout, failed pwd, pwd change       | 1 year                      |
-| 4   | **Email delivery** (`email_delivery_log`) | Postgres | Resend webhook handler                                   | 90 days                     |
+| 4   | **Email delivery** (`email_delivery_log`) | Postgres | Worker render+send pipeline + Resend webhook handler     | 90 days                     |
 | 5   | **Sensitive access** (`access_log`)       | Postgres | Next.js middleware on dealer/payment/export routes       | 1 year                      |
 | 6   | **Document generation** (`document_log`)  | Postgres | Worker writes after each PDF render                      | Forever (GST audit)         |
 | 7   | **App stdout/stderr**                     | Axiom    | `pino` logger piped from both Node processes             | 30 days                     |
@@ -496,6 +496,11 @@ Server Action → enqueue 'render-pdf' job → pg-boss → workers/jobs/render-p
 - Argon2 for password hashing.
 - Session lifetime: 30 days, with refresh on activity.
 - Password policy: min 8 chars, 1 uppercase, 1 number, 1 special.
+- `users.must_change_password` (Day 4) gates the login flow: when true, the
+  user is forced through a password-rotation screen before reaching the rest
+  of the app. Set by operator-driven provisioning + password resets
+  (ADR-010). Cleared on successful rotation. Surfaced on the Lucia session
+  attributes so client code can route appropriately.
 
 ### Four fixed roles
 
@@ -737,6 +742,7 @@ Every tenant-specific value lives in `tenants` and `tenant_settings`. **No tenan
 | Default credit period (days)         | `tenant_settings.default_credit_period`      | Order workflow               |
 | Low-stock threshold                  | `tenant_settings.low_stock_threshold`        | Inventory alerts             |
 | Inbound email token                  | `tenant_settings.inbound_email_token`        | BCC-to-CRM matching          |
+| Retired inbound tokens (grace)       | `inbound_token_history` (per-tenant)         | 7-day Resend-webhook grace   |
 | Notification preferences             | `tenant_settings.notification_prefs` (JSONB) | Notification engine          |
 
 ---

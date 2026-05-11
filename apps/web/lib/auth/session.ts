@@ -13,6 +13,7 @@ export type AuthContext = {
     role: 'admin' | 'sales' | 'accounts' | 'dispatch' | 'operator';
     fullName: string;
     status: 'active' | 'invited' | 'suspended' | 'deleted';
+    mustChangePassword: boolean;
   };
   session: {
     id: string;
@@ -69,6 +70,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
       role: result.user.role,
       fullName: result.user.fullName,
       status: result.user.status,
+      mustChangePassword: result.user.mustChangePassword,
     },
     session: {
       id: result.session.id,

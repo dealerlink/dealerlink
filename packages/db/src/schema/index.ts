@@ -11,3 +11,5 @@ export * from './audit-log';
 export * from './auth-events';
 export * from './access-log';
 export * from './rate-limit';
+export * from './email-delivery-log';
+export * from './inbound-token-history';
