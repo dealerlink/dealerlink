@@ -303,7 +303,192 @@ Also tick off **R.5** and **R.6** from the Risks register if the carried-over de
 
 ## Day 3 — RLS Hardening + Tenant Middleware + Audit Pipeline
 
-_Will be added when Day 2 is complete. Day 3 hardens the multi-tenancy story and locks in the audit pipeline before any business modules go in._
+**Goal:** Lock the multi-tenancy contract. By end of day, every Server Action and tRPC procedure runs inside a guaranteed tenant context, audit logs capture all relevant changes, and the operator → tenant impersonation flow is testable.
+
+**Estimated time:** 4–6 hours of Claude Code work + ~1 hour of your verification
+
+**Deliverable:** Production-ready multi-tenancy. Cross-tenant access is impossible by construction. Every business module added from Day 5+ inherits this for free.
+
+### Prompt for Claude Code
+
+```
+You are implementing Day 3 of the Dealerlink build. Day 2 shipped successfully (commit 81613de) — Drizzle schema, RLS, Lucia auth, login screen, seed with 9 users, dashboard greeting. Today we harden the multi-tenancy story before any business modules arrive Day 5+.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md (especially §5 data model, §6 logging surface, §10 auth, §11 critical workflows, §19 standards)
+2. DECISIONS.md (ADR-001 subdomain routing, ADR-002 admin app with operator role)
+3. Day 2 commit 81613de — review what shipped before extending it
+
+DAY 3 SCOPE:
+
+Phase 1 — Tenant resolution middleware (production-grade)
+1. Audit apps/web/lib/tenant/resolve.ts (created in Day 2) and harden it. Resolution rules:
+   - Production: <slug>.dealerlink.in -> slug
+   - Production: app.dealerlink.in -> no tenant (operator routes only)
+   - Production: admin.dealerlink.in -> no tenant (operator routes only)
+   - Local dev: localhost?tenant=<slug> -> slug
+   - Local dev: localhost (no query param) -> no tenant (login screen shows generic Dealerlink branding)
+2. Create apps/web/middleware.ts (Next.js Edge middleware) that:
+   - Runs on every request to (app)/* and admin/* routes
+   - Reads the host/query param via resolve.ts
+   - Sets a request header X-Tenant-Slug for downstream Server Components
+   - For (app)/* routes: if no tenant resolved, redirect to login
+   - For admin/* routes: if request is not from admin subdomain (or ?admin=true in dev), redirect to login
+   - Bypasses static assets, _next, api/health
+3. Create apps/web/lib/tenant/context.ts:
+   - getTenantContext() — cached per request, returns { tenant, settings } or throws NotFoundError
+   - getCurrentUser() — cached per request, returns the Lucia user or throws UnauthorizedError
+   - Both use Next.js's cache() from 'react' for request-scoped memoization
+4. Add Zod validation at the Lucia boundary (resolves R.8 from PROJECT_PLAN.md):
+   - In apps/web/lib/auth/lucia.ts, define a Zod schema for DatabaseUserAttributes that matches the Drizzle users table shape
+   - getUserAttributes parses the row through Zod; on parse failure, throws a loud error with the actual shape received
+   - This converts silent undefined-field bugs into immediate startup errors
+
+Phase 2 — withTenant() transaction wrapper hardening
+5. Audit packages/db/src/with-tenant.ts (created in Day 2). Ensure:
+   - It opens a transaction
+   - Sets BOTH app.tenant_id AND app.user_id (the latter for audit triggers per CLAUDE.md §6)
+   - Rolls back on error
+   - Has proper TypeScript inference so the callback receives a typed transaction client
+6. Add an explicit unit test for withTenant():
+   - Setting and reading current_setting('app.tenant_id')
+   - Verifying RLS actually filters when set vs unset
+   - Confirming session variables don't leak between transactions
+
+Phase 3 — Server Action wrapper for guaranteed tenant context
+7. Create apps/web/lib/actions/wrap.ts with two higher-order functions:
+   - tenantAction(allowedRoles, fn) — wraps a Server Action with: auth check, role check, tenant context, withTenant transaction, Zod input validation, error normalization to AppError union type
+   - operatorAction(fn) — same but for the operator role (no tenant_id is set; only platform-level actions)
+8. Migrate the existing login/logout actions from Day 2 to use these wrappers where applicable
+9. Document the wrap pattern in CLAUDE.md §10 with a code example (append to the existing auth section, don't rewrite)
+
+Phase 4 — Audit pipeline completeness
+10. Audit packages/db/src/triggers/audit-log.sql (created in Day 2). Ensure:
+    - Trigger handles INSERT (before=null, after=NEW), UPDATE (before=OLD, after=NEW), DELETE (before=OLD, after=null)
+    - Sensitive fields are redacted in the log (password_hash, session tokens, inbound_email_token)
+    - tenant_id is pulled from current_setting('app.tenant_id', true), with NULL allowed for operator-level changes
+    - changed_by is pulled from current_setting('app.user_id', true)
+    - ip and user_agent are populated from a separate set of session variables (app.request_ip, app.request_ua) — these will be set by tenantAction wrapper
+11. Apply the audit trigger to tenants and users tables (these are the only data tables that exist today). Other business tables get triggered on Day 5 when they're added.
+12. Write integration tests in packages/db/tests/audit.test.ts:
+    - INSERT a user -> audit_log has a row with action=insert, before=null, after=user row
+    - UPDATE a user -> audit_log has action=update with both before and after diffs
+    - DELETE a user -> audit_log has action=delete with before=user row, after=null
+    - Verify password_hash is redacted in all three cases
+
+Phase 5 — Access log middleware for sensitive routes
+13. Per CLAUDE.md §6 logging surface, create apps/web/lib/audit/access-log.ts with a recordAccess(entityType, entityId, action) helper that writes to access_log table
+14. Create packages/db/src/schema/access-log.ts (didn't exist in Day 2):
+    - id, tenant_id, user_id, entity_type, entity_id, action ('view' | 'export' | 'download'), ip, user_agent, accessed_at
+    - Index on (tenant_id, entity_type, entity_id) and (tenant_id, user_id, accessed_at)
+    - RLS policy: tenant_isolation
+15. Generate and run the migration
+16. The actual logging hooks get attached to dealer/payment/dispatch views starting Day 5 — Day 3 only sets up the infrastructure
+
+Phase 6 — Operator → tenant impersonation flow
+17. Per ADR-002, operators provision tenants. To debug tenant issues, operators may need a controlled impersonation flow.
+18. Add to the admin app (app/admin/tenants/[id]/page.tsx):
+    - View a tenant's details
+    - "Enter tenant workspace" button -> sets a special operator_impersonation cookie + redirects to <slug>.dealerlink.in (or ?tenant=<slug> in dev)
+    - All access while impersonating is logged to access_log with action='operator_impersonation_view'
+    - A banner at the top of (app)/* routes shows "Operator impersonating tenant X — Exit impersonation" when active
+    - Operators cannot perform mutations while impersonating (read-only); enforce via tenantAction guard
+19. Add tests in apps/web/tests/impersonation.test.ts covering: enter, view, attempted mutation blocked, exit
+
+Phase 7 — RLS isolation test expansion
+20. Expand packages/db/tests/rls.test.ts (created in Day 2) to cover every table that has RLS:
+    - tenants (no RLS — operators have access)
+    - users (RLS on tenant_id)
+    - tenant_settings (RLS on tenant_id)
+    - sessions (no RLS — looked up by id)
+    - document_counters (RLS on tenant_id)
+    - audit_log (RLS on tenant_id)
+    - auth_events (RLS on tenant_id)
+    - access_log (RLS on tenant_id)
+21. Each test:
+    - Sets app.tenant_id to tenant A
+    - Inserts a row
+    - Switches to tenant B
+    - Confirms SELECT returns zero rows
+    - Confirms UPDATE/DELETE silently affect zero rows
+22. Add this test to CI as a required check (resolves R.9 from PROJECT_PLAN.md)
+
+Phase 8 — Health endpoint enrichment
+23. Update apps/web/app/api/health/route.ts (created in Day 1 as a stub) to actually check:
+    - DB connection (SELECT 1)
+    - DB query latency (in ms)
+    - Schema migrations are at the latest version
+    - Audit trigger is installed (check pg_trigger)
+    - RLS is enabled on the expected tables
+24. Return JSON per CLAUDE.md §6 health endpoint contract
+25. Add a rate limiter (60 req/min per IP) using a Postgres-backed rate_limit table — this gets used by login too in a later day
+
+Phase 9 — Documentation
+26. Update CLAUDE.md §10 to reflect the tenantAction/operatorAction pattern with a concrete code example
+27. Add a new short section to CLAUDE.md §11 documenting the operator impersonation flow
+28. Update DECISIONS.md with a new ADR-009 recording the Zod-at-Lucia-boundary decision (this addresses R.8)
+
+Phase 10 — Verification
+29. Run pnpm typecheck, pnpm lint, pnpm build — all green
+30. Run pnpm test from root — all unit + integration tests pass
+31. Run the manual flow:
+    - Visit localhost:3000 (no tenant) -> generic login screen
+    - Visit localhost:3000?tenant=demo -> "Sign in to Demo Solar Distributors"
+    - Log in as admin@demo.test -> dashboard
+    - Log in as operator@dealerlink.test -> /admin
+    - From /admin, click "Enter tenant workspace" for Demo Solar -> redirected with impersonation banner showing
+    - Try to perform a mutation while impersonating -> blocked with friendly error
+    - Click "Exit impersonation" -> back to /admin
+32. Query the audit_log to confirm rows accumulated during testing
+33. Commit with message: feat(tenancy): day 3 — middleware, action wrappers, audit pipeline, impersonation
+
+GUARDRAILS:
+- Do NOT skip RLS tests. Every table with tenant_id needs an isolation test.
+- Do NOT widen permissions in the operator impersonation flow. Read-only is non-negotiable for Phase 1.
+- Do NOT log sensitive fields in audit (password_hash, tokens). Redact at the trigger layer.
+- If Next.js Edge middleware can't access Drizzle (it can't on Edge runtime), put the middleware on Node runtime explicitly via `export const runtime = 'nodejs'` in middleware.ts
+- If Lucia v3's Zod-at-getUserAttributes approach isn't idiomatic, use a different validation point — the goal is to never silently expose undefined attributes again
+
+WHEN DONE:
+- Print a summary of what was created
+- List any deviations from spec with reasons
+- Print which tables now have RLS isolation tests passing
+- Tell me what to verify visually
+- Suggest the commit message
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` all green
+- [ ] Visit `localhost:3000` (no tenant param) → generic login, no tenant branding
+- [ ] Visit `localhost:3000?tenant=demo` → "Sign in to Demo Solar Distributors"
+- [ ] Visit `localhost:3000?tenant=nonexistent` → graceful error or generic login, NOT a crash
+- [ ] Log in as `operator@dealerlink.test / password123` → lands on `/admin`
+- [ ] `/admin/tenants` shows both seeded tenants
+- [ ] Click "Enter tenant workspace" → impersonation banner shows at top of dashboard
+- [ ] Try a mutation while impersonating → blocked with friendly error
+- [ ] "Exit impersonation" → back to `/admin`
+- [ ] Query: `docker compose exec postgres psql -U dealerlink -d dealerlink_dev -c "SELECT entity_type, action, count(*) FROM audit_log GROUP BY 1,2;"` shows audit rows accumulating
+- [ ] Query: `SELECT entity_type, action, count(*) FROM access_log GROUP BY 1,2;` shows operator impersonation views logged
+- [ ] `/api/health` returns richer JSON with db latency, migration version, RLS check
+- [ ] All RLS isolation tests pass (one test per table — `pnpm test packages/db/tests/rls.test.ts`)
+- [ ] Password hash never appears in any audit_log row (verify with: `SELECT before, after FROM audit_log WHERE entity_type = 'user' LIMIT 5;` — passwords should be redacted)
+
+### Update PROJECT_PLAN.md after Day 3
+
+Mark **B.3** as ✅, add today's date, append to changelog:
+
+```markdown
+| YYYY-MM-DD | B.3 Day 3 complete — tenant middleware, action wrappers, audit pipeline hardening, operator impersonation, RLS tests on all tables | — |
+```
+
+Resolve **R.8** and **R.9** if Zod-at-boundary and CI-required-RLS-test were both shipped.
+
+---
+
+## Day 4 — Tenant Provisioning Admin App
+
+_Will be added when Day 3 is complete. Day 4 fleshes out the operator-only admin app: create tenant form, edit settings, list users, regenerate inbound email tokens._
 
 ---
 
