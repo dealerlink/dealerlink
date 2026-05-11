@@ -488,7 +488,206 @@ Resolve **R.8** and **R.9** if Zod-at-boundary and CI-required-RLS-test were bot
 
 ## Day 4 — Tenant Provisioning Admin App
 
-_Will be added when Day 3 is complete. Day 4 fleshes out the operator-only admin app: create tenant form, edit settings, list users, regenerate inbound email tokens._
+**Goal:** Operators can create, configure, and manage tenants end-to-end via the admin app. By the end of Day 4, an operator can onboard a brand-new tenant in under 2 minutes — no SQL, no CLI, no manual steps. This is the first day the system can onboard a real customer.
+
+**Estimated time:** 4–5 hours of Claude Code work + ~30 min of your verification
+
+**Deliverable:** A working `admin.dealerlink.in` admin app with: create tenant, edit tenant settings, manage tenant users, regenerate inbound email tokens. Tested end-to-end with Playwright.
+
+### Prompt for Claude Code
+
+```
+You are implementing Day 4 of the Dealerlink build. Day 3 shipped successfully — tenant middleware, action wrappers, audit pipeline, operator impersonation, 45 tests passing across 8 tables. Today we build out the operator-facing admin app so a brand-new tenant can be onboarded without touching SQL.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md (especially §10 auth/roles, §16 tenant configuration surface, §19 standards)
+2. DECISIONS.md (ADR-002 internal admin app, ADR-007 branding upload spec, ADR-009 Zod at boundary)
+3. Day 3 commit — review tenantAction/operatorAction patterns; today's mutations all use operatorAction
+4. docs/Distribyte.html and docs/screens-extra.jsx — visual reference for form styling, table density, and the operator's admin look. Admin uses the same design system as the tenant app but with subtle distinction (e.g., a "Platform" badge or different sidebar header).
+
+DAY 4 SCOPE:
+
+Phase 1 — Create tenant flow
+1. Create app/admin/tenants/new/page.tsx — a form with these fields per CLAUDE.md §16:
+   - Tenant identity:
+     - slug (text, lowercase alphanumeric + hyphens, 3-32 chars, must be unique) — live validation with debounced check against DB
+     - legal_name (text, required, max 255)
+     - display_name (text, required, max 100)
+   - Compliance:
+     - gstin (text, validated against GSTIN format + checksum) — use isValidGSTIN() from lib/format/
+     - pan (text, auto-derived from GSTIN positions 3-12 but editable)
+     - state (dropdown, all 28 Indian states + 8 UTs, required — used for tax CGST/SGST vs IGST decision)
+   - Registered address:
+     - address_line1, address_line2, city, pincode (6 digits), state (dropdown — same list, may differ from compliance state)
+   - Bank details (for invoice footer):
+     - bank_account_name, bank_account_number, bank_ifsc, bank_branch
+   - Initial admin user:
+     - admin_email (validated email)
+     - admin_full_name
+     - Password is NOT collected; a temporary password is generated and emailed
+   - Branding (deferred to settings page; not on create form to keep it focused)
+
+2. Form validation via react-hook-form + Zod. Submit button disabled until valid.
+3. Visual treatment: match the design system. Two-column layout for the form fields (section headings: "Identity", "Compliance", "Address", "Bank", "Initial Admin"). Sticky "Create tenant" button at the bottom right.
+
+Phase 2 — createTenant Server Action
+4. Create apps/web/lib/actions/admin/create-tenant.ts using operatorAction() wrapper from Day 3:
+   - Input: Zod schema mirroring the form
+   - Steps inside a single transaction (operatorAction doesn't auto-wrap in withTenant because there's no tenant yet):
+     a. Validate slug doesn't exist (case-insensitive)
+     b. Generate UUID for tenant
+     c. Insert tenants row (id, slug, legal_name, display_name, status='active')
+     d. Generate inbound email token (32 hex chars via crypto.randomBytes)
+     e. Insert tenant_settings row with all fields from form + defaults from CLAUDE.md §16 (default_currency='INR', default_locale='en-IN', fiscal_year_start=4, default_quote_validity=30, default_credit_period=30, low_stock_threshold=5, inbound_email_token, empty doc_prefixes JSONB starting with {QT:'QT', PI:'PI', INV:'INV', ORD:'ORD', PAY:'PAY', DSP:'DSP'})
+     f. Generate temporary password (12 chars, mix of upper/lower/digit/special)
+     g. Hash password with @node-rs/argon2
+     h. Insert admin user with role='admin', tenant_id=new tenant id, must_change_password=true (add this column to users schema if missing)
+     i. Enqueue a pg-boss job 'send-tenant-welcome-email' with: tenant info, admin email, temporary password, login URL
+     j. Write audit_log entry manually (operatorAction doesn't auto-audit since no tenant context — capture as platform-level event)
+     k. Return { tenantId, slug, adminEmail, loginUrl }
+   - On success, redirect operator to /admin/tenants/[id] with a success toast showing the credentials
+5. Error handling per CLAUDE.md §19.1: discriminated union result. Frontend shows specific error message for VALIDATION (field errors), CONFLICT (slug taken), INTERNAL (generic, with retry button).
+
+Phase 3 — Welcome email job
+6. Create apps/workers/src/jobs/send-tenant-welcome-email.ts:
+   - Renders a React Email template with: tenant display_name, admin name, login URL (https://<slug>.dealerlink.in/login in prod, http://localhost:3000/login?tenant=<slug> in dev), temporary credentials, instructions to change password on first login
+   - Sends via Resend
+   - Logs to email_delivery_log (table created in Day 4 if not present; otherwise add it now per CLAUDE.md §6 — id, tenant_id (nullable for platform emails), recipient, subject, status, provider_message_id, sent_at)
+   - Retries up to 3 times on failure
+7. Create the React Email template at apps/web/components/emails/TenantWelcomeEmail.tsx using @react-email/components. Match the design system tokens (paper background, ink text, accent button).
+
+Phase 4 — Tenant detail / edit settings page
+8. Enhance app/admin/tenants/[id]/page.tsx (created in Day 3 as read-only view) to:
+   - Show all current tenant_settings fields organized in sections
+   - Each section has an "Edit" button that opens an inline edit form (not a modal — keep it dense like the prototype)
+   - Sections: Identity (slug — DANGER ZONE, can rename but warn about URL changes), Compliance (GSTIN, PAN, state), Address, Bank, Branding (logo upload), Document prefixes (JSONB editor with friendly UI), Defaults (quote validity, credit period, low-stock threshold, default T&Cs textarea)
+9. For logo upload (per ADR-007):
+   - Accept PNG, SVG, JPG up to 1 MB
+   - Recommend 400×120 px
+   - Upload directly to DO Spaces if DO Spaces env vars are configured; otherwise store as base64 in tenant_settings.logo_url with a note "Configure DO_SPACES_* env vars for production storage" (this lets dev work without DO Spaces)
+   - Sanitize SVGs with DOMPurify before storage to prevent XSS
+   - Show preview before save
+10. Each edit action uses operatorAction() with a Zod schema for the specific section being edited. Audit_log captures the change.
+
+Phase 5 — Tenant users management
+11. Create app/admin/tenants/[id]/users/page.tsx:
+   - Lists all users for the tenant (table with name, email, role, status, last login)
+   - "Add user" button -> form for: full_name, email, role (admin/sales/accounts/dispatch — no operator), password (temporary, will be emailed) auto-generated
+   - Per-row actions: Edit (name, role, status), Deactivate (sets status='inactive'), Reset password (generates new temp password, emails it)
+12. Server Actions for: createTenantUser, updateTenantUser, deactivateTenantUser, resetTenantUserPassword. All use operatorAction() but with explicit tenant_id parameter; the action does the equivalent of withTenant() manually since we're acting on a tenant from outside its context.
+13. Reset password flow: invalidate all existing sessions for that user (DELETE FROM sessions WHERE user_id=...), generate new temp password, set must_change_password=true, send email.
+
+Phase 6 — Regenerate inbound email token
+14. On the tenant detail page, add a "Regenerate inbound email token" button with strong warning:
+    - "This will change <slug>+<oldtoken>@mail.dealerlink.in to <slug>+<newtoken>@mail.dealerlink.in. Existing BCC instructions need updating. The old address will continue to work for 7 days then expire."
+15. Server Action regenerateInboundToken(tenantId):
+    - Generates new token
+    - Updates tenant_settings.inbound_email_token
+    - Records the OLD token in a new table inbound_token_history (tenant_id, token, retired_at, expires_at = now() + 7 days)
+    - The inbound webhook handler (built in Day 14) checks this history for grace-period matches
+16. Schema: create inbound_token_history table with RLS, audit trigger, and standard columns
+
+Phase 7 — Operator UX polish
+17. Sidebar in /admin layout shows: Dashboard, Tenants, Operators (Phase 2), Platform Settings (stub for now)
+18. /admin/dashboard shows platform metrics: total tenants, active tenants, tenants created this month, total users across all tenants, recent provisioning activity
+19. Each metric is a card with the same dense KPI style as the tenant dashboard prototype
+20. Add a "Platform" badge next to the brand mark in admin sidebar to make it visually distinct from tenant workspaces
+
+Phase 8 — Tests
+21. Unit tests for createTenant() Server Action:
+    - Valid input creates tenant + admin user + queues email
+    - Duplicate slug returns CONFLICT
+    - Invalid GSTIN returns VALIDATION
+    - Invalid pincode returns VALIDATION
+    - Transaction rolls back if any step fails (test by mocking a failure in step h)
+22. Playwright E2E test apps/web/tests/e2e/operator-onboarding.spec.ts:
+    - Log in as operator@dealerlink.test
+    - Click "New tenant", fill form for "Test Distributors" with slug "test", real-looking GSTIN, MH state, etc.
+    - Submit
+    - Verify redirect to tenant detail page
+    - Verify credentials shown on screen
+    - In a second browser context, navigate to http://localhost:3000/login?tenant=test
+    - Log in with the credentials shown
+    - Verify dashboard loads with "Test Distributors" in sidebar
+    - Verify audit_log has entries for tenant creation
+    - Clean up: delete the test tenant via SQL teardown
+23. Run all existing tests — they should still pass with the new schema columns
+
+Phase 9 — Documentation
+24. Update CLAUDE.md §16 if any tenant_settings columns were added during Day 4 (e.g., must_change_password on users)
+25. Update DECISIONS.md with ADR-010 if any meaningful decisions were made (e.g., temporary password length, must-change-password flow)
+26. Add a brief "Onboarding a new tenant" runbook to CLAUDE.md or a new docs/RUNBOOKS.md file — operator-facing instructions on using the new admin app
+
+Phase 10 — Verification
+27. pnpm typecheck, pnpm lint, pnpm build, pnpm test — all green
+28. Manual smoke test:
+    - Log in as operator
+    - Create a tenant called "Smoke Test Co" with slug "smoke"
+    - Verify credentials are shown
+    - Verify email job ran (check pg-boss state table or email_delivery_log)
+    - In dev, the email won't actually send unless RESEND_FROM_EMAIL is verified; verify the job was enqueued and email content is correct
+    - Open localhost:3000/login?tenant=smoke
+    - Log in with credentials -> "Smoke Test Co" dashboard
+    - Log out, log back in as operator
+    - Click impersonate Smoke Test Co -> banner appears
+    - Exit impersonation, edit Smoke Test Co's GSTIN -> verify audit_log captured the change
+    - Add a user to Smoke Test Co -> verify
+    - Regenerate inbound token -> verify history row created
+    - Clean up: delete test tenant (operator action for this is fine too — add it to the detail page with strong confirmation)
+29. Commit with: feat(admin): day 4 — tenant provisioning admin app, user management, token rotation
+
+GUARDRAILS:
+- All admin mutations use operatorAction(), NEVER tenantAction() (operators don't have a tenant context)
+- DO NOT auto-login operators into newly created tenants — always send the email and let the admin user log in normally
+- Temporary passwords MUST be force-rotated on first login (must_change_password flag)
+- Slug renames are dangerous — show a clear warning; document the cascading effects in the warning text
+- Logo upload sanitizes SVGs (XSS risk)
+- DO Spaces credentials are not yet configured in .env.local (per the project plan, deferred to Stage D) — fall back to base64 storage in dev with a clear warning logged once at startup
+- Email sending in dev: if RESEND_FROM_EMAIL is the default sandbox (onboarding@resend.dev), emails go to a Resend sandbox inbox — that's fine for dev verification, just log the message ID
+
+WHEN DONE:
+- Print a summary of what shipped
+- Print the deviations from spec with reasons
+- Confirm the Playwright E2E test passes
+- Confirm operator can onboard a tenant in <2 minutes
+- Suggest the commit message
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` all green
+- [ ] Log in as `operator@dealerlink.test` → land on `/admin`
+- [ ] Sidebar shows "Platform" badge to distinguish from tenant workspace
+- [ ] `/admin/dashboard` shows platform-level metrics (total tenants, active tenants, etc.)
+- [ ] Click "New tenant" → form loads with all required sections
+- [ ] Slug validation works live (try "demo" → shows "already taken")
+- [ ] GSTIN validation works (try invalid GSTIN → error)
+- [ ] Submit valid form → redirects to tenant detail with credentials visible
+- [ ] Welcome email job is in pg-boss queue (check via `docker compose exec postgres psql -U dealerlink -d dealerlink_dev -c "SELECT name, state FROM pgboss.job WHERE name = 'send-tenant-welcome-email' ORDER BY createdon DESC LIMIT 5;"`)
+- [ ] Open `localhost:3000/login?tenant=<new-slug>` → tenant-specific login screen
+- [ ] Log in with temp credentials → forced to change password
+- [ ] After password change → dashboard with new tenant name in sidebar
+- [ ] Back as operator → `/admin/tenants/[id]/users` → add a sales user → verify in DB
+- [ ] Regenerate inbound token → confirm warning shown, history row created
+- [ ] Edit tenant GSTIN → audit_log row created with before/after diff
+- [ ] Logo upload (PNG and SVG) → preview shows, save persists
+- [ ] Try uploading SVG with `<script>` tag → script is stripped (DOMPurify working)
+- [ ] Playwright E2E `operator-onboarding.spec.ts` passes
+- [ ] Stopwatch test: can you (manually) create a tenant in under 2 minutes? If not, where's the friction?
+
+### Update PROJECT_PLAN.md after Day 4
+
+Mark **B.4** as ✅, add today's date, append to changelog:
+
+```markdown
+| YYYY-MM-DD | B.4 Day 4 complete — operator admin app, tenant CRUD, user management, inbound token rotation, welcome email | — |
+```
+
+---
+
+## Day 5 — Dealer Master + Product Catalog + Inventory Schema
+
+_Will be added when Day 4 is complete. Day 5 ships the first three business modules — Dealer Master CRUD, Product Catalog, and the Inventory schema (procurement happens Day 6). This is where the system starts to do real distributor work._
 
 ---
 
