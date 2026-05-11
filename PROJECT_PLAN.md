@@ -76,7 +76,7 @@
 | B.1 | Day 1 | Repo scaffold, design tokens, fonts, base layout (Sidebar + Topbar + Shell) | ✅     | 2026-05-10 | 63 files, commit d364ad7. Two follow-ups carried to Day 2 (R.5, R.6)                                                                                    |
 | B.2 | Day 2 | Drizzle schema (tenant, user, role) + Lucia auth + login screen             | ✅     | 2026-05-11 | Initial commit included Lucia snake_case bug; fixed in 81613de with full audit. 4 similar latent bugs caught and fixed. Prop types widened at boundary. |
 | B.3 | Day 3 | RLS policies, tenant middleware, audit log triggers, seed scripts           | ✅     | 2026-05-11 | 45 tests passing across 8 tables. Operator impersonation with read-only enforcement. 4 documented deviations, all justified. R.8 closed via ADR-009.    |     |
-| B.4 | Day 4 | Tenant provisioning admin app (admin.dealerlink.in route group)             | ⏳     |            |                                                                                                                                                         |
+| B.4 | Day 4 | Tenant provisioning admin app (admin.dealerlink.in route group)             | ✅     | 2026-05-11 | 75 tests, 6 runbooks, cascade-delete audit bug fixed. 4 documented deviations, all tracked. Commit 62c568b.                                             |     |
 | B.5 | Day 5 | Dealer Master CRUD + Product Catalog + Inventory schema                     | ⏳     |            |                                                                                                                                                         |
 
 ### Week 2 — Core Operations (Days 6–10)
@@ -228,6 +228,10 @@ These items, if delayed, push the whole timeline:
 | R.9  | ~~No integration test for Lucia session contract~~                                                                               | Resolved — audit + RLS tests collectively cover the contract |
 | R.10 | Pattern of unguarded .split/.charAt/.toUpperCase on user/tenant fields keeps recurring. ESLint plugin to detect this could help. | Dev                                                          | Phase 2 if it recurs                                     |
 | R.11 | `tax` workspace has `--passWithNoTests` flag to let root test runner pass. Must be removed when tax engine ships on Day 9.       | Dev                                                          | Day 9                                                    |
+| R.12 | Playwright E2E deferred from Day 4 — operator-onboarding spec must be added on Day 18                                            | Dev                                                          | Day 18                                                   |
+| R.13 | Inline email dispatch from /admin/tenants/new — must be worker-ized when pg-boss bootstraps on Day 14                            | Dev                                                          | Day 14                                                   |
+| R.14 | Plain HTML email template instead of @react-email/components — revisit when 2nd template ships (Day 11 or 13)                    | Dev                                                          | Day 11/13                                                |
+| R.15 | Base64 logo fallback — swap to DO Spaces in Stage D                                                                              | Dev                                                          | Stage D                                                  |
 
 ---
 
@@ -235,16 +239,17 @@ These items, if delayed, push the whole timeline:
 
 Append a dated entry every time you complete a task or change a status.
 
-| Date       | Change                                                                                                                                                                             | By  |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| 2026-05-09 | PROJECT_PLAN.md created                                                                                                                                                            | —   |
-| 2026-05-09 | Stage 0 marked complete (8/8)                                                                                                                                                      | —   |
-| 2026-05-09 | Stage A marked complete (9/10 active, A.10 parked)                                                                                                                                 | —   |
-| 2026-05-10 | B.1 Day 1 complete — 63 files, monorepo + design system + base layout, all 3 quality gates green, commit d364ad7                                                                   | —   |
-| 2026-05-10 | PowerShell execution policy fix documented in R.7                                                                                                                                  | —   |
-| 2026-05-11 | B.2 Day 2 complete — Drizzle schema, RLS, Lucia auth, login (Aurora), seed (9 users), dashboard greeting. Initial Lucia snake_case bug caught and fixed via audit. Commit 81613de. | —   |
-| 2026-05-XX | B.3 Day 3 complete — tenant middleware, action wrappers, audit redaction, operator impersonation, 45 tests passing. ADR-009 closes R.8.                                            | —   |
-|            |                                                                                                                                                                                    |     |
+| Date       | Change                                                                                                                                                                                    | By  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| 2026-05-09 | PROJECT_PLAN.md created                                                                                                                                                                   | —   |
+| 2026-05-09 | Stage 0 marked complete (8/8)                                                                                                                                                             | —   |
+| 2026-05-09 | Stage A marked complete (9/10 active, A.10 parked)                                                                                                                                        | —   |
+| 2026-05-10 | B.1 Day 1 complete — 63 files, monorepo + design system + base layout, all 3 quality gates green, commit d364ad7                                                                          | —   |
+| 2026-05-10 | PowerShell execution policy fix documented in R.7                                                                                                                                         | —   |
+| 2026-05-11 | B.2 Day 2 complete — Drizzle schema, RLS, Lucia auth, login (Aurora), seed (9 users), dashboard greeting. Initial Lucia snake_case bug caught and fixed via audit. Commit 81613de.        | —   |
+| 2026-05-XX | B.3 Day 3 complete — tenant middleware, action wrappers, audit redaction, operator impersonation, 45 tests passing. ADR-009 closes R.8.                                                   | —   |
+| 2026-05-XX | B.4 Day 4 complete — operator admin app, tenant CRUD, user management, inbound token rotation, welcome email pipeline. Cascade-delete audit-trigger bug fixed in passing. Commit 62c568b. | —   |
+|            |                                                                                                                                                                                           |     |
 
 ---
 
