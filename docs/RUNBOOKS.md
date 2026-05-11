@@ -134,3 +134,72 @@ Short, operator-facing procedures for actions that ship with the admin app. Each
    - Provider downtime
 3. If transient, flip `status` back to `queued` and the next dispatch pulse (operator-triggered from `/admin` or a future pg-boss tick) will retry. The `meta.attempts` counter caps at 3.
 4. For repeated failures, fall back to R3 (reset password and hand off credentials manually).
+
+---
+
+## R7 — Bulk importing dealers from a legacy system
+
+**When to use:** A newly-onboarded tenant has hundreds of existing dealer records in an older CRM (Tally, Zoho, an Excel sheet) and wants them in Dealerlink without re-typing.
+
+**Time:** ~5 minutes per batch of up to 500 rows.
+
+**Prerequisites:** You (or the tenant admin) are signed in as a tenant admin. Per Day 5 guardrails, only the **admin** role can bulk-import; sales cannot.
+
+**Steps:**
+
+1. Sign in to the tenant workspace as an admin user.
+2. Navigate to **Dealers** in the sidebar, then click **Bulk import**.
+3. Click **Load template** to populate the textarea with the canonical column order:
+   `legalName, displayName, gstin, pan, state, city, pincode, type, category, riskLevel, email, phone, creditLimit, creditPeriodDays, discountPercent, tags`.
+4. Paste your source CSV, replacing the template body but keeping the header row. Required columns: `legalName`, `displayName`. Anything missing falls back to schema defaults (`type=retailer`, `category=B`, `riskLevel=low`).
+5. Click **Preview**. The first 10 rows are shown for visual sanity check. Confirm:
+   - GSTINs look right (15 chars, valid format)
+   - States are spelled correctly (the dealer state controls CGST/SGST vs IGST decisions on quotes)
+   - Tag values are comma-quoted (`"premium,strategic"`) since plain commas would be field separators
+6. Click **Confirm import (atomic)**.
+7. The whole batch goes in a single transaction. If any row fails validation or hits a GSTIN conflict against existing dealers, the entire import rolls back and the error message identifies the first offender. Fix the source CSV and retry — partial imports are forbidden by design.
+
+**On success:** Each dealer is assigned a sequential `dealer_code` (`DL-000xxx`) from the tenant's counter. The audit log records a `create` row per dealer attributed to your user.
+
+**Sizing:** The Server Action enforces a 500-row max per batch. For larger migrations (1,000+ dealers), split the source CSV into chunks. Don't try to bypass — the cap exists to keep the transaction short enough not to hold row locks during peak hours.
+
+---
+
+## R8 — Updating product GST rates after a tax change
+
+**When to use:** The GST Council changes the rate on a product category (e.g., HSN 8541 panels move from 18% to 12%). Every product affected must be updated before the next quotation is issued.
+
+**Time:** ~10 minutes for a few SKUs; an hour if you need to coordinate across tenants.
+
+**Prerequisites:** You are signed in as a tenant admin. The check constraint on `products.gst_rate` only accepts {0, 5, 12, 18, 28} — anything else is rejected at the DB layer.
+
+**Steps:**
+
+1. Confirm which HSN codes are affected by the rate change (refer to the gazette notification).
+2. In the tenant workspace, go to **Catalog**. Filter by **Category** or use the search bar to find affected SKUs (e.g., search "TOPCon" for panels in that subcategory).
+3. For each product:
+   - Click into the detail page.
+   - In the **Tax & pricing** section, click **Edit**.
+   - Change the **GST rate** dropdown to the new value.
+   - Click **Save**. The audit log captures the before/after.
+4. **Important:** The change applies to **new** quotations only. Quotations and invoices already in flight are frozen by design — the tax rate at the time of issue is what's billed. Don't try to retroactively re-tax a sent quote.
+5. For bulk updates across dozens of SKUs:
+   - Export the current catalog (Day 16 feature; for now, use the DB directly).
+   - Update the `gst_rate` column in the CSV.
+   - Use the **Bulk import** flow only for _new_ products — there is no bulk update in Phase 1. For bulk in-place changes, run a tenant-scoped SQL UPDATE through the admin DB, e.g.:
+
+     ```sql
+     -- Run as the admin role; bypasses RLS deliberately for ops work.
+     UPDATE products
+     SET gst_rate = 12, updated_at = now()
+     WHERE tenant_id = '<tenant-id>'
+       AND hsn_code LIKE '8541%'
+       AND status = 'active';
+     ```
+
+     The audit trigger fires per-row and the change is recorded with `app.user_id` if you set the GUC, otherwise as a system update.
+
+**Don't:**
+
+- Don't introduce GST rates outside {0, 5, 12, 18, 28} — the check constraint will reject them. If a new statutory rate is added, that requires a migration.
+- Don't update GST rates on `status='discontinued'` products; they shouldn't be selling anyway, and the change muddies the audit trail.

@@ -7,3 +7,4 @@ export {
   type DrizzleTx,
   type TenantContextOptions,
 } from './with-tenant';
+export { nextCounter, nextDealerCode, formatDealerCode } from './helpers/document-counter';

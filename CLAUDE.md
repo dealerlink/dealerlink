@@ -1015,6 +1015,16 @@ A short list of habits that keep the codebase healthy.
 - **Write the test first** for tax math, document numbering, and stage transitions. These are the bug-prone areas.
 - **One TODO ages out per week.** Either resolve it or convert to a tracked issue.
 
+### 19.7 Recurring patterns established in early days
+
+A handful of cross-module patterns were settled in Days 4-5. Reuse them instead of re-inventing.
+
+- **Per-tenant document numbering.** `document_counters` holds `(tenant_id, doc_type, fiscal_year)` with a `last_value`. Use the `nextCounter()` / `nextDealerCode()` helpers in `@dealerlink/db` — they perform an atomic `INSERT ... ON CONFLICT DO UPDATE` so two concurrent calls cannot allocate the same number. `fiscal_year=0` is reserved for non-fiscal counters (dealer code), all other doc types use the tenant's fiscal year per BRD §4.3.
+- **JSONB specs editor.** Vertical-specific fields (panel wattage, inverter capacity, etc.) live in `products.specs` as JSONB rather than separate columns. The catalog detail page uses a `humanize()` helper to render snake_case keys with friendly suffixes (`wattage` → `Wattage (W)`). Always default to `{}` so the JSONB is never NULL.
+- **Bulk import is atomic.** Both dealers and products use the same shape: a `bulkImport*Schema` Zod array cap at 500 rows, a single `tenantAction` transaction that pre-checks conflicts, then inserts each row, and rolls back on any single failure. No partial imports in Phase 1 — the operator UI guarantees this contract.
+- **Inline-edit sections.** The dealer + product detail pages use the same "Edit / Save / Cancel" section pattern established by the tenant settings page in Day 4. Each section maps to a Zod schema; commercial terms (`creditLimit`, `creditPeriodDays`, `discountPercent`) require `admin` while profile edits accept `sales`.
+- **Access logging on detail views.** Dealer detail pages call `recordAccess('dealer', id, 'view')` from a Server Component. Payment, dispatch, and export routes will do the same per CLAUDE.md §7.
+
 ---
 
 _Last updated: May 2026 · Architecture v4 · Phase 1 spec_

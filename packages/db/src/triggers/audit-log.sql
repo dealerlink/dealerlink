@@ -177,3 +177,20 @@ DROP TRIGGER IF EXISTS audit_trg ON inbound_token_history;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON inbound_token_history
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 5: dealer + product master + inventory items are auditable.
+-- Procurements stay un-audited until Day 6 finalizes the procurement flow.
+DROP TRIGGER IF EXISTS audit_trg ON dealers;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON dealers
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON products;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON products
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON inventory_items;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON inventory_items
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
