@@ -194,3 +194,15 @@ DROP TRIGGER IF EXISTS audit_trg ON inventory_items;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON inventory_items
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 6: procurements + procurement_items become auditable as the
+-- procurement workflow ships (draft → confirmed → received).
+DROP TRIGGER IF EXISTS audit_trg ON procurements;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON procurements
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON procurement_items;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON procurement_items
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();

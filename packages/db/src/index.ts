@@ -8,3 +8,14 @@ export {
   type TenantContextOptions,
 } from './with-tenant';
 export { nextCounter, nextDealerCode, formatDealerCode } from './helpers/document-counter';
+export {
+  ALLOWED_TRANSITIONS,
+  InvalidTransitionError,
+  InventoryItemNotFoundError,
+  isAllowed,
+  transitionInventoryItem,
+  reserveSerials,
+  getInventoryItemStatus,
+  type InventoryStatus,
+  type TransitionPatch,
+} from './inventory/transitions';

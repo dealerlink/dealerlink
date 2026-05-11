@@ -6,6 +6,53 @@
 
 ---
 
+## ADR-011 — Server Components + typed query helpers replace tRPC for reads
+
+**Date:** May 2026 (Day 5)
+**Status:** Locked
+**Decided by:** Dev
+**Supersedes:** CLAUDE.md §3 entry "RPC: tRPC for queries"
+
+### Decision
+
+Reads in tenant-facing routes are served by **Next.js Server Components** that
+call typed query helpers in `apps/web/lib/queries/*`. Writes go through
+**Server Actions** wrapped by `tenantAction()` / `operatorAction()`. tRPC is
+not used in Phase 1.
+
+### Alternatives considered
+
+- **tRPC** (CLAUDE.md §3 original pick) — adds a router layer that re-creates,
+  on the server side, what Server Components already provide for free. Every
+  route would build a router, an input schema, a procedure, then await it from
+  a Server Component which itself runs on the server. The extra hop has no
+  benefit because there is no client-side fetcher to type for tenant pages.
+- **Server Components + raw drizzle in `app/`** — works but bleeds DB shape
+  into pages and tempts duplication across routes.
+- **Server Components + typed query helpers (chosen)** — keeps DB calls inside
+  `lib/queries/` modules that import Zod filter schemas from `@dealerlink/schemas`
+  and return narrow row types. Pages stay thin; types flow naturally.
+
+### Why this matters
+
+- Removes a layer that paid no rent — every tRPC procedure would have been a
+  thin wrapper around an existing query helper, with the same Zod validation
+  the Server Action wrappers already enforce.
+- The boundary that matters (auth + RLS + audit context) is `tenantAction()`,
+  not the transport. RPC was never the multi-tenant gate.
+- Client islands that need data still use Server Actions (mutations) or accept
+  pre-fetched props from a Server Component parent. TanStack Query is reserved
+  for the few client surfaces that genuinely need it (Day 9 quotation builder).
+
+### Consequences
+
+- CLAUDE.md §3 RPC row updated to `Server Components + typed query helpers (lib/queries/) for reads; Server Actions + tenantAction() for writes`.
+- No `app/api/trpc/[trpc]` route, no router setup.
+- If a Phase 2 mobile/desktop client lands, a thin tRPC (or REST) shim can be
+  layered on top of the existing query helpers without disturbing the web app.
+
+---
+
 ## ADR-008 — Product Rename to Dealerlink (.in)
 
 **Date:** May 2026

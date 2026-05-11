@@ -104,6 +104,7 @@ export const dealers = pgTable(
       sql`${t.creditPeriodDays} IS NULL OR ${t.creditPeriodDays} >= 0`,
     ),
     check('dealers_discount_chk', sql`${t.discountPercent} >= 0 AND ${t.discountPercent} <= 100`),
+    check('dealers_gstin_not_empty_chk', sql`${t.gstin} IS NULL OR ${t.gstin} <> ''`),
   ],
 );
 

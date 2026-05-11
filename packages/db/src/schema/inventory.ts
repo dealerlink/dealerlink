@@ -4,6 +4,7 @@ import {
   date,
   decimal,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -36,14 +37,20 @@ export const procurements = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
 
+    procurementNumber: text().notNull(),
+
     procurementDate: date().notNull(),
     supplierName: text().notNull(),
     invoiceNumber: text(),
     invoiceDate: date(),
-    totalAmount: decimal({ precision: 14, scale: 2 }),
+    invoiceAttachmentUrl: text(),
+    totalAmount: decimal({ precision: 12, scale: 2 }).notNull().default('0'),
     notes: text(),
 
     status: procurementStatus().notNull().default('draft'),
+
+    confirmedAt: timestamp({ withTimezone: true }),
+    receivedAt: timestamp({ withTimezone: true }),
 
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdBy: uuid().references(() => users.id, { onDelete: 'set null' }),
@@ -51,9 +58,46 @@ export const procurements = pgTable(
     updatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [
+    uniqueIndex('procurements_tenant_number_uq').on(t.tenantId, t.procurementNumber),
     index('procurements_tenant_status_ix').on(t.tenantId, t.status),
     index('procurements_tenant_date_ix').on(t.tenantId, t.procurementDate),
-    check('procurements_total_chk', sql`${t.totalAmount} IS NULL OR ${t.totalAmount} >= 0`),
+    check('procurements_total_chk', sql`${t.totalAmount} >= 0`),
+  ],
+);
+
+export const procurementItems = pgTable(
+  'procurement_items',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    tenantId: uuid()
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    procurementId: uuid()
+      .notNull()
+      .references(() => procurements.id, { onDelete: 'cascade' }),
+    productId: uuid()
+      .notNull()
+      .references(() => products.id, { onDelete: 'restrict' }),
+
+    quantity: integer().notNull(),
+    unitPrice: decimal({ precision: 12, scale: 2 }).notNull(),
+    lineTotal: decimal({ precision: 12, scale: 2 }).notNull(),
+
+    serialsReceived: integer().notNull().default(0),
+
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('procurement_items_tenant_proc_ix').on(t.tenantId, t.procurementId),
+    index('procurement_items_tenant_product_ix').on(t.tenantId, t.productId),
+    check('procurement_items_qty_chk', sql`${t.quantity} > 0`),
+    check('procurement_items_unit_chk', sql`${t.unitPrice} >= 0`),
+    check('procurement_items_line_chk', sql`${t.lineTotal} >= 0`),
+    check(
+      'procurement_items_serials_chk',
+      sql`${t.serialsReceived} >= 0 AND ${t.serialsReceived} <= ${t.quantity}`,
+    ),
   ],
 );
 
@@ -115,5 +159,7 @@ export const inventoryItems = pgTable(
 
 export type Procurement = typeof procurements.$inferSelect;
 export type NewProcurement = typeof procurements.$inferInsert;
+export type ProcurementItem = typeof procurementItems.$inferSelect;
+export type NewProcurementItem = typeof procurementItems.$inferInsert;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type NewInventoryItem = typeof inventoryItems.$inferInsert;
