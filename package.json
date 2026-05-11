@@ -24,7 +24,8 @@
     "db:rollback": "pnpm --filter @dealerlink/db db:rollback",
     "db:seed": "pnpm --filter @dealerlink/db db:seed",
     "db:studio": "pnpm --filter @dealerlink/db db:studio",
-    "prepare": "husky"
+    "prepare": "husky",
+    "playwright:install": "pnpm --filter web exec playwright install chromium"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.18.0",
