@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 
-import { getAuthContext } from '@/lib/auth/session';
 import { logout } from '@/lib/auth/actions';
+import { getAuthContext } from '@/lib/auth/session';
+import { displayNameFrom } from '@/lib/format/initials';
 
 export const metadata = { title: 'Admin · Dealerlink' };
 
@@ -15,7 +16,11 @@ export default async function AdminPage() {
       <div className="mx-auto max-w-[640px] px-8 py-16">
         <div className="titlecaps">Operator console</div>
         <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.02em]">
-          Welcome, <span className="editorial font-normal">{ctx.user.fullName}</span>.
+          Welcome,{' '}
+          <span className="editorial font-normal">
+            {displayNameFrom(ctx.user.fullName, ctx.user.email)}
+          </span>
+          .
         </h1>
         <p className="text-mute mt-3 text-[14px]">
           Tenant provisioning and platform-level management land in a later milestone (ADR-002). For

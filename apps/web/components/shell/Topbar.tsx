@@ -9,7 +9,7 @@ interface BreadcrumbItem {
 }
 
 interface TopbarUser {
-  fullName: string;
+  fullName: string | null | undefined;
   email: string;
   role: string;
 }

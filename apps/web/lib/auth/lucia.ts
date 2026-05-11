@@ -20,11 +20,14 @@ export const lucia = new Lucia(adapter, {
       ...(process.env.NODE_ENV === 'production' ? { domain: '.dealerlink.in' } : {}),
     },
   },
+  // Drizzle returns columns by their TS property names (camelCase), regardless
+  // of the snake_case DB columns. The adapter passes the row through verbatim,
+  // so we read camelCase here too.
   getUserAttributes: (data) => ({
-    tenantId: data.tenant_id,
+    tenantId: data.tenantId,
     email: data.email,
     role: data.role,
-    fullName: data.full_name,
+    fullName: data.fullName,
     status: data.status,
   }),
 });
@@ -35,10 +38,10 @@ declare module 'lucia' {
   interface Register {
     Lucia: typeof lucia;
     DatabaseUserAttributes: {
-      tenant_id: string | null;
+      tenantId: string | null;
       email: string;
       role: 'admin' | 'sales' | 'accounts' | 'dispatch' | 'operator';
-      full_name: string;
+      fullName: string;
       status: 'active' | 'invited' | 'suspended' | 'deleted';
     };
   }

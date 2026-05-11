@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { displayNameFrom, initialsFrom } from '@/lib/format/initials';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -32,7 +33,8 @@ const NAV_ITEMS = [
 ] as const;
 
 interface SidebarUser {
-  fullName: string;
+  fullName: string | null | undefined;
+  email: string;
   role: string;
 }
 
@@ -73,11 +75,8 @@ function UserAvatar({ initials }: { initials: string }) {
 export function Sidebar({ user, tenant }: SidebarProps) {
   const pathname = usePathname();
 
-  const initials = user.fullName
-    .split(' ')
-    .map((w) => w[0] ?? '')
-    .slice(0, 2)
-    .join('');
+  const initials = initialsFrom(user.fullName, user.email);
+  const displayName = displayNameFrom(user.fullName, user.email);
 
   return (
     <aside
@@ -142,7 +141,7 @@ export function Sidebar({ user, tenant }: SidebarProps) {
         <div className="flex items-center gap-2 px-1">
           <UserAvatar initials={initials} />
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[12px]">{user.fullName}</div>
+            <div className="truncate text-[12px]">{displayName}</div>
             <div className="mono truncate text-[10.5px] text-[#7C7E89]">{user.role}</div>
           </div>
           <Link

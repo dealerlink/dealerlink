@@ -9,7 +9,7 @@ interface BreadcrumbItem {
 }
 
 interface ShellUser {
-  fullName: string;
+  fullName: string | null | undefined;
   role: string;
   email: string;
 }

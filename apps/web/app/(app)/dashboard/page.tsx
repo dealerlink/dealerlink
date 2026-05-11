@@ -1,4 +1,5 @@
 import { getAuthContext } from '@/lib/auth/session';
+import { displayNameFrom } from '@/lib/format/initials';
 
 function timeOfDay(date = new Date()): 'morning' | 'afternoon' | 'evening' {
   const hour = date.getHours();
@@ -9,7 +10,8 @@ function timeOfDay(date = new Date()): 'morning' | 'afternoon' | 'evening' {
 
 export default async function DashboardPage() {
   const ctx = await getAuthContext();
-  const firstName = ctx?.user.fullName.split(' ')[0] ?? 'there';
+  const fullDisplay = ctx ? displayNameFrom(ctx.user.fullName, ctx.user.email) : 'there';
+  const firstName = fullDisplay.split(' ')[0] ?? fullDisplay;
   const tod = timeOfDay();
 
   return (

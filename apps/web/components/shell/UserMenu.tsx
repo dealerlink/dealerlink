@@ -6,19 +6,17 @@ import Link from 'next/link';
 import { useTransition } from 'react';
 
 import { logout } from '@/lib/auth/actions';
+import { displayNameFrom, initialsFrom } from '@/lib/format/initials';
 
 interface UserMenuProps {
-  user: { fullName: string; email: string; role: string };
+  user: { fullName: string | null | undefined; email: string; role: string };
 }
 
 export function UserMenu({ user }: UserMenuProps) {
   const [isPending, startTransition] = useTransition();
 
-  const initials = user.fullName
-    .split(' ')
-    .map((w) => w[0] ?? '')
-    .slice(0, 2)
-    .join('');
+  const initials = initialsFrom(user.fullName, user.email);
+  const displayName = displayNameFrom(user.fullName, user.email);
 
   const handleLogout = () => {
     startTransition(async () => {
@@ -46,7 +44,7 @@ export function UserMenu({ user }: UserMenuProps) {
           className="text-ink shadow-paper hairline min-w-[220px] rounded-[6px] bg-white p-1 text-[12.5px]"
         >
           <div className="px-2.5 py-2">
-            <div className="font-medium">{user.fullName}</div>
+            <div className="font-medium">{displayName}</div>
             <div className="mono text-mute truncate text-[11px]">{user.email}</div>
             <div className="mono text-mute-2 mt-1 text-[10.5px] uppercase tracking-[0.08em]">
               {user.role}
