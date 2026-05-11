@@ -9,3 +9,5 @@ export * from './session';
 export * from './document-counter';
 export * from './audit-log';
 export * from './auth-events';
+export * from './access-log';
+export * from './rate-limit';

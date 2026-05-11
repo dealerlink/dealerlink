@@ -3,23 +3,36 @@ import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { ImpersonationBanner } from '@/components/shell/ImpersonationBanner';
 import { Shell } from '@/components/shell';
 import { getAuthContext } from '@/lib/auth/session';
+import { impersonationTenantId } from '@/lib/tenant/context';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getAuthContext();
   if (!ctx) redirect('/login');
-  if (ctx.user.role === 'operator') redirect('/admin');
 
-  let tenantBrief: { displayName: string; slug: string } | null = null;
-  if (ctx.user.tenantId) {
-    const [row] = await db
-      .select({ displayName: tenants.displayName, slug: tenants.slug })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.user.tenantId))
-      .limit(1);
-    tenantBrief = row ?? null;
+  const impersonatingId = impersonationTenantId();
+
+  // Operators are only allowed in the tenant shell if they hold an
+  // impersonation cookie. Otherwise they belong on /admin.
+  if (ctx.user.role === 'operator' && !impersonatingId) {
+    redirect('/admin');
   }
+
+  const effectiveTenantId = ctx.user.role === 'operator' ? impersonatingId : ctx.user.tenantId;
+  if (!effectiveTenantId) redirect('/login');
+
+  const [tenantBrief] = await db
+    .select({
+      id: tenants.id,
+      displayName: tenants.displayName,
+      slug: tenants.slug,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, effectiveTenantId))
+    .limit(1);
+  if (!tenantBrief) redirect('/login');
 
   return (
     <Shell
@@ -28,8 +41,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         role: ctx.user.role,
         email: ctx.user.email,
       }}
-      tenant={tenantBrief}
+      tenant={{ displayName: tenantBrief.displayName, slug: tenantBrief.slug }}
     >
+      {ctx.user.role === 'operator' && impersonatingId && (
+        <ImpersonationBanner tenantName={tenantBrief.displayName} tenantSlug={tenantBrief.slug} />
+      )}
       {children}
     </Shell>
   );

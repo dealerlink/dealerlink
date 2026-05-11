@@ -4,6 +4,8 @@ import { getAuthContext, type AuthContext } from './session';
 
 type Role = AuthContext['user']['role'];
 
+export type { AuthContext };
+
 /**
  * Server-side gate. Call at the top of every protected Server Action,
  * Route Handler, and tRPC procedure. Hides nothing — never trust the UI.

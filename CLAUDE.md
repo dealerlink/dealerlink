@@ -16,18 +16,18 @@ If you encounter "DistroFlow" or "Distribyte" anywhere in the BRD, prototype fil
 
 ### Quick reference
 
-| Surface | Value |
-|---|---|
-| Product name | **Dealerlink** |
-| Domain | `dealerlink.in` |
-| Repo | `dealerlink` |
-| Database (prod) | `dealerlink_prod` |
-| Database (dev) | `dealerlink_dev` |
-| Inbound email domain | `mail.dealerlink.in` |
-| Default app URL | `https://app.dealerlink.in` |
+| Surface                  | Value                                                      |
+| ------------------------ | ---------------------------------------------------------- |
+| Product name             | **Dealerlink**                                             |
+| Domain                   | `dealerlink.in`                                            |
+| Repo                     | `dealerlink`                                               |
+| Database (prod)          | `dealerlink_prod`                                          |
+| Database (dev)           | `dealerlink_dev`                                           |
+| Inbound email domain     | `mail.dealerlink.in`                                       |
+| Default app URL          | `https://app.dealerlink.in`                                |
 | Tenant subdomain pattern | `<tenant-slug>.dealerlink.in` (e.g., `demo.dealerlink.in`) |
-| Sentry project | `dealerlink-web`, `dealerlink-workers` |
-| Spaces bucket | `dealerlink-prod` |
+| Sentry project           | `dealerlink-web`, `dealerlink-workers`                     |
+| Spaces bucket            | `dealerlink-prod`                                          |
 
 If anything else becomes inconsistent (logo, marketing copy, support email, internal tool names), flag it — don't silently re-introduce the old name.
 
@@ -85,56 +85,61 @@ The product is **tenant-agnostic by design**. There is no hardcoded customer. Ev
 These are **not up for debate** during Phase 1. If a library would be a better fit for a specific module, prefer the locked choice for consistency.
 
 ### Frontend
-| Concern | Pick | Notes |
-|---|---|---|
-| Framework | **Next.js 14** App Router | Server Components by default, Client Components only when needed |
-| Language | **TypeScript strict** | `noUncheckedIndexedAccess` enabled |
-| Components | **shadcn/ui** | Copy components into `components/ui/`; restyle to design tokens |
-| Styling | **Tailwind v3** | All design tokens as CSS variables in `globals.css` |
-| Fonts | **Inter** + **IBM Plex Mono** via `next/font` | Italic Inter replaces Instrument Serif from prototype |
-| Tables | **TanStack Table v8** + **TanStack Virtual** | Virtualize anything > 100 rows |
-| Drag-drop | **dnd-kit** | Pipeline kanban only |
-| Charts | **Tremor** + custom SVG | No Recharts directly. Sparklines/funnel = hand SVG |
-| Forms | **react-hook-form** + **Zod** | Schemas live in `lib/schemas/` and are imported by both client + server |
-| Server cache | **TanStack Query** | Wrap tRPC; optimistic updates on stage moves |
-| Client state | **React Context** | Tweaks panel + sidebar collapse only. **No Zustand.** |
-| RPC | **tRPC** | For queries; mutations should prefer Server Actions |
-| Number format | `Intl.NumberFormat('en-IN')` + `formatINR()` utility | Auto-scale lakh/crore |
+
+| Concern       | Pick                                                 | Notes                                                                   |
+| ------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| Framework     | **Next.js 14** App Router                            | Server Components by default, Client Components only when needed        |
+| Language      | **TypeScript strict**                                | `noUncheckedIndexedAccess` enabled                                      |
+| Components    | **shadcn/ui**                                        | Copy components into `components/ui/`; restyle to design tokens         |
+| Styling       | **Tailwind v3**                                      | All design tokens as CSS variables in `globals.css`                     |
+| Fonts         | **Inter** + **IBM Plex Mono** via `next/font`        | Italic Inter replaces Instrument Serif from prototype                   |
+| Tables        | **TanStack Table v8** + **TanStack Virtual**         | Virtualize anything > 100 rows                                          |
+| Drag-drop     | **dnd-kit**                                          | Pipeline kanban only                                                    |
+| Charts        | **Tremor** + custom SVG                              | No Recharts directly. Sparklines/funnel = hand SVG                      |
+| Forms         | **react-hook-form** + **Zod**                        | Schemas live in `lib/schemas/` and are imported by both client + server |
+| Server cache  | **TanStack Query**                                   | Wrap tRPC; optimistic updates on stage moves                            |
+| Client state  | **React Context**                                    | Tweaks panel + sidebar collapse only. **No Zustand.**                   |
+| RPC           | **tRPC**                                             | For queries; mutations should prefer Server Actions                     |
+| Number format | `Intl.NumberFormat('en-IN')` + `formatINR()` utility | Auto-scale lakh/crore                                                   |
 
 ### Backend
-| Concern | Pick | Notes |
-|---|---|---|
-| Runtime | **Node 20** | Both processes |
-| Auth | **Lucia v3** | Session-based, sessions stored in Postgres |
-| ORM | **Drizzle** | Migrations via `drizzle-kit` |
-| Validation | **Zod** | Same schemas as frontend |
-| Mutations | **Next.js Server Actions** | Default for forms |
-| Queries | **tRPC procedures** | For dashboards, search, exports |
-| Job queue | **pg-boss** | Postgres-backed, no Redis |
-| PDF gen | **Puppeteer** in workers process | Renders the same React component used for live preview |
-| Email | **Resend** SDK | Templates via `react-email` |
+
+| Concern    | Pick                             | Notes                                                  |
+| ---------- | -------------------------------- | ------------------------------------------------------ |
+| Runtime    | **Node 20**                      | Both processes                                         |
+| Auth       | **Lucia v3**                     | Session-based, sessions stored in Postgres             |
+| ORM        | **Drizzle**                      | Migrations via `drizzle-kit`                           |
+| Validation | **Zod**                          | Same schemas as frontend                               |
+| Mutations  | **Next.js Server Actions**       | Default for forms                                      |
+| Queries    | **tRPC procedures**              | For dashboards, search, exports                        |
+| Job queue  | **pg-boss**                      | Postgres-backed, no Redis                              |
+| PDF gen    | **Puppeteer** in workers process | Renders the same React component used for live preview |
+| Email      | **Resend** SDK                   | Templates via `react-email`                            |
 
 ### Data
-| Concern | Pick | Notes |
-|---|---|---|
-| Database | **PostgreSQL 16** | DO Managed Postgres, Bangalore region |
-| Tenant isolation | **Row-Level Security (RLS)** | Every table has `tenant_id` + RLS policy. Non-negotiable. |
-| Search | **`pg_trgm`** + GIN indexes | Dealer name, GSTIN, serial number |
-| Audit | Postgres triggers + dedicated log tables | See §7 |
+
+| Concern          | Pick                                     | Notes                                                     |
+| ---------------- | ---------------------------------------- | --------------------------------------------------------- |
+| Database         | **PostgreSQL 16**                        | DO Managed Postgres, Bangalore region                     |
+| Tenant isolation | **Row-Level Security (RLS)**             | Every table has `tenant_id` + RLS policy. Non-negotiable. |
+| Search           | **`pg_trgm`** + GIN indexes              | Dealer name, GSTIN, serial number                         |
+| Audit            | Postgres triggers + dedicated log tables | See §7                                                    |
 
 ### External & Ops
-| Concern | Pick | Notes |
-|---|---|---|
-| Hosting | **DigitalOcean App Platform**, Bangalore | Web app on App Platform; workers on a small Droplet OR same App Platform component |
-| File storage | **DO Spaces** | S3-compatible, India region |
-| Email send + receive | **Resend** | Webhooks for inbound + delivery |
-| CI/CD | **GitHub Actions** | Auto-deploy `main` to DO App Platform |
-| Errors + APM | **Sentry** | Frontend + both Node processes |
-| Uptime | **Better Stack** | Pings `/health` every 30s |
-| Infra metrics | **DO Monitoring** | Built-in, just enable alerts |
-| App logs | **Axiom** | Structured JSON from stdout |
+
+| Concern              | Pick                                     | Notes                                                                              |
+| -------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| Hosting              | **DigitalOcean App Platform**, Bangalore | Web app on App Platform; workers on a small Droplet OR same App Platform component |
+| File storage         | **DO Spaces**                            | S3-compatible, India region                                                        |
+| Email send + receive | **Resend**                               | Webhooks for inbound + delivery                                                    |
+| CI/CD                | **GitHub Actions**                       | Auto-deploy `main` to DO App Platform                                              |
+| Errors + APM         | **Sentry**                               | Frontend + both Node processes                                                     |
+| Uptime               | **Better Stack**                         | Pings `/health` every 30s                                                          |
+| Infra metrics        | **DO Monitoring**                        | Built-in, just enable alerts                                                       |
+| App logs             | **Axiom**                                | Structured JSON from stdout                                                        |
 
 ### Explicitly NOT used in Phase 1
+
 Redis, Meilisearch, Zustand, Auth.js, Recharts, Instrument Serif, Turborepo, Kubernetes, PostHog, Twenty CRM. All have clean migration paths if Phase 2 needs them.
 
 ---
@@ -242,34 +247,34 @@ dealerlink/
 
 ## 5. Design System — The Non-Negotiables
 
-The design prototype (`Dealerlink.html`) is the **visual source of truth**. Match it pixel-perfectly. Aesthetic direction: *quiet precision* — dense, editorial, instrument-like.
+The design prototype (`Dealerlink.html`) is the **visual source of truth**. Match it pixel-perfectly. Aesthetic direction: _quiet precision_ — dense, editorial, instrument-like.
 
 ### Tokens (`apps/web/app/globals.css`)
 
 ```css
 :root {
-  --ink: #0B0F1A;
-  --ink-2: #1A2030;
-  --paper: #F7F7F4;
-  --paper-2: #EFEFEA;
-  --line: #E3E3DC;
-  --line-2: #D5D5CC;
-  --mute: #6B7280;
-  --mute-2: #94928A;
-  --accent: #3730A3;          /* deep indigo, primary action */
-  --accent-2: #4F46E5;
-  --accent-soft: #EEF2FF;
+  --ink: #0b0f1a;
+  --ink-2: #1a2030;
+  --paper: #f7f7f4;
+  --paper-2: #efefea;
+  --line: #e3e3dc;
+  --line-2: #d5d5cc;
+  --mute: #6b7280;
+  --mute-2: #94928a;
+  --accent: #3730a3; /* deep indigo, primary action */
+  --accent-2: #4f46e5;
+  --accent-soft: #eef2ff;
   --emerald: #047857;
-  --amber: #B45309;
-  --rose: #B91C1C;
-  --tile: #FBFBF8;
+  --amber: #b45309;
+  --rose: #b91c1c;
+  --tile: #fbfbf8;
 }
 ```
 
 ### Typography rules
 
 - **Inter** for all UI text. Italic for editorial moments (greetings, artboard labels, layer summaries).
-- **IBM Plex Mono** for *every* number, count, currency, ID, timestamp, GSTIN. Always with `font-feature-settings: "tnum", "zero"` (tabular figures).
+- **IBM Plex Mono** for _every_ number, count, currency, ID, timestamp, GSTIN. Always with `font-feature-settings: "tnum", "zero"` (tabular figures).
 - Currency display: `₹3.42 Cr`, `₹47.80 L`, `₹14,82,000`. Use `formatINR()` from `lib/format/`. Auto-scale to lakh/crore for values ≥ 1 lakh.
 - Editorial italic only for: dashboard greeting, artboard titles, layer summaries, "vs last period" subtitles. Don't sprinkle.
 
@@ -324,6 +329,7 @@ Soft delete only on entities with strong references (Dealer, Product). Use `dele
 ### Document numbering (BRD §4.3)
 
 Per-tenant, per-fiscal-year sequential counters with prefixes:
+
 - Quotation: `QT-2026-0001`
 - Proforma Invoice: `PI-2026-0001`
 - Order: `ORD-2026-0001`
@@ -343,16 +349,16 @@ Counter resets on **April 1** (Indian fiscal year). Implementation: a `document_
 
 These are mandatory. Each has its own table (or external system) and writer pattern.
 
-| # | Log | Storage | Written by | Retention |
-|---|---|---|---|---|
-| 1 | **Domain audit** (`audit_log`) | Postgres | Postgres triggers on Order, Payment, Dispatch, Inventory | Forever |
-| 2 | **Email content** (`email_log`) | Postgres | Outbound from app, inbound from Resend webhook | Forever |
-| 3 | **Auth events** (`auth_events`) | Postgres | Lucia hooks: login, logout, failed pwd, pwd change | 1 year |
-| 4 | **Email delivery** (`email_delivery_log`) | Postgres | Resend webhook handler | 90 days |
-| 5 | **Sensitive access** (`access_log`) | Postgres | Next.js middleware on dealer/payment/export routes | 1 year |
-| 6 | **Document generation** (`document_log`) | Postgres | Worker writes after each PDF render | Forever (GST audit) |
-| 7 | **App stdout/stderr** | Axiom | `pino` logger piped from both Node processes | 30 days |
-| 8 | **Errors** | Sentry | Sentry SDK in both processes | 30–90 days (Sentry default) |
+| #   | Log                                       | Storage  | Written by                                               | Retention                   |
+| --- | ----------------------------------------- | -------- | -------------------------------------------------------- | --------------------------- |
+| 1   | **Domain audit** (`audit_log`)            | Postgres | Postgres triggers on Order, Payment, Dispatch, Inventory | Forever                     |
+| 2   | **Email content** (`email_log`)           | Postgres | Outbound from app, inbound from Resend webhook           | Forever                     |
+| 3   | **Auth events** (`auth_events`)           | Postgres | Lucia hooks: login, logout, failed pwd, pwd change       | 1 year                      |
+| 4   | **Email delivery** (`email_delivery_log`) | Postgres | Resend webhook handler                                   | 90 days                     |
+| 5   | **Sensitive access** (`access_log`)       | Postgres | Next.js middleware on dealer/payment/export routes       | 1 year                      |
+| 6   | **Document generation** (`document_log`)  | Postgres | Worker writes after each PDF render                      | Forever (GST audit)         |
+| 7   | **App stdout/stderr**                     | Axiom    | `pino` logger piped from both Node processes             | 30 days                     |
+| 8   | **Errors**                                | Sentry   | Sentry SDK in both processes                             | 30–90 days (Sentry default) |
 
 ### `audit_log` schema
 
@@ -360,11 +366,11 @@ These are mandatory. Each has its own table (or external system) and writer patt
 export const auditLog = pgTable('audit_log', {
   id: uuid().primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull(),
-  entityType: text('entity_type').notNull(),    // 'order' | 'payment' | ...
+  entityType: text('entity_type').notNull(), // 'order' | 'payment' | ...
   entityId: uuid('entity_id').notNull(),
-  action: text('action').notNull(),              // 'create' | 'update' | 'delete'
-  before: jsonb('before'),                       // null on create
-  after: jsonb('after'),                         // null on delete
+  action: text('action').notNull(), // 'create' | 'update' | 'delete'
+  before: jsonb('before'), // null on create
+  after: jsonb('after'), // null on delete
   changedBy: uuid('changed_by'),
   changedAt: timestamp('changed_at').notNull().defaultNow(),
   // ip, user agent for traceability
@@ -378,6 +384,7 @@ Implement via Postgres triggers — application code does not write directly. Th
 ### `access_log` write pattern
 
 A Next.js middleware at `app/(app)/dealers/[id]/middleware.ts` (or equivalent route handler logic) writes a row when:
+
 - A dealer detail page is viewed
 - A payment record is viewed
 - A CSV/Excel export is downloaded
@@ -414,6 +421,7 @@ This is the highest-risk area for bugs. Follow these rules exactly (BRD §4).
 ### Three-party model
 
 Every document tracks three distinct parties:
+
 1. **Bill From** — the tenant (Distributor). Pulled from tenant settings.
 2. **Bill To** — the Dealer who pays. Selected on the deal.
 3. **Ship To** — consignee (may equal Bill To, or be a different end customer).
@@ -424,12 +432,13 @@ Every document tracks three distinct parties:
 // All tax math lives here. NEVER inline in routes.
 export function calculateGST(input: {
   distributorState: IndianState;
-  dealerState: IndianState;       // Bill To, NOT Ship To
+  dealerState: IndianState; // Bill To, NOT Ship To
   lineItems: LineItem[];
-}): TaxBreakdown
+}): TaxBreakdown;
 ```
 
 Rules:
+
 - **Inter-state** (distributor state ≠ dealer state): apply **IGST** at full GST rate.
 - **Intra-state** (same state): apply **CGST + SGST**, each at half the GST rate.
 - **Ship To state does NOT affect tax.** Only Bill To matters.
@@ -451,6 +460,7 @@ The recalc happens in a **pure function** in `packages/tax/`. UI never duplicate
 ### Single React component, two render paths
 
 The same `<QuotationDocument />` component (under `apps/web/components/pdf/`) is used for:
+
 1. **Live preview** in the Quotation Builder — rendered as React in an iframe at A4 dimensions (380px scaled width).
 2. **Final PDF** — rendered by Puppeteer in the worker process.
 
@@ -489,14 +499,45 @@ Server Action → enqueue 'render-pdf' job → pg-boss → workers/jobs/render-p
 
 ### Four fixed roles
 
-| Role | Can | Cannot |
-|---|---|---|
-| **Admin** | Everything within tenant | (no restrictions within own tenant) |
-| **Sales** | Manage dealers, leads, quotations, PIs, orders. Read inventory. | Create users, modify payments, edit dispatch records |
-| **Accounts** | View orders, manage payments, generate invoices, financial reports | Edit dealer master, modify pipeline stages, dispatch ops |
-| **Dispatch** | View confirmed orders, manage inventory, record serials, generate LR | Edit pricing, payments, dealer data |
+| Role         | Can                                                                  | Cannot                                                   |
+| ------------ | -------------------------------------------------------------------- | -------------------------------------------------------- |
+| **Admin**    | Everything within tenant                                             | (no restrictions within own tenant)                      |
+| **Sales**    | Manage dealers, leads, quotations, PIs, orders. Read inventory.      | Create users, modify payments, edit dispatch records     |
+| **Accounts** | View orders, manage payments, generate invoices, financial reports   | Edit dealer master, modify pipeline stages, dispatch ops |
+| **Dispatch** | View confirmed orders, manage inventory, record serials, generate LR | Edit pricing, payments, dealer data                      |
 
 Permission enforcement: **at the tRPC procedure / Server Action level**, not just in the UI. Use a `requireRole(role[])` middleware. Hiding a button is not security — every mutation is checked server-side.
+
+### Server Action wrapper — `tenantAction` and `operatorAction`
+
+Every tenant-facing Server Action must go through `tenantAction()` from `apps/web/lib/actions/wrap.ts`. The wrapper guarantees, in order:
+
+1. The caller is authenticated and has one of `allowedRoles` (or is an operator currently impersonating a tenant — see §11).
+2. Input is Zod-validated.
+3. The action runs inside `withTenant(tenantId, …, { userId, ip, userAgent, readOnly })`, so RLS, the audit trigger, and the read-only enforcement all see the right context.
+4. Errors are normalized to `{ ok: false, error: { code, message } }` — never throw across the network boundary.
+
+```ts
+import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { dealers } from '@dealerlink/db';
+import { tenantAction } from '@/lib/actions/wrap';
+
+export const updateDealerName = tenantAction(
+  ['admin', 'sales'],
+  z.object({ id: z.string().uuid(), name: z.string().min(2) }),
+  async ({ tx, input, auth }) => {
+    await tx.update(dealers).set({ name: input.name }).where(eq(dealers.id, input.id));
+    return { id: input.id };
+  },
+);
+```
+
+`operatorAction()` is the same pattern for platform-operator routes (no `tenantId` GUC; only `userId`).
+
+### Zod at the Lucia boundary
+
+Per ADR-009, `getUserAttributes` parses the Drizzle row through Zod and throws on drift. Adding a column to `users` requires updating the schema in `lib/auth/lucia.ts`; forgetting causes a loud, traceable error at session validation rather than silent `undefined` values downstream.
 
 ---
 
@@ -506,13 +547,13 @@ Permission enforcement: **at the tRPC procedure / Server Action level**, not jus
 
 The 9 pipeline stages have specific transition rules. Some are automatic, some manual:
 
-| From → To | Trigger |
-|---|---|
-| 3 (Quotation Sent) | Auto-stamped when quotation email is sent successfully (Resend delivery webhook) |
-| 6 (Payment Pending) | Auto on order confirmation |
-| 7 (Ready for Dispatch) | Auto when payment status = Paid (or per credit terms) |
-| 8 (Dispatched) | Auto when dispatch record is created with LR |
-| 9 (Closed) | Auto when delivery is confirmed; or manual with Lost reason |
+| From → To              | Trigger                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| 3 (Quotation Sent)     | Auto-stamped when quotation email is sent successfully (Resend delivery webhook) |
+| 6 (Payment Pending)    | Auto on order confirmation                                                       |
+| 7 (Ready for Dispatch) | Auto when payment status = Paid (or per credit terms)                            |
+| 8 (Dispatched)         | Auto when dispatch record is created with LR                                     |
+| 9 (Closed)             | Auto when delivery is confirmed; or manual with Lost reason                      |
 
 **High-risk dealers** (Risk Level = High) cannot move past stage 4 (Negotiation) without an Admin override. Enforce server-side.
 
@@ -544,16 +585,28 @@ Distributors BCC a unique tenant email address (e.g., `<tenant-slug>+<token>@mai
 4. Insert into `email_log` with direction = 'inbound'.
 5. If no dealer match, insert with `dealer_id = null` and flag for admin review.
 
+### Operator impersonation flow
+
+Per ADR-002 operators provision tenants and occasionally need to look inside one to debug. Day 3 ships a controlled, read-only impersonation flow:
+
+1. Operator visits `/admin/tenants/[id]` and clicks **Enter tenant workspace**.
+2. The Server Action sets the `dealerlink_impersonation` cookie (httpOnly, 1-hour TTL) to the tenant id, records an `access_log` row with `action='operator_impersonation_view'`, and redirects to the tenant workspace (`?tenant=<slug>` in dev, `<slug>.dealerlink.in` in prod).
+3. The `(app)` layout reads the cookie and renders an **ImpersonationBanner** at the top of every page so the operator never forgets the context.
+4. Every `tenantAction` invocation while the cookie is present runs `withTenant(tenantId, fn, { readOnly: true })`. The audit trigger raises `42501 'read-only context'` on any INSERT/UPDATE/DELETE.
+5. Clicking **Exit impersonation** in the banner clears the cookie and sends the operator back to `/admin`.
+
+Tenant users never see the banner and never run in read-only mode — the cookie is set only by `enterImpersonation()` which requires the `operator` role.
+
 ---
 
 ## 12. Testing Approach
 
-| Layer | Tool | What to test |
-|---|---|---|
-| Unit | **Vitest** | Tax math (`packages/tax/`), `formatINR`, GSTIN validation, Zod schemas |
-| Integration | **Vitest + testcontainers-postgres** | Database operations against a real Postgres with RLS active |
-| E2E | **Playwright** | Login → create deal → generate quote → confirm order → dispatch (one happy path per persona) |
-| Component visual | Optional, **Chromatic** Phase 2 | — |
+| Layer            | Tool                                 | What to test                                                                                 |
+| ---------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Unit             | **Vitest**                           | Tax math (`packages/tax/`), `formatINR`, GSTIN validation, Zod schemas                       |
+| Integration      | **Vitest + testcontainers-postgres** | Database operations against a real Postgres with RLS active                                  |
+| E2E              | **Playwright**                       | Login → create deal → generate quote → confirm order → dispatch (one happy path per persona) |
+| Component visual | Optional, **Chromatic** Phase 2      | —                                                                                            |
 
 **Coverage targets:** 90%+ on `packages/tax/`, 70%+ on Server Actions, smoke E2E for each role's primary workflow.
 
@@ -649,48 +702,49 @@ A short list of mistakes that would meaningfully hurt the project:
 
 The 7 platform-level decisions below were resolved before Stage 2 began. They are **locked** — do not revisit during the build. The reasoning behind each is captured in `DECISIONS.md` for future reference.
 
-| # | Decision | Locked answer |
-|---|---|---|
-| 1 | **Tenant routing strategy** | **Subdomain.** Each tenant accesses their workspace at `<tenant-slug>.dealerlink.in`. Wildcard DNS + wildcard SSL cert. Cookies scoped to `.dealerlink.in` for cross-subdomain session sharing where needed. |
-| 2 | **Tenant provisioning flow** | **Internal admin app** at `admin.dealerlink.in`. Dealerlink operators authenticate with a separate role (`operator`, one tier above tenant `admin`), fill a provisioning form, and the system creates the tenant + initial Admin user + sends them a credentials email. No SQL or CLI provisioning. |
-| 3 | **Inbound email subdomain** | **`mail.dealerlink.in`.** Each tenant receives a unique inbound address: `<tenant-slug>+<random-token>@mail.dealerlink.in`. MX, SPF, DKIM, DMARC point to Resend. |
-| 4 | **Fiscal year** | **Hardcoded to Indian fiscal year (Apr 1 – Mar 31)** for Phase 1. Schema includes `tenant_settings.fiscal_year_start` (default `4` = April) so per-tenant fiscal year is a config flip in Phase 2 — no migration needed. |
-| 5 | **Currency & locale** | **INR + en-IN locked** for Phase 1. Schema has `tenant_settings.default_currency` (default `'INR'`) and `tenant_settings.default_locale` (default `'en-IN'`) ready, but the application reads them as constants for now. Multi-currency is a Phase 2 unlock. |
-| 6 | **Default document templates** | **Dealerlink ships default Quotation, PI, and Tax Invoice templates.** Layout is fixed (designed once, used by all tenants). Tenant-specific overrides: logo, header copy, T&C text, footer (bank details). Tenants cannot edit the document layout itself in Phase 1. |
-| 7 | **Branding upload spec** | Max **1 MB**. Accepted formats: **PNG, SVG, JPG**. Recommended dimensions: **400×120 px** (header use). Renders in: sidebar, login screen, PDF letterhead, email header. Stored in DO Spaces; URL in `tenant_settings.logo_url`. |
+| #   | Decision                       | Locked answer                                                                                                                                                                                                                                                                                       |
+| --- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Tenant routing strategy**    | **Subdomain.** Each tenant accesses their workspace at `<tenant-slug>.dealerlink.in`. Wildcard DNS + wildcard SSL cert. Cookies scoped to `.dealerlink.in` for cross-subdomain session sharing where needed.                                                                                        |
+| 2   | **Tenant provisioning flow**   | **Internal admin app** at `admin.dealerlink.in`. Dealerlink operators authenticate with a separate role (`operator`, one tier above tenant `admin`), fill a provisioning form, and the system creates the tenant + initial Admin user + sends them a credentials email. No SQL or CLI provisioning. |
+| 3   | **Inbound email subdomain**    | **`mail.dealerlink.in`.** Each tenant receives a unique inbound address: `<tenant-slug>+<random-token>@mail.dealerlink.in`. MX, SPF, DKIM, DMARC point to Resend.                                                                                                                                   |
+| 4   | **Fiscal year**                | **Hardcoded to Indian fiscal year (Apr 1 – Mar 31)** for Phase 1. Schema includes `tenant_settings.fiscal_year_start` (default `4` = April) so per-tenant fiscal year is a config flip in Phase 2 — no migration needed.                                                                            |
+| 5   | **Currency & locale**          | **INR + en-IN locked** for Phase 1. Schema has `tenant_settings.default_currency` (default `'INR'`) and `tenant_settings.default_locale` (default `'en-IN'`) ready, but the application reads them as constants for now. Multi-currency is a Phase 2 unlock.                                        |
+| 6   | **Default document templates** | **Dealerlink ships default Quotation, PI, and Tax Invoice templates.** Layout is fixed (designed once, used by all tenants). Tenant-specific overrides: logo, header copy, T&C text, footer (bank details). Tenants cannot edit the document layout itself in Phase 1.                              |
+| 7   | **Branding upload spec**       | Max **1 MB**. Accepted formats: **PNG, SVG, JPG**. Recommended dimensions: **400×120 px** (header use). Renders in: sidebar, login screen, PDF letterhead, email header. Stored in DO Spaces; URL in `tenant_settings.logo_url`.                                                                    |
 
 ### Tenant Configuration Surface
 
 Every tenant-specific value lives in `tenants` and `tenant_settings`. **No tenant-specific values in code, env vars, or config files.** This is the contract that makes Dealerlink multi-tenant by design.
 
-| Configurable per tenant | Stored in | Used by |
-|---|---|---|
-| Legal business name | `tenants.legal_name` | Invoices, headers, emails |
-| Display name / brand | `tenants.display_name` | UI sidebar, app title |
-| Tenant slug (subdomain) | `tenants.slug` | Routing, inbound email |
-| GSTIN | `tenant_settings.gstin` | All tax documents |
-| PAN | `tenant_settings.pan` | Auto-derived but overridable |
-| Registered address | `tenant_settings.address_*` | Bill-From on documents |
-| State (for tax calc) | `tenant_settings.state` | CGST+SGST vs IGST decision |
-| Bank details (account, IFSC, branch) | `tenant_settings.bank_*` | Invoice footer |
-| Logo (URL in Spaces) | `tenant_settings.logo_url` | Sidebar, PDFs, emails |
-| Primary brand color | `tenant_settings.primary_color` | Optional UI accent override |
-| Document prefixes | `tenant_settings.doc_prefixes` (JSONB) | `QT-`, `PI-`, `INV-`, etc. |
-| Fiscal year start month | `tenant_settings.fiscal_year_start` | Document counter resets |
-| Default currency | `tenant_settings.default_currency` | Phase 2 multi-currency hook |
-| Default locale | `tenant_settings.default_locale` | Number/date formatting |
-| Default quotation validity (days) | `tenant_settings.default_quote_validity` | Quotation Builder default |
-| Default T&C text | `tenant_settings.default_terms` | Quotation Builder default |
-| Default credit period (days) | `tenant_settings.default_credit_period` | Order workflow |
-| Low-stock threshold | `tenant_settings.low_stock_threshold` | Inventory alerts |
-| Inbound email token | `tenant_settings.inbound_email_token` | BCC-to-CRM matching |
-| Notification preferences | `tenant_settings.notification_prefs` (JSONB) | Notification engine |
+| Configurable per tenant              | Stored in                                    | Used by                      |
+| ------------------------------------ | -------------------------------------------- | ---------------------------- |
+| Legal business name                  | `tenants.legal_name`                         | Invoices, headers, emails    |
+| Display name / brand                 | `tenants.display_name`                       | UI sidebar, app title        |
+| Tenant slug (subdomain)              | `tenants.slug`                               | Routing, inbound email       |
+| GSTIN                                | `tenant_settings.gstin`                      | All tax documents            |
+| PAN                                  | `tenant_settings.pan`                        | Auto-derived but overridable |
+| Registered address                   | `tenant_settings.address_*`                  | Bill-From on documents       |
+| State (for tax calc)                 | `tenant_settings.state`                      | CGST+SGST vs IGST decision   |
+| Bank details (account, IFSC, branch) | `tenant_settings.bank_*`                     | Invoice footer               |
+| Logo (URL in Spaces)                 | `tenant_settings.logo_url`                   | Sidebar, PDFs, emails        |
+| Primary brand color                  | `tenant_settings.primary_color`              | Optional UI accent override  |
+| Document prefixes                    | `tenant_settings.doc_prefixes` (JSONB)       | `QT-`, `PI-`, `INV-`, etc.   |
+| Fiscal year start month              | `tenant_settings.fiscal_year_start`          | Document counter resets      |
+| Default currency                     | `tenant_settings.default_currency`           | Phase 2 multi-currency hook  |
+| Default locale                       | `tenant_settings.default_locale`             | Number/date formatting       |
+| Default quotation validity (days)    | `tenant_settings.default_quote_validity`     | Quotation Builder default    |
+| Default T&C text                     | `tenant_settings.default_terms`              | Quotation Builder default    |
+| Default credit period (days)         | `tenant_settings.default_credit_period`      | Order workflow               |
+| Low-stock threshold                  | `tenant_settings.low_stock_threshold`        | Inventory alerts             |
+| Inbound email token                  | `tenant_settings.inbound_email_token`        | BCC-to-CRM matching          |
+| Notification preferences             | `tenant_settings.notification_prefs` (JSONB) | Notification engine          |
 
 ---
 
 ## 17. Implementation Order (Suggested 3.5-Week Plan)
 
 ### Week 1 — Foundation
+
 - Day 1: Repo setup, design tokens, font loading, `globals.css`, base layout (Sidebar + Topbar + Shell)
 - Day 2: Drizzle schema for tenant, user, role + Lucia auth + login screen (Aurora theme)
 - Day 3: RLS policies, tenant middleware, audit log triggers, seed scripts skeleton
@@ -698,6 +752,7 @@ Every tenant-specific value lives in `tenants` and `tenant_settings`. **No tenan
 - Day 5: Product Catalog + Inventory schema and basic list views
 
 ### Week 2 — Core Operations
+
 - Day 6: Inventory bulk procurement, serial entry, status transitions
 - Day 7: Sales Pipeline — 9-stage kanban with dnd-kit
 - Day 8: Quotation Builder UI + line items
@@ -705,6 +760,7 @@ Every tenant-specific value lives in `tenants` and `tenant_settings`. **No tenan
 - Day 10: PDF rendering pipeline + Puppeteer worker setup
 
 ### Week 3 — Order Lifecycle
+
 - Day 11: PI generation, Order creation from accepted quote
 - Day 12: Payment tracking, status transitions
 - Day 13: Dispatch flow — pick serials, generate LR, tax invoice
@@ -712,6 +768,7 @@ Every tenant-specific value lives in `tenants` and `tenant_settings`. **No tenan
 - Day 15: Reports (Pipeline Health, Inventory Status, Payment Outstanding, GST Summary)
 
 ### Half Week 4 — Polish & Ship
+
 - Day 16: Settings, user management, notifications
 - Day 17: Observability wiring (Sentry, Better Stack, Axiom, /health)
 - Day 18: E2E tests for primary workflows, deploy to staging
@@ -723,6 +780,7 @@ This is aggressive. Cut features, not quality, if behind schedule. **Inventory a
 ## 18. When You're Stuck
 
 In priority order:
+
 1. **Re-read the relevant BRD module section.** The answer is probably there.
 2. **Open the design prototype** for the screen you're working on. Match it.
 3. **Check this file** for the locked decision.
@@ -739,6 +797,7 @@ This section closes the practical gaps between "code that runs" and "code that s
 ### 19.1 Coding Standards
 
 **Naming**
+
 - **Files:** `kebab-case.ts` for everything (components, modules, utilities). Exception: Next.js convention files (`page.tsx`, `layout.tsx`, `route.ts`) follow Next.js rules.
 - **Components:** `PascalCase` for component names, `kebab-case` for filenames. Component `<DealerTable />` lives in `dealer-table.tsx`.
 - **Variables / functions:** `camelCase`. Booleans prefixed with `is`, `has`, `can`, `should`.
@@ -747,23 +806,27 @@ This section closes the practical gaps between "code that runs" and "code that s
 - **Database:** `snake_case` for table and column names. Drizzle schema uses `camelCase` in TS, mapped to `snake_case` in DB.
 
 **File organization**
+
 - **No barrel files** (`index.ts` re-exports) except at package public boundaries (e.g., `packages/tax/index.ts`). They break tree-shaking and slow IDE indexing.
 - **One component per file.** Co-locate small helpers in the same file only if they're not used elsewhere.
 - **Imports order:** (1) React/Next, (2) third-party, (3) `@/` internal, (4) relative. Use ESLint `import/order` rule with auto-fix.
 
 **Error handling**
+
 - **Server Actions and tRPC procedures** return discriminated union results: `{ ok: true, data } | { ok: false, error: AppError }`. Never throw across the network boundary except for genuinely unexpected errors (which Sentry catches).
 - **Define `AppError` once** in `lib/errors.ts` with codes: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION`, `CONFLICT`, `RATE_LIMITED`, `INTERNAL`. UI maps codes to user-facing messages.
 - **Always `await` promises.** No floating promises. ESLint `no-floating-promises` enabled.
 - **Catch and rethrow with context** when wrapping external SDK calls (Resend, Spaces, Puppeteer): `throw new AppError('INTERNAL', 'Failed to upload PDF', { cause: err })`.
 
 **TypeScript**
+
 - `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`.
 - **No `any`.** Use `unknown` then narrow. ESLint `no-explicit-any` enabled as error.
 - **No `as` casts** except for `as const` and narrowing after a runtime check (e.g., Zod parse). Never `as SomeType` to silence the compiler.
 - **Zod schemas first**, types derived via `z.infer`. Don't write a TS type and a Zod schema for the same shape.
 
 **Comments**
+
 - Comment **why**, not **what**. The code says what.
 - **JSDoc on public package exports** (`packages/tax/`, `packages/db/`, `packages/schemas/`).
 - **`// TODO(yourname):`** with a note. Naked `// TODO` is banned — ESLint rule.
@@ -771,6 +834,7 @@ This section closes the practical gaps between "code that runs" and "code that s
 ### 19.2 Git Workflow
 
 **Branch naming**
+
 - `feat/<short-slug>` — new feature
 - `fix/<short-slug>` — bug fix
 - `chore/<short-slug>` — tooling, deps, refactor without behavior change
@@ -778,6 +842,7 @@ This section closes the practical gaps between "code that runs" and "code that s
 - Examples: `feat/quotation-builder`, `fix/gst-rounding`, `chore/upgrade-drizzle`
 
 **Commit messages — Conventional Commits**
+
 ```
 <type>(<scope>): <short summary>
 
@@ -785,6 +850,7 @@ This section closes the practical gaps between "code that runs" and "code that s
 
 <optional footer>
 ```
+
 - **Types:** `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`
 - **Scope:** the module or area, e.g., `inventory`, `tax`, `pipeline`, `auth`, `pdf`
 - **Examples:**
@@ -793,6 +859,7 @@ This section closes the practical gaps between "code that runs" and "code that s
   - `chore(deps): bump drizzle-orm to 0.30`
 
 **PR rules**
+
 - **One PR per logical change.** No mega-PRs.
 - **Squash on merge.** Final commit message is the PR title; PR title follows Conventional Commits.
 - **PR description must include:** what changed, why, screenshots if UI, and a checklist (see Definition of Done below).
@@ -804,44 +871,52 @@ This section closes the practical gaps between "code that runs" and "code that s
 Apply to every feature. This is non-negotiable for a CRM that stores GSTINs, financial data, and dealer information.
 
 **Input validation**
+
 - ☐ Every Server Action and tRPC procedure validates input with Zod **before** any business logic.
 - ☐ GSTIN format + checksum validated, not just length.
 - ☐ Pincode, mobile, email validated with format-specific regex.
 - ☐ Numeric inputs (amounts, quantities) bounded with min/max.
 
 **SQL injection**
+
 - ☐ All queries go through Drizzle's parameterized API.
 - ☐ Any raw SQL (`sql\`...\``) uses Drizzle's tagged template — **never** string concatenation with user input.
 - ☐ No dynamic table or column names from user input. Use an allowlist if needed.
 
 **XSS**
+
 - ☐ React escapes by default — never use `dangerouslySetInnerHTML` with user-derived content.
 - ☐ **PDF templates** rendered by Puppeteer: same rule. Email subject lines rendered into HTML must be escaped.
 - ☐ Rich text fields (notes, T&Cs) sanitized with **DOMPurify** before storage and again before render.
 
 **CSRF**
+
 - ☐ Next.js Server Actions are CSRF-safe by default (origin check). Don't disable.
 - ☐ Webhook endpoints (Resend) verify HMAC signature before processing.
 
 **Auth**
+
 - ☐ Every mutation calls `requireRole([...])` before doing work.
 - ☐ Session cookies: `httpOnly`, `secure`, `sameSite: 'lax'`.
 - ☐ Password hashing: Argon2id with sane defaults (don't tune unless you know why).
 - ☐ Failed login attempts logged to `auth_events`; rate-limited after 5 failures from same IP in 15 min.
 
 **Rate limiting**
+
 - ☐ Login endpoint: 5 attempts / 15 min per IP.
 - ☐ `/api/health`: 60 / min per IP (it's public for monitoring, but no need to be unbounded).
 - ☐ Webhook endpoints: signature verification is the gate; rate limit as defense-in-depth.
 - ☐ Use a simple Postgres-backed rate limiter (`pg-boss` queue overkill for this — use a `rate_limit` table with `(key, window_start, count)`).
 
 **Secrets**
+
 - ☐ Never log API keys, session tokens, or passwords. Sentry, Axiom, and `console.log` all checked.
 - ☐ Never commit `.env*` files. Pre-commit hook (`gitleaks`) catches accidental commits.
 - ☐ Production secrets only in DO App Platform env vars; never in source.
 - ☐ Rotate `SESSION_SECRET` on tenant compromise.
 
 **Multi-tenancy (most critical)**
+
 - ☐ RLS policies present and tested on **every** table — see §6.
 - ☐ Tenant context set per request via `SET LOCAL app.tenant_id` inside a transaction.
 - ☐ **Cross-tenant data leak test** in CI: query as Tenant A, assert zero rows from Tenant B.
@@ -851,20 +926,20 @@ Apply to every feature. This is non-negotiable for a CRM that stores GSTINs, fin
 
 If a feature exceeds these, fix it before merging. These are Phase 1 launch targets — appropriate for the first wave of tenants. Tighten as scale grows.
 
-| Surface | Budget | Measurement |
-|---|---|---|
-| **First Contentful Paint** (logged-in dashboard) | < 1.5s on 4G | Lighthouse, real-user via Sentry Performance |
-| **Time to Interactive** (logged-in dashboard) | < 3s on 4G | Lighthouse |
-| **Page bundle size** (per-route JS) | < 200 KB gzipped | Next.js bundle analyzer |
-| **Inventory list — 10K rows** | < 100ms scroll latency | TanStack Virtual handles this if used correctly |
-| **Pipeline kanban — 200 deals** | < 200ms initial render | React profiler |
-| **PDF generation — single quote** | < 5s end-to-end (enqueue → file in Spaces) | `document_log` timestamps |
-| **DB query p95** (any user-facing query) | < 100ms | Sentry Performance + Postgres `pg_stat_statements` |
-| **DB query p99** | < 500ms | Same |
-| **Server Action / tRPC query response** | < 300ms p95 | Sentry Performance |
-| **Quotation Builder live recalc** | < 50ms after debounce | Manual; React profiler |
-| **Health endpoint response** | < 100ms | Better Stack monitor |
-| **Worker job pickup latency** | < 5s after enqueue | pg-boss metrics |
+| Surface                                          | Budget                                     | Measurement                                        |
+| ------------------------------------------------ | ------------------------------------------ | -------------------------------------------------- |
+| **First Contentful Paint** (logged-in dashboard) | < 1.5s on 4G                               | Lighthouse, real-user via Sentry Performance       |
+| **Time to Interactive** (logged-in dashboard)    | < 3s on 4G                                 | Lighthouse                                         |
+| **Page bundle size** (per-route JS)              | < 200 KB gzipped                           | Next.js bundle analyzer                            |
+| **Inventory list — 10K rows**                    | < 100ms scroll latency                     | TanStack Virtual handles this if used correctly    |
+| **Pipeline kanban — 200 deals**                  | < 200ms initial render                     | React profiler                                     |
+| **PDF generation — single quote**                | < 5s end-to-end (enqueue → file in Spaces) | `document_log` timestamps                          |
+| **DB query p95** (any user-facing query)         | < 100ms                                    | Sentry Performance + Postgres `pg_stat_statements` |
+| **DB query p99**                                 | < 500ms                                    | Same                                               |
+| **Server Action / tRPC query response**          | < 300ms p95                                | Sentry Performance                                 |
+| **Quotation Builder live recalc**                | < 50ms after debounce                      | Manual; React profiler                             |
+| **Health endpoint response**                     | < 100ms                                    | Better Stack monitor                               |
+| **Worker job pickup latency**                    | < 5s after enqueue                         | pg-boss metrics                                    |
 
 **When you blow a budget:** measure first (don't guess), fix the actual bottleneck, document the trade-off in the PR if you choose to defer.
 
@@ -936,4 +1011,4 @@ A short list of habits that keep the codebase healthy.
 
 ---
 
-*Last updated: May 2026 · Architecture v4 · Phase 1 spec*
+_Last updated: May 2026 · Architecture v4 · Phase 1 spec_
