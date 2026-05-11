@@ -927,9 +927,311 @@ This closes **Week 1**. You'll have all foundation work done + 2 business module
 
 ---
 
-## Day 6 — Inventory Procurement + Serial Entry + Status Transitions
+## Day 6 — Inventory Procurement + Serial Entry + Status Transitions + Daily Automation Setup
 
-_Will be added when Day 5 is complete. Day 6 fleshes out the inventory module: bulk procurement intake, per-serial entry, status state machine (in_stock → reserved → dispatched → delivered), inventory dashboard._
+**Goal:** Ship the inventory module's working core — bulk procurement intake, per-serial entry, status state machine, inventory dashboard. Additionally, establish the daily automation patterns (preflight script, verify specs, auto-housekeeping, deviation log) that every subsequent day will inherit.
+
+**Estimated time:** 6–7 hours (5–6h for inventory, ~1h for automation setup)
+
+**Deliverable:** A fully working inventory module + a reusable daily automation kit that reduces your per-day housekeeping from ~20 min to ~5 min.
+
+### Prompt for Claude Code
+
+```
+You are implementing Day 6 of the Dealerlink build. Day 5 shipped successfully (commit <SHA>) — dealer master + product catalog + inventory schema, 112 tests passing.
+
+Today has THREE tracks:
+A. INVENTORY MODULE (main deliverable, ~5h work)
+B. DAILY AUTOMATION KIT (one-time setup, ~1h, all subsequent days inherit)
+PRELIMINARY: LINT COVERAGE FIX (must run BEFORE A or B, ~20 min)
+
+PRIMARY REFERENCES:
+1. CLAUDE.md (especially §3 stack, §5 data model, §10 auth & roles, §11 critical workflows — inventory reservation flow, §19 standards)
+2. BRD §4 (Inventory data model + procurement + status transitions)
+3. docs/screens-extra.jsx — Inventory screen is the primary visual target. Density, status pills, serial display format, filter chips.
+4. docs/Distribyte.html — for the procurement workflow visual treatment
+5. Day 5 commit <SHA> — review the dealers/products patterns; today's inventory CRUD follows the same shape
+6. PROJECT_PLAN.md — note R.5 (REOPENED — lint coverage gap), R.16 (TanStack Virtual needed today), R.17 (CSV per-row errors), R.18 (GSTIN empty-string check), R.19 (lint-strict in EOD verification)
+
+==========================================================
+PRELIMINARY — LINT COVERAGE FIX (MUST RUN FIRST)
+==========================================================
+
+PROBLEM: Day 5 closeout revealed `pnpm lint` only runs ESLint on `apps/web` (via `next lint`). The pre-commit hook (lint-staged) lints all staged files including `packages/*`. This caused 5 ESLint errors in `packages/db/*` to silently pass `pnpm lint` but fail the pre-commit hook.
+
+This is unsafe: developers (and Claude Code) trust `pnpm lint` as the source of truth, but it's blind to most of the codebase.
+
+R.5 was prematurely marked resolved on Day 2. Close it for real today.
+
+PRE.1 — Audit current lint setup
+PRE.1.1. Run `pnpm -r exec --workspace-concurrency=1 -- node -e "console.log(require('./package.json').name + ': ' + (require('./package.json').scripts?.lint ?? 'NO LINT SCRIPT'))"` and report which workspaces have a `lint` script vs which don't.
+PRE.1.2. For every workspace without a `lint` script, identify whether it should have one (anything with .ts/.tsx/.js/.jsx source files should).
+
+PRE.2 — Standardize ESLint config across workspaces
+PRE.2.1. Verify the root .eslintrc.js (or .eslintrc.json or eslint.config.mjs depending on which is in use) extends sensibly across packages. The same parserOptions.project + import/order + no-unused-vars + no-explicit-any rules must apply uniformly.
+PRE.2.2. If packages/* have their own .eslintrc files, ensure they extend the root config rather than duplicate it.
+PRE.2.3. For Next.js's `next lint` (apps/web only), keep it — but ensure it uses the same ruleset as the rest of the repo (Next.js eslint config extends "next/core-web-vitals" but doesn't have to be in conflict with @typescript-eslint/* rules).
+
+PRE.3 — Add `lint` scripts to every code-bearing workspace
+PRE.3.1. Add to each `packages/*/package.json` that doesn't have it:
+   "lint": "eslint --max-warnings=0 --no-error-on-unmatched-pattern ."
+PRE.3.2. apps/web already has `next lint`. Either:
+   (a) Keep apps/web on `next lint --max-warnings=0` (simpler, but parallel toolchain), OR
+   (b) Switch apps/web to plain `eslint --max-warnings=0 .` (uniform, but loses next-specific rules)
+   Recommendation: (a) — keep next lint for apps/web, plain eslint for packages/*. Document the split in BUILD_PROMPT_TEMPLATE.md so future devs aren't confused.
+
+PRE.4 — Update root `pnpm lint` to be comprehensive
+PRE.4.1. Verify root package.json's lint script: `"lint": "pnpm -r lint"`. The `-r` flag runs the script in every workspace that defines it. With PRE.3 above, this now means EVERY workspace runs lint.
+PRE.4.2. Add a stricter root variant: `"lint:strict": "pnpm -r lint"` (same behavior; the name signals intent). Optional but nice for clarity.
+PRE.4.3. Add `"lint:fix": "pnpm -r exec eslint --fix --no-error-on-unmatched-pattern ."` at root for the auto-fix path that works across workspaces.
+
+PRE.5 — Verify the fix
+PRE.5.1. Reintroduce one of Day 5's original unused imports as a test: temporarily add `import { boolean } from 'drizzle-orm/pg-core';` to packages/db/src/schema/dealer.ts (without using it).
+PRE.5.2. Run `pnpm lint` from root. It MUST now fail with the unused-import error on packages/db. If it passes, the coverage is still incomplete — debug and fix.
+PRE.5.3. Remove the temporary import. Confirm `pnpm lint` is green again.
+
+PRE.6 — Update verification commands going forward
+PRE.6.1. Every future day's prompt (and the Phase C8 verification today) must use `pnpm lint` AS-IS (now that it covers everything) — not workspace-specific variants. Document this in docs/BUILD_PROMPT_TEMPLATE.md.
+PRE.6.2. The pre-commit hook command (`eslint --max-warnings=0 --no-error-on-unmatched-pattern`) is now identical to what `pnpm lint` runs per workspace. Confirm with: a deliberate error → `pnpm lint` fails AND pre-commit fails the same way.
+
+PRE.7 — Close R.5 properly in PROJECT_PLAN.md
+PRE.7.1. Update the R.5 row:
+   ✅ Lint coverage gap resolved. `pnpm lint` now lints all workspaces uniformly (root → `pnpm -r lint` → each workspace's `lint` script → eslint --max-warnings=0). Pre-commit hook and dev-loop command are now identical in scope.
+PRE.7.2. Add Day 6 entry to changelog noting R.5 truly closed.
+
+PRE.8 — Commit the lint fix before starting inventory work
+PRE.8.1. Run `pnpm lint` — must be green.
+PRE.8.2. Stage and commit:
+   git add -A
+   git commit -m "fix(tooling): close R.5 — pnpm lint now covers all workspaces uniformly"
+PRE.8.3. The pre-commit hook should pass cleanly. If not, investigate before proceeding to Track A.
+
+ONLY AFTER PRE.8 SUCCEEDS, proceed to Track A and Track B below.
+
+==========================================================
+TRACK A — INVENTORY MODULE
+==========================================================
+
+Phase A1 — Address Day 5 carry-overs
+A1.1. Fix R.18: Add DB CHECK constraint to dealers.gstin: `CHECK (gstin IS NULL OR gstin <> '')`. Generate migration. Update emptyToNull usage to remove the helper where the constraint now suffices.
+A1.2. Address R.16: Add TanStack Virtual to apps/web. Refactor the dealer list and product list to use virtualization. Verify scroll performance with the seed data (20 rows) AND with a stress test (1000 rows seeded temporarily, then removed).
+A1.3. Add ADR-011 to DECISIONS.md formalizing the "Server Components + typed query helpers" decision from Day 5 (no tRPC). Reference back to the rationale.
+A1.4. Update CLAUDE.md §3 row for RPC to match what we actually use. (NOTE: this may already be done by the user during Day 5 closeout — check first; if updated, just verify accuracy.)
+
+Phase A2 — Procurements schema completion
+A2.1. The procurements table was stubbed in Day 5. Complete it now per BRD §4:
+   - Already has: id, tenant_id, audit columns, procurement_date, supplier_name, invoice_number, invoice_date, total_amount, status
+   - Add: invoice_attachment_url (text, nullable — DO Spaces URL or base64 fallback per ADR-007/Day 4 pattern), notes (text), procurement_number (auto-generated, format PROC-2026-0001 — use document_counters with fiscal year)
+   - Add line items table procurement_items:
+     - id, tenant_id, procurement_id (FK), product_id (FK), quantity (integer), unit_price (decimal 12,2), line_total (computed: quantity * unit_price)
+     - RLS, audit trigger
+   - Add status transitions: draft → confirmed → received. Each transition is a separate Server Action so audit trail captures who/when/why.
+A2.2. Apply audit trigger to procurements and procurement_items.
+
+Phase A3 — Procurement workflow
+A3.1. Create app/(app)/inventory/procurements/page.tsx — list view with columns: procurement number (mono), date, supplier, items count, total amount (₹ formatted), status pill, action menu
+A3.2. Create app/(app)/inventory/procurements/new/page.tsx:
+   - Header: procurement date (default today), supplier dropdown (manufacturers from product table OR free text), invoice number, invoice date
+   - Line items: add products with quantity + unit price. Each line shows the product name + SKU + HSN.
+   - "Save as draft" button (admin + dispatch) and "Confirm and proceed to serial entry" button (admin + dispatch)
+A3.3. Create app/(app)/inventory/procurements/[id]/serials/page.tsx — the serial entry workflow:
+   - For each line item where product.requires_serial = true, show a section:
+     - Heading: product name + SKU + expected quantity (e.g., "TOPCon 540W — 50 units expected")
+     - Input pattern: paste-friendly textarea (one serial per line) + manual entry fallback
+     - Live validation: format check (configurable per product, default any non-empty trimmed string), tenant-unique check (highlight duplicates within paste AND against existing inventory)
+     - Counter: "47 of 50 entered" (mono, tabular figures)
+     - Per-product "Mark all received" button (only enabled when counter matches expected)
+   - For non-serialized products: just show a "Received: <quantity>" confirmation
+   - Footer: "Finalize procurement" button (admin + dispatch) — only enabled when all serialized lines have full serial counts
+A3.4. Server Actions:
+   - createProcurement (admin + dispatch)
+   - addProcurementLine, removeProcurementLine, updateProcurementLine (admin + dispatch)
+   - confirmProcurement — locks editing of items, transitions status to 'confirmed'
+   - submitSerials(procurementId, productId, serials[]) — validates uniqueness, inserts inventory_items rows with status='in_stock', links to procurement_id
+   - finalizeProcurement — verifies all serials submitted, transitions to 'received'
+A3.5. All inserts/updates use tenantAction() with appropriate role gates.
+
+Phase A4 — Inventory list and detail
+A4.1. Create app/(app)/inventory/page.tsx (main inventory view):
+   - Match the prototype's dense grid: 56px row height, status pill per row
+   - Columns: serial number (mono), product name + SKU, status pill, warehouse, procurement number (mono, click-through), procurement date, age (days since procurement), reserved-for (dealer name if reserved), notes
+   - Filters: status (multi-select), product (typeahead), warehouse, age range, procurement (typeahead)
+   - Search: serial number prefix match (pg_trgm)
+   - Virtualization: TanStack Virtual since this list grows fast (500+ rows is the common case)
+   - Bulk actions: "Mark as damaged", "Move to warehouse" (admin + dispatch)
+A4.2. Create app/(app)/inventory/[id]/page.tsx (per-serial detail):
+   - Hero: serial number (mono, large), product, status pill, current location
+   - Timeline: full lifecycle — procured (date, procurement#) → reserved (if applicable, date, dealer, order) → dispatched (if applicable, date, dispatch#) → delivered (if applicable, date, recipient)
+   - Action panel: status-appropriate actions (e.g., if in_stock: "Mark damaged", "Move warehouse"; if reserved: "Release reservation")
+   - Audit log section: who changed what, when
+
+Phase A5 — Inventory dashboard widgets
+A5.1. Update app/(app)/dashboard/page.tsx to include inventory widgets per the prototype:
+   - "In stock" KPI card (total + by product top 5)
+   - "Reserved" KPI card
+   - "Low stock alerts" — products with in_stock count below tenant_settings.low_stock_threshold
+   - "Recent procurements" mini-list
+A5.2. All numbers use IBM Plex Mono with tabular figures (per CLAUDE.md §4)
+
+Phase A6 — Status transition guards
+A6.1. Create packages/db/src/inventory/transitions.ts with explicit state machine:
+   - Allowed transitions: in_stock → reserved, reserved → in_stock, reserved → dispatched, dispatched → delivered, in_stock → damaged, in_stock → lost, dispatched → returned, returned → in_stock (with admin override)
+   - Forbidden transitions raise InvalidTransitionError with the source + target shown
+A6.2. EVERY status change goes through the transition function — no raw UPDATE inventory_items SET status = X queries anywhere
+A6.3. Transitions are inside withTenant() transactions with row-level locks (SELECT ... FOR UPDATE on the inventory_items row) per CLAUDE.md §11
+
+Phase A7 — Tests for inventory
+A7.1. Procurement creation, line item add/remove/update, serial submission with duplicates rejected, finalization gated on completeness
+A7.2. State machine: every allowed transition tested, several forbidden transitions confirmed to raise
+A7.3. Row-locking under concurrent reservation attempts (use a quick simulation: two parallel withTenant blocks trying to reserve the same serial — second should fail cleanly)
+A7.4. RLS still holds for procurements + procurement_items + inventory_items across tenants
+A7.5. Seed expansion: ~500 inventory_items across products per tenant (mix of statuses for demo purposes — about 60% in_stock, 30% reserved (linked to fake dealer_ids since orders don't exist yet), 10% mixed dispatched/delivered)
+
+==========================================================
+TRACK B — DAILY AUTOMATION KIT (one-time setup)
+==========================================================
+
+These five automations will be reused by every day from now through Day 18. Build them once, well.
+
+Phase B1 — Pre-flight script
+B1.1. Create scripts/preflight.ps1 (Windows) and scripts/preflight.sh (POSIX) that check:
+   - Git working tree is clean (no uncommitted changes)
+   - Local branch is in sync with origin (no unpushed commits, or warn if any)
+   - Docker Desktop is running (docker info succeeds)
+   - dealerlink-postgres container is "healthy"
+   - Required Postgres extensions are loaded (uuid-ossp, pg_trgm, btree_gin)
+   - .env.local exists and has non-placeholder values for SESSION_SECRET, RESEND_API_KEY, SENTRY_DSN
+   - pnpm dev is NOT running (port 3000 free)
+   - Node version is 20.x
+   - pnpm version is 9.x
+   - Latest migration is applied (pnpm db:migrate dry-run finds nothing pending)
+B1.2. Output: structured report with ✅/⚠️/❌ per check. Exit code 0 if all green, 1 if any ❌.
+B1.3. Make both scripts executable. Document in README.md and SETUP.md.
+B1.4. Add `pnpm preflight` as a root package.json script that runs the OS-appropriate version.
+
+Phase B2 — Daily verify specs
+B2.1. Create apps/web/tests/e2e/ directory if not present. Install Playwright (`pnpm add -D @playwright/test` at workspace root; `pnpm exec playwright install chromium`).
+B2.2. Create one verify spec per completed day so far:
+   - verify-day-1.spec.ts: app shell renders, all 11 nav items present, /api/health returns ok
+   - verify-day-2.spec.ts: login works for each role, dashboard greeting shows, logout works, RLS holds (smoke check)
+   - verify-day-3.spec.ts: tenant resolution by ?tenant=demo, operator can impersonate, banner shows, impersonation read-only is enforced
+   - verify-day-4.spec.ts: operator can create a tenant, credentials shown, new admin can log in
+   - verify-day-5.spec.ts: dealer list loads with seed data, product list loads, role enforcement blocks sales from editing commercial terms
+   - verify-day-6.spec.ts: procurement create → serial entry → finalize works, inventory list shows new serials, status transitions work
+B2.3. Add `pnpm verify` script at root that runs ALL verify specs in order. Aborts on first failure (fail-fast).
+B2.4. Add `pnpm verify:latest` that runs only the most recent day's spec (for fast feedback during a build day).
+B2.5. Each future day's prompt will add its own verify spec. Establish this pattern clearly.
+
+Phase B3 — Auto-commit and auto-push
+B3.1. End of every Server Action / build phase doesn't auto-commit (too granular), but the END of each day's prompt should explicitly do the following:
+   - git add -A
+   - git commit -m "<conventional commit message>"
+   - git push
+B3.2. Add this as Phase 11 (or the final phase) of every future day's prompt template. Document the template in a new file: `docs/BUILD_PROMPT_TEMPLATE.md` so every future day's prompt has the same closing pattern.
+B3.3. Today, after Day 6's work, perform the auto-commit + auto-push using:
+   - Commit message: `feat(inventory): day 6 — procurement, serial entry, status transitions + daily automation kit`
+
+Phase B4 — PROJECT_PLAN.md auto-update
+B4.1. Every future day's prompt MUST conclude with these specific actions:
+   a. Open PROJECT_PLAN.md
+   b. Find the row for B.N (where N is the day number)
+   c. Change status from ⏳ to ✅
+   d. Add today's date in YYYY-MM-DD format
+   e. Add a brief notes summary
+   f. Append a new row to the Changelog section at the bottom with date, day summary, and commit SHA
+B4.2. Today, do this for B.6 yourself after completing the work.
+B4.3. This eliminates the manual housekeeping the user previously did. Add the requirement to docs/BUILD_PROMPT_TEMPLATE.md.
+
+Phase B5 — DEVIATIONS.md auto-log
+B5.1. Create /DEVIATIONS.md at repo root if it doesn't exist. Format:
+```
+
+# Build Deviations Log
+
+Append-only record of deviations from the daily prompt spec.
+Format: Day N — YYYY-MM-DD — DEV.NN — Title
+
+## DEV.01 — Day 1 — strict-peer-dependencies disabled
+
+**Date:** YYYY-MM-DD
+**Spec said:** strict-peer-dependencies=true in .npmrc
+**Built:** false + auto-install-peers=true
+**Why:** Next.js 14 + React 18 peer-dep tree doesn't resolve under strict mode
+**Impact:** None on functionality; standard pnpm + Next workaround
+**Resolution:** None needed
+
+## DEV.02 — Day 1 — ESLint not in pre-commit hook
+
+... etc
+
+```
+B5.2. Back-fill from Days 1–5: read PROJECT_PLAN.md Risks register and the daily summaries to retroactively populate DEVIATIONS.md with every deviation logged so far. Use commit history if needed.
+B5.3. Append today's Day 6 deviations as they happen.
+B5.4. Future day prompts conclude with: "If any deviations from spec occurred, append to /DEVIATIONS.md with the format above."
+B5.5. Document the requirement in docs/BUILD_PROMPT_TEMPLATE.md.
+
+==========================================================
+PHASE C — END OF DAY ROUTINE (one-time setup, executed today)
+==========================================================
+
+C1. Run pnpm preflight (verify your own setup script works)
+C2. Run pnpm verify (all 6 day specs should pass — verify-day-6 is today's deliverable)
+C3. Run pnpm typecheck, pnpm lint, pnpm build, pnpm test — all green
+C4. Update PROJECT_PLAN.md: mark B.6 ✅, today's date, brief notes, changelog entry
+C5. Append Day 6 deviations to DEVIATIONS.md
+C6. Auto-commit: `git add -A && git commit -m "feat(inventory): day 6 — procurement, serial entry, status transitions + daily automation kit"`
+C7. Auto-push: `git push`
+C8. Print final summary including:
+- Tests added today + total count
+- Files added in Track A (inventory)
+- Files added in Track B (automation kit)
+- Deviations count appended to DEVIATIONS.md
+- Commit SHA and confirmation it was pushed
+- "Daily automation kit established — future days will use pnpm preflight, pnpm verify, and auto-housekeeping"
+
+GUARDRAILS:
+- All inventory state transitions go through transitions.ts — no raw UPDATE
+- Serial number uniqueness enforced at DB level (tenant_id, serial_number) WHERE serial_number IS NOT NULL — verify the constraint exists
+- Row locks on inventory_items during reservation/dispatch operations
+- Procurement totals stay in decimal(12,2)
+- The verify specs are end-to-end and use the actual Playwright runner, not unit-test mocks — they should catch real regressions
+- DEVIATIONS.md is append-only — never edit historic entries; if a deviation gets resolved, append a "RESOLVED" note as a new entry referencing the original DEV.NN
+
+WHEN DONE:
+- Print the summary per Phase C8
+- The user expects the auto-housekeeping to have run; confirm explicitly that PROJECT_PLAN.md and DEVIATIONS.md are updated
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+#### Inventory module
+
+- [ ] All quality gates pass
+- [ ] `/inventory/procurements/new` accepts a procurement with line items
+- [ ] Confirming a procurement opens the serial entry page
+- [ ] Pasting 50 serials with one duplicate → duplicate highlighted, can't finalize until fixed
+- [ ] Finalizing → 50 inventory_items rows created with status='in_stock'
+- [ ] `/inventory` shows the new serials, virtualized scroll smooth
+- [ ] Filter by status, by product → works
+- [ ] Click a serial → detail page with timeline
+- [ ] Try to manually UPDATE an inventory_item's status via SQL → constraint or trigger catches it (or at minimum, the transition function refuses)
+- [ ] Dashboard shows the inventory widgets
+
+#### Automation kit
+
+- [ ] `pnpm preflight` runs and reports green
+- [ ] `pnpm verify` runs all 6 day specs and they pass
+- [ ] `pnpm verify:latest` runs only Day 6's spec
+- [ ] DEVIATIONS.md exists at root, contains entries for Days 1–5 back-fill + Day 6's deviations
+- [ ] PROJECT_PLAN.md B.6 is already marked ✅ with today's date and changelog entry — you don't have to do it manually
+- [ ] Commit was pushed automatically (`git log -1` shows the Day 6 commit on origin)
+- [ ] `docs/BUILD_PROMPT_TEMPLATE.md` exists with the daily template
+
+---
+
+## Day 7 — Sales Pipeline (9-stage Kanban)
+
+_Will be added when Day 6 is complete. Day 7 builds the Pipeline kanban with dnd-kit, the 9-stage state machine per BRD §3, and the high-risk-dealer guard. This is the first day with significant interaction design._
 
 ---
 
