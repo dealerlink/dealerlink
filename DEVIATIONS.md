@@ -216,3 +216,26 @@ their own at end-of-day per `docs/BUILD_PROMPT_TEMPLATE.md`.
 **Why:** pg-boss + workers process bootstraps on Day 14 per the plan.
 **Impact:** None — procurement actions are fast enough server-side.
 **Resolution:** N/A (matches plan).
+
+## DEV.24 — Day 6 validation — Playwright Chromium one-time install
+
+**Date:** 2026-05-12
+**Issue:** First `pnpm verify` run after Day 6 ship failed all 10 browser-based tests with `browserType.launch: Executable doesn't exist`. Playwright was installed during Day 6 (per DEV.21) but the Chromium binary requires a separate one-time `playwright install chromium` step that wasn't part of Day 6 automation.
+**Resolution:** Ran `pnpm --filter web exec playwright install chromium` (~150 MB). All browser-based specs run after.
+**Permanent fix:** `pnpm playwright:install` convenience script added to root package.json. Documented one-time install step in SETUP.md prerequisites and Common Issues table.
+
+## DEV.25 — Day 6 validation — Node version drift
+
+**Date:** 2026-05-12
+**Issue:** `pnpm preflight` warned local Node was 24.15.0; project locks Node 20 LTS per CLAUDE.md §3.
+**Risk:** Native module ABI mismatch (Argon2 password hashing), behavior drift vs production (DigitalOcean runs Node 20). Did not block Day 6 verify but flagged as systemic risk.
+**Resolution (partial):** `.nvmrc` pinning 20.18.0 already present in repo. Updated SETUP.md with new "Node version management (recommended)" section covering nvm-windows / nvm.
+**Permanent fix:** User to switch their local Node to 20.18.0 at their convenience. .nvmrc ensures any future contributor on a managed Node toolchain auto-aligns.
+
+## DEV.26 — Day 6 closeout — Verify specs used wrong seeded credentials
+
+**Date:** 2026-05-12
+**Issue:** 7 of 11 verify specs (Day 2, Day 5×2, Day 6×4) failed with timeout on `waitForURL` after login submit. Root cause: specs hardcoded credentials `admin@demo.dealerlink.in / DemoAdmin!2026`, but actual seeded user (per packages/db/src/seeds/index.ts) is `admin@demo.test / password123`. App correctly rejected login; specs timed out waiting for the dashboard redirect that never came.
+**Why it slipped past Day 6:** Verify specs were written with assumed credentials rather than verified against the actual seed. The spec comment even acknowledged uncertainty ("or whatever the smoke seed sets"). End-of-day `pnpm verify` apparently passed under different conditions or was not run with the seed in its final state.
+**Resolution:** Created `apps/web/tests/e2e/helpers.ts` with `SEEDED_USERS` constant + `loginAs()` and `loginAsOperator()` helpers. Refactored verify-day-2/5/6 to use the helper. Single source of truth eliminates this class of bug. Two additional locator-quality bugs surfaced and were fixed inline: catalog spec now forces `?view=table` (default is grid/cards, no `<tbody>`); dashboard KPI spec uses `{ exact: true }` matching to avoid strict-mode collisions with status-pill text.
+**Permanent fix:** All future verify-day-N specs MUST use the helper. Day 7+ prompts to reference this pattern. If seed conventions ever change, only helpers.ts and the seed script need to update.

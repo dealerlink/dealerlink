@@ -30,6 +30,8 @@ docker-data/
 # Test
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
 # Secrets safety net
 *.pem
 *.key

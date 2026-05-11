@@ -28,6 +28,36 @@
 - **VS Code** with extensions: ESLint, Prettier, Tailwind CSS IntelliSense, Drizzle Kit
 - **TablePlus** or **DBeaver** — visual Postgres client (alternative to pgAdmin)
 
+### Node version management (recommended)
+
+This project pins Node 20.18.0 via `.nvmrc`. Use a version manager so your local Node always matches the project's expected version — this avoids native-module ABI mismatches and prevents drift from production (which runs Node 20 on DigitalOcean).
+
+**Windows:** [nvm-windows](https://github.com/coreybutler/nvm-windows)
+
+```powershell
+winget install CoreyButler.NVMforWindows
+# After restart:
+nvm install 20.18.0
+nvm use 20.18.0
+```
+
+**macOS / Linux:** [nvm](https://github.com/nvm-sh/nvm)
+
+```bash
+nvm install        # reads .nvmrc automatically
+nvm use            # switches to 20.18.0
+```
+
+**Verify:**
+
+```bash
+node --version     # should print v20.18.0
+```
+
+If you skip this, your local Node may drift from the project version. The build will still likely work, but native modules (Argon2 used by Lucia auth) may need rebuilding when versions change. The `pnpm playwright:install` step below is also Node-version-sensitive.
+
+The OS-specific install commands below install Node directly; once Node is on PATH, prefer the version manager above for day-to-day work — it lets you switch versions per project without reinstalling.
+
 ---
 
 ## Installation by OS
@@ -291,6 +321,7 @@ Sign in with the seeded admin credentials (printed by the seed script).
 | **Worker keeps restarting**                                         | Check `pnpm dev:workers` output; usually missing env var or DB connection issue                                                                              |
 | **Hot reload not working in Next.js**                               | Try restarting the dev server; on Windows, file system events can be flaky in WSL paths                                                                      |
 | **`pnpm.ps1 cannot be loaded because running scripts is disabled`** | PowerShell execution policy blocks unsigned scripts. Fix: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` (one-time, no admin needed) |
+| **Native module ABI errors after Node upgrade**                     | Rebuild native deps: `pnpm install --force` or switch back to Node 20.18.0 via `.nvmrc` (see Node version management above)                                  |
 
 ---
 
