@@ -3,8 +3,11 @@ import Link from 'next/link';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatINRExact } from '@/lib/format';
 import { displayNameFrom } from '@/lib/format/initials';
+import { getDealMetrics } from '@/lib/queries/deals';
 import { inventoryDashboardStats } from '@/lib/queries/procurements';
 import { impersonationTenantId } from '@/lib/tenant/context';
+
+import { PipelineFunnel, PipelineHotStalled, PipelineKpiRow } from './pipeline-widgets';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +25,17 @@ export default async function DashboardPage() {
   const stats = tenantId
     ? await inventoryDashboardStats(tenantId)
     : { counts: {}, lowStock: [], recent: [] };
+  const pipelineMetrics = tenantId
+    ? await getDealMetrics(tenantId)
+    : {
+        total: 0,
+        totalValue: 0,
+        byStage: [] as never[],
+        hotCount: 0,
+        stalledCount: 0,
+        hotSample: [] as never[],
+        stalledSample: [] as never[],
+      };
 
   const fullDisplay = ctx ? displayNameFrom(ctx.user.fullName, ctx.user.email) : 'there';
   const firstName = fullDisplay.split(' ')[0] ?? fullDisplay;
@@ -45,6 +59,10 @@ export default async function DashboardPage() {
         <Kpi label="Dispatched" value={dispatched} accent="indigo" />
         <Kpi label="Delivered" value={delivered} accent="mute" />
       </div>
+
+      <PipelineKpiRow metrics={pipelineMetrics} />
+      <PipelineFunnel metrics={pipelineMetrics} />
+      <PipelineHotStalled metrics={pipelineMetrics} />
 
       <div className="mt-6 grid grid-cols-2 gap-4">
         <section className="border-line rounded-[6px] border bg-white p-5">
