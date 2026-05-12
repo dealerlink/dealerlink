@@ -9,7 +9,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { dealAllowedTargets, type DealStage } from '@dealerlink/db';
+import { DEAL_STAGE_NUMBER, dealAllowedTargets, type DealStage } from '@dealerlink/db';
 import { useState, useTransition } from 'react';
 
 import { transitionDealStage } from '@/lib/actions/deals';
@@ -17,6 +17,7 @@ import { transitionDealStage } from '@/lib/actions/deals';
 import { DealCard, type DealCardData } from './deal-card';
 import { DraggableDealCard } from './draggable-deal-card';
 import { DroppableColumn } from './droppable-column';
+import { HighRiskModal, type HighRiskPrompt } from './high-risk-modal';
 import { STAGES } from './stage-meta';
 
 export interface PipelineBoardProps {
@@ -37,8 +38,46 @@ export function PipelineBoard({ initialByStage, viewerRole }: PipelineBoardProps
   const [dragging, setDragging] = useState<DealCardData | null>(null);
   const [, startTransition] = useTransition();
   const [toast, setToast] = useState<Toast>(null);
+  const [highRiskPrompt, setHighRiskPrompt] = useState<HighRiskPrompt | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  function stageMeta(key: DealStage) {
+    return STAGES.find((s) => s.key === key)!;
+  }
+
+  function commitMove(
+    dealId: string,
+    fromStage: DealStage,
+    toStage: DealStage,
+    overrideReason?: string,
+  ) {
+    const fromList = byStage[fromStage] ?? [];
+    const card = fromList.find((c) => c.id === dealId);
+    if (!card) return;
+    const next = {
+      ...byStage,
+      [fromStage]: fromList.filter((c) => c.id !== dealId),
+      [toStage]: [card, ...(byStage[toStage] ?? [])],
+    };
+    setByStage(next);
+
+    startTransition(async () => {
+      const result = await transitionDealStage({
+        id: dealId,
+        toStage,
+        ...(overrideReason ? { overrideReason } : {}),
+      });
+      if (!result.ok) {
+        setByStage(byStage);
+        const msg =
+          result.error.code === 'FORBIDDEN' && /high-risk/i.test(result.error.message)
+            ? 'High-risk dealer — admin override required to move past Negotiation.'
+            : result.error.message;
+        setToast({ kind: 'error', message: msg });
+      }
+    });
+  }
 
   const fromStageOf = (dealId: string): DealStage | null => {
     for (const s of STAGES) {
@@ -70,30 +109,33 @@ export function PipelineBoard({ initialByStage, viewerRole }: PipelineBoardProps
       return;
     }
 
-    // Optimistic move.
-    const fromList = byStage[fromStage] ?? [];
-    const card = fromList.find((c) => c.id === dealId);
+    const card = byStage[fromStage]?.find((c) => c.id === dealId);
     if (!card) return;
-    const next = {
-      ...byStage,
-      [fromStage]: fromList.filter((c) => c.id !== dealId),
-      [toStage]: [card, ...(byStage[toStage] ?? [])],
-    };
-    setByStage(next);
 
-    // Server commit.
-    startTransition(async () => {
-      const result = await transitionDealStage({ id: dealId, toStage });
-      if (!result.ok) {
-        // Rollback.
-        setByStage(byStage);
-        const msg =
-          result.error.code === 'FORBIDDEN' && /high-risk/i.test(result.error.message)
-            ? 'High-risk dealer — admin override required to move past Negotiation.'
-            : result.error.message;
-        setToast({ kind: 'error', message: msg });
-      }
-    });
+    // High-risk guard: dealer.risk === 'high' AND target stage past Negotiation.
+    const breachesGuard =
+      card.dealer.riskLevel === 'high' &&
+      DEAL_STAGE_NUMBER[toStage] > DEAL_STAGE_NUMBER.negotiation;
+    if (breachesGuard) {
+      setHighRiskPrompt({
+        dealId,
+        dealTitle: card.title,
+        dealerName: card.dealer.name,
+        fromStage: stageMeta(fromStage),
+        toStage: stageMeta(toStage),
+        viewerRole,
+      });
+      return;
+    }
+
+    commitMove(dealId, fromStage, toStage);
+  }
+
+  function onOverrideConfirm(overrideReason: string) {
+    if (!highRiskPrompt) return;
+    const { dealId, fromStage, toStage } = highRiskPrompt;
+    setHighRiskPrompt(null);
+    commitMove(dealId, fromStage.key, toStage.key, overrideReason);
   }
 
   // Compute per-column highlight relative to the currently dragged card.
@@ -139,6 +181,12 @@ export function PipelineBoard({ initialByStage, viewerRole }: PipelineBoardProps
           {dragging ? <DealCard card={dragging} dragging asOverlay /> : null}
         </DragOverlay>
       </DndContext>
+
+      <HighRiskModal
+        prompt={highRiskPrompt}
+        onCancel={() => setHighRiskPrompt(null)}
+        onConfirm={onOverrideConfirm}
+      />
 
       {toast && (
         <div
