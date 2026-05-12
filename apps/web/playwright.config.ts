@@ -42,14 +42,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  ...(process.env.START_DEV_SERVER
-    ? {
-        webServer: {
-          command: 'pnpm dev',
-          url: BASE_URL,
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
-        },
-      }
-    : {}),
+  webServer: {
+    command: 'pnpm dev',
+    url: BASE_URL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
 });
