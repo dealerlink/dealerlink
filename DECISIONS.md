@@ -11,7 +11,7 @@
 **Date:** May 2026 (Day 5)
 **Status:** Locked
 **Decided by:** Dev
-**Supersedes:** CLAUDE.md §3 entry "RPC: tRPC for queries"
+**Supersedes:** CLAUDE.md §3 entry "RPC: tRPC for queries" (now: "Server Components + typed query helpers ... for reads; Server Actions + tenantAction() for writes")
 
 ### Decision
 

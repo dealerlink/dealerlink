@@ -34,7 +34,7 @@ export default async function DealerDetailPage({ params }: PageProps) {
   const dealer = await getDealerById(tenantId, params.id);
   if (!dealer) notFound();
 
-  // Per CLAUDE.md §7: dealer detail views write an access_log entry.
+  // Per docs/LOGGING.md: dealer detail views write an access_log entry.
   void recordAccess('dealer', params.id, 'view').catch(() => null);
 
   const activity = await getAuditTrail(tenantId, 'dealers', params.id, 50);

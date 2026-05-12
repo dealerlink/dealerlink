@@ -78,7 +78,7 @@ body {
   }
 
   /* Italic Inter — for editorial moments (dashboard greeting, etc.)
-     CLAUDE.md §5: Italic Inter replaces Instrument Serif from prototype */
+     docs/DESIGN_SYSTEM.md: Italic Inter replaces Instrument Serif from prototype */
   .editorial {
     font-style: italic;
     font-family: var(--font-inter), system-ui, sans-serif;

@@ -82,7 +82,7 @@ export async function transitionInventoryItem(
   target: InventoryStatus,
   patch: TransitionPatch = {},
 ): Promise<InventoryItem> {
-  // Row-level lock per CLAUDE.md §11 — block any other transition on this
+  // Row-level lock per docs/WORKFLOWS.md — block any other transition on this
   // serial until the surrounding transaction commits.
   const locked = await tx.execute<{ id: string; status: InventoryStatus }>(sql`
     SELECT id, status FROM inventory_items WHERE id = ${id} FOR UPDATE

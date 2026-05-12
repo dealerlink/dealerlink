@@ -4,7 +4,7 @@
  * Run AFTER day5.ts (which creates dealers + products). Re-runnable: it
  * truncates procurements/procurement_items/inventory_items first.
  *
- * Mix per CLAUDE.md §13:
+ * Mix per docs/SEED_DATA.md:
  *   - ~60% in_stock
  *   - ~30% reserved (linked to a random dealer; orderId stays NULL since
  *     orders don't exist yet)

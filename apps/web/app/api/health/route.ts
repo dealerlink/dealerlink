@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { checkRateLimit } from '@/lib/rate-limit';
 
-// Per CLAUDE.md §6 — used by Better Stack uptime monitoring.
+// Per docs/LOGGING.md — used by Better Stack uptime monitoring.
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 

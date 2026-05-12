@@ -1,5 +1,5 @@
 /**
- * Day 5 seed extension: dealers + products per CLAUDE.md §13.
+ * Day 5 seed extension: dealers + products per docs/SEED_DATA.md.
  * 20 dealers per tenant across mixed states/types/categories/risk levels.
  * 20 products per tenant from Premier Energies, Adani Solar, Vikram Solar.
  *

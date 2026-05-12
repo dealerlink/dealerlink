@@ -1,5 +1,5 @@
 // Single entry point for drizzle-kit + drizzle client.
-// This is the one allowed barrel file per CLAUDE.md §19.1 — drizzle-kit
+// This is the one allowed barrel file per docs/STANDARDS.md §1 — drizzle-kit
 // requires a single schema entrypoint and the db client takes the schema
 // as a single namespace.
 export * from './tenant';

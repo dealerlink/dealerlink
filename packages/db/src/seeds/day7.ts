@@ -2,7 +2,7 @@
  * Day 7 seed extension: 30 deals per tenant distributed across the 9
  * pipeline stages, with deal_products lines and a synthetic stage history.
  *
- * Distribution per CLAUDE.md §13: deals across all 9 stages, mixed
+ * Distribution per docs/SEED_DATA.md: deals across all 9 stages, mixed
  * statuses (open/won/lost), some hot, some stalled.
  *
  * Run AFTER day5.ts (which creates dealers + products + sales users).

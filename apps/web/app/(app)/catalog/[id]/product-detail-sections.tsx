@@ -330,7 +330,8 @@ export function ProductDetailSections({
         <h2 className="text-[13px] font-semibold tracking-[-0.01em]">Inventory behavior</h2>
         <p className="text-mute mt-1 text-[12.5px]">
           When <em>requires serial</em> is on, every inventory item must be created with a unique
-          serial number (per CLAUDE.md §11). Useful for panels and inverters; off for accessories.
+          serial number (per docs/WORKFLOWS.md). Useful for panels and inverters; off for
+          accessories.
         </p>
         <div className="mt-3">
           <span className="mono text-ink text-[13px]">

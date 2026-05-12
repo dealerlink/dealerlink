@@ -13,9 +13,35 @@
 > **Companion files:**
 >
 > - `CLAUDE.md` — implementation guide (Claude Code's primary reference)
+> - `docs/*.md` — focused deep-dive references (`STRUCTURE.md`, `DESIGN_SYSTEM.md`, `LOGGING.md`, `PDF_PIPELINE.md`, `WORKFLOWS.md`, `TESTING.md`, `SEED_DATA.md`, `DEPLOYMENT.md`, `BUILD_TIMELINE.md`, `STANDARDS.md`)
 > - `DECISIONS.md` — locked decisions
 > - `PROJECT_PLAN.md` — task tracker
 > - `SETUP.md` — local dev setup
+>
+> **Note on section refs:** Day 1–7 prompts below were authored against the
+> pre-DEV.28 CLAUDE.md (19 sections). After DEV.28 (2026-05-12), CLAUDE.md
+> retains 10 sections (§0–§9) and the remainder live as `docs/*.md`. The
+> mapping is:
+>
+> | Old CLAUDE.md ref      | New location             |
+> | ---------------------- | ------------------------ |
+> | §4 (Project Structure) | `docs/STRUCTURE.md`      |
+> | §5 (Design System)     | `docs/DESIGN_SYSTEM.md`  |
+> | §6 (Data Model)        | CLAUDE.md §4             |
+> | §7 (Logging)           | `docs/LOGGING.md`        |
+> | §8 (GST)               | CLAUDE.md §5             |
+> | §9 (PDF Pipeline)      | `docs/PDF_PIPELINE.md`   |
+> | §10 (Auth & Roles)     | CLAUDE.md §6             |
+> | §11 (Workflows)        | `docs/WORKFLOWS.md`      |
+> | §12 (Testing)          | `docs/TESTING.md`        |
+> | §13 (Seed Data)        | `docs/SEED_DATA.md`      |
+> | §14 (Deployment)       | `docs/DEPLOYMENT.md`     |
+> | §15 (What NOT)         | CLAUDE.md §7             |
+> | §16 (Locked)           | CLAUDE.md §8             |
+> | §17 (Timeline)         | `docs/BUILD_TIMELINE.md` |
+> | §19 (Standards)        | `docs/STANDARDS.md`      |
+>
+> Day 8+ prompts use the new locations directly.
 
 ---
 

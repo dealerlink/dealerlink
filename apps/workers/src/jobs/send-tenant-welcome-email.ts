@@ -20,6 +20,6 @@ export async function handleSendTenantWelcomeEmail(_job: {
   // import to the shared dispatch helper extracted into `@dealerlink/email`.
   throw new Error(
     'pg-boss bootstrap pending — Day 4 dispatches inline via web. ' +
-      'See apps/web/lib/email/dispatch.ts and CLAUDE.md §17 (Day 5+).',
+      'See apps/web/lib/email/dispatch.ts and docs/BUILD_TIMELINE.md (Day 5+).',
   );
 }

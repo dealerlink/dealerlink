@@ -247,3 +247,24 @@ their own at end-of-day per `docs/BUILD_PROMPT_TEMPLATE.md`.
 **Resolution:** User cancelled the session via Ctrl+C, ran `git status` to identify the saved work, committed Phases 1-4 as a recovery point (`feat(pipeline): day 7 phases 1-4 — schema, state machine, actions, queries (WIP)`), then resumed in a fresh Claude Code session with explicit chunking instructions. Phase 5 was rebuilt in three smaller commits (5a static skeleton, 5b drag-and-drop, 5c high-risk modal) instead of one large generation.
 **Root cause:** Large React component generations (kanban with dnd-kit, multiple useSortable hooks, optimistic updates, styling) push API response-size limits. A single 400+ line component in one turn is at the edge of what the streaming protocol can deliver reliably from this region.
 **Permanent fix:** Day 8 and later prompts MUST instruct Claude Code to chunk large component generations into separate files, committing between chunks. Any single component or file expected to exceed ~250 lines should be considered a chunking candidate. The Day 7 recovery prompt encodes this rule and is the template for future complex-UI days.
+
+## DEV.28 — Post-Day-7 — CLAUDE.md size refactor
+
+**Date:** 2026-05-12
+**Issue:** CLAUDE.md had grown to 62.8k characters (~15k tokens). Claude Code surfaced a warning that oversized project context hurts performance, and the Day 7 stream timeout (DEV.27) was plausibly amplified by the large always-loaded context. Day 8 onward involves larger UI generations, so the risk compounds.
+**Resolution:** Split 10 sections from CLAUDE.md into focused `docs/*.md` files:
+
+- `docs/STRUCTURE.md` — monorepo folder layout
+- `docs/DESIGN_SYSTEM.md` — tokens, typography, component principles
+- `docs/LOGGING.md` — 8-stream logging surface and `/health` contract
+- `docs/PDF_PIPELINE.md` — Puppeteer flow and constraints
+- `docs/WORKFLOWS.md` — pipeline stages, inventory transitions, dispatch, impersonation
+- `docs/TESTING.md` — test stack and RLS test pattern
+- `docs/SEED_DATA.md` — required seed volumes
+- `docs/DEPLOYMENT.md` — local dev + DO App Platform + env vars
+- `docs/BUILD_TIMELINE.md` — 18-day Stage B plan
+- `docs/STANDARDS.md` — coding standards, security checklist, perf budgets, DoD
+
+CLAUDE.md retains only the day-to-day-critical sections (Brand Naming, Project at a Glance, Architecture, Tech Stack, Data Model + RLS, GST, Auth & Roles, What NOT to Do, Locked Platform Decisions, When You're Stuck) and gains a `Reading Order` navigation block at the top. Sections were renumbered sequentially (§0 plus §1–§9). All technical content preserved verbatim — only relocated.
+**Result:** CLAUDE.md shrunk from 62.8k → 29.8k characters (52% reduction). All content lives somewhere, all cross-references updated.
+**Permanent fix:** Future content additions go to the appropriate focused doc rather than CLAUDE.md, unless they're cross-cutting rules that every interaction needs.

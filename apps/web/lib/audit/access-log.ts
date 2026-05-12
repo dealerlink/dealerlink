@@ -6,7 +6,7 @@ import { getAuthContext } from '@/lib/auth/session';
 export type AccessAction = 'view' | 'export' | 'download' | 'operator_impersonation_view';
 
 /**
- * Record a sensitive-route observation. Per CLAUDE.md §6, this fires on
+ * Record a sensitive-route observation. Per docs/LOGGING.md, this fires on
  * dealer detail views, payment views, CSV/Excel exports, and dispatch opens.
  *
  * Inserts directly via the app DB connection — RLS allows tenant_isolation

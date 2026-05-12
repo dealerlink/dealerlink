@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-/** Six status states per CLAUDE.md §5 design system */
+/** Six status states per docs/DESIGN_SYSTEM.md */
 type StatusTone = 'em' | 'am' | 'ro' | 'in' | 'mu' | 'ink';
 
 const DOT_COLOR: Record<StatusTone, string> = {
@@ -32,7 +32,7 @@ interface StatusPillProps {
 /**
  * StatusPill — status chip with a coloured dot prefix.
  *
- * Per CLAUDE.md §5: "Status dots before chip text: `<span class="dot s-em"/> Active`"
+ * Per docs/DESIGN_SYSTEM.md: "Status dots before chip text: `<span class="dot s-em"/> Active`"
  * Six states: em (emerald), am (amber), ro (rose), in (indigo), mu (muted), ink.
  *
  * @example

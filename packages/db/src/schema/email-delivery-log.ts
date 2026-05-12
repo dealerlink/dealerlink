@@ -5,7 +5,7 @@ import { tenants } from './tenant';
 /**
  * Append-only delivery record for every outbound message Dealerlink sends
  * (welcome emails, password resets, quotation deliveries, etc.). Per
- * CLAUDE.md §7 row #4 this lives in Postgres with 90-day retention; row #2
+ * docs/LOGGING.md row #4 this lives in Postgres with 90-day retention; row #2
  * (`email_log`, full body) ships later when outbound quote sends arrive.
  *
  * `tenantId` is nullable so platform-level emails (e.g., operator-issued

@@ -33,16 +33,16 @@
 
 ## Stage 0 — Discovery & Decisions
 
-| #   | Task                                                         | Status | Date | Notes                                                      |
-| --- | ------------------------------------------------------------ | ------ | ---- | ---------------------------------------------------------- |
-| 0.1 | BRD authored (12 modules, GST logic, pipeline stages)        | ✅     |      |                                                            |
-| 0.2 | Visual design prototype created (12 screens)                 | ✅     |      | Distribyte.html + screens-extra.jsx                        |
-| 0.3 | Tech stack evaluated and locked                              | ✅     |      | Next.js + Postgres + Drizzle + Lucia + pg-boss + Puppeteer |
-| 0.4 | Architecture diagram created (v4 with observability + audit) | ✅     |      | dealerlink-architecture-v4.html                            |
-| 0.5 | 7 platform decisions resolved and logged in DECISIONS.md     | ✅     |      | All defaults accepted                                      |
-| 0.6 | Brand naming locked: Dealerlink (dealerlink.in)              | ✅     |      | ADR-008                                                    |
-| 0.7 | CLAUDE.md implementation guide finalized (19 sections)       | ✅     |      | Includes engineering standards                             |
-| 0.8 | Engineering standards & Definition of Done documented        | ✅     |      | CLAUDE.md §19                                              |
+| #   | Task                                                                                              | Status | Date | Notes                                                      |
+| --- | ------------------------------------------------------------------------------------------------- | ------ | ---- | ---------------------------------------------------------- |
+| 0.1 | BRD authored (12 modules, GST logic, pipeline stages)                                             | ✅     |      |                                                            |
+| 0.2 | Visual design prototype created (12 screens)                                                      | ✅     |      | Distribyte.html + screens-extra.jsx                        |
+| 0.3 | Tech stack evaluated and locked                                                                   | ✅     |      | Next.js + Postgres + Drizzle + Lucia + pg-boss + Puppeteer |
+| 0.4 | Architecture diagram created (v4 with observability + audit)                                      | ✅     |      | dealerlink-architecture-v4.html                            |
+| 0.5 | 7 platform decisions resolved and logged in DECISIONS.md                                          | ✅     |      | All defaults accepted                                      |
+| 0.6 | Brand naming locked: Dealerlink (dealerlink.in)                                                   | ✅     |      | ADR-008                                                    |
+| 0.7 | CLAUDE.md implementation guide finalized (10 sections; 10 deep-dive docs in `docs/` after DEV.28) | ✅     |      | Includes engineering standards                             |
+| 0.8 | Engineering standards & Definition of Done documented                                             | ✅     |      | `docs/STANDARDS.md` (moved out of CLAUDE.md in DEV.28)     |
 
 **Stage 0 status: ✅ Complete (8/8)**
 
@@ -260,6 +260,7 @@ Append a dated entry every time you complete a task or change a status.
 | 2026-05-11 | B.6 Day 6 complete — procurement workflow, serial entry, inventory state machine (in_stock → reserved → dispatched → delivered with row locks), 500 seeded items per tenant, 19 new tests | —   |
 | 2026-05-11 | Daily automation kit shipped — preflight script, Playwright verify specs (days 1–6), BUILD_PROMPT_TEMPLATE.md, DEVIATIONS.md backfilled                                                   | —   |
 | 2026-05-12 | B.7 Day 7 complete — Sales Pipeline kanban with dnd-kit, 9-stage state machine, high-risk dealer guard, deal detail + create, dashboard pipeline widgets, 60 seeded deals, 165 tests      | —   |
+| 2026-05-12 | DEV.28 — CLAUDE.md size refactor: split 10 sections into focused `docs/*.md` files, slimmed from 62.8k → 29.8k chars (52% reduction). Sections renumbered §0–§9. No code change.          | —   |
 |            |                                                                                                                                                                                           |     |
 
 ---

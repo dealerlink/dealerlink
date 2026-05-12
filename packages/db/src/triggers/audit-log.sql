@@ -2,7 +2,7 @@
 -- AUDIT-LOG TRIGGER
 -- ----------------------------------------------------------------------------
 -- A single generic trigger function applied to every table that needs
--- audit history (per CLAUDE.md §6: orders, payments, dispatches, inventory).
+-- audit history (per docs/LOGGING.md: orders, payments, dispatches, inventory).
 -- Day 2 wires it up for tenants + users; later days add the rest.
 --
 -- Inputs read from session GUCs (set by withTenant() / tenantAction):

@@ -1,4 +1,4 @@
-/** Indian number formatting utilities per CLAUDE.md §5 typography rules */
+/** Indian number formatting utilities per docs/DESIGN_SYSTEM.md typography rules */
 
 const LAKH = 100_000;
 const CRORE = 10_000_000;
