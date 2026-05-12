@@ -1,10 +1,23 @@
 'use client';
 
-import { ColumnHeader } from './column-header';
-import { DealCard, type DealCardData } from './deal-card';
-import { STAGES, type StageMeta } from './stage-meta';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { dealAllowedTargets, type DealStage } from '@dealerlink/db';
+import { useState, useTransition } from 'react';
 
-import type { DealStage } from '@dealerlink/db';
+import { transitionDealStage } from '@/lib/actions/deals';
+
+import { DealCard, type DealCardData } from './deal-card';
+import { DraggableDealCard } from './draggable-deal-card';
+import { DroppableColumn } from './droppable-column';
+import { STAGES } from './stage-meta';
 
 export interface PipelineBoardProps {
   initialByStage: Record<DealStage, DealCardData[]>;
@@ -12,33 +25,143 @@ export interface PipelineBoardProps {
   viewerId: string;
 }
 
-export function PipelineBoard({ initialByStage }: PipelineBoardProps) {
-  return (
-    <div className="flex gap-3 overflow-x-auto pb-4">
-      {STAGES.map((stage) => (
-        <Column key={stage.key} stage={stage} cards={initialByStage[stage.key] ?? []} />
-      ))}
-    </div>
-  );
+type Toast = { kind: 'error' | 'info'; message: string } | null;
+
+function stageOf(idOrLocator: string): DealStage | null {
+  if (!idOrLocator.startsWith('stage:')) return null;
+  return idOrLocator.slice('stage:'.length) as DealStage;
 }
 
-function Column({ stage, cards }: { stage: StageMeta; cards: DealCardData[] }) {
-  const totalValue = cards.reduce((sum, c) => sum + (c.estimatedValue ?? 0), 0);
+export function PipelineBoard({ initialByStage, viewerRole }: PipelineBoardProps) {
+  const [byStage, setByStage] = useState<Record<DealStage, DealCardData[]>>(initialByStage);
+  const [dragging, setDragging] = useState<DealCardData | null>(null);
+  const [, startTransition] = useTransition();
+  const [toast, setToast] = useState<Toast>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const fromStageOf = (dealId: string): DealStage | null => {
+    for (const s of STAGES) {
+      if (byStage[s.key]?.some((c) => c.id === dealId)) return s.key;
+    }
+    return null;
+  };
+
+  function onDragStart(e: DragStartEvent) {
+    const id = String(e.active.id);
+    const stage = fromStageOf(id);
+    if (!stage) return;
+    const card = byStage[stage]?.find((c) => c.id === id) ?? null;
+    setDragging(card);
+  }
+
+  function onDragEnd(e: DragEndEvent) {
+    setDragging(null);
+    if (!e.over) return;
+    const dealId = String(e.active.id);
+    const toStage = stageOf(String(e.over.id));
+    if (!toStage) return;
+    const fromStage = fromStageOf(dealId);
+    if (!fromStage || fromStage === toStage) return;
+
+    const allowed = dealAllowedTargets(fromStage, viewerRole);
+    if (!allowed.includes(toStage)) {
+      setToast({ kind: 'error', message: `Can't move from ${fromStage} to ${toStage}.` });
+      return;
+    }
+
+    // Optimistic move.
+    const fromList = byStage[fromStage] ?? [];
+    const card = fromList.find((c) => c.id === dealId);
+    if (!card) return;
+    const next = {
+      ...byStage,
+      [fromStage]: fromList.filter((c) => c.id !== dealId),
+      [toStage]: [card, ...(byStage[toStage] ?? [])],
+    };
+    setByStage(next);
+
+    // Server commit.
+    startTransition(async () => {
+      const result = await transitionDealStage({ id: dealId, toStage });
+      if (!result.ok) {
+        // Rollback.
+        setByStage(byStage);
+        const msg =
+          result.error.code === 'FORBIDDEN' && /high-risk/i.test(result.error.message)
+            ? 'High-risk dealer — admin override required to move past Negotiation.'
+            : result.error.message;
+        setToast({ kind: 'error', message: msg });
+      }
+    });
+  }
+
+  // Compute per-column highlight relative to the currently dragged card.
+  const draggingFromStage = dragging ? fromStageOf(dragging.id) : null;
+  const allowedTargets = draggingFromStage
+    ? dealAllowedTargets(draggingFromStage, viewerRole)
+    : null;
+
   return (
-    <section
-      aria-label={stage.name}
-      className="border-line bg-paper flex w-[280px] shrink-0 flex-col rounded-[6px] border"
-    >
-      <ColumnHeader stage={stage} count={cards.length} totalValue={totalValue} />
-      <div className="flex min-h-[200px] flex-1 flex-col gap-2 p-2">
-        {cards.length === 0 ? (
-          <div className="text-mute editorial flex h-full items-center justify-center text-[11.5px] italic">
-            —
+    <div className="relative">
+      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {STAGES.map((stage) => {
+            const cards = byStage[stage.key] ?? [];
+            const totalValue = cards.reduce((sum, c) => sum + (c.estimatedValue ?? 0), 0);
+            const highlight =
+              draggingFromStage == null || stage.key === draggingFromStage
+                ? 'none'
+                : allowedTargets?.includes(stage.key)
+                  ? 'valid'
+                  : 'invalid';
+            return (
+              <DroppableColumn
+                key={stage.key}
+                stage={stage}
+                count={cards.length}
+                totalValue={totalValue}
+                highlight={highlight}
+              >
+                {cards.length === 0 ? (
+                  <div className="text-mute editorial flex h-full items-center justify-center text-[11.5px] italic">
+                    —
+                  </div>
+                ) : (
+                  cards.map((card) => <DraggableDealCard key={card.id} card={card} />)
+                )}
+              </DroppableColumn>
+            );
+          })}
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {dragging ? <DealCard card={dragging} dragging asOverlay /> : null}
+        </DragOverlay>
+      </DndContext>
+
+      {toast && (
+        <div
+          role="status"
+          className="border-line fixed bottom-6 right-6 z-40 max-w-[360px] rounded-[6px] border bg-white px-4 py-3 text-[12.5px] shadow-md"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="mt-1 inline-block h-[6px] w-[6px] flex-shrink-0 rounded-full"
+              style={{ background: toast.kind === 'error' ? '#B91C1C' : '#4F46E5' }}
+            />
+            <div className="flex-1">{toast.message}</div>
+            <button
+              type="button"
+              className="text-mute hover:text-ink text-[11px]"
+              onClick={() => setToast(null)}
+            >
+              ×
+            </button>
           </div>
-        ) : (
-          cards.map((card) => <DealCard key={card.id} card={card} />)
-        )}
-      </div>
-    </section>
+        </div>
+      )}
+    </div>
   );
 }
