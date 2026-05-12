@@ -1229,9 +1229,236 @@ WHEN DONE:
 
 ---
 
-## Day 7 — Sales Pipeline (9-stage Kanban)
+## Day 7 — Sales Pipeline (9-stage Kanban with dnd-kit)
 
-_Will be added when Day 6 is complete. Day 7 builds the Pipeline kanban with dnd-kit, the 9-stage state machine per BRD §3, and the high-risk-dealer guard. This is the first day with significant interaction design._
+**Goal:** Ship the Sales Pipeline as a 9-stage kanban board. By end of day, sales users can create deals, drag them between stages, see hot/risk markers, and interact with the high-risk-dealer guard.
+
+This is the **first day using the daily automation kit** established Day 6. Phases run cleaner because preflight + verify + auto-housekeeping are now standard.
+
+**Estimated time:** 5–6 hours of Claude Code work + ~30 min of your verification
+
+**Deliverable:** Working `/pipeline` page that visually matches the prototype, with drag-and-drop stage transitions, deal create/edit/close flows, and a stage state machine.
+
+### Prompt for Claude Code
+
+```
+You are implementing Day 7 of the Dealerlink build. Day 6 shipped successfully (commit 8ea2fe4) — inventory module + daily automation kit. From today onward, every day uses pnpm preflight, pnpm verify, and the end-of-day routine in docs/BUILD_PROMPT_TEMPLATE.md.
+
+PRELIMINARY (every day must do this):
+P.1. Run `pnpm preflight` and confirm 9 green checks. If anything fails, stop and report.
+P.2. Read docs/BUILD_PROMPT_TEMPLATE.md — your standing closeout pattern.
+P.3. Skim DEVIATIONS.md to know what's been parked.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md (especially §3 stack — dnd-kit is locked for kanban, §10 auth & roles, §11 critical workflows — stage progression rules, §19 standards)
+2. BRD §3 (Sales Pipeline — 9 stages, transition rules, automatic vs manual triggers, high-risk dealer guard)
+3. docs/Distribyte.html — Pipeline screen is the primary visual reference. Note the column widths, deal card density, hot/risk markers, stage headers with counts and value summaries.
+4. docs/screens-extra.jsx — additional pipeline interactions
+5. Day 6 commit 8ea2fe4 — inventory state machine in packages/db/src/inventory/transitions.ts is the pattern for state machines; pipeline transitions follow the same shape
+
+DAY 7 SCOPE:
+
+Phase 1 — Pipeline schema
+1.1. Create packages/db/src/schema/deal.ts per BRD §3:
+   - id, tenant_id, standard audit columns
+   - deal_code (auto-generated, format DEAL-2026-0001 — use document_counters with fiscal year)
+   - title (text, required) — e.g., "Acme Corp 100kW rooftop solar"
+   - dealer_id (FK to dealers, required)
+   - assigned_to (FK to users, required — the sales person who owns the deal)
+   - stage (enum: 'qualification' | 'needs_analysis' | 'quotation_sent' | 'negotiation' | 'verbal_commit' | 'po_pending' | 'payment_pending' | 'ready_for_dispatch' | 'closed' — matches BRD §3.4 stage numbers 1-9)
+   - status: 'open' | 'won' | 'lost' (when stage='closed', status must be 'won' or 'lost' — never 'open')
+   - estimated_value (decimal 12,2, nullable) — running estimate; gets nailed down when quotation is generated
+   - probability_percent (integer 0-100, nullable) — sales confidence
+   - expected_close_date (date, nullable)
+   - source (enum: 'inbound' | 'outbound' | 'referral' | 'repeat_business' | 'other')
+   - lost_reason (text, nullable — required if status='lost', stored as enum: 'price' | 'competitor' | 'timing' | 'no_budget' | 'other' + free-text)
+   - notes (text)
+   - hot (boolean, default false — sales-marked priority deal)
+   - last_activity_at (timestamp — auto-updated on stage change, note added, etc.)
+1.2. Create deal_products junction table (a deal can be associated with multiple products as line interest, before a real quotation exists):
+   - id, tenant_id, deal_id (FK), product_id (FK), estimated_quantity (integer), notes (text)
+1.3. Create deal_stage_history table for the audit log of stage transitions (separate from generic audit_log because we want quick "time in each stage" reporting):
+   - id, tenant_id, deal_id, from_stage, to_stage, transitioned_by, transitioned_at, automatic (boolean — true if auto-triggered, false if manual), reason (text, nullable — for stage 9 closures and high-risk overrides)
+1.4. Indexes:
+   - (tenant_id, stage, status) for kanban column queries
+   - (tenant_id, assigned_to, stage) for "my deals"
+   - (tenant_id, hot) WHERE hot = true for hot-deal queries
+   - (tenant_id, last_activity_at DESC) for stale-deal detection
+   - UNIQUE (tenant_id, deal_code)
+1.5. RLS on all three tables. Audit trigger on deals and deal_products (deal_stage_history is itself the audit so no trigger needed).
+1.6. document_counters entry for 'deal' with fiscal_year per the tenant's fiscal year start.
+1.7. Generate migration and verify it runs.
+
+Phase 2 — Stage state machine
+2.1. Create packages/db/src/deals/transitions.ts following the inventory transitions pattern from Day 6:
+   - allowedTransitions map covering BRD §3.4. Examples:
+     - qualification → needs_analysis (manual)
+     - qualification → closed (manual, lost only)
+     - needs_analysis → quotation_sent (auto when quotation email is delivered; manual override allowed for admin)
+     - quotation_sent → negotiation (manual)
+     - negotiation → verbal_commit (manual)
+     - verbal_commit → po_pending (manual; this is where the PO/PI gets generated)
+     - po_pending → payment_pending (auto when order is confirmed; manual override for admin)
+     - payment_pending → ready_for_dispatch (auto when payment status='paid' OR per credit terms)
+     - ready_for_dispatch → closed (auto when dispatch is created; status='won')
+     - any → closed (manual; status='lost' with mandatory lost_reason)
+     - Reverse transitions only with admin role (e.g., negotiation → needs_analysis is admin-only)
+   - High-risk dealer guard: if dealer.risk_level = 'high', deals cannot move PAST stage 4 (negotiation) without an admin override
+     - The override action requires an explicit reason captured in deal_stage_history.reason
+2.2. transitionStage(dealId, toStage, opts: { override?: { admin: User, reason: string } }) — runs inside withTenant transaction:
+   - SELECT deal FOR UPDATE
+   - Validate transition is allowed for current stage + role
+   - Check high-risk guard if applicable
+   - Update deal.stage, deal.status, deal.last_activity_at
+   - Insert deal_stage_history row
+   - Return updated deal
+2.3. Forbidden transitions throw InvalidTransitionError with helpful messages.
+2.4. Unit tests for: every allowed transition, several forbidden ones, high-risk guard kicks in correctly, admin override works with reason, missing reason on lost-closure throws.
+
+Phase 3 — Server Actions
+3.1. apps/web/lib/actions/deals/ using tenantAction():
+   - createDeal (admin, sales) — title, dealer_id, assigned_to (defaults to current user if sales), estimated_value, source, products[]
+   - updateDealMetadata (admin + assigned_to sales) — title, estimated_value, probability, expected_close_date, notes, hot flag
+   - reassignDeal (admin only)
+   - transitionDealStage (admin, sales — but admin override required for high-risk past stage 4)
+   - closeDeal (admin, sales) — status, lost_reason if lost
+   - addDealProduct, removeDealProduct, updateDealProduct (admin + assigned_to sales)
+3.2. All actions write deal_stage_history when applicable, update last_activity_at on the deal.
+
+Phase 4 — Query helpers
+4.1. apps/web/lib/queries/deals.ts:
+   - listDealsByStage(tenantId, opts) — returns Map<stage, Deal[]> for kanban rendering. Filters: assigned_to, hot, dealer_id, age_range
+   - getDealById(id) — full deal with dealer, assigned user, products, stage_history (last 20 entries)
+   - getDealMetrics(tenantId) — per-stage counts, per-stage total estimated value, average time-in-stage (for dashboard widgets later)
+4.2. All queries respect RLS via the request's tenant context.
+
+Phase 5 — Pipeline Kanban UI
+5.1. Create app/(app)/pipeline/page.tsx — the kanban board.
+   Visual references: docs/Distribyte.html Pipeline screen, docs/screens-extra.jsx kanban patterns.
+   - Header bar: page title "Pipeline" (Inter italic for "Pipeline"), date range filter, assigned-to filter (admin sees all, sales defaults to "Mine"), search box, "+ New deal" button
+   - 9 columns horizontally scrolling (the prototype lets you scroll horizontally on smaller screens, but desktop fits ~5-6 columns visible at once with horizontal scroll for the rest)
+   - Each column header: stage name (Inter), count of deals (mono), total estimated value (mono, ₹ formatted with auto-scale)
+   - Each deal card (compact, ~120px tall):
+     - Title (truncated)
+     - Dealer name + GSTIN state (small mono)
+     - Estimated value (mono, large, tabular figures)
+     - Hot marker (small flame icon if hot=true)
+     - Risk marker (small badge if dealer.risk_level='high')
+     - Last activity ("3d ago" — mono)
+     - Avatar of assigned_to person
+   - Hover state: subtle hairline shadow
+   - Cards are draggable via dnd-kit
+5.2. Implement drag-and-drop with dnd-kit:
+   - useSortable on each card, useSortable column droppable
+   - Optimistic update: card visually moves immediately on drop
+   - Server action called in background; on success, no change; on failure, card snaps back with toast error
+   - Stage transition validation happens server-side; for predictable UX, also do a client-side check before the optimistic update to prevent obviously-invalid drops (e.g., grayed-out columns when dragging)
+5.3. High-risk override flow:
+   - If a non-admin sales user tries to drag a high-risk deal past stage 4, show a modal: "This deal is for a high-risk dealer. Moving it past Negotiation requires admin approval. Cancel or Request approval?"
+   - "Request approval" is out of scope for Phase 1 (just shows a placeholder); cancel reverts the drag
+   - If an admin drags it: a modal asks for the override reason (required text), then submits with override
+
+Phase 6 — Deal detail page
+6.1. Create app/(app)/pipeline/[id]/page.tsx (or /deals/[id] if cleaner routing):
+   - Hero: deal title (large), dealer name + GSTIN, current stage pill, hot toggle, action menu
+   - Tabs/sections:
+     - Overview: estimated value, probability, expected close, source, assigned to, notes (inline-editable)
+     - Products: list of deal_products with estimated quantities, "+ Add product"
+     - Stage History: timeline showing every transition (from_stage → to_stage), who, when, reason (if any), automatic vs manual
+     - Activity: audit_log entries for this deal
+   - Right rail: stage transition buttons (showing allowed next stages, disabled if not allowed for current role/risk)
+   - "Close deal" button: opens modal for Won/Lost + reason if Lost
+
+Phase 7 — Deal create form
+7.1. Create app/(app)/pipeline/new/page.tsx:
+   - Single-page form, sections: Identity (title), Dealer (typeahead from dealers — uses Day 5's searchDealers), Owner (defaults to current user if sales; admin can pick), Commercial (estimated value, expected close, probability, source), Products (typeahead, add multiple lines)
+   - Submit creates deal at stage='qualification'
+   - Redirect to deal detail
+
+Phase 8 — Dashboard widgets
+8.1. Update /dashboard with pipeline widgets per prototype:
+   - "Pipeline value" card: total estimated value of open deals
+   - "Hot deals" card: count of hot deals + list of top 5
+   - "Stalled deals" card: deals with no activity in 14+ days
+   - "Stage funnel" mini-chart: bar chart of deal count by stage (use custom SVG per CLAUDE.md §4, not Tremor for this small chart; Tremor for larger ones)
+
+Phase 9 — Seed data
+9.1. Update seed scripts to add per CLAUDE.md §13:
+   - 30 deals per tenant, spread across all 9 stages (more deals in middle stages for realistic demo: ~3 in qualification, 5 in needs_analysis, 5 in quotation_sent, 8 in negotiation, 4 in verbal_commit, 2 in po_pending, 2 in payment_pending, 1 in ready_for_dispatch, 0 in closed initially — Day 11 will close some)
+   - Each deal linked to a real dealer + 1-3 products with quantities
+   - 3-5 deals marked hot
+   - 2-3 deals on high-risk dealers (for testing the guard)
+   - Realistic deal titles (e.g., "Solar Roofers Pune 150kW rooftop", "Bharat EPC 1MW utility-scale", "Maharashtra Solar Co warranty extension")
+   - Estimated values realistic for solar distribution (₹2L to ₹2Cr range)
+   - last_activity_at distributed across last 30 days for realistic stale-deal indicators
+9.2. Re-run seed and verify counts
+
+Phase 10 — Tests
+10.1. Unit tests for transitions.ts: all allowed transitions, several forbidden ones, high-risk guard, admin override
+10.2. Integration tests for createDeal, transitionDealStage (including override), closeDeal with required lost_reason
+10.3. RLS test that deals from tenant A are not visible to tenant B
+10.4. Component test for kanban DnD: rendering a column, simulating a drop event triggers the right server action
+10.5. Playwright verify-day-7.spec.ts:
+   - Login as sales@demo.test
+   - Visit /pipeline
+   - Verify 9 columns visible, seed deals present
+   - Drag a deal from qualification to needs_analysis → succeeds, card moved
+   - Click "+ New deal", fill form, submit → deal appears in qualification
+   - Try to drag a high-risk deal past negotiation → modal appears, cancel
+   - Click into a deal → detail page loads with stage history populated
+   - Close the deal as Lost with reason → status updates, history shows the transition
+
+Phase 11 — Documentation
+11.1. Update CLAUDE.md §11 if any pipeline workflow nuances emerged that aren't already documented.
+11.2. Append to docs/RUNBOOKS.md: "Pipeline stage transition rules" with the full transition matrix and override semantics.
+
+Phase 12 — Closeout (per docs/BUILD_PROMPT_TEMPLATE.md)
+12.1. Run `pnpm preflight` — confirm green
+12.2. Run `pnpm verify` — all 7 day specs pass (verify-day-7 is today's deliverable)
+12.3. Run `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` — all green
+12.4. Update PROJECT_PLAN.md: mark B.7 ✅, today's date, brief notes, changelog entry
+12.5. Append any Day 7 deviations to DEVIATIONS.md
+12.6. Auto-commit: `git add -A && git commit -m "feat(pipeline): day 7 — sales pipeline kanban with stage state machine"`
+12.7. Auto-push: `git push`
+12.8. Print final summary with: tests added, files added by phase, deviations count, commit SHA confirmed pushed, "Day 7 done"
+
+GUARDRAILS:
+- All stage transitions go through transitions.ts — no raw UPDATE deals SET stage = X anywhere
+- Row locks on deals during stage transitions (SELECT FOR UPDATE)
+- High-risk guard tested explicitly — DO NOT skip
+- Drag-and-drop optimistic updates MUST roll back on server failure (don't leave the user with stale UI)
+- Closed deals (status != 'open') cannot be dragged in the kanban — they shouldn't even appear in open-deals columns
+- estimated_value uses decimal(12,2) — money rules per CLAUDE.md §19
+- All dates use the en-IN locale formatting via formatDate from lib/format
+
+WHEN DONE:
+- Confirm pnpm verify passes including the new verify-day-7 spec
+- Print summary per Phase 12.8
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+- [ ] `pnpm preflight` → 9 green
+- [ ] `pnpm verify` → 7 specs pass (including new verify-day-7)
+- [ ] `/pipeline` shows 9 columns with seed deals distributed across them
+- [ ] Drag a deal between columns → visual update is instant, server confirms in background
+- [ ] Drag to an invalid stage (e.g., qualification → ready_for_dispatch directly) → drop is rejected with toast
+- [ ] Try to drag a high-risk deal past Negotiation as a sales user → modal appears
+- [ ] Same drag as admin → reason modal appears, can override
+- [ ] Click a deal → detail page shows stage history timeline
+- [ ] Close deal as Lost without reason → blocked with validation error
+- [ ] Dashboard shows pipeline widgets with real numbers
+- [ ] PROJECT_PLAN.md B.7 marked ✅ (auto-done)
+- [ ] DEVIATIONS.md has Day 7 entries if any (auto-done)
+- [ ] Commit pushed (auto-done)
+
+If all auto-housekeeping ran as expected, your only task is the visual + interaction verification above. ~30 minutes.
+
+---
+
+## Day 8 — Quotation Builder UI + Line Items
+
+_Will be added when Day 7 is complete. Day 8 ships the Quotation Builder — the most complex single form in the app. It's also a prerequisite for Day 9's GST tax engine, since the Builder is where tax calculations render live._
 
 ---
 

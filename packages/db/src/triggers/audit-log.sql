@@ -206,3 +206,15 @@ DROP TRIGGER IF EXISTS audit_trg ON procurement_items;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON procurement_items
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 7: deals + deal_products are auditable. deal_stage_history is itself
+-- the audit log for stage transitions, so no trigger on that table.
+DROP TRIGGER IF EXISTS audit_trg ON deals;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON deals
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON deal_products;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON deal_products
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();

@@ -43,6 +43,13 @@
       "when": 1778521027693,
       "tag": "0005_aromatic_post",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778527215755,
+      "tag": "0006_outstanding_energizer",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import {
-  InvalidTransitionError,
+  InventoryInvalidTransitionError,
   InventoryItemNotFoundError,
   transitionInventoryItem,
 } from '@dealerlink/db';
@@ -25,7 +25,7 @@ export const transitionInventory = tenantAction(
       if (err instanceof InventoryItemNotFoundError) {
         throw new AppError('NOT_FOUND', err.message);
       }
-      if (err instanceof InvalidTransitionError) {
+      if (err instanceof InventoryInvalidTransitionError) {
         throw new AppError('VALIDATION', err.message);
       }
       throw err;

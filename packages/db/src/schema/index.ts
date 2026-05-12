@@ -16,3 +16,4 @@ export * from './inbound-token-history';
 export * from './dealer';
 export * from './product';
 export * from './inventory';
+export * from './deal';
