@@ -9,7 +9,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { DEAL_STAGE_NUMBER, dealAllowedTargets, type DealStage } from '@dealerlink/db';
+import type { DealStage } from '@dealerlink/db';
 import { useState, useTransition } from 'react';
 
 import { transitionDealStage } from '@/lib/actions/deals';
@@ -18,7 +18,7 @@ import { DealCard, type DealCardData } from './deal-card';
 import { DraggableDealCard } from './draggable-deal-card';
 import { DroppableColumn } from './droppable-column';
 import { HighRiskModal, type HighRiskPrompt } from './high-risk-modal';
-import { STAGES } from './stage-meta';
+import { STAGE_NUMBER, STAGES, clientAllowedTargets } from './stage-meta';
 
 export interface PipelineBoardProps {
   initialByStage: Record<DealStage, DealCardData[]>;
@@ -103,7 +103,7 @@ export function PipelineBoard({ initialByStage, viewerRole }: PipelineBoardProps
     const fromStage = fromStageOf(dealId);
     if (!fromStage || fromStage === toStage) return;
 
-    const allowed = dealAllowedTargets(fromStage, viewerRole);
+    const allowed = clientAllowedTargets(fromStage, viewerRole);
     if (!allowed.includes(toStage)) {
       setToast({ kind: 'error', message: `Can't move from ${fromStage} to ${toStage}.` });
       return;
@@ -114,8 +114,7 @@ export function PipelineBoard({ initialByStage, viewerRole }: PipelineBoardProps
 
     // High-risk guard: dealer.risk === 'high' AND target stage past Negotiation.
     const breachesGuard =
-      card.dealer.riskLevel === 'high' &&
-      DEAL_STAGE_NUMBER[toStage] > DEAL_STAGE_NUMBER.negotiation;
+      card.dealer.riskLevel === 'high' && STAGE_NUMBER[toStage] > STAGE_NUMBER.negotiation;
     if (breachesGuard) {
       setHighRiskPrompt({
         dealId,
@@ -141,7 +140,7 @@ export function PipelineBoard({ initialByStage, viewerRole }: PipelineBoardProps
   // Compute per-column highlight relative to the currently dragged card.
   const draggingFromStage = dragging ? fromStageOf(dragging.id) : null;
   const allowedTargets = draggingFromStage
-    ? dealAllowedTargets(draggingFromStage, viewerRole)
+    ? clientAllowedTargets(draggingFromStage, viewerRole)
     : null;
 
   return (

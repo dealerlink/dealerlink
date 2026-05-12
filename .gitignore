@@ -36,3 +36,5 @@ playwright-report/
 *.pem
 *.key
 secrets/
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.lock
