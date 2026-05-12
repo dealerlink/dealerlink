@@ -23,7 +23,12 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false, // each day's spec assumes a known seeded state
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 1 : 1,
+  // Dev-server route compilation on first hit can run 5-10s per dynamic
+  // route. A test that chains loginAs → goto → goto can run close to
+  // the default 30s on a cold .next. Give it headroom so the suite is
+  // not flaky.
+  timeout: 60_000,
   workers: 1,
   reporter: process.env.CI ? 'github' : 'list',
   use: {

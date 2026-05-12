@@ -8,7 +8,7 @@ import {
   withTenant,
   type DealStage,
 } from '@dealerlink/db';
-import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 
 export interface DealCard {
   id: string;
@@ -70,7 +70,7 @@ export async function listDealsByStage(
     if (opts.assignedTo) where.push(eq(deals.assignedTo, opts.assignedTo));
     if (opts.dealerId) where.push(eq(deals.dealerId, opts.dealerId));
     if (opts.hot === true) where.push(eq(deals.hot, true));
-    if (opts.activeSince) where.push(sql`${deals.lastActivityAt} >= ${opts.activeSince}`);
+    if (opts.activeSince) where.push(gte(deals.lastActivityAt, opts.activeSince));
     if (opts.search && opts.search.trim().length > 0) {
       const q = `%${opts.search.trim()}%`;
       const clause = or(ilike(deals.title, q), ilike(deals.dealCode, q));
@@ -401,7 +401,7 @@ export async function getDealMetrics(tenantId: string): Promise<PipelineMetrics>
         and(
           eq(deals.tenantId, tenantId),
           eq(deals.status, 'open'),
-          sql`${deals.lastActivityAt} < ${stalledThreshold}`,
+          lt(deals.lastActivityAt, stalledThreshold),
         ),
       );
 
@@ -432,7 +432,7 @@ export async function getDealMetrics(tenantId: string): Promise<PipelineMetrics>
         and(
           eq(deals.tenantId, tenantId),
           eq(deals.status, 'open'),
-          sql`${deals.lastActivityAt} < ${stalledThreshold}`,
+          lt(deals.lastActivityAt, stalledThreshold),
         ),
       )
       .orderBy(asc(deals.lastActivityAt))

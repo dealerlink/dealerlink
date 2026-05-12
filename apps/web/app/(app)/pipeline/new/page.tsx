@@ -19,8 +19,8 @@ export default async function NewDealPage() {
   if (!tenantId) redirect('/login');
 
   const [dealerList, productList] = await Promise.all([
-    listDealers(tenantId, { limit: 500 }),
-    listProducts(tenantId, { limit: 500 }),
+    listDealers(tenantId, { limit: 200 }),
+    listProducts(tenantId, { limit: 200 }),
   ]);
 
   const dealers = dealerList.rows

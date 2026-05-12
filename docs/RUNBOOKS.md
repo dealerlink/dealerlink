@@ -203,3 +203,33 @@ Short, operator-facing procedures for actions that ship with the admin app. Each
 
 - Don't introduce GST rates outside {0, 5, 12, 18, 28} — the check constraint will reject them. If a new statutory rate is added, that requires a migration.
 - Don't update GST rates on `status='discontinued'` products; they shouldn't be selling anyway, and the change muddies the audit trail.
+
+---
+
+## R9 — Moving a deal past the high-risk dealer guard
+
+**When to use:** A salesperson reports that a deal is "stuck" — they can't drag the card past Negotiation on the kanban. The card belongs to a dealer with `risk_level = 'high'`, which BRD §3.4 blocks from moving forward without an admin sign-off.
+
+**Time:** ~30 seconds (modal flow).
+
+**Prerequisites:** You are signed in as a tenant **admin** (not sales). Sales users see the same modal but can only acknowledge it, not override.
+
+**Steps:**
+
+1. Open `/pipeline` in the tenant workspace.
+2. Drag the affected card from its current column (likely Negotiation) onto the next column (Verbal commit, PO pending, etc.). The drop registers as usual.
+3. The **High-risk dealer — Override required** modal appears, identifying the deal, the dealer, and the target stage.
+4. Type a one-line reason in the **Override reason** textarea. Examples that survive a compliance review: "Verbal commit verified with CFO on 2026-05-12", "Bank guarantee on file", "Existing AR balance cleared this week". The reason persists on the `deal_stage_history` row.
+5. Click **Override & move**.
+
+The card lands in the destination column and the history row is marked `overridden = true` with the reason. Re-running the move later will need a fresh reason — overrides do not persist as a per-deal "trust" flag.
+
+**Don't:**
+
+- Don't override without a reason that names the mitigating fact. The override row is what compliance reads if the deal eventually goes bad.
+- Don't try to bypass the modal by editing the database directly — `deal_stage_history` writes happen inside the same transaction as the stage update, and skipping the modal also skips the history row.
+- Don't change the dealer's `risk_level` to medium just to make the modal go away. If the risk has genuinely improved, update the risk level from the dealer detail page (which is itself audited); the kanban will then stop firing the guard for future moves.
+
+**Reverse transitions:** Admins can drag a card _backwards_ one stage (e.g., "Verbal commit" → "Negotiation") if the dealer pulled out of a commit. Sales users cannot. Reverse moves never trigger the high-risk modal because they reduce risk exposure rather than increase it.
+
+**Closing as lost:** Any deal at any stage can be dragged into **Closed** — but if the close status is 'lost', the action requires a `lostReason` selection (and admin override modal does _not_ gate lost-closures for high-risk dealers). Lost is always permitted because it removes the deal from the active pipeline.
