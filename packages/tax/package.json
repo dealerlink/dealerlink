@@ -12,7 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "decimal.js": "^10.4.3"
   },
   "devDependencies": {
     "typescript": "*",
