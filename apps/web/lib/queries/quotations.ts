@@ -143,6 +143,7 @@ export interface QuotationDetail {
     legalName: string;
     state: string | null;
     gstin: string | null;
+    email: string | null;
   };
   preparedBy: {
     id: string;
@@ -202,6 +203,7 @@ export async function getQuotationById(
         dealerLegal: dealers.legalName,
         dealerState: dealers.state,
         dealerGstin: dealers.gstin,
+        dealerEmail: dealers.email,
         preparedById: quotations.preparedBy,
         preparedByName: users.fullName,
         preparedByEmail: users.email,
@@ -282,6 +284,7 @@ export async function getQuotationById(
         legalName: base.dealerLegal ?? '—',
         state: base.dealerState,
         gstin: base.dealerGstin,
+        email: base.dealerEmail,
       },
       preparedBy: {
         id: base.preparedById,

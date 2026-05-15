@@ -12,6 +12,7 @@ import { and, eq, lte } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
+import { spawnPdfRender } from '@/lib/pdf/spawn-render';
 
 import { loadQuotationForGuard, writeStatusHistory } from './helpers';
 
@@ -50,6 +51,21 @@ export const sendQuotation = tenantAction(
       actorId: auth.user.id,
       reason: `sent_via_${input.via}`,
     });
+
+    // Auto-generate the PDF on the draft → sent transition so the document
+    // the dealer receives is ready immediately. Best-effort: a render
+    // failure must not roll back the (successful) status change — the user
+    // can re-generate from the quotation page.
+    try {
+      await spawnPdfRender({
+        documentType: 'quotation',
+        documentId: input.id,
+        tenantId: existing.tenantId,
+        userId: auth.user.id,
+      });
+    } catch {
+      // Swallowed by design — see comment above.
+    }
 
     // Pipeline integration: if linked to a deal in needs_analysis, auto-
     // advance to quotation_sent. Day 14 will replace this with the Resend

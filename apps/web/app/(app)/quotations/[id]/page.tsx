@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate, formatINRExact } from '@/lib/format';
+import { getLatestGeneratedDocument } from '@/lib/queries/generated-documents';
 import { getQuotationById, getQuotationRevisionChain } from '@/lib/queries/quotations';
 import { impersonationTenantId } from '@/lib/tenant/context';
 import type { QuotationStatus } from '@dealerlink/schemas';
@@ -51,6 +52,8 @@ export default async function QuotationDetailPage({ params }: PageProps) {
   const chain =
     q.parentQuotationId || q.revision > 1 ? await getQuotationRevisionChain(tenantId, q.id) : [];
 
+  const latestPdf = await getLatestGeneratedDocument(tenantId, 'quotation', q.id);
+
   return (
     <div className="mx-auto max-w-[1100px] px-8 py-10">
       <Link
@@ -82,6 +85,9 @@ export default async function QuotationDetailPage({ params }: PageProps) {
           quoteNumber={q.quoteNumber}
           isAdmin={isAdmin}
           canEdit={canEdit}
+          role={ctx.user.role}
+          dealerEmail={q.dealer.email}
+          lastGeneratedAt={latestPdf ? latestPdf.generatedAt.toISOString() : null}
         />
       </div>
 
