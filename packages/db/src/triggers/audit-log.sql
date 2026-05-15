@@ -218,3 +218,15 @@ DROP TRIGGER IF EXISTS audit_trg ON deal_products;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON deal_products
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 8: quotations + quotation_lines auditable. quotation_status_history is
+-- itself the audit log for status transitions, so no trigger on that table.
+DROP TRIGGER IF EXISTS audit_trg ON quotations;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON quotations
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON quotation_lines;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON quotation_lines
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();

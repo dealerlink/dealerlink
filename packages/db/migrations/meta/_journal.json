@@ -50,6 +50,13 @@
       "when": 1778527215755,
       "tag": "0006_outstanding_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778807136396,
+      "tag": "0007_keen_odin",
+      "breakpoints": true
     }
   ]
 }

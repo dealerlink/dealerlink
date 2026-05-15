@@ -17,3 +17,4 @@ export * from './dealer';
 export * from './product';
 export * from './inventory';
 export * from './deal';
+export * from './quotation';
