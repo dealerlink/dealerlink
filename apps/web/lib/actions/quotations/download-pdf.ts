@@ -44,13 +44,18 @@ export const downloadQuotationPdf = tenantAction(
     )?.id;
 
     if (!generatedId) {
-      const rendered = await spawnPdfRender({
-        documentType: 'quotation',
-        documentId: input.id,
-        tenantId: existing.tenantId,
-        userId: auth.user.id,
-      });
-      generatedId = rendered.generatedDocumentId;
+      try {
+        const rendered = await spawnPdfRender({
+          documentType: 'quotation',
+          documentId: input.id,
+          tenantId: existing.tenantId,
+          userId: auth.user.id,
+        });
+        generatedId = rendered.generatedDocumentId;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'PDF generation failed';
+        throw new AppError('INTERNAL', `Could not generate the PDF — ${message}`);
+      }
     }
 
     const payload = await getGeneratedDocumentPayload(existing.tenantId, generatedId, tx);

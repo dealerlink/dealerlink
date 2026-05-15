@@ -302,9 +302,15 @@ async function seedTenant(
     await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     await tx.execute(sql`SELECT set_config('app.user_id', ${actorId}, true)`);
 
+    // Explicit tenant filter on every master-data read: the seed runs with
+    // a role that bypasses RLS, so an unqualified select would return rows
+    // from EVERY tenant and `pick()` could grab a cross-tenant dealer —
+    // producing quotations whose dealer_id points outside their own tenant
+    // (DEV.38). Scope every read to `tenantId`.
     const dealerRows = (await tx
       .select({ id: dealers.id, displayName: dealers.displayName, state: dealers.state })
-      .from(dealers)) as DealerRow[];
+      .from(dealers)
+      .where(sql`tenant_id = ${tenantId}`)) as DealerRow[];
     const productRows = (await tx
       .select({
         id: products.id,
@@ -314,10 +320,12 @@ async function seedTenant(
         gstRate: products.gstRate,
         defaultSellingPrice: products.defaultSellingPrice,
       })
-      .from(products)) as ProductRow[];
+      .from(products)
+      .where(sql`tenant_id = ${tenantId}`)) as ProductRow[];
     const dealRows = (await tx
       .select({ id: deals.id, dealerId: deals.dealerId })
-      .from(deals)) as DealRow[];
+      .from(deals)
+      .where(sql`tenant_id = ${tenantId}`)) as DealRow[];
 
     if (dealerRows.length === 0 || productRows.length < 3) {
       console.log('  · (not enough dealers/products — skipping)');
@@ -521,7 +529,11 @@ async function seedTenant(
         termsAndConditions: quotations.termsAndConditions,
       })
       .from(quotations)
-      .where(sql`status = 'accepted'`)
+      // Tenant filter is required: the seed bypasses RLS, so an unqualified
+      // status filter would pick an 'accepted' quotation from ANOTHER tenant
+      // and build this tenant's revision chain on top of it — cross-tenant
+      // dealer + parent references (DEV.38).
+      .where(sql`status = 'accepted' AND tenant_id = ${tenantId}`)
       .limit(1);
 
     if (acceptedRows[0]) {

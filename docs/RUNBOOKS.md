@@ -233,3 +233,26 @@ The card lands in the destination column and the history row is marked `overridd
 **Reverse transitions:** Admins can drag a card _backwards_ one stage (e.g., "Verbal commit" → "Negotiation") if the dealer pulled out of a commit. Sales users cannot. Reverse moves never trigger the high-risk modal because they reduce risk exposure rather than increase it.
 
 **Closing as lost:** Any deal at any stage can be dragged into **Closed** — but if the close status is 'lost', the action requires a `lostReason` selection (and admin override modal does _not_ gate lost-closures for high-risk dealers). Lost is always permitted because it removes the deal from the active pipeline.
+
+---
+
+## R? — Re-generating a quotation PDF after edits
+
+**When to use:** A quotation was edited (or revised) after its PDF was already generated, and the operator/sales user needs the PDF to reflect the current data.
+
+**Time:** ~10 seconds.
+
+**Background:** Every PDF render produces a **new immutable `generated_documents` row** — old renders are never mutated or deleted (they stay for audit). The "Download PDF" button always serves the **latest** row. So a stale PDF is simply a sign that no render has run since the last edit.
+
+**Steps:**
+
+1. Open the quotation at `/quotations/<id>` in the tenant workspace.
+2. If a PDF has been generated before, the page shows **Last generated: DD-MMM HH:MM** and an admin-only **Regenerate PDF** button.
+3. Click **Regenerate PDF** (admin) and confirm. A fresh render runs; on success the page shows "PDF regenerated." and the timestamp updates.
+4. Click **Download PDF** to retrieve the new copy. Sales/Accounts users who only see "Download PDF" can also force a fresh copy by asking an admin to regenerate — Download itself serves the most recent render and only generates on first-ever request.
+
+**Notes:**
+
+- The render runs in the workers process (Puppeteer). It is spawned as a one-shot subprocess by the web action (Phase 1 — DEV.36); from Day 14 it moves to the pg-boss `render-pdf` queue.
+- A `draft → sent` transition auto-generates the PDF, so a freshly-sent quotation already has a current render.
+- If a render fails ("Could not generate the PDF…"), check that the workers Chromium is available — see `docs/PDF_PIPELINE.md`.

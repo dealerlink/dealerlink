@@ -324,6 +324,61 @@ CLAUDE.md retains only the day-to-day-critical sections (Brand Naming, Project a
 **Date:** 2026-05-15
 **Issue:** The Day 9 engine-parity test (`packages/db/tests/quotation-engine-parity.test.ts`) recomputes every seeded `QT-` quotation and compares against the stored header totals. It failed on `QT-2026-0010` revisions 2 & 3: the engine computed `discountAmount = 0.00` but the stored value was `177400.00`.
 **Investigation:** The stored revision rows had `discount_amount = 177400.00` **with `discount_type = NULL` and `discount_value = NULL`** — internally inconsistent. Root cause: the Day 8 seed's revision-chain block (`packages/db/src/seeds/day8.ts`) builds Rev 2/Rev 3 from a _partial_ `select()` projection of the parent that omitted `discountType`/`discountValue`, and the follow-up `insert()` likewise omitted them — so the copied `discount_amount` was orphaned. The DB CHECK `quotations_discount_chk` did not catch it (both type and value being NULL satisfies its first branch). The production `reviseQuotation` Server Action (`apps/web/lib/actions/quotations/revise-quotation.ts`) is **correct** — it copies `discountType`/`discountValue` (lines 52-53) — so only the seed was affected.
-**Verdict:** A genuine pre-existing Day 8 **seed** bug, not a tax-engine bug. The engine correctly computed `0` from the broken input. The stored _totals_ (subtotal, discount_amount, taxes, total) were all numerically correct in intent; only the discount _metadata_ was missing.
+**Verdict:** A genuine pre-existing Day 8 **seed** bug, not a tax-engine bug. The engine correctly computed `0` from the broken input. The stored _totals_ (subtotal, discount*amount, taxes, total) were all numerically correct in intent; only the discount \_metadata* was missing.
 **Resolution:** Added `discountType`/`discountValue` to both the parent select projection and the revision insert in `day8.ts`, then re-ran `db:seed:day8` (the seed truncates + re-inserts, so this is a clean regenerate). Post-fix: zero rows with `discount_amount > 0 AND discount_type IS NULL`; the parity test passes for all seeded quotations including every revision. No production code or stored-total math changed.
 **Permanent fix:** The parity test itself — it now guards against any future drift between the engine and persisted quotation totals, and would re-catch this class of seed/copy bug. A Phase 1 cleanup candidate: tighten `quotations_discount_chk` to also forbid a non-zero `discount_amount` when `discount_type IS NULL`.
+
+## DEV.36 — Day 10 — PDF render runs as a spawned subprocess, not a pg-boss job
+
+**Date:** 2026-05-15
+**Spec said:** Chunk 10c — "Enqueue a pg-boss 'render-pdf' job … await pg-boss completion." A4 anticipated this exact deviation: "Document as DEV.36 if questioned."
+**Built:** The web `generateQuotationPdf` / `downloadQuotationPdf` / `emailQuotationPdf`
+actions render synchronously by **spawning the workers `render-cli` as a
+one-shot subprocess** (`apps/web/lib/pdf/spawn-render.ts` →
+`node --import tsx apps/workers/src/pdf/render-cli.ts`). The pg-boss
+`render-pdf` job handler (`handleRenderPdfJob`) IS written and wraps the
+exact same `runRenderPdf` core — it is dormant until Day 14.
+**Why:**
+
+- **pg-boss is not bootstrapped until Day 14** (DEV.15, DEV.23). A true
+  async enqueue needs a running workers process consuming the queue; the
+  `pnpm verify` harness only starts `pnpm dev` (web).
+- **The Day 10 guardrail forbids importing puppeteer-core into `apps/web`**
+  ("200 MB binary in the web bundle"). Rendering therefore _must_ happen in
+  the workers process. A spawned subprocess keeps Puppeteer + Chromium
+  entirely in workers while still being synchronous from the request's
+  point of view (the action `await`s the child) — which is all Day 10
+  needs (no async job-polling UI).
+- It needs no always-on workers process, so `pnpm verify` works unchanged.
+  **Impact:** A render holds the parent tenant transaction open for the
+  subprocess duration (~5–10 s incl. Chromium launch). Acceptable for Phase 1
+  volumes. The child re-loads the document by id inside its own
+  `withTenant` transaction, so the persisted `generated_documents` row is
+  RLS- and audit-correct.
+  **Resolution:** Day 14 swaps `spawnPdfRender()` for a pg-boss
+  `boss.send('render-pdf', …)` against the already-written `handleRenderPdfJob`.
+  No template, storage, or schema change required.
+
+## DEV.37 — Day 10 — page footer via Chromium footerTemplate (A1.4 said displayHeaderFooter=false)
+
+**Date:** 2026-05-15
+**Spec said:** A1.4 — `renderPdfFromHtml` uses `displayHeaderFooter: false`
+("we build header/footer into the HTML"). A2.2 — "Footer band on every
+page: Page X of Y".
+**Conflict:** A repeating _page-numbered_ footer cannot be produced from
+body HTML alone — CSS page counters (`counter(page)`) only resolve inside
+`@page` margin boxes, which Puppeteer does not expose; a `position:fixed`
+div repeats per page but cannot count pages.
+**Built:** `renderPdfFromHtml` accepts an optional `footerTemplate`. When
+provided it sets `displayHeaderFooter: true` with an empty header template
+(suppresses Chromium's default date header) and the given footer template,
+which uses Chromium's `pageNumber`/`totalPages` token classes. The rich
+_branded_ header stays entirely in the body HTML as A1.4 intended; only the
+minimal running footer uses Chromium's mechanism. Default (no
+`footerTemplate`) is still `displayHeaderFooter: false`, matching A1.4 for
+the smoke-test path.
+**Impact:** None — the quotation PDF shows "Page X of Y" + the document id
+on every page, as A2.2 requires.
+**Resolution:** N/A — this is the only mechanism Chromium offers for true
+per-page numbering; the divergence from A1.4's literal flag is required to
+satisfy A2.2.
