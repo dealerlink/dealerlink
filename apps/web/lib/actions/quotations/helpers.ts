@@ -14,8 +14,10 @@ import {
 import { type CreateQuotationInput, type QuotationLineInput } from '@dealerlink/schemas';
 import { eq } from 'drizzle-orm';
 
+import { computeTax, serializeOutput, TaxComputationError, type GstRate } from '@dealerlink/tax';
+
 import { AppError } from '@/lib/errors';
-import { computeQuotationTotals, lineTotalOf } from '@/lib/quotation/preview';
+import { lineTotalOf } from '@/lib/quotation/preview';
 
 import { fiscalYear } from './fiscal-year';
 
@@ -150,29 +152,49 @@ export interface ComputedTotals {
   totalAmount: string;
 }
 
+/**
+ * Server-side authoritative totals for persistence. Delegates to the
+ * canonical `@dealerlink/tax` engine and returns fixed-2dp strings ready for
+ * insertion into the quotation's NUMERIC columns.
+ *
+ * Unlike the client preview, this path does NOT cap an over-large discount:
+ * the engine rejects it and we surface a clean validation error rather than
+ * silently persisting a capped figure the user never saw.
+ */
 export function computeTotalsForPersistence(
   input: Pick<CreateQuotationInput, 'lines' | 'discount'>,
   tenantState: string,
   placeOfSupply: string,
 ): ComputedTotals {
-  const totals = computeQuotationTotals({
-    tenantState,
-    placeOfSupply,
-    lines: input.lines.map((l) => ({
-      quantity: l.quantity,
-      unitPrice: l.unitPrice,
-      gstRate: l.gstRate,
-    })),
-    discount: input.discount ?? null,
-  });
+  let totals;
+  try {
+    totals = serializeOutput(
+      computeTax({
+        tenantState,
+        placeOfSupply,
+        lines: input.lines.map((l, i) => ({
+          lineId: String(i),
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          gstRate: l.gstRate as GstRate,
+        })),
+        discount: input.discount ?? null,
+      }),
+    );
+  } catch (err) {
+    if (err instanceof TaxComputationError) {
+      throw new AppError('VALIDATION', err.message);
+    }
+    throw err;
+  }
   return {
-    subtotal: totals.subtotal.toFixed(2),
-    discountAmount: totals.discountAmount.toFixed(2),
-    taxableAmount: totals.taxableAmount.toFixed(2),
-    cgstAmount: totals.cgst.toFixed(2),
-    sgstAmount: totals.sgst.toFixed(2),
-    igstAmount: totals.igst.toFixed(2),
-    totalAmount: totals.total.toFixed(2),
+    subtotal: totals.subtotal,
+    discountAmount: totals.discountAmount,
+    taxableAmount: totals.taxableAmount,
+    cgstAmount: totals.cgstAmount,
+    sgstAmount: totals.sgstAmount,
+    igstAmount: totals.igstAmount,
+    totalAmount: totals.totalAmount,
   };
 }
 

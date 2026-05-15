@@ -507,6 +507,10 @@ async function seedTenant(
         placeOfSupply: quotations.placeOfSupply,
         validUntil: quotations.validUntil,
         currency: quotations.currency,
+        // discountType/discountValue MUST be carried into the revision —
+        // omitting them leaves a copied discount_amount with no type/value.
+        discountType: quotations.discountType,
+        discountValue: quotations.discountValue,
         subtotal: quotations.subtotal,
         discountAmount: quotations.discountAmount,
         taxableAmount: quotations.taxableAmount,
@@ -554,6 +558,8 @@ async function seedTenant(
             quoteDate: new Date().toISOString().slice(0, 10),
             validUntil: parent.validUntil,
             currency: parent.currency,
+            discountType: parent.discountType,
+            discountValue: parent.discountValue,
             subtotal: parent.subtotal,
             discountAmount: parent.discountAmount,
             taxableAmount: parent.taxableAmount,

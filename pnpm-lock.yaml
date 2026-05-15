@@ -47,6 +47,9 @@ importers:
       '@dealerlink/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@dealerlink/tax':
+        specifier: workspace:*
+        version: link:../../packages/tax
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -194,6 +197,9 @@ importers:
         specifier: ^3.4.5
         version: 3.4.9
     devDependencies:
+      '@dealerlink/tax':
+        specifier: workspace:*
+        version: link:../tax
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0

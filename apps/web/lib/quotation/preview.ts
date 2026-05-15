@@ -1,21 +1,35 @@
 /**
  * Client-side tax preview helper.
  *
- * The Builder uses this to update totals live as the user edits a quotation,
- * without making a server round-trip. The Day 9 tax engine in packages/tax
- * will replace the math inside `computeQuotationTotals` (the shared
- * pure-function below). Until then, server-side actions call the SAME
- * function so the numbers are guaranteed identical to the preview.
+ * As of Day 9 this file is a THIN ADAPTER. All money math lives in the
+ * canonical engine `@dealerlink/tax` (`computeTax`). This adapter exists
+ * only to bridge two shapes:
  *
- * Rules (per CLAUDE.md §6 + BRD §4):
- *   - Inter-state when tenantState !== placeOfSupply → IGST at full rate
- *   - Intra-state → CGST + SGST, each at half the rate
- *   - Discount applies BEFORE tax (Phase 1 only)
- *   - Discount distributes proportionally across lines so each line's tax
- *     is computed against its own discounted base (lines with different
- *     GST rates need this)
- *   - All money rounded to 2dp via half-up rounding
+ *   - the Builder's loose, mid-edit input (number-or-string fields, lines
+ *     that are not yet complete, a discount the user is still typing) →
+ *     the engine's strict `TaxComputationInput`;
+ *   - the engine's `Decimal` output → plain `number`s for the live preview
+ *     (the UI does not need Decimal precision to render rupees).
+ *
+ * Tolerances applied here, and ONLY here (the engine itself stays strict):
+ *   - incomplete lines (quantity ≤ 0) are dropped — they contribute nothing;
+ *   - the inter/intra-state decision is case-INsensitive (the engine is
+ *     case-sensitive; persisted data is already uppercased consistently);
+ *   - an over-large discount is capped at the subtotal instead of throwing,
+ *     so the live preview never blows up while the user edits.
+ *
+ * Rules (per CLAUDE.md §6 + BRD §4) are all enforced by the engine:
+ *   - Inter-state → IGST at full rate; intra-state → CGST + SGST at half.
+ *   - Discount applies BEFORE tax, allocated proportionally per line.
  */
+import {
+  Decimal,
+  computeTax,
+  round2,
+  toDecimal,
+  type GstRate,
+  type TaxDiscount,
+} from '@dealerlink/tax';
 
 export interface PreviewLine {
   quantity: number | string;
@@ -46,8 +60,6 @@ export interface PreviewOutput {
   isInterState: boolean;
 }
 
-const round2 = (n: number): number => Math.round(n * 100) / 100;
-
 const toNum = (v: number | string): number => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -55,59 +67,73 @@ const toNum = (v: number | string): number => {
 
 /**
  * Pure function used by both the client preview and the Server Actions.
- * Same inputs → same outputs by construction.
+ * Same inputs → same outputs by construction — it delegates to `computeTax`.
  */
 export function computeQuotationTotals(input: PreviewInput): PreviewOutput {
-  const isInterState = input.tenantState.toUpperCase() !== input.placeOfSupply.toUpperCase();
+  // Case-insensitive state comparison — the documented preview behaviour.
+  const isInterState =
+    input.tenantState.trim().toUpperCase() !== input.placeOfSupply.trim().toUpperCase();
 
-  let subtotal = 0;
-  for (const l of input.lines) {
-    subtotal += toNum(l.quantity) * toNum(l.unitPrice);
+  // Drop incomplete lines; a quantity ≤ 0 contributes nothing to a preview.
+  const engineLines = input.lines
+    .map((l, i) => ({
+      lineId: `preview-${i}`,
+      quantity: toNum(l.quantity),
+      unitPrice: toNum(l.unitPrice),
+      gstRate: toNum(l.gstRate) as GstRate,
+    }))
+    .filter((l) => l.quantity > 0 && l.unitPrice >= 0);
+
+  if (engineLines.length === 0) {
+    return {
+      subtotal: 0,
+      discountAmount: 0,
+      taxableAmount: 0,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      total: 0,
+      isInterState,
+    };
   }
-  subtotal = round2(subtotal);
 
-  let discountAmount = 0;
+  // Subtotal (sum of rounded line subtotals) — only needed to cap the
+  // discount before handing it to the strict engine.
+  const subtotalD = engineLines.reduce(
+    (acc, l) => acc.plus(round2(toDecimal(l.quantity).times(l.unitPrice))),
+    new Decimal(0),
+  );
+
+  // Resolve any discount to a concrete, non-negative, subtotal-capped amount
+  // so the engine (which rejects over-large discounts) never throws here.
+  let discount: TaxDiscount = null;
   if (input.discount) {
-    const v = toNum(input.discount.value);
-    if (input.discount.type === 'percent') {
-      discountAmount = round2((subtotal * v) / 100);
-    } else {
-      // Amount discount capped at subtotal to avoid negative bases.
-      discountAmount = round2(Math.min(v, subtotal));
-    }
+    const v = Math.max(toNum(input.discount.value), 0);
+    const rawAmount =
+      input.discount.type === 'percent'
+        ? subtotalD.times(Math.min(v, 100)).dividedBy(100)
+        : toDecimal(v);
+    const capped = Decimal.min(round2(rawAmount), subtotalD);
+    discount = { type: 'amount', value: capped.toNumber() };
   }
 
-  const taxableAmount = round2(subtotal - discountAmount);
-  const discountRatio = subtotal > 0 ? discountAmount / subtotal : 0;
-
-  let cgst = 0;
-  let sgst = 0;
-  let igst = 0;
-
-  for (const l of input.lines) {
-    const lineGross = toNum(l.quantity) * toNum(l.unitPrice);
-    const lineAfterDiscount = lineGross * (1 - discountRatio);
-    const rate = toNum(l.gstRate) / 100;
-    if (isInterState) {
-      igst += lineAfterDiscount * rate;
-    } else {
-      cgst += lineAfterDiscount * (rate / 2);
-      sgst += lineAfterDiscount * (rate / 2);
-    }
-  }
-
-  cgst = round2(cgst);
-  sgst = round2(sgst);
-  igst = round2(igst);
+  // The engine only uses the two state strings for the inter/intra decision;
+  // pass canonical non-empty sentinels so a half-filled state never throws.
+  const out = computeTax({
+    tenantState: 'INTRA',
+    placeOfSupply: isInterState ? 'INTER' : 'INTRA',
+    lines: engineLines,
+    discount,
+  });
 
   return {
-    subtotal,
-    discountAmount,
-    taxableAmount,
-    cgst,
-    sgst,
-    igst,
-    total: round2(taxableAmount + cgst + sgst + igst),
+    subtotal: out.subtotal.toNumber(),
+    discountAmount: out.discountAmount.toNumber(),
+    taxableAmount: out.taxableAmount.toNumber(),
+    cgst: out.cgstAmount.toNumber(),
+    sgst: out.sgstAmount.toNumber(),
+    igst: out.igstAmount.toNumber(),
+    total: out.totalAmount.toNumber(),
     isInterState,
   };
 }
@@ -117,5 +143,5 @@ export function lineTotalOf(line: {
   quantity: number | string;
   unitPrice: number | string;
 }): number {
-  return round2(toNum(line.quantity) * toNum(line.unitPrice));
+  return round2(toDecimal(toNum(line.quantity)).times(toNum(line.unitPrice))).toNumber();
 }
