@@ -361,6 +361,52 @@ describe('document counter for quotations', () => {
   });
 });
 
+describe('seed integrity — quotation line drift', () => {
+  // Regression guard: catches any future seed or Server Action bug that
+  // inserts quotation_lines more than once (or drops them), which would
+  // make SUM(line_total) diverge from the stored header subtotal and
+  // break the Day 9 tax engine, the Builder edit view, and downstream
+  // order/invoice modules. Scoped to seeded `QT-` quotations so test
+  // residue (TEST-/CHAIN-/UQ- header-only fixtures) is excluded.
+  for (const slug of ['demo', 'sample'] as const) {
+    it(`every seeded QT- quotation in "${slug}" has SUM(line_total) === subtotal`, async () => {
+      const tenantId = slug === 'demo' ? demoId : sampleId;
+      const rows = (await asTenant(tenantId, async (tx) =>
+        tx.execute(sql`
+          SELECT q.quote_number,
+                 q.revision,
+                 q.subtotal::text                    AS subtotal,
+                 COALESCE(SUM(ql.line_total), 0)::text AS lines_sum,
+                 COUNT(ql.id)::text                    AS line_count
+          FROM quotations q
+          LEFT JOIN quotation_lines ql ON ql.quotation_id = q.id
+          WHERE q.quote_number LIKE 'QT-%'
+          GROUP BY q.id, q.quote_number, q.revision, q.subtotal
+        `),
+      )) as unknown as {
+        quote_number: string;
+        revision: number;
+        subtotal: string;
+        lines_sum: string;
+        line_count: string;
+      }[];
+
+      expect(
+        rows.length,
+        `no seeded QT- quotations for "${slug}" — run pnpm db:seed`,
+      ).toBeGreaterThan(0);
+      for (const r of rows) {
+        const label = `${r.quote_number} rev${r.revision}`;
+        expect(Number(r.line_count), `${label} has no lines`).toBeGreaterThan(0);
+        expect(Number(r.lines_sum), `${label}: SUM(line_total) !== subtotal`).toBeCloseTo(
+          Number(r.subtotal),
+          2,
+        );
+      }
+    });
+  }
+});
+
 describe('revision chain', () => {
   it('parent_quotation_id self-FK enforces in-tenant chain', async () => {
     const num = `CHAIN-${Date.now()}`;
