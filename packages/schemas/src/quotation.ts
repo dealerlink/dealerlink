@@ -38,7 +38,7 @@ export const quotationLineInputSchema = z.object({
   productName: trimmed.min(1).max(256),
   hsnCode: trimmed.regex(/^[0-9]{4,8}$/, 'HSN must be 4–8 digits'),
   quantity: z.coerce.number().positive().max(999_999),
-  unitOfMeasure: trimmed.min(1).max(16).default('Nos'),
+  unitOfMeasure: trimmed.min(1).max(16).optional(),
   unitPrice: z.coerce.number().nonnegative().max(99_999_999),
   gstRate: z.coerce.number().refine((n) => [0, 5, 12, 18, 28].includes(n), {
     message: 'GST rate must be 0, 5, 12, 18, or 28',
