@@ -13,11 +13,12 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:rollback": "drizzle-kit drop",
-    "db:seed": "tsx src/seeds/index.ts && tsx src/seeds/day5.ts && tsx src/seeds/day6.ts && tsx src/seeds/day7.ts",
+    "db:seed": "tsx src/seeds/index.ts && tsx src/seeds/day5.ts && tsx src/seeds/day6.ts && tsx src/seeds/day7.ts && tsx src/seeds/day8.ts",
     "db:seed:base": "tsx src/seeds/index.ts",
     "db:seed:day5": "tsx src/seeds/day5.ts",
     "db:seed:day6": "tsx src/seeds/day6.ts",
     "db:seed:day7": "tsx src/seeds/day7.ts",
+    "db:seed:day8": "tsx src/seeds/day8.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

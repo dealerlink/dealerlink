@@ -13,35 +13,9 @@
 > **Companion files:**
 >
 > - `CLAUDE.md` — implementation guide (Claude Code's primary reference)
-> - `docs/*.md` — focused deep-dive references (`STRUCTURE.md`, `DESIGN_SYSTEM.md`, `LOGGING.md`, `PDF_PIPELINE.md`, `WORKFLOWS.md`, `TESTING.md`, `SEED_DATA.md`, `DEPLOYMENT.md`, `BUILD_TIMELINE.md`, `STANDARDS.md`)
 > - `DECISIONS.md` — locked decisions
 > - `PROJECT_PLAN.md` — task tracker
 > - `SETUP.md` — local dev setup
->
-> **Note on section refs:** Day 1–7 prompts below were authored against the
-> pre-DEV.28 CLAUDE.md (19 sections). After DEV.28 (2026-05-12), CLAUDE.md
-> retains 10 sections (§0–§9) and the remainder live as `docs/*.md`. The
-> mapping is:
->
-> | Old CLAUDE.md ref      | New location             |
-> | ---------------------- | ------------------------ |
-> | §4 (Project Structure) | `docs/STRUCTURE.md`      |
-> | §5 (Design System)     | `docs/DESIGN_SYSTEM.md`  |
-> | §6 (Data Model)        | CLAUDE.md §4             |
-> | §7 (Logging)           | `docs/LOGGING.md`        |
-> | §8 (GST)               | CLAUDE.md §5             |
-> | §9 (PDF Pipeline)      | `docs/PDF_PIPELINE.md`   |
-> | §10 (Auth & Roles)     | CLAUDE.md §6             |
-> | §11 (Workflows)        | `docs/WORKFLOWS.md`      |
-> | §12 (Testing)          | `docs/TESTING.md`        |
-> | §13 (Seed Data)        | `docs/SEED_DATA.md`      |
-> | §14 (Deployment)       | `docs/DEPLOYMENT.md`     |
-> | §15 (What NOT)         | CLAUDE.md §7             |
-> | §16 (Locked)           | CLAUDE.md §8             |
-> | §17 (Timeline)         | `docs/BUILD_TIMELINE.md` |
-> | §19 (Standards)        | `docs/STANDARDS.md`      |
->
-> Day 8+ prompts use the new locations directly.
 
 ---
 
@@ -1484,7 +1458,609 @@ If all auto-housekeeping ran as expected, your only task is the visual + interac
 
 ## Day 8 — Quotation Builder UI + Line Items
 
-_Will be added when Day 7 is complete. Day 8 ships the Quotation Builder — the most complex single form in the app. It's also a prerequisite for Day 9's GST tax engine, since the Builder is where tax calculations render live._
+**Goal:** Ship the Quotation Builder — the most complex single form in the app. By end of day, sales users can create, edit, send, and revise quotations with multi-line items, dealer-context-aware tax preview, before-tax discounts, terms & conditions, and validity periods.
+
+**This day is the foundation for Day 9.** Day 9 (GST tax engine) will compute final taxes on the data structure Day 8 produces. If the schema or line-item shape is wrong here, every tax calculation downstream is wrong. **Day 8 must be precise.**
+
+**Estimated time:** 6–7 hours of Claude Code work + ~45 min of your verification
+
+**Deliverable:** Working `/quotations` module with list, create, edit, detail, revise, send-via-email-stub. Tax preview is approximate (final engine arrives Day 9); schema is fully tax-engine-ready.
+
+### Prompt for Claude Code
+
+````
+You are implementing Day 8 of the Dealerlink build. Day 7 shipped successfully (commit c9c70c5) — sales pipeline kanban. The CLAUDE.md refactor is also complete (commit 6df3e1f) — CLAUDE.md is now 29.8k chars with 10 focused docs in docs/*.md.
+
+Today: Quotation Builder. This is the data-producing input for Day 9's GST tax engine. The schema and line-item shape MUST be tax-engine-ready by end of day.
+
+NOTE: PRE.1 (Playwright webServer config in apps/web/playwright.config.ts) is already committed and pushed (commit 7e95c0e). Verify the webServer block exists in playwright.config.ts and skip PRE.1 if confirmed. Proceed directly to Chunk 8a.
+
+PRELIMINARY (every day must do this):
+P.1. Run `pnpm preflight` and confirm 9 green checks. Port 3000 should be free.
+P.2. Read CLAUDE.md (now slim) for §3 stack, §5 data model, §6 GST logic, §7 auth, §8 anti-patterns, §9 locked decisions.
+P.3. Read docs/STANDARDS.md and docs/WORKFLOWS.md for context. Read docs/TESTING.md for test patterns.
+P.4. Skim DEVIATIONS.md to know what's been parked. R.13, R.17, R.20 are still tracked.
+P.5. Read CLAUDE.md §6 (GST & Multi-Party Document Logic) THREE TIMES. This is the highest-stakes module of the build and Day 8's schema must match the contract.
+P.6. Read BRD §4 (Quotations + GST computation rules) for the actual three-party logic and tax math.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md §6 (GST logic), §3 stack, §5 data model
+2. docs/WORKFLOWS.md (pipeline → quotation → order flow)
+3. BRD §4 — quotation requirements, three-party scenarios, intra-state vs inter-state determination
+4. docs/Distribyte.html — Quotation Builder is the most complex form in the prototype
+5. docs/3 PO Premier.pdf — real PO/quotation reference document with actual tax math for validation
+6. Day 7 commit c9c70c5 — pipeline transitions (qualification → needs_analysis → quotation_sent) integrate with quotation creation
+
+==========================================================
+PRELIMINARY TRACK — Playwright auto-start fix (~10 min)
+==========================================================
+
+PRE.1 — Make pnpm verify self-sufficient (closes the two-terminal dance)
+
+PROBLEM: Currently `pnpm verify` requires `pnpm dev` running in a separate terminal. This caused 16/16 failures during post-refactor validation when dev server wasn't up. Add `webServer` config so Playwright auto-starts the dev server.
+
+PRE.1.1. Open apps/web/playwright.config.ts. Add a webServer block to the export:
+
+```typescript
+export default defineConfig({
+  // ... existing config ...
+  webServer: {
+    command: 'pnpm dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000, // 2 min for cold Next.js compile
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
+});
+````
+
+PRE.1.2. Test it: stop any pnpm dev process, then run `pnpm verify` from a single terminal. Playwright should auto-start the dev server, run tests, then tear down. All 16 specs should still pass.
+
+PRE.1.3. Update SETUP.md to remove any "run pnpm dev in another terminal first" instructions, since they're no longer needed.
+
+PRE.1.4. Commit this fix BEFORE starting Day 8 main work:
+git add apps/web/playwright.config.ts SETUP.md
+git commit -m "chore(verify): playwright auto-starts dev server (closes two-terminal dance)"
+
+==========================================================
+TRACK A — QUOTATION BUILDER (CHUNKED — 5 chunks, commit per chunk)
+==========================================================
+
+CRITICAL: Day 7 timed out on a single-shot UI generation. The Quotation Builder is even more complex. From the start, build in CHUNKS, committing between each. Treat single components >250 lines as candidates for further chunking.
+
+## CHUNK 8a — Schema and queries
+
+A1.1. Create packages/db/src/schema/quotation.ts:
+
+```typescript
+// Quotation header
+export const quotations = pgTable('quotations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+
+  // Identity (auto-generated per fiscal year via document_counters)
+  quoteNumber: text('quote_number').notNull(), // e.g., QT-2026-0042
+  revision: integer('revision').notNull().default(1), // bumps on each revise
+  parentQuotationId: uuid('parent_quotation_id'), // self-FK; non-null for revisions
+
+  // Relationships
+  dealId: uuid('deal_id'), // optional — quote can exist without a deal
+  dealerId: uuid('dealer_id').notNull(),
+  preparedBy: uuid('prepared_by').notNull(), // FK to users
+
+  // Critical for tax engine (Day 9): captures point-in-time tenant + dealer state
+  tenantStateAtIssue: text('tenant_state_at_issue').notNull(), // 2-letter Indian state code
+  placeOfSupply: text('place_of_supply').notNull(), // 2-letter — defaults from dealer.state
+
+  // Commercial
+  quoteDate: date('quote_date').notNull().defaultNow(),
+  validUntil: date('valid_until').notNull(),
+  currency: text('currency').notNull().default('INR'),
+
+  // Discount applied BEFORE tax (BRD §4 — Phase 1 only supports before-tax discounts)
+  discountType: text('discount_type'), // 'percent' | 'amount' | null
+  discountValue: numeric('discount_value', { precision: 12, scale: 2 }), // null if no discount
+
+  // Computed totals (denormalized for fast list queries; recomputed on every save)
+  subtotal: numeric('subtotal', { precision: 14, scale: 2 }).notNull(), // sum of line totals before discount
+  discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  taxableAmount: numeric('taxable_amount', { precision: 14, scale: 2 }).notNull(), // subtotal - discount
+  cgstAmount: numeric('cgst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  sgstAmount: numeric('sgst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  igstAmount: numeric('igst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  totalAmount: numeric('total_amount', { precision: 14, scale: 2 }).notNull(), // taxableAmount + cgst + sgst + igst
+
+  // Terms
+  termsAndConditions: text('terms_and_conditions'), // tenant default or per-quote override
+  notes: text('notes'),
+
+  // Status
+  status: text('status').notNull().default('draft'),
+  // 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'superseded' (when revised)
+  sentAt: timestamp('sent_at'),
+  sentVia: text('sent_via'), // 'email' | 'pdf_download' | 'in_person' (Phase 1 = email or download)
+  acceptedAt: timestamp('accepted_at'),
+  rejectedAt: timestamp('rejected_at'),
+  rejectedReason: text('rejected_reason'),
+
+  // Audit
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by').notNull(),
+});
+
+// Line items
+export const quotationLines = pgTable('quotation_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  quotationId: uuid('quotation_id').notNull(),
+
+  // Position (1-indexed; supports reordering)
+  lineNumber: integer('line_number').notNull(),
+
+  // Product reference (captured by id for traceability, but values snapshotted)
+  productId: uuid('product_id').notNull(),
+  productSku: text('product_sku').notNull(), // snapshot
+  productName: text('product_name').notNull(), // snapshot
+  hsnCode: text('hsn_code').notNull(), // snapshot from product.hsn_code
+
+  // Quantity and pricing
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(), // e.g., 100.000 panels
+  unitOfMeasure: text('unit_of_measure').notNull().default('Nos'),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+
+  // CRITICAL: gst_rate must come from product.gst_rate at line-creation time
+  // Day 9 tax engine reads this column as source of truth — never recomputes from product
+  gstRate: numeric('gst_rate', { precision: 5, scale: 2 }).notNull(), // 5.00, 12.00, 18.00, or 28.00
+
+  // Computed (lineTotal = quantity * unitPrice — pre-discount, pre-tax)
+  lineTotal: numeric('line_total', { precision: 14, scale: 2 }).notNull(),
+
+  // Free-text addenda
+  description: text('description'), // override of product name if needed
+  notes: text('notes'),
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+```
+
+A1.2. Indexes:
+
+- quotations: (tenant_id, status, quote_date DESC), (tenant_id, dealer_id, quote_date DESC), UNIQUE (tenant_id, quote_number, revision)
+- quotation_lines: (tenant_id, quotation_id, line_number), (tenant_id, product_id) for "where used"
+
+A1.3. CHECK constraints:
+
+- quotations.gst_rate sanity check: NOT applicable here (it's on quotation_lines)
+- quotation_lines.gst_rate IN (0, 5, 12, 18, 28) — must match products table constraint
+- quotations.discount_type IN ('percent', 'amount') OR IS NULL
+- quotations.status IN ('draft', 'sent', 'accepted', 'rejected', 'expired', 'superseded')
+- quotations.revision >= 1
+
+A1.4. RLS policy: tenant_isolation on both tables. Audit trigger on both.
+
+A1.5. Document counter entry: 'quotation' doc_type with fiscal_year (Indian fiscal year per ADR-005).
+
+A1.6. Generate Drizzle migration. Confirm it applies cleanly.
+
+A1.7. Create packages/schemas/src/quotation.ts with Zod schemas:
+
+- createQuotationInput
+- updateQuotationInput (partial)
+- reviseQuotationInput
+- quotationLineInput
+- sendQuotationInput
+
+A1.8. Create apps/web/lib/queries/quotations.ts:
+
+- listQuotations(tenantId, opts) — filters: status, dealer, date range, prepared_by, search by quote_number
+- getQuotationById(id) — full quotation with lines (ordered by line_number), dealer, prepared_by user
+- getQuotationsByDeal(dealId)
+- getQuotationRevisionChain(quotationId) — returns array of all revisions
+
+A1.9. Verify: pnpm typecheck green.
+
+COMMIT 8a: `feat(quotation): day 8 chunk a — schema + queries`
+
+## CHUNK 8b — Server actions and tax preview helper
+
+A2.1. Create apps/web/lib/quotation/preview.ts — APPROXIMATE tax preview helper for the Builder UI:
+
+```typescript
+// NOTE: This is a CLIENT-SIDE preview for the Builder.
+// Final authoritative tax calculation arrives in Day 9 (packages/tax).
+// The preview rules below MUST match Day 9's engine exactly so users see the right numbers.
+
+import type { QuotationLineInput } from '@dealerlink/schemas';
+
+type TaxPreviewInput = {
+  lines: QuotationLineInput[]; // {productId, quantity, unitPrice, gstRate}
+  tenantState: string; // 2-letter
+  placeOfSupply: string; // 2-letter
+  discount: { type: 'percent' | 'amount'; value: number } | null;
+};
+
+type TaxPreviewOutput = {
+  subtotal: number;
+  discountAmount: number;
+  taxableAmount: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  total: number;
+  isInterState: boolean;
+};
+
+export function previewTax(input: TaxPreviewInput): TaxPreviewOutput {
+  const isInterState = input.tenantState !== input.placeOfSupply;
+
+  // Pre-discount subtotal
+  const subtotal = input.lines.reduce(
+    (sum, l) => sum + Number(l.quantity) * Number(l.unitPrice),
+    0,
+  );
+
+  // Apply discount BEFORE tax (Phase 1 rule per BRD §4)
+  const discountAmount = input.discount
+    ? input.discount.type === 'percent'
+      ? subtotal * (input.discount.value / 100)
+      : input.discount.value
+    : 0;
+
+  const taxableAmount = subtotal - discountAmount;
+
+  // CRITICAL: distribute discount proportionally across lines for tax calc
+  // (since different lines may have different GST rates)
+  const discountRatio = subtotal > 0 ? discountAmount / subtotal : 0;
+
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
+
+  for (const line of input.lines) {
+    const lineGross = Number(line.quantity) * Number(line.unitPrice);
+    const lineAfterDiscount = lineGross * (1 - discountRatio);
+    const lineRate = Number(line.gstRate) / 100;
+
+    if (isInterState) {
+      igst += lineAfterDiscount * lineRate;
+    } else {
+      // Intra-state: split equally between CGST and SGST
+      cgst += lineAfterDiscount * (lineRate / 2);
+      sgst += lineAfterDiscount * (lineRate / 2);
+    }
+  }
+
+  // Round to 2 decimals per CLAUDE.md §6
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  return {
+    subtotal: round2(subtotal),
+    discountAmount: round2(discountAmount),
+    taxableAmount: round2(taxableAmount),
+    cgst: round2(cgst),
+    sgst: round2(sgst),
+    igst: round2(igst),
+    total: round2(taxableAmount + cgst + sgst + igst),
+    isInterState,
+  };
+}
+```
+
+Add unit tests for previewTax in apps/web/lib/quotation/preview.test.ts covering:
+
+- Intra-state single-line panel sale (e.g., MH tenant → MH dealer, 100 panels @ ₹15,000 @ 18% GST)
+- Inter-state single-line (e.g., MH tenant → KA dealer)
+- Multiple lines with mixed GST rates (18% panels + 12% accessories)
+- Percent discount applied before tax
+- Amount discount applied before tax
+- Zero discount
+- Single line at 0% GST (e.g., services exempt)
+- Verify rounding behavior matches CLAUDE.md §6 expectations
+
+A2.2. Create apps/web/lib/actions/quotations/ Server Actions, each wrapped in tenantAction():
+
+- createQuotation (admin, sales) — creates draft with computed totals
+- updateQuotation (admin + prepared_by sales) — only for status='draft'; recomputes totals
+- updateQuotationLines (admin + prepared_by sales) — bulk replace; recomputes totals
+- sendQuotation (admin, sales) — transitions draft → sent; stamps sentAt + sentVia; in this day, just logs the email send; pg-boss integration comes Day 14
+- markAccepted, markRejected (admin, sales) — captures rejection reason if rejected
+- markExpired (admin, system) — for the validity expiry job (Day 14)
+- reviseQuotation (admin + prepared_by sales) — creates new quotation with revision = parent.revision + 1, parent_quotation_id set, parent.status = 'superseded'
+- deleteQuotation (admin only) — soft delete only allowed for status='draft'
+
+A2.3. Each action recomputes the denormalized totals server-side using the same logic as previewTax. **The server-side computation is authoritative**; the client preview is informational.
+
+A2.4. Audit trail: every status transition writes a row to a new table quotation_status_history (similar to deal_stage_history from Day 7). Same pattern: from_status, to_status, by, at, reason.
+
+A2.5. Pipeline integration: when sendQuotation transitions a quotation to 'sent', if linked to a deal and the deal is in stage 'needs_analysis', auto-advance deal to 'quotation_sent' via transitionDealStage (uses Day 7's existing function).
+
+A2.6. Verify: pnpm typecheck + pnpm test green.
+
+COMMIT 8b: `feat(quotation): day 8 chunk b — server actions + tax preview helper`
+
+## CHUNK 8c — Builder UI (the form itself, the hardest piece)
+
+A3.1. Create app/(app)/quotations/new/page.tsx and app/(app)/quotations/[id]/edit/page.tsx — share the bulk of the Builder.
+
+Sections (top to bottom):
+
+(1) Header card:
+
+- Dealer typeahead (uses Day 5's searchDealers) — required; on select, fills placeOfSupply from dealer.state
+- Linked deal typeahead (optional; uses Day 7's deal queries)
+- Quote date (default today)
+- Valid until (default = today + tenant.default_quote_validity days)
+- Prepared by (default = current user; admin can pick another sales user)
+
+(2) Line items table:
+
+- Add row by product typeahead (uses Day 5's searchProducts)
+- On product select, snapshot: sku, name, hsn_code, gstRate (read from product.gst_rate — DO NOT allow line-level GST rate edits)
+- Editable: quantity, unitPrice, description override (defaults from product name), notes
+- Row total (mono, tabular figures) updated live as quantity or unitPrice changes
+- Remove row (with confirm if line is the only one)
+- Reorder rows (drag handle — use dnd-kit since it's already in the stack)
+- Empty state: "Add the first line item to get started"
+
+(3) Commercial section:
+
+- Discount type radio: None / Percentage / Amount
+- Discount value input (auto-validated: percent ≤ 100, amount ≤ subtotal)
+- Currency display (locked to INR per locked decision; show field as read-only)
+
+(4) Terms & conditions:
+
+- Defaults to tenant.terms_and_conditions if set
+- Otherwise empty textarea
+- "Use tenant default" button to restore
+
+(5) Notes (internal-only, not on PDF):
+
+- Free-text
+
+(6) Summary card (right side, sticky on desktop):
+
+- Subtotal
+- Discount: -₹X (if any)
+- Taxable: ₹Y
+- CGST @ X% / SGST @ X% (if intra-state) OR IGST @ X% (if inter-state)
+- **Inter-state determination chip** showing tenantState → placeOfSupply with badge (e.g., "MH → KA · Inter-state")
+- Total (large mono, tabular figures)
+- All numbers update LIVE as the form changes (debounced 200ms)
+
+(7) Action footer:
+
+- "Save as Draft" — saves with status='draft'
+- "Save and Send" — saves with status='sent', triggers email job
+- "Cancel" — discards
+
+A3.2. Form library: react-hook-form + zodResolver per CLAUDE.md §3. Field arrays for line items via useFieldArray.
+
+A3.3. Validation rules:
+
+- At least 1 line item required
+- All line items must have quantity > 0 and unitPrice >= 0
+- dealerId required
+- validUntil must be > quoteDate
+- If discountType set, discountValue required and > 0
+- If discountType='percent', discountValue <= 100
+- If discountType='amount', discountValue <= subtotal (computed)
+
+A3.4. Build the Builder in stages within this chunk if needed — if any single component file exceeds 250 lines, split it:
+
+- QuotationBuilderForm (orchestrator)
+- LineItemsTable (the line items section)
+- SummaryCard (the totals panel)
+- DiscountPicker (the discount section)
+  Each in its own file under app/(app)/quotations/\_components/.
+
+A3.5. Verify: navigate to /quotations/new manually. Create a quotation with 2 lines. Confirm preview matches expected math for both intra-state and inter-state cases.
+
+COMMIT 8c: `feat(quotation): day 8 chunk c — builder UI with live preview`
+
+## CHUNK 8d — List, detail, revise, status transitions
+
+A4.1. Create app/(app)/quotations/page.tsx — list view:
+
+- Dense table (56px rows) matching Day 5/Day 7 prototype style
+- Columns: quote number (mono, with revision badge if > 1), date, dealer, total amount (mono), status pill, prepared by, valid until (with "expires in X days" or "expired" indicator)
+- Filters: status (multi), dealer (typeahead), date range, prepared by, "show superseded" toggle (default off — hides parent revisions)
+- Search by quote number
+- "+ New quotation" button (admin + sales)
+- Pagination per Day 6 pattern
+
+A4.2. Create app/(app)/quotations/[id]/page.tsx — detail view:
+
+- Read-only display matching the Builder structure
+- Header: quote number with revision (e.g., "QT-2026-0042 · Rev 2"), status pill, action menu
+- Action menu items based on status:
+  - Draft: Edit, Send, Delete
+  - Sent: Mark accepted, Mark rejected, Revise
+  - Accepted: Revise (creates revision), Convert to order (Day 11 stub for now)
+  - Rejected: Revise
+  - Expired: Revise
+  - Superseded: View latest revision link, view older revisions link
+- Tabs/sections: Overview (header), Line items, Totals breakdown, Activity (audit log + status history), Revisions (chain of all versions)
+
+A4.3. Revise flow:
+
+- "Revise" creates new quotation with revision = parent.revision + 1
+- parent_quotation_id set
+- Parent status updates to 'superseded'
+- Opens new revision in Builder edit mode pre-filled from parent
+- User adjusts lines/discount, saves
+- History shows: "Revised from QT-2026-0042 · Rev 1"
+
+A4.4. Send flow:
+
+- On Send, show modal: "Send to {dealer.email}? Subject: 'Quotation QT-2026-0042 from {tenant.name}'"
+- User confirms; status → 'sent', sentAt = now, sentVia = 'email'
+- For Day 8: log the email contents to email_delivery_log; actual Resend integration validates Day 14
+- Auto-advance linked deal stage per A2.5
+
+A4.5. Verify: navigate end-to-end — create → save draft → edit → send → mark accepted → revise → view revision chain.
+
+COMMIT 8d: `feat(quotation): day 8 chunk d — list, detail, revise flow`
+
+## CHUNK 8e — Seed data, tests, closeout
+
+A5.1. Seed data (packages/db/src/seeds/day8.ts):
+
+- 15 quotations per tenant across all statuses
+- At least 3 multi-line quotations (mix of panels + inverters + accessories with mixed GST rates)
+- At least 2 inter-state quotations (e.g., MH tenant → TN dealer for IGST scenario)
+- At least 1 revision chain (QT-2026-0001 Rev 1 → Rev 2 → Rev 3)
+- At least 1 with percent discount, 1 with amount discount, rest no discount
+- Status distribution: 4 draft, 5 sent, 3 accepted, 2 rejected, 1 expired
+- Realistic Indian solar pricing: 540W panels around ₹14k-16k, 6kW inverters around ₹35k-45k, accessories ₹500-5k
+- Quote numbers follow QT-YYYY-NNNN format (fiscal year aware)
+
+A5.2. Tests (packages/db/tests/quotation.test.ts + apps/web/lib/quotation/preview.test.ts):
+
+- Schema: required fields, CHECK constraints (gst_rate values, status values, discount_type values)
+- RLS isolation (tenant A's quotations not visible to tenant B)
+- Document counter increments per fiscal year
+- Revision chain integrity (parent.status='superseded' enforced)
+- Tax preview: at least 8 cases covering intra-state, inter-state, mixed rates, both discount types, edge cases (zero subtotal, all-zero discount)
+- Status transition guards (can't go from 'accepted' back to 'draft', etc.)
+
+A5.3. Playwright verify-day-8.spec.ts (use loginAs helper):
+
+- List loads with seeded quotations
+- "+ New quotation" loads Builder
+- Add a line, total updates
+- Switch dealer to inter-state, see CGST/SGST change to IGST in summary
+- Save as draft → appears in list with 'draft' status
+- Open draft → Edit → change qty → save → updated
+- Send draft → status changes to 'sent'
+- Revise sent quotation → new revision in chain, parent superseded
+- Role check: sales@demo.test can create+edit; cannot delete others' quotations beyond their own (admin can)
+
+A5.4. Documentation:
+
+- Update docs/WORKFLOWS.md with the full quotation lifecycle (draft → sent → accepted/rejected; revision creates new with parent superseded)
+- Add new section to docs/RUNBOOKS.md: "Revising a sent quotation" with the operator-facing steps
+
+A5.5. CRITICAL FINAL CHECKS (this is the Day 9 readiness gate):
+
+- quotation_lines.gst_rate is populated from product.gst_rate at line creation
+- quotation_lines.hsn_code is populated from product.hsn_code at line creation
+- quotations.tenantStateAtIssue is captured at creation (read from tenant.state at the moment)
+- quotations.placeOfSupply defaults from dealer.state at creation
+- All money columns are NUMERIC(precision, scale), never float
+- previewTax produces the same numbers as the server-side compute (verify with one shared test fixture)
+
+A5.6. Closeout per docs/BUILD_PROMPT_TEMPLATE.md:
+
+- pnpm preflight — green
+- pnpm verify — 17/17 (16 prior + verify-day-8)
+- pnpm typecheck, pnpm lint, pnpm test, pnpm build — all green
+- PROJECT_PLAN.md B.8 marked ✅ with today's date and brief notes
+- DEVIATIONS.md: append any Day 8 deviations
+- Auto-commit + push
+
+COMMIT 8e: `feat(quotation): day 8 complete — quotation builder, list, detail, revise, send`
+
+==========================================================
+GUARDRAILS (DAY 8 SPECIFIC — MOST IMPORTANT)
+==========================================================
+
+- gst_rate on quotation_lines is the SOURCE OF TRUTH for Day 9's tax engine. Once captured from product.gst_rate at line creation, it MUST NOT change unless the user explicitly removes and re-adds the line. Day 9 will read this column directly.
+
+- placeOfSupply is the SOURCE OF TRUTH for inter-state determination. Capture it from dealer.state at quotation creation. Allow override (user might pick a different ship-to state) but display the override clearly.
+
+- tenantStateAtIssue is required to handle tenant state changes over time. If a tenant updates their registered state mid-fiscal-year, quotations issued before the change still use the original state.
+
+- Discount is BEFORE TAX in Phase 1. Do NOT implement after-tax discounts — BRD §4 is explicit on this and Day 9 expects this assumption.
+
+- Money columns: NUMERIC(precision, scale) everywhere. Never float. Never parseFloat without going through a Decimal helper.
+
+- previewTax must match the server-side compute EXACTLY. Same rounding rules. Same line-by-line distribution. If they diverge by even 1 paisa, users see incorrect totals before saving. Phase A2.6 test must include this parity check.
+
+- Revisions: parent.status MUST become 'superseded' atomically with new revision creation. Use a transaction. If new revision insert fails, parent stays as 'sent' or 'accepted' or whatever it was.
+
+- Document number generation: use the document_counters mechanism. Two parallel revisions of the same quote must NOT get the same number — but they SHOULD share the base quote_number and differ by revision. So QT-2026-0042 Rev 1 and Rev 2 have quote_number='QT-2026-0042' and revision=1 vs 2. The UNIQUE constraint is (tenant_id, quote_number, revision).
+
+- The Builder is a critical UX. Don't compromise on:
+  - Live updates (debounced 200ms, never blocking the input)
+  - Inter-state badge prominently shown in summary
+  - Mono + tabular figures for all numbers
+  - Clear error messages on validation failures (per docs/STANDARDS.md)
+
+- If you exceed 250 lines in any single component file, STOP and split. Day 7's lesson applies here doubly — this is the largest form in the app.
+
+==========================================================
+WHEN DONE
+==========================================================
+
+Print final report:
+
+- 5 chunk commits (8a through 8e) + 1 preliminary commit
+- Tests added today + total count (was 172 after Day 7)
+- pnpm verify shows 17/17
+- pnpm preflight green (now with port 3000 free since Playwright manages dev server)
+- Files added by chunk
+- Confirm Day 9 readiness gates (gst_rate, hsn_code, tenantStateAtIssue, placeOfSupply, decimal columns, preview/server parity)
+- Any deviations appended to DEVIATIONS.md
+- Commit SHAs of each chunk
+- Tell me: "Day 8 complete. Day 9 (GST tax engine) is the next step — please review the schema once before Day 9."
+
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+#### Tax-engine readiness (most important — these enable Day 9)
+- [ ] `quotation_lines.gst_rate` populated from products in seeded data — run: `docker compose exec postgres psql -U dealerlink -d dealerlink_dev -c "SELECT q.quote_number, ql.product_sku, ql.gst_rate, p.gst_rate AS product_rate FROM quotation_lines ql JOIN quotations q ON q.id = ql.quotation_id JOIN products p ON p.id = ql.product_id LIMIT 10;"` — gst_rate columns should match
+- [ ] `quotations.tenant_state_at_issue` and `place_of_supply` populated for every seed row
+- [ ] Inter-state seed quotation exists (e.g., MH tenant → TN dealer) with IGST > 0 and CGST + SGST = 0
+- [ ] Intra-state seed quotation exists with CGST = SGST and IGST = 0
+- [ ] All money columns are NUMERIC type, not REAL/FLOAT (sanity-check with `\d quotations` in psql)
+
+#### Builder UX
+- [ ] Navigate to /quotations/new as admin@demo.test
+- [ ] Add 2 line items (one panel, one inverter)
+- [ ] Watch summary update live as quantities change
+- [ ] Change dealer from intra-state (e.g., MH dealer) to inter-state (e.g., KA dealer) → summary switches from CGST/SGST to IGST
+- [ ] Apply 5% percent discount → discount line appears, taxes recompute
+- [ ] Save as draft → appears in /quotations list
+- [ ] Open the draft, edit a quantity, save → totals updated
+- [ ] Send the quotation → status pill changes to 'sent', email logged
+- [ ] Revise the sent quotation → new Rev 2 created, original shows as 'superseded'
+
+#### Pipeline integration
+- [ ] If a quotation was created against a deal in 'needs_analysis' stage, after sending the quotation, the deal should auto-advance to 'quotation_sent' (open the deal in /pipeline to verify)
+
+#### Role enforcement
+- [ ] sales@demo.test can create + edit their own quotations
+- [ ] sales@demo.test cannot delete a quotation created by admin (or another sales)
+- [ ] accounts@demo.test cannot create quotations (view-only)
+- [ ] dispatch@demo.test cannot create quotations
+
+#### Automated
+- [ ] `pnpm preflight` — green
+- [ ] `pnpm verify` — 17/17 (16 prior + new verify-day-8)
+- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build` — all green
+- [ ] PROJECT_PLAN.md B.8 marked ✅ (auto-done)
+- [ ] DEVIATIONS.md has any Day 8 entries (auto-done)
+- [ ] Commit pushed (auto-done)
+
+#### Day 9 readiness (verify before kicking off Day 9)
+- [ ] Read CLAUDE.md §6 once with fresh eyes — does the schema match the contract?
+- [ ] Open the seed data and pick one quotation. Manually compute its expected CGST/SGST/IGST per BRD §4. Compare to what the database shows. They must match.
+- [ ] If anything is off — STOP. Fix before Day 9. Day 9's tax engine has no chance of being correct if Day 8's schema is wrong.
+
+### Update PROJECT_PLAN.md after Day 8
+
+Mark **B.8** as ✅, add today's date, append to changelog. Note explicitly: "Day 9 readiness gates verified" if all the readiness checks pass.
+
+---
+
+## Day 9 — GST Tax Engine
+
+*Will be added when Day 8 is complete and Day 9 readiness gates are verified. Day 9 is the highest-risk module of the build — Indian GST math with CGST/SGST/IGST split, rounding per CLAUDE.md §6, line-item-level tax aggregation, and authoritative server-side computation that replaces Day 8's preview. The prompt will include explicit BRD §4 test cases that Claude Code must validate against before the day is considered shipped.*
 
 ---
 
@@ -1502,4 +2078,5 @@ This rhythm keeps each day clean, verifiable, and recoverable if something needs
 
 ---
 
-_Last updated: May 2026 · Day 1 prompt only · subsequent days added progressively_
+*Last updated: May 2026 · Day 1 prompt only · subsequent days added progressively*
+```

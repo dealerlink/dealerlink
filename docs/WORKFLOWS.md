@@ -55,3 +55,33 @@ Per ADR-002 operators provision tenants and occasionally need to look inside one
 5. Clicking **Exit impersonation** in the banner clears the cookie and sends the operator back to `/admin`.
 
 Tenant users never see the banner and never run in read-only mode — the cookie is set only by `enterImpersonation()` which requires the `operator` role.
+
+## Quotation lifecycle (Day 8)
+
+A quotation moves through six statuses:
+
+```
+draft  ──Send──▶  sent  ──Accept──▶ accepted
+                       ──Reject──▶ rejected
+                       ──Expire──▶ expired
+                       ──Revise──▶ (parent → superseded, new revision in draft)
+```
+
+- **`draft`** — the only editable status. Sales can edit their own drafts; admin can edit any.
+- **`sent`** — `sentAt` and `sentVia` are stamped. If the quotation is linked to a deal in `needs_analysis`, the deal auto-advances to `quotation_sent` (this is the same transition the Resend webhook will fire in Day 14).
+- **`accepted` / `rejected`** — terminal until revised. `rejected` requires a reason.
+- **`expired`** — set by the validity-expiry sweep (`sweepExpiredQuotationsForTenant`) when `valid_until` is in the past and status is still `sent`. A manual `markQuotationExpired` exists for admin overrides.
+- **`superseded`** — created by `reviseQuotation`. The new revision inherits the parent's `quote_number` but bumps `revision` (`QT-2026-0042` Rev 1 → Rev 2). Lines + commercials are copied; the new row opens in `draft` so the user can adjust before re-sending. The parent flips to `superseded` atomically.
+
+### Tax engine contract (Day 9 readiness)
+
+The schema captures every input the tax engine will need at line creation, never to be recomputed:
+
+- `quotation_lines.gst_rate` — copied from `products.gst_rate` when the line is added. Day 9 reads this column directly; the product master can change later without altering already-issued quotations.
+- `quotation_lines.hsn_code` — same snapshot rule.
+- `quotations.tenant_state_at_issue` — captured from `tenant_settings.state` at creation so tenants relocating mid-fiscal-year do not retroactively change prior quotations.
+- `quotations.place_of_supply` — defaults from `dealer.state` at creation, overridable for ship-to-elsewhere scenarios.
+
+Discount is applied **before tax** in Phase 1 (BRD §4). The discount is distributed proportionally across lines so each line's tax base is its own discounted gross — this is required to correctly tax quotations with mixed GST rates.
+
+The live preview helper (`apps/web/lib/quotation/preview.ts → computeQuotationTotals`) and the server-side persistence helper (`apps/web/lib/actions/quotations/helpers.ts → computeTotalsForPersistence`) call the same pure function. Day 9 swaps the implementation for `packages/tax` while preserving the call shape.

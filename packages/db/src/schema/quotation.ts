@@ -111,7 +111,7 @@ export const quotations = pgTable(
     check('quotations_revision_chk', sql`${t.revision} >= 1`),
     check(
       'quotations_state_codes_chk',
-      sql`length(${t.tenantStateAtIssue}) = 2 AND length(${t.placeOfSupply}) = 2`,
+      sql`length(${t.tenantStateAtIssue}) >= 2 AND length(${t.placeOfSupply}) >= 2`,
     ),
     check(
       'quotations_discount_value_chk',

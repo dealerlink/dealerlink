@@ -19,14 +19,12 @@ export type QuotationSentVia = (typeof QUOTATION_SENT_VIA)[number];
 const trimmed = z.string().trim();
 
 /**
- * 2-letter ISO 3166-2 subdivision code (Indian state). UI keeps a master
- * list; here we just enforce length and uppercase so the tax engine has a
- * stable input shape.
+ * State label (Indian). Seed data uses full state names ("Maharashtra"),
+ * not 2-letter codes — the tax engine just needs an exact-match string.
+ * Day 9 may introduce a normalized 2-letter code; until then, accept any
+ * non-empty short label.
  */
-export const stateCodeSchema = trimmed
-  .length(2, 'State code must be 2 letters')
-  .toUpperCase()
-  .regex(/^[A-Z]{2}$/, 'State code must be 2 uppercase letters');
+export const stateCodeSchema = trimmed.min(2, 'State is required').max(50);
 
 /**
  * Single line input. `gstRate` is captured from product.gst_rate at the

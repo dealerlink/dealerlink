@@ -71,7 +71,7 @@ CREATE TABLE "quotations" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_by" uuid NOT NULL,
 	CONSTRAINT "quotations_revision_chk" CHECK ("quotations"."revision" >= 1),
-	CONSTRAINT "quotations_state_codes_chk" CHECK (length("quotations"."tenant_state_at_issue") = 2 AND length("quotations"."place_of_supply") = 2),
+	CONSTRAINT "quotations_state_codes_chk" CHECK (length("quotations"."tenant_state_at_issue") >= 2 AND length("quotations"."place_of_supply") >= 2),
 	CONSTRAINT "quotations_discount_value_chk" CHECK (("quotations"."discount_type" IS NULL AND "quotations"."discount_value" IS NULL) OR ("quotations"."discount_type" IS NOT NULL AND "quotations"."discount_value" IS NOT NULL AND "quotations"."discount_value" > 0)),
 	CONSTRAINT "quotations_discount_percent_chk" CHECK ("quotations"."discount_type" <> 'percent' OR "quotations"."discount_value" <= 100),
 	CONSTRAINT "quotations_subtotal_chk" CHECK ("quotations"."subtotal" >= 0),

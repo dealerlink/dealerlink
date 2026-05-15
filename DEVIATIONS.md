@@ -268,3 +268,27 @@ their own at end-of-day per `docs/BUILD_PROMPT_TEMPLATE.md`.
 CLAUDE.md retains only the day-to-day-critical sections (Brand Naming, Project at a Glance, Architecture, Tech Stack, Data Model + RLS, GST, Auth & Roles, What NOT to Do, Locked Platform Decisions, When You're Stuck) and gains a `Reading Order` navigation block at the top. Sections were renumbered sequentially (§0 plus §1–§9). All technical content preserved verbatim — only relocated.
 **Result:** CLAUDE.md shrunk from 62.8k → 29.8k characters (52% reduction). All content lives somewhere, all cross-references updated.
 **Permanent fix:** Future content additions go to the appropriate focused doc rather than CLAUDE.md, unless they're cross-cutting rules that every interaction needs.
+
+## DEV.29 — Day 8 — quotation_lines.unitOfMeasure schema default friction with exactOptionalPropertyTypes
+
+**Date:** 2026-05-15
+**Issue:** `quotationLineInputSchema` initially declared `unitOfMeasure: trimmed.min(1).max(16).default('Nos')`. The intent was to let clients omit the field and have Zod fill in `'Nos'`. With `exactOptionalPropertyTypes: true` (CLAUDE.md §3), TypeScript narrowed the resulting type as `unitOfMeasure?: string | undefined` even on the output side, which then conflicted with `buildLineInserts` returning `unitOfMeasure: string`.
+**Resolution:** Switched the Zod field to `.optional()` and let `buildLineInserts` apply the `|| 'Nos'` fallback at the persistence boundary. Same runtime behavior, no TS gymnastics.
+**Root cause:** Zod's `.default()` plus `exactOptionalPropertyTypes: true` produces inferred types where the property is still optional on the output shape (a TS / Zod interaction, not a Zod bug per se). The cleanest workaround is to handle defaulting in code, not in the schema, when the value flows into a strict-typed structural target.
+**Permanent fix:** Prefer `.optional()` + explicit fallback over `.default()` for fields that flow into Drizzle insert types, until the toolchain reconciles `exactOptionalPropertyTypes` with Zod default inference.
+
+## DEV.30 — Day 8 — state CHECK constraint relaxed (full names, not 2-letter codes)
+
+**Date:** 2026-05-15
+**Issue:** Initial `quotations` schema declared `CHECK length(tenant_state_at_issue) = 2 AND length(place_of_supply) = 2` to enforce 2-letter ISO state codes. The existing seed data (Day 2 tenants, Day 5 dealers) stores state as the full name — "Maharashtra", "Karnataka". Day 8 seed insertion failed the CHECK.
+**Resolution:** Relaxed the CHECK to `length(...) >= 2` and the Zod `stateCodeSchema` to `min(2).max(50)`. Day 9 tax engine only needs an exact-match string; the BRD's reference to ISO codes is a future normalization that should be a separate migration.
+**Root cause:** I introduced a new normalization assumption ("states are 2-letter codes") without checking the existing data shape across modules. The single-source-of-truth for state representation lives in dealer + tenant settings rows, not in CLAUDE.md.
+**Permanent fix:** Day 9 may introduce a state-code lookup table or a normalized 2-letter column on `tenant_settings` and `dealers`. Until then, store and compare states verbatim.
+
+## DEV.31 — Day 8 — DB tests leave residue in quotations table; verify-day-8 had to filter
+
+**Date:** 2026-05-15
+**Issue:** `packages/db/tests/quotation.test.ts` inserts "TEST-...", "CHAIN-...", "DISC-..." rows for constraint and chain checks. The suite does not truncate quotations on teardown, so subsequent Playwright runs see those rows above the seeded `QT-` rows in the list view. Two verify-day-8 assertions that looked for "the first row" failed.
+**Resolution:** Made the Playwright assertions filter for `/QT-\d{4}-/` quote numbers specifically — the seeded rows are always discoverable even if test rows precede them.
+**Root cause:** DB tests run with the app role and write into the same dev DB as Playwright. Re-seeding day8 between test runs is the cleanest reset but not all developers will do it.
+**Permanent fix:** Either (a) DB tests should run inside a transaction that always rolls back, or (b) verify specs should be resilient to test residue. Day 8 takes (b) as a cheap fix; (a) is a Phase 1 cleanup item (R.??).
