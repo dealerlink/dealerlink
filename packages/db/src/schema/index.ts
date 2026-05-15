@@ -18,3 +18,4 @@ export * from './product';
 export * from './inventory';
 export * from './deal';
 export * from './quotation';
+export * from './generated-document';

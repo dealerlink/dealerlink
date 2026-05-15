@@ -230,3 +230,11 @@ DROP TRIGGER IF EXISTS audit_trg ON quotation_lines;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON quotation_lines
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 10: generated_documents — every PDF render (and the daily prune)
+-- becomes an audit row. Rows are immutable once written; in practice the
+-- trigger sees INSERTs and (Day 14 cron) DELETEs.
+DROP TRIGGER IF EXISTS audit_trg ON generated_documents;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON generated_documents
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();

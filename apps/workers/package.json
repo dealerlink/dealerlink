@@ -6,15 +6,25 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint --max-warnings=0 --no-error-on-unmatched-pattern ."
+    "lint": "eslint --max-warnings=0 --no-error-on-unmatched-pattern .",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@dealerlink/db": "workspace:*",
+    "@dealerlink/tax": "workspace:*",
+    "@sparticuz/chromium": "^131.0.0",
     "pg-boss": "^10.1.5",
-    "puppeteer": "^22.15.0",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "puppeteer-core": "^22.15.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "tsx": "^4.19.2",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "^2.1.8"
   }
 }
