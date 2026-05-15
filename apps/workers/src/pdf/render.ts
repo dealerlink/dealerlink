@@ -27,6 +27,14 @@ export interface PdfOptions {
   printBackground?: boolean;
   /** Hard cap on render time. Default: 30_000ms (docs/PDF_PIPELINE.md). */
   timeoutMs?: number;
+  /**
+   * Optional Chromium footer template, repeated on every printed page.
+   * The rich branded header is built into the body HTML; the only thing
+   * that genuinely needs page-repetition is the running footer (page
+   * numbers + document id). When set, `displayHeaderFooter` is enabled.
+   * Supports the Chromium token classes: `pageNumber`, `totalPages`.
+   */
+  footerTemplate?: string;
 }
 
 const DEFAULT_MARGIN: PdfMargin = {
@@ -50,14 +58,21 @@ export async function renderPdfFromHtml(html: string, opts: PdfOptions = {}): Pr
   notePageOpened();
   try {
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: timeoutMs });
-    const pdf = await page.pdf({
+    const pdfOpts: Parameters<typeof page.pdf>[0] = {
       format: opts.format ?? 'A4',
       printBackground: opts.printBackground ?? true,
       displayHeaderFooter: false,
       preferCSSPageSize: false,
       margin: { ...DEFAULT_MARGIN, ...opts.margin },
       timeout: timeoutMs,
-    });
+    };
+    if (typeof opts.footerTemplate === 'string') {
+      pdfOpts.displayHeaderFooter = true;
+      // An empty header template suppresses Chromium's default date header.
+      pdfOpts.headerTemplate = '<span></span>';
+      pdfOpts.footerTemplate = opts.footerTemplate;
+    }
+    const pdf = await page.pdf(pdfOpts);
     return Buffer.from(pdf);
   } finally {
     // Always close the page, even if .pdf() threw — a leaked page is a

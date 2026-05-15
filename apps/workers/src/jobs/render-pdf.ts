@@ -53,8 +53,16 @@ export async function runRenderPdf(payload: RenderPdfPayload): Promise<RenderPdf
   return withTenant(
     payload.tenantId,
     async (tx) => {
-      const { html, filename } = await buildQuotationHtml(tx, payload.tenantId, payload.documentId);
-      const buffer = await renderPdfFromHtml(html, { format: 'A4', margin: { top: '14mm' } });
+      const { html, filename, footerTemplate } = await buildQuotationHtml(
+        tx,
+        payload.tenantId,
+        payload.documentId,
+      );
+      const buffer = await renderPdfFromHtml(html, {
+        format: 'A4',
+        margin: { top: '14mm', bottom: '20mm' },
+        footerTemplate,
+      });
       const stored = await storeRenderedPdf({
         tx,
         tenantId: payload.tenantId,
