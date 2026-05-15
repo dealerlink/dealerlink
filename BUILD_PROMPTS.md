@@ -1473,8 +1473,6 @@ You are implementing Day 8 of the Dealerlink build. Day 7 shipped successfully (
 
 Today: Quotation Builder. This is the data-producing input for Day 9's GST tax engine. The schema and line-item shape MUST be tax-engine-ready by end of day.
 
-NOTE: PRE.1 (Playwright webServer config in apps/web/playwright.config.ts) is already committed and pushed (commit 7e95c0e). Verify the webServer block exists in playwright.config.ts and skip PRE.1 if confirmed. Proceed directly to Chunk 8a.
-
 PRELIMINARY (every day must do this):
 P.1. Run `pnpm preflight` and confirm 9 green checks. Port 3000 should be free.
 P.2. Read CLAUDE.md (now slim) for §3 stack, §5 data model, §6 GST logic, §7 auth, §8 anti-patterns, §9 locked decisions.
@@ -2058,9 +2056,1275 @@ Mark **B.8** as ✅, add today's date, append to changelog. Note explicitly: "Da
 
 ---
 
-## Day 9 — GST Tax Engine
+## Day 9 — GST Tax Engine (HIGHEST-RISK DAY)
 
-*Will be added when Day 8 is complete and Day 9 readiness gates are verified. Day 9 is the highest-risk module of the build — Indian GST math with CGST/SGST/IGST split, rounding per CLAUDE.md §6, line-item-level tax aggregation, and authoritative server-side computation that replaces Day 8's preview. The prompt will include explicit BRD §4 test cases that Claude Code must validate against before the day is considered shipped.*
+**Goal:** Ship the authoritative GST tax engine in `packages/tax/`. By end of day, the engine computes CGST/SGST/IGST per Indian GST law with 100% precision, swapped in behind Day 8's `computeQuotationTotals` call shape. 50+ unit tests prove correctness against canonical fixtures.
+
+**This is the single most important module of the build.** A tax bug destroys commercial trust. Get this right.
+
+**Estimated time:** 5–6 hours of Claude Code work + ~1 hour of your verification + ~30 min of business-side math validation
+
+**Deliverable:** Working `packages/tax/` package, swap completed in `apps/web/lib/actions/quotations/helpers.ts`, Day 8's preview helper redirected to use the canonical engine, 50+ tests passing, all prior quotations re-verified against new engine output.
+
+### Prompt for Claude Code
+
+```
+
+You are implementing Day 9 of the Dealerlink build. Day 8 shipped successfully (commit 6616ca6) — quotation builder with line items + tax preview helper. Day 9 replaces the preview helper with the authoritative tax engine in packages/tax/.
+
+THIS IS THE HIGHEST-STAKES MODULE OF THE ENTIRE BUILD. A tax bug means: customer disputes over invoice math, compliance penalties from misfiled GST, lost trust. Every other module is recoverable; this one is not. Slow is fast here.
+
+PRELIMINARY (every day must do this):
+P.1. Run `pnpm preflight` and confirm 9 green checks.
+P.2. Read CLAUDE.md §6 (GST & Multi-Party Document Logic) THREE TIMES SLOWLY. Every rule there is a test case.
+P.3. Read BRD §4 in full if not already done in Day 8.
+P.4. Read DEVIATIONS.md DEV.33 — states are stored as full names ("Maharashtra"), not 2-letter codes ("MH"). The tax engine MUST treat them as opaque strings; comparison is `tenantState !== placeOfSupply`. Don't normalize; trust the input format.
+P.5. Read apps/web/lib/quotation/preview.ts to know the current call shape and computation logic. The Day 9 engine has the same input/output contract but with rigorous edge-case handling.
+P.6. Read apps/web/lib/actions/quotations/helpers.ts::computeTotalsForPersistence — this is the server-side compute path that Day 9 replaces.
+
+PRIMARY REFERENCES:
+
+1. CLAUDE.md §6 — the contract Day 9 implements
+2. BRD §4 — business rules and test scenarios
+3. docs/STANDARDS.md — coding standards (decimal arithmetic, error types, etc.)
+4. apps/web/lib/quotation/preview.ts — current preview implementation (will be redirected)
+5. apps/web/lib/actions/quotations/helpers.ts — server-side compute (will be redirected)
+6. packages/tax/ — workspace exists but is empty; this is where the engine lands
+
+==========================================================
+TRACK A — PACKAGES/TAX ENGINE (CHUNKED — 4 chunks)
+==========================================================
+
+## CHUNK 9a — Engine scaffold + types + decimal helpers
+
+A1.1. Audit packages/tax/ — confirm package.json exists, has typecheck script. If empty src/, set up:
+
+- packages/tax/src/index.ts (public API exports)
+- packages/tax/src/types.ts (input/output shapes)
+- packages/tax/src/decimal.ts (decimal arithmetic helpers)
+- packages/tax/src/round.ts (rounding rules)
+- packages/tax/src/state.ts (state comparison helper)
+- packages/tax/tests/ (test directory)
+
+A1.2. Decimal arithmetic — NEVER use JavaScript native floats for money math. Three options:
+
+- Option A (preferred): Use `Decimal.js` library — battle-tested, exact precision
+- Option B: Use BigInt with explicit scale tracking (paise as integer)
+- Option C: Use a thin wrapper around `Number` with strict round-after-every-op
+
+RECOMMEND: Use Decimal.js. It's a small dependency (~30KB) and eliminates the entire class of float-precision bugs. Add to packages/tax/package.json:
+
+```
+"dependencies": { "decimal.js": "^10.4.3" }
+```
+
+A1.3. packages/tax/src/types.ts — define the engine contract:
+
+```typescript
+import { Decimal } from 'decimal.js';
+
+export type GstRate = 0 | 5 | 12 | 18 | 28; // canonical per CLAUDE.md §6
+
+export type TaxLineInput = {
+  /** Unique line identifier — passed through to output for reconciliation */
+  lineId: string;
+  /** Quantity (can be fractional, e.g., 2.5 kg) */
+  quantity: number | string | Decimal;
+  /** Unit price in INR (decimal, 2-3 places typical) */
+  unitPrice: number | string | Decimal;
+  /** GST rate as percentage (0, 5, 12, 18, or 28) */
+  gstRate: GstRate;
+};
+
+export type TaxDiscount =
+  | { type: 'percent'; value: number | string | Decimal } // 0-100
+  | { type: 'amount'; value: number | string | Decimal } // INR
+  | null;
+
+export type TaxComputationInput = {
+  /** Tenant's state at point of issue (opaque string; consistent format per DEV.33) */
+  tenantState: string;
+  /** Place of supply (opaque string; same format as tenantState) */
+  placeOfSupply: string;
+  /** Line items — at least one required */
+  lines: TaxLineInput[];
+  /** Document-level discount applied BEFORE tax */
+  discount: TaxDiscount;
+};
+
+export type TaxLineOutput = {
+  lineId: string;
+  /** Quantity × unitPrice (pre-discount, pre-tax) */
+  lineSubtotal: Decimal;
+  /** Portion of document discount allocated to this line */
+  lineDiscount: Decimal;
+  /** lineSubtotal - lineDiscount */
+  lineTaxable: Decimal;
+  /** GST rate for this line */
+  gstRate: GstRate;
+  /** CGST amount for this line (zero if inter-state) */
+  lineCgst: Decimal;
+  /** SGST amount for this line (zero if inter-state) */
+  lineSgst: Decimal;
+  /** IGST amount for this line (zero if intra-state) */
+  lineIgst: Decimal;
+  /** Total tax on this line (cgst + sgst + igst) */
+  lineTaxTotal: Decimal;
+  /** lineTaxable + lineTaxTotal */
+  lineTotal: Decimal;
+};
+
+export type TaxComputationOutput = {
+  /** Sum of line subtotals (pre-discount, pre-tax) */
+  subtotal: Decimal;
+  /** Document-level discount amount in INR */
+  discountAmount: Decimal;
+  /** subtotal - discountAmount */
+  taxableAmount: Decimal;
+  /** Aggregate CGST across all lines (0 if inter-state) */
+  cgstAmount: Decimal;
+  /** Aggregate SGST across all lines (0 if inter-state) */
+  sgstAmount: Decimal;
+  /** Aggregate IGST across all lines (0 if intra-state) */
+  igstAmount: Decimal;
+  /** taxableAmount + cgstAmount + sgstAmount + igstAmount */
+  totalAmount: Decimal;
+  /** True if tenantState !== placeOfSupply */
+  isInterState: boolean;
+  /** Per-line breakdown — same length and order as input lines */
+  lines: TaxLineOutput[];
+};
+
+export class TaxComputationError extends Error {
+  constructor(
+    public code: TaxErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export type TaxErrorCode =
+  | 'EMPTY_LINES'
+  | 'NEGATIVE_QUANTITY'
+  | 'NEGATIVE_UNIT_PRICE'
+  | 'INVALID_GST_RATE'
+  | 'NEGATIVE_DISCOUNT'
+  | 'DISCOUNT_EXCEEDS_SUBTOTAL'
+  | 'DISCOUNT_PERCENT_OUT_OF_RANGE'
+  | 'EMPTY_STATE';
+```
+
+A1.4. packages/tax/src/decimal.ts — helpers:
+
+- `toDecimal(value: number | string | Decimal): Decimal` — normalizes any input to Decimal
+- `sumDecimals(values: Decimal[]): Decimal` — exact summation
+  Set Decimal.set({ precision: 30, rounding: Decimal.ROUND_HALF_UP }) globally in this file
+
+A1.5. packages/tax/src/round.ts — rounding rules per CLAUDE.md §6:
+
+- `round2(d: Decimal): Decimal` — round to 2 decimal places, half-up
+- Apply at LINE LEVEL for taxes (per Indian invoicing convention — each line tax rounded individually, then summed)
+- Verify this matches CLAUDE.md §6 — if §6 specifies document-level rounding instead, implement that. PICK ONE AND COMMENT WHY.
+
+A1.6. packages/tax/src/state.ts — state comparison:
+
+- `isInterState(tenantState: string, placeOfSupply: string): boolean` — returns `tenantState !== placeOfSupply` after trim. Pure string comparison; opaque format per DEV.33.
+
+A1.7. packages/tax/src/index.ts — exports the public API surface (types, computeTax function placeholder for now)
+
+A1.8. Add packages/tax/package.json with proper exports map. Add typecheck/test scripts. Make sure pnpm typecheck passes for the package.
+
+COMMIT 9a: `feat(tax): chunk a — engine scaffold, types, decimal arithmetic`
+
+## CHUNK 9b — Core engine implementation
+
+A2.1. Create packages/tax/src/compute.ts — the core engine:
+
+```typescript
+import { Decimal } from 'decimal.js';
+import { toDecimal, sumDecimals } from './decimal';
+import { round2 } from './round';
+import { isInterState } from './state';
+import type { TaxComputationInput, TaxComputationOutput, TaxLineOutput } from './types';
+import { TaxComputationError } from './types';
+
+export function computeTax(input: TaxComputationInput): TaxComputationOutput {
+  // Phase 1: Validate
+  validateInput(input);
+
+  const interState = isInterState(input.tenantState, input.placeOfSupply);
+
+  // Phase 2: Compute per-line subtotals
+  const lineSubtotals = input.lines.map((line) => ({
+    line,
+    subtotal: toDecimal(line.quantity).times(toDecimal(line.unitPrice)),
+  }));
+
+  const subtotal = sumDecimals(lineSubtotals.map((l) => l.subtotal));
+
+  // Phase 3: Compute document-level discount amount
+  const discountAmount = computeDiscountAmount(input.discount, subtotal);
+
+  // Validate discount doesn't exceed subtotal
+  if (discountAmount.greaterThan(subtotal)) {
+    throw new TaxComputationError(
+      'DISCOUNT_EXCEEDS_SUBTOTAL',
+      `Discount ₹${discountAmount} exceeds subtotal ₹${subtotal}`,
+    );
+  }
+
+  const taxableAmount = subtotal.minus(discountAmount);
+
+  // Phase 4: Allocate discount proportionally to each line, then compute tax per line
+  // Allocation ratio handles edge case of zero subtotal (no division by zero)
+  const discountRatio = subtotal.isZero() ? new Decimal(0) : discountAmount.dividedBy(subtotal);
+
+  const lines: TaxLineOutput[] = lineSubtotals.map(({ line, subtotal: lineSubtotal }) => {
+    const lineDiscount = round2(lineSubtotal.times(discountRatio));
+    const lineTaxable = lineSubtotal.minus(lineDiscount);
+    const rate = new Decimal(line.gstRate).dividedBy(100);
+
+    let lineCgst = new Decimal(0);
+    let lineSgst = new Decimal(0);
+    let lineIgst = new Decimal(0);
+
+    if (interState) {
+      // Inter-state: full GST as IGST
+      lineIgst = round2(lineTaxable.times(rate));
+    } else {
+      // Intra-state: split equally CGST + SGST
+      const halfRate = rate.dividedBy(2);
+      lineCgst = round2(lineTaxable.times(halfRate));
+      lineSgst = round2(lineTaxable.times(halfRate));
+    }
+
+    const lineTaxTotal = lineCgst.plus(lineSgst).plus(lineIgst);
+    const lineTotal = lineTaxable.plus(lineTaxTotal);
+
+    return {
+      lineId: line.lineId,
+      lineSubtotal: round2(lineSubtotal),
+      lineDiscount,
+      lineTaxable: round2(lineTaxable),
+      gstRate: line.gstRate,
+      lineCgst,
+      lineSgst,
+      lineIgst,
+      lineTaxTotal: round2(lineTaxTotal),
+      lineTotal: round2(lineTotal),
+    };
+  });
+
+  // Phase 5: Aggregate document totals (sum of rounded line values — Indian convention)
+  const cgstAmount = sumDecimals(lines.map((l) => l.lineCgst));
+  const sgstAmount = sumDecimals(lines.map((l) => l.lineSgst));
+  const igstAmount = sumDecimals(lines.map((l) => l.lineIgst));
+
+  return {
+    subtotal: round2(subtotal),
+    discountAmount: round2(discountAmount),
+    taxableAmount: round2(taxableAmount),
+    cgstAmount,
+    sgstAmount,
+    igstAmount,
+    totalAmount: round2(taxableAmount.plus(cgstAmount).plus(sgstAmount).plus(igstAmount)),
+    isInterState: interState,
+    lines,
+  };
+}
+
+function validateInput(input: TaxComputationInput): void {
+  if (input.lines.length === 0) {
+    throw new TaxComputationError('EMPTY_LINES', 'At least one line item is required');
+  }
+  if (!input.tenantState || !input.tenantState.trim()) {
+    throw new TaxComputationError('EMPTY_STATE', 'tenantState is required');
+  }
+  if (!input.placeOfSupply || !input.placeOfSupply.trim()) {
+    throw new TaxComputationError('EMPTY_STATE', 'placeOfSupply is required');
+  }
+  for (const line of input.lines) {
+    const qty = toDecimal(line.quantity);
+    if (qty.lessThanOrEqualTo(0)) {
+      throw new TaxComputationError(
+        'NEGATIVE_QUANTITY',
+        `Line ${line.lineId}: quantity must be > 0`,
+      );
+    }
+    const price = toDecimal(line.unitPrice);
+    if (price.lessThan(0)) {
+      throw new TaxComputationError(
+        'NEGATIVE_UNIT_PRICE',
+        `Line ${line.lineId}: unitPrice must be >= 0`,
+      );
+    }
+    if (![0, 5, 12, 18, 28].includes(line.gstRate)) {
+      throw new TaxComputationError(
+        'INVALID_GST_RATE',
+        `Line ${line.lineId}: gstRate ${line.gstRate} not in {0,5,12,18,28}`,
+      );
+    }
+  }
+  if (input.discount) {
+    const value = toDecimal(input.discount.value);
+    if (value.lessThan(0)) {
+      throw new TaxComputationError('NEGATIVE_DISCOUNT', 'Discount value cannot be negative');
+    }
+    if (input.discount.type === 'percent' && value.greaterThan(100)) {
+      throw new TaxComputationError(
+        'DISCOUNT_PERCENT_OUT_OF_RANGE',
+        'Discount percent must be 0-100',
+      );
+    }
+  }
+}
+
+function computeDiscountAmount(
+  discount: TaxComputationInput['discount'],
+  subtotal: Decimal,
+): Decimal {
+  if (!discount) return new Decimal(0);
+  const value = toDecimal(discount.value);
+  if (discount.type === 'percent') {
+    return subtotal.times(value.dividedBy(100));
+  }
+  return value;
+}
+```
+
+A2.2. Export `computeTax` from packages/tax/src/index.ts. Also export a convenience function `serializeOutput(output: TaxComputationOutput): SerializedOutput` that converts all Decimal fields to strings — needed because Decimal objects don't serialize cleanly across the Server Component boundary.
+
+A2.3. Verify pnpm typecheck green.
+
+COMMIT 9b: `feat(tax): chunk b — core engine with line-level rounding`
+
+## CHUNK 9c — Comprehensive test suite (50+ tests)
+
+A3.1. Create packages/tax/tests/compute.test.ts. Group tests into clear suites:
+
+TEST SUITE 1 — Basic intra-state cases:
+
+- Single line, 100 panels @ ₹15,000 @ 18%, no discount, intra-state (MH→MH):
+  subtotal=1,500,000, discount=0, taxable=1,500,000, cgst=135,000, sgst=135,000, igst=0, total=1,770,000
+- Single line, 1 unit @ ₹1.00 @ 18%, intra-state:
+  subtotal=1.00, cgst=0.09, sgst=0.09, igst=0, total=1.18
+- Single line, 0% GST (e.g., exempt goods):
+  taxable amount, zero tax, total = taxable
+
+TEST SUITE 2 — Basic inter-state cases:
+
+- Single line, 100 panels @ ₹15,000 @ 18%, no discount, inter-state (MH→KA):
+  subtotal=1,500,000, taxable=1,500,000, cgst=0, sgst=0, igst=270,000, total=1,770,000
+- Cross-check: same numbers as intra-state but cgst+sgst becomes igst
+
+TEST SUITE 3 — Mixed GST rate scenarios:
+
+- 2 lines: panels @ 18% + accessories @ 12%, intra-state — each line taxed at its own rate
+- 3 lines: panels @ 18% + inverter @ 18% + service @ 0% — service line has zero tax
+- All four GST rates in one quotation (5, 12, 18, 28)
+
+TEST SUITE 4 — Discount application:
+
+- Percent discount: 10% off ₹100,000 subtotal, 18% GST intra-state:
+  subtotal=100,000, discount=10,000, taxable=90,000, cgst=8,100, sgst=8,100, total=106,200
+- Amount discount: ₹5,000 off ₹100,000 subtotal, 18% inter-state:
+  subtotal=100,000, discount=5,000, taxable=95,000, igst=17,100, total=112,100
+- Discount across multi-line mixed-rate: proportional allocation per line
+- 100% percent discount on 18% intra-state: taxable=0, all taxes=0, total=0
+- 0% percent discount: same as no discount
+
+TEST SUITE 5 — Rounding edge cases (CRITICAL):
+
+- Tax that produces fractional paise: 1 unit @ ₹333.33 @ 18% intra-state:
+  cgst = round2(333.33 _ 0.09) = 30.00 (333.33 _ 0.09 = 29.9997, rounds to 30.00)
+  sgst = 30.00, total tax = 60.00, total = 393.33
+- Tax rounding consistency: verify line-level rounding produces same total whether you sum first or round first (asserted via test)
+- Penny-precision: ₹0.01 line @ 18% intra-state:
+  cgst = round2(0.01 \* 0.09) = 0.00 (rounds down)
+  sgst = 0.00
+  total = 0.01 (taxable only)
+
+TEST SUITE 6 — Validation errors:
+
+- Empty lines → EMPTY_LINES
+- Negative quantity → NEGATIVE_QUANTITY
+- Negative unit price → NEGATIVE_UNIT_PRICE
+- Invalid GST rate (e.g., 10, 15, 100) → INVALID_GST_RATE
+- Negative discount → NEGATIVE_DISCOUNT
+- Discount percent > 100 → DISCOUNT_PERCENT_OUT_OF_RANGE
+- Discount amount > subtotal → DISCOUNT_EXCEEDS_SUBTOTAL
+- Empty tenant state → EMPTY_STATE
+- Empty place of supply → EMPTY_STATE
+
+TEST SUITE 7 — State comparison edge cases (DEV.33 awareness):
+
+- States with full names: "Maharashtra" vs "Karnataka" → inter-state
+- Same state, different case: "Maharashtra" vs "maharashtra" → INTER-STATE (engine does exact match — log this as DEV.34 if it surfaces problems)
+- States with trailing whitespace: trimmed before comparison
+- Identical states → intra-state regardless of format
+
+TEST SUITE 8 — Real-world distributor scenarios:
+
+- 5 panels @ ₹15,000 @ 18% intra-state, no discount: ₹88,500 total
+- 100 panels @ ₹14,800 @ 18% inter-state, ₹50,000 discount:
+  subtotal=1,480,000, discount=50,000, taxable=1,430,000, igst=257,400, total=1,687,400
+- Mixed quote: 50 panels @ ₹15,000 (18%) + 50 mounting clamps @ ₹100 (12%) + installation service @ ₹25,000 (0%) intra-state with 5% discount:
+  Verify per-line discount allocation, mixed-rate aggregation, total
+
+TEST SUITE 9 — Output structure invariants:
+
+- For every output: lines.length === input.lines.length
+- For every output: sum of line.lineSubtotal === subtotal
+- For every output: subtotal - discountAmount === taxableAmount (exact)
+- For every output: cgstAmount + sgstAmount + igstAmount === sum of line tax totals
+- For every output: if isInterState, cgstAmount === 0 and sgstAmount === 0
+- For every output: if !isInterState, igstAmount === 0
+- For every output: totalAmount === taxableAmount + cgst + sgst + igst (exact)
+
+A3.2. Target: 50+ tests minimum. Use Decimal-aware assertions (e.g., `expect(output.totalAmount.toString()).toBe('1770000')` — strings avoid float comparison pitfalls).
+
+A3.3. Run `pnpm --filter @dealerlink/tax test`. ALL tests must pass before continuing.
+
+COMMIT 9c: `feat(tax): chunk c — comprehensive test suite (50+ cases)`
+
+## CHUNK 9d — Integration: swap preview + persistence to use the engine
+
+A4.1. Refactor apps/web/lib/quotation/preview.ts:
+
+- Import computeTax from packages/tax (add @dealerlink/tax as a workspace dependency in apps/web/package.json if not already)
+- The previewTax function becomes a thin adapter that:
+  - Maps the existing input shape to the new TaxComputationInput shape (mostly a rename)
+  - Calls computeTax
+  - Maps the Decimal output to number (for the UI's live preview — UI doesn't need Decimal precision)
+- Behavior MUST be byte-identical to the prior preview for all the existing seed data
+- The existing preview.test.ts should still pass without modification (this is the parity proof)
+
+A4.2. Refactor apps/web/lib/actions/quotations/helpers.ts::computeTotalsForPersistence:
+
+- Same pattern: thin adapter that calls computeTax
+- Output mapped to strings (for direct insertion into NUMERIC columns)
+- Use Decimal's .toFixed(2) to produce strings like '1770000.00' for DB inserts
+- The Server Action's existing call sites do NOT need to change — the function signature stays the same
+
+A4.3. CRITICAL VERIFICATION — Parity with Day 8's data:
+For every seeded QT- quotation, re-run computeTax with its line inputs and assert the result matches the stored header totals (subtotal, taxableAmount, cgst/sgst/igst, total).
+Write this as packages/db/tests/quotation-engine-parity.test.ts:
+
+```typescript
+test('Day 9 engine produces same totals as Day 8 stored values for all seeded quotations', async () => {
+  const quotations = await db
+    .select()
+    .from(quotationsTable)
+    .where(like(quotationsTable.quoteNumber, 'QT-%'));
+  for (const q of quotations) {
+    const lines = await db
+      .select()
+      .from(quotationLines)
+      .where(eq(quotationLines.quotationId, q.id));
+    const result = computeTax({
+      tenantState: q.tenantStateAtIssue,
+      placeOfSupply: q.placeOfSupply,
+      lines: lines.map((l) => ({
+        lineId: l.id,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        gstRate: Number(l.gstRate),
+      })),
+      discount: q.discountType ? { type: q.discountType, value: q.discountValue } : null,
+    });
+    expect(result.subtotal.toFixed(2)).toBe(q.subtotal);
+    expect(result.discountAmount.toFixed(2)).toBe(q.discountAmount);
+    expect(result.taxableAmount.toFixed(2)).toBe(q.taxableAmount);
+    expect(result.cgstAmount.toFixed(2)).toBe(q.cgstAmount);
+    expect(result.sgstAmount.toFixed(2)).toBe(q.sgstAmount);
+    expect(result.igstAmount.toFixed(2)).toBe(q.igstAmount);
+    expect(result.totalAmount.toFixed(2)).toBe(q.totalAmount);
+  }
+});
+```
+
+This test MUST pass. If even one quotation produces different numbers:
+
+- That's a sign of a behavior difference between Day 8's preview and Day 9's engine
+- STOP and investigate: which is correct? (Day 9's engine is the new source of truth; Day 8's preview may have had a subtle bug)
+- If Day 9 differs in a defensibly-correct way (e.g., better rounding), document as DEV.35 and update the stored values via a one-time recompute migration
+- If Day 9 differs incorrectly, fix the engine
+
+A4.4. Run all quality gates:
+
+- pnpm typecheck — green
+- pnpm lint — green
+- pnpm test — all unit + integration tests including the new parity test green
+- pnpm verify — 21/21 still passing
+- pnpm build — green
+
+A4.5. Closeout:
+
+- PROJECT_PLAN.md: mark B.9 ✅ with date and notes
+- DEVIATIONS.md: append any Day 9 deviations (likely DEV.34 for case-sensitivity if surfaced, possibly DEV.35 for engine parity)
+- Final commit: `feat(tax): day 9 complete — authoritative GST engine with line-level rounding`
+- Push
+
+COMMIT 9d: as above
+
+==========================================================
+GUARDRAILS (DAY 9 SPECIFIC — MOST IMPORTANT)
+==========================================================
+
+- NEVER use JavaScript native floats for tax math. Decimal.js or BigInt only.
+- Line-level rounding is the standard Indian invoicing convention. If CLAUDE.md §6 specifies otherwise, follow §6 — but be explicit in code comments about which choice was made and why.
+- The engine is a PURE FUNCTION. No I/O, no DB calls, no framework imports. Just input → output.
+- packages/tax depends ONLY on decimal.js. No drizzle, no react, no next, no @dealerlink/\* — it's reusable beyond this app.
+- All money output values are Decimal in the internal API. The boundary adapters convert to string (for DB) or number (for UI).
+- State comparison is opaque string compare per DEV.33. The engine does NOT know about "MH" vs "Maharashtra" — it just trusts the caller passed consistent values.
+- The parity test (A4.3) is the proof point. If it fails, the day is not done.
+- DO NOT MODIFY Day 8's stored quotation totals unless A4.3 surfaces a genuine pre-existing bug. Document any such case as DEV.35 with clear before/after numbers.
+- Edge cases that MUST be tested: zero quantity (rejected), zero subtotal (zero discount ratio, no DIV/0), 100% discount (taxable=0, taxes=0), penny-level amounts, fractional paise via 18% on odd amounts.
+
+WHEN DONE:
+
+- Print summary: 4 chunk commits, total test count (50+ new in packages/tax), parity test result, pnpm verify 21/21
+- Confirm Day 8 quotations all match Day 9 engine output exactly
+- Confirm the preview helper and persistence path are both wired to the canonical engine
+- Tell me: "Day 9 complete. Engine swap successful. Day 10 (PDF pipeline) is next."
+
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+#### Engine correctness (most important)
+- [ ] All 50+ tests in `packages/tax/tests/compute.test.ts` pass
+- [ ] Parity test in `packages/db/tests/quotation-engine-parity.test.ts` passes — every seeded quotation produces identical totals via the new engine
+- [ ] `pnpm test` overall green
+- [ ] Pick one quotation and manually verify with a calculator (e.g., QT-2026-0001: 100 × 10400 × 1.18 should equal stored total for intra-state, or 1 + IGST for inter-state)
+
+#### Integration
+- [ ] `apps/web/lib/quotation/preview.ts` now imports from `@dealerlink/tax`
+- [ ] `apps/web/lib/actions/quotations/helpers.ts` now imports from `@dealerlink/tax`
+- [ ] Builder UI still works — open `/quotations/new`, add lines, see live preview update correctly
+- [ ] Save a new quotation — DB stores totals matching the preview (within rounding)
+- [ ] `pnpm verify` still 21/21
+
+#### Engine purity
+- [ ] `packages/tax/package.json` has only `decimal.js` as a runtime dependency
+- [ ] No imports from drizzle, next, react, or `@dealerlink/*` in `packages/tax/src/`
+- [ ] Engine can be imported and called from a standalone Node script (smoke test in your head: would it work outside this monorepo?)
+
+#### Day 10 readiness
+- [ ] PDF generation (Day 10) will read computed totals from quotations table — these are now engine-produced
+- [ ] If parity test required updates to stored values, all old quotations have been refreshed
+- [ ] DEV log clean: any new deviations explained and tracked
+
+### Update PROJECT_PLAN.md after Day 9
+
+Mark **B.9** as ✅, today's date, append to changelog. Day 9 is the most important checkbox in the entire build.
+
+---
+
+## Day 10 — PDF Pipeline (Puppeteer Worker + Templates)
+
+**Goal:** Ship the PDF generation pipeline. By end of day, sales users can generate professional quotation PDFs with tenant branding, line items, GST breakdown, T&Cs, and bank details. The infrastructure handles invoices, dispatch notes, and payment receipts in later days.
+
+**Estimated time:** 5–6 hours of Claude Code work + ~45 min of your verification (including reviewing actual PDF output)
+
+**Deliverable:** Working "Download PDF" and "Email PDF" actions on quotations. Puppeteer runs in `apps/workers/` (isolated process per locked decision). Generated PDFs match the prototype design. Template architecture supports invoices/dispatch/receipts on later days.
+
+### Prompt for Claude Code
+
+```
+
+You are implementing Day 10 of the Dealerlink build. Day 9 shipped successfully (commit 4061f0d) — authoritative GST tax engine. Day 10 builds on Day 9 by generating PDFs that show those computed taxes.
+
+PRELIMINARY (every day must do this):
+P.1. Run `pnpm preflight` and confirm 9 green checks.
+P.2. Read CLAUDE.md §3 (stack — Puppeteer in workers per locked decision), §6 (GST/three-party — invoice PDF later but pattern starts today), §10 (auth — PDF actions are tenant-scoped).
+P.3. Read docs/PDF_PIPELINE.md — the design contract for this module.
+P.4. Read DECISIONS.md ADR-007 (branding spec) — 1 MB max, PNG/SVG/JPG, 400×120 px recommendation.
+P.5. Read DEVIATIONS.md DEV.15 (base64 logo fallback — still active since DO Spaces deferred to Stage D).
+P.6. Read apps/workers/ structure — pg-boss worker scaffold exists from Day 6/8 stubs; today fleshes it out for PDF jobs.
+
+PRIMARY REFERENCES:
+
+1. docs/PDF_PIPELINE.md — the contract
+2. CLAUDE.md §3 (stack), §6 (multi-party doc logic)
+3. docs/Distribyte.html and docs/Distribyte-print.html — the print stylesheet from the prototype is the visual target
+4. docs/3 PO Premier.pdf — real-world reference PDF for layout cues (page size, structure, density)
+5. ADR-007 — branding constraints
+6. Day 9's @dealerlink/tax — engine that computes the numbers the PDF displays
+
+==========================================================
+TRACK A — PDF PIPELINE (CHUNKED — 4 chunks)
+==========================================================
+
+## CHUNK 10a — Worker scaffold + Puppeteer setup
+
+A1.1. Audit apps/workers/ — confirm package.json, tsconfig, existing pg-boss scaffold.
+
+A1.2. Add Puppeteer to apps/workers/package.json:
+
+```
+"dependencies": {
+  "puppeteer-core": "^22.x",
+  "@sparticuz/chromium": "^131.x"
+}
+```
+
+Rationale: puppeteer-core (no bundled Chromium) + @sparticuz/chromium (slim Chromium for production servers). In dev, fall back to a system Chromium if @sparticuz fails to load.
+
+A1.3. Create apps/workers/src/pdf/browser.ts:
+
+- Lazy-initialized singleton browser instance (one Chromium process, shared across jobs)
+- Auto-restart if browser crashes (track lastUsed; if >10 min idle, close and re-launch on next request)
+- Memory cap awareness: track number of pages opened; force a browser restart every 100 pages to mitigate Puppeteer memory drift (known issue)
+- Pages closed cleanly after each render (try/finally)
+- Headless mode, no sandbox flags appropriate for Linux containers in Stage D
+
+A1.4. Create apps/workers/src/pdf/render.ts — pure rendering function:
+
+```typescript
+export async function renderPdfFromHtml(html: string, opts: PdfOptions): Promise<Buffer> {
+  // Open page, setContent, waitForLoadState, page.pdf({format: 'A4', margin: ...}), close page
+  // Return Buffer
+}
+```
+
+Options: page size (default A4), margins (default 18mm), printBackground=true, displayHeaderFooter=false (we build header/footer into the HTML)
+
+A1.5. Add a pg-boss job type 'render-pdf':
+
+- Input: { documentType: 'quotation' | 'invoice' | 'dispatch' | 'payment_receipt', documentId: string, tenantId: string }
+- Worker reads document, renders HTML, calls renderPdfFromHtml, stores result
+- For Day 10: only 'quotation' is implemented; others throw "not implemented yet"
+
+A1.6. Storage strategy for generated PDFs:
+
+- Phase 1 (today): write to DO Spaces if configured, else base64 in a new generated_documents table (per CLAUDE.md and DEV.15 fallback pattern)
+- Create packages/db/src/schema/generated_documents.ts:
+  - id, tenantId, documentType, documentId (FK varies by type — store as text), filename, mimeType, sizeBytes, storage ('spaces' | 'inline'), storageRef (URL or base64 data), generatedAt, generatedBy, expiresAt (nullable)
+  - RLS, audit trigger
+- Cleanup: rows older than 30 days with storage='inline' get pruned by a daily cron job (Day 14 wires this; Day 10 just creates the schema)
+
+A1.7. Generate migration. Verify pnpm typecheck green.
+
+A1.8. Add a simple smoke test in apps/workers/tests/render.test.ts:
+
+- Render a trivial HTML ('<h1>test</h1>') to PDF
+- Assert output is a non-empty Buffer starting with '%PDF-'
+- Skip if no system Chromium available (dev environment fallback)
+
+COMMIT 10a: `feat(pdf): chunk a — puppeteer worker scaffold + storage schema`
+
+## CHUNK 10b — Quotation template (the design)
+
+A2.1. Create apps/workers/src/templates/quotation.tsx (or quotation.html.ts if not using React for templates — pick one and document):
+
+DECISION: Use React-on-the-server template rendering for two reasons:
+
+- Type safety on template inputs
+- Component reuse for shared sub-templates (header, footer, line-items-table)
+  Alternative: handlebars-style string templates. Less typesafe. Skip.
+
+Set up:
+
+- apps/workers/src/templates/quotation.tsx (renders quotation HTML)
+- apps/workers/src/templates/\_components/Header.tsx (tenant branding)
+- apps/workers/src/templates/\_components/Footer.tsx (T&Cs, bank, page number)
+- apps/workers/src/templates/\_components/LineItemsTable.tsx (with GST breakdown)
+- apps/workers/src/templates/\_components/TaxSummary.tsx (CGST/SGST/IGST breakdown)
+- apps/workers/src/templates/\_components/PartyBlock.tsx (Bill-To / Ship-To dealer info — handles three-party scenarios per CLAUDE.md §6)
+- apps/workers/src/templates/styles.ts (inline CSS for print — print stylesheet from Distribyte-print.html)
+
+A2.2. Quotation template structure (matches docs/Distribyte-print.html, docs/3 PO Premier.pdf as visual reference):
+
+PAGE LAYOUT (A4 portrait):
+
+- Header band (60mm):
+  - Tenant logo (left) — from tenant_settings.logoUrl (base64 inline or Spaces URL)
+  - Tenant legal name + address + GSTIN + PAN (left below logo)
+  - Document title "QUOTATION" (right, large)
+  - Quote number + revision + date + valid until (right, monospaced)
+- Bill-To block (40mm):
+  - "Bill To:" label
+  - Dealer legal name, address, GSTIN, contact person
+- Line items table (variable height, wraps to multiple pages):
+  - Columns: S.No, Description (SKU + name + HSN), Qty, Unit Price, Discount (if line-level — N/A for Phase 1, but column placeholder), Taxable Value, GST Rate, GST Amount, Total
+  - Each row uses IBM Plex Mono for numbers (consistent with on-screen design)
+  - Total row at the bottom of each page repeats column headers
+- Tax summary block (40mm):
+  - Subtotal
+  - Discount (if any) with type indicator (e.g., "Discount @ 5%")
+  - Taxable Amount
+  - Either: CGST @ X% + SGST @ X% (intra-state) OR IGST @ X% (inter-state)
+  - Grand Total (large, bold)
+  - Amount in words (e.g., "Rupees One Lakh Twenty Seven Thousand Two Hundred Only")
+- Terms & Conditions (variable, end of document):
+  - From quotation.termsAndConditions if set, else tenant_settings.defaultTermsAndConditions
+- Bank details footer (last page only):
+  - Bank account name, account number, IFSC, branch (from tenant_settings.bank\*)
+- Footer band on every page:
+  - "Page X of Y" right-aligned
+  - "Quotation QT-2026-NNNN · Generated DD-MMM-YYYY HH:MM IST" left-aligned
+
+A2.3. CRITICAL: Three-party support stub:
+
+- The quotation today has ONE dealer (Bill-To = Ship-To)
+- But the template should accept optional separate billTo and shipTo dealer references
+- Per CLAUDE.md §6, invoices (Day 11) will use this; quotation only renders Bill-To with a note that Ship-To = Bill-To for quotations
+- This makes Day 11's invoice template a small extension, not a rewrite
+
+A2.4. Numbers display:
+
+- All currency in IBM Plex Mono, tabular figures
+- Amounts: 2 decimal places, comma-thousands in Indian format (1,27,200.00 NOT 127,200.00 — uses Intl.NumberFormat with en-IN locale)
+- GST rates: "18%" (whole number when possible)
+
+A2.5. Amount-in-words helper:
+
+- Create apps/workers/src/lib/amount-in-words.ts
+- Converts a number (or Decimal string) to Indian-format words ("One Lakh Twenty Seven Thousand Two Hundred Rupees Only")
+- Handles lakhs and crores (NOT thousands and millions — Indian numbering)
+- Unit test: 10 cases covering edge cases (0, 1, 99, 100, 1000, 99999, 100000=1 Lakh, 9999999=99 Lakhs, 10000000=1 Crore, decimals like 127200.50)
+
+A2.6. Render the quotation template to a static HTML string given a quotation + tenant + dealer payload. Output is a complete <html>...</html> with inline styles. NO external CSS files — Puppeteer needs everything inline for reliable rendering.
+
+A2.7. Smoke test:
+
+- Feed a fixture quotation (with realistic data: 2 lines, 18% GST, inter-state) into the template renderer
+- Assert HTML output contains expected strings (quote number, dealer name, GSTIN, IGST amount, total in words)
+- This is a HTML-level test, not a PDF-level test
+
+COMMIT 10b: `feat(pdf): chunk b — quotation template with tenant branding`
+
+## CHUNK 10c — Server actions: generate, download, email-attached
+
+A3.1. Create apps/web/lib/actions/quotations/generate-pdf.ts:
+
+- Action: generateQuotationPdf(quotationId) using tenantAction(['admin', 'sales'])
+- Flow:
+  1.  Load quotation + lines + dealer + tenant settings (single query)
+  2.  Build the template payload
+  3.  Enqueue a pg-boss 'render-pdf' job with the payload (passed by reference: just the IDs; worker re-loads to avoid stale data)
+  4.  Worker renders HTML, calls renderPdfFromHtml, stores result in generated_documents
+  5.  Return { documentId } so the client can poll OR — if synchronous mode is fine for Day 10 — just await the job and return the storage ref directly
+- For Day 10 simplicity: SYNCHRONOUS within the request (await pg-boss completion). Async polling pattern adds complexity not needed yet. Document as DEV.36 if questioned.
+
+A3.2. Create apps/web/lib/actions/quotations/download-pdf.ts:
+
+- Action: downloadQuotationPdf(quotationId) using tenantAction(['admin', 'sales', 'accounts'])
+- Loads the latest generated PDF for this quotation (most recent generated_documents row)
+- If none exists, calls generateQuotationPdf first
+- Returns a stream or base64 payload to the client for download
+- Records to access_log: action='download', entity_type='quotation', entity_id=quotationId
+
+A3.3. Update the quotation detail page (app/(app)/quotations/[id]/page.tsx):
+
+- Add "Download PDF" button (visible to admin + sales + accounts)
+- Add "Regenerate PDF" button if a generated_documents row exists (admin only — for after edits)
+- Show "Last generated: DD-MMM HH:MM" if applicable
+- Add "Email PDF" button — opens modal asking for recipient (default = dealer.email) + subject + body; on confirm, attaches PDF to email and sends via Resend
+  - Day 10 just LOGS the email request to email_delivery_log; actual send hooks up in Day 14
+  - The PDF generation happens regardless
+
+A3.4. Connect the existing "Save and Send" flow from Day 8:
+
+- When a quotation transitions draft → sent, auto-generate the PDF (call generateQuotationPdf)
+- Email body references the PDF (when Day 14 wires the actual send)
+
+A3.5. Verify pnpm typecheck + test green.
+
+COMMIT 10c: `feat(pdf): chunk c — generate/download/email actions wired up`
+
+## CHUNK 10d — Tests, real PDF verification, closeout
+
+A4.1. Tests:
+
+- apps/workers/tests/quotation-template.test.ts — HTML output assertions for various quotation shapes:
+  - Single-line intra-state
+  - Multi-line inter-state with discount
+  - With and without revision badge
+  - With and without tenant logo (test base64 fallback)
+  - With and without bank details
+- apps/workers/tests/amount-in-words.test.ts — 10 cases minimum
+- apps/web/tests/e2e/verify-day-10.spec.ts (Playwright):
+  - Login, open a quotation, click Download PDF, verify response is a PDF (mime type + magic bytes %PDF-)
+  - Open the same quotation again, verify the cached PDF returns quickly (no regeneration)
+  - Click Regenerate PDF (admin), verify a new generated_documents row created with different generated_at
+
+A4.2. REAL PDF QUALITY CHECK (manual, do this YOURSELF before declaring the day done):
+
+- Generate a PDF for one seeded quotation
+- Open the PDF in Adobe Reader or browser PDF viewer
+- Verify:
+  - Logo renders correctly (or fallback "TENANT NAME" placeholder if no logo)
+  - All numbers use mono font with tabular alignment
+  - GST breakdown shows the right type (CGST/SGST OR IGST, never both)
+  - Amount in words matches the grand total
+  - T&Cs and bank details appear on the last page
+  - Page numbers correct on multi-page quotes (force a 30-line test quotation if needed to test pagination)
+- Save a sample PDF to docs/samples/quotation-sample.pdf for future reference
+
+A4.3. Documentation:
+
+- Update docs/PDF_PIPELINE.md with the implemented architecture (template files, worker flow, storage strategy)
+- Add to docs/RUNBOOKS.md: "Re-generating a quotation PDF after edits"
+- Add to DEVIATIONS.md any deviations encountered (likely DEV.36 for synchronous PDF generation, possibly DEV.37 for any template quirks)
+
+A4.4. Closeout per docs/BUILD_PROMPT_TEMPLATE.md:
+
+- pnpm preflight — green
+- pnpm verify — 22/22 (21 prior + verify-day-10)
+- pnpm typecheck, pnpm lint, pnpm test, pnpm build — all green
+- PROJECT_PLAN.md B.10 marked ✅
+- Final commit: `feat(pdf): day 10 complete — puppeteer pipeline + quotation template`
+- Push
+
+COMMIT 10d: as above
+
+==========================================================
+GUARDRAILS (DAY 10 SPECIFIC)
+==========================================================
+
+- Puppeteer runs ONLY in apps/workers/. Never import puppeteer-core from apps/web/ — that would bring 200MB of binary into the web bundle.
+- Generated PDFs are stored as immutable artifacts (one row per render). If a user edits the quotation and regenerates, NEW row is created; old row stays for audit. The download endpoint serves the LATEST.
+- Template inputs are typed — no `any` in template props.
+- Numbers in PDFs use Indian format (1,27,200.00). Use Intl.NumberFormat('en-IN'), not generic comma-thousands.
+- Amount in words uses Indian numbering (Lakhs, Crores). NOT international (Thousands, Millions).
+- The template MUST work without a logo (base64 fallback per DEV.15). Test the fallback explicitly.
+- Three-party stub: template accepts billTo + shipTo. For quotations, shipTo defaults to billTo with a "Ship-To same as Bill-To" line. Invoice (Day 11) overrides this.
+- Storage: base64 inline in dev, DO Spaces in production. Day 10's storage code uses an abstraction so Stage D's DO Spaces wiring is a config change, not a refactor.
+- Memory: Puppeteer browser restarts every 100 pages. Confirm this via comment in browser.ts.
+
+WHEN DONE:
+
+- Print summary
+- 4 chunk commits
+- Confirm a real PDF was generated and visually verified for one seeded quotation
+- Sample PDF saved to docs/samples/
+- pnpm verify shows 22/22
+- Tell me Day 10 is complete and Day 11 (PI/Order creation) is next
+
+```
+
+### Verification checklist for you (after Claude Code finishes)
+
+#### Generated PDF quality (do this yourself — 15 minutes)
+- [ ] Open `/quotations/[any-seeded-id]` as admin
+- [ ] Click "Download PDF" — file downloads, opens in PDF viewer
+- [ ] **Read the entire PDF carefully**:
+  - Logo or "TENANT NAME" placeholder rendered correctly
+  - Quote number, date, valid until shown
+  - Dealer info (legal name, address, GSTIN) correct
+  - Each line item shows: SKU, name, HSN, quantity, unit price, line total
+  - Numbers in mono font, tabular aligned
+  - Tax summary shows CGST+SGST (intra-state) OR IGST (inter-state) — never both
+  - Grand total matches what the quotation detail page shows
+  - Amount in words matches the grand total
+  - T&Cs section populated
+  - Bank details on the last page
+  - Page numbers correct
+- [ ] Open a multi-line inter-state quotation — verify IGST appears, CGST+SGST don't
+- [ ] Open one with a discount — verify discount line shows in tax summary
+- [ ] Save one sample PDF to share for future reference
+
+#### Architecture
+- [ ] Puppeteer is in `apps/workers/`, not `apps/web/`
+- [ ] `apps/web/package.json` does NOT depend on `puppeteer-core` or `@sparticuz/chromium`
+- [ ] Generated documents table has rows for every PDF you generated
+- [ ] Re-clicking Download (without regenerate) reuses the cached PDF (fast response)
+
+#### Automated
+- [ ] `pnpm preflight` — green
+- [ ] `pnpm verify` — 22/22
+- [ ] All quality gates green
+- [ ] B.10 marked ✅ in PROJECT_PLAN.md
+- [ ] DEV log updated if any deviations
+
+#### Day 11 readiness
+- [ ] Template architecture supports invoice extension (three-party billTo/shipTo handles invoice case)
+- [ ] PDF storage abstraction in place (Stage D will swap to DO Spaces)
+- [ ] Worker flow established (pg-boss job → Puppeteer → storage)
+
+### Update PROJECT_PLAN.md after Day 10
+
+Mark **B.10** as ✅, today's date, append to changelog.
+
+---
+
+## Day 11 — Performa Invoice + Order Creation
+
+**Goal:** Ship the PI (Performa Invoice) and Order modules. By end of day, an accepted quotation converts to a PI for buyer confirmation, then to an Order once the buyer confirms. The Order creates inventory reservations and advances the deal pipeline. PI gets its own PDF with full three-party support.
+
+**Estimated time:** 5–6 hours + ~45 min verification
+
+**Deliverable:** Working `/quotations/[id]/convert-to-pi` flow, `/pi/*` and `/orders/*` modules with list, detail, status transitions, PDF generation. Inventory automatically reserves on order confirmation.
+
+### Prompt for Claude Code
+
+```
+
+You are implementing Day 11 of the Dealerlink build. Day 10 shipped successfully (commit fc6fbed) — PDF pipeline with quotation template. Day 11 reuses that template architecture for invoices and adds the cross-module choreography (deal advancement + inventory reservation + PDF generation).
+
+PRELIMINARY:
+P.1. Run `pnpm preflight` — confirm 9 green.
+P.2. Read CLAUDE.md §6 (three-party document logic) and §11 (auth/roles).
+P.3. Read docs/WORKFLOWS.md — the deal pipeline transitions (verbal_commit → po_pending → payment_pending).
+P.4. Read DEVIATIONS.md — note DEV.36 (sync PDF generation), DEV.38 (cross-tenant seed fix), R.13 (email dispatch must move to pg-boss Day 14).
+P.5. Read apps/workers/src/templates/\_components/ — these are Day 10's shared template parts. Today extends them for invoices.
+P.6. Read packages/db/src/deals/transitions.ts and packages/db/src/inventory/transitions.ts — Day 11 calls both.
+
+PRIMARY REFERENCES:
+
+1. CLAUDE.md §6 (three-party) — Bill-To = who pays, Ship-To = where goods go. PI/Order/Invoice can have different combinations.
+2. BRD §5 (PI/Order requirements + workflow)
+3. docs/Distribyte.html — PI/Order screens reference
+4. docs/3 PO Premier.pdf — real reference document
+5. Day 10 quotation template — invoice template extends this
+6. Day 9 @dealerlink/tax — engine recomputes taxes on PI/Order (they reuse quotation totals but support different ship-to states which may change inter-state determination)
+
+==========================================================
+TRACK A — PI + ORDER (CHUNKED — 5 chunks)
+==========================================================
+
+## CHUNK 11a — Schemas + state machines
+
+A1.1. Create packages/db/src/schema/performa_invoice.ts (PI = Performa Invoice):
+
+```typescript
+export const performaInvoices = pgTable('performa_invoices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+
+  piNumber: text('pi_number').notNull(), // e.g., PI-2026-0001
+
+  // Source quotation (required — PIs always come from accepted quotations in Phase 1)
+  quotationId: uuid('quotation_id').notNull(),
+
+  // Deal link (denormalized for fast queries; copied from quotation)
+  dealId: uuid('deal_id'),
+
+  // Bill-To and Ship-To dealers (may differ — three-party scenario)
+  billToDealerId: uuid('bill_to_dealer_id').notNull(),
+  shipToDealerId: uuid('ship_to_dealer_id').notNull(), // defaults to billTo on creation
+
+  // Captured at issue (point-in-time)
+  tenantStateAtIssue: text('tenant_state_at_issue').notNull(),
+  placeOfSupply: text('place_of_supply').notNull(), // recomputed from ship-to if different from quote
+
+  preparedBy: uuid('prepared_by').notNull(),
+
+  // Commercial (snapshot from quotation; can deviate slightly e.g. validity period change)
+  piDate: date('pi_date').notNull().defaultNow(),
+  validUntil: date('valid_until').notNull(),
+  currency: text('currency').notNull().default('INR'),
+
+  // Discount (snapshot from quotation, allowed to adjust)
+  discountType: text('discount_type'),
+  discountValue: numeric('discount_value', { precision: 12, scale: 2 }),
+
+  // Computed totals (server-side via @dealerlink/tax, never trust client)
+  subtotal: numeric('subtotal', { precision: 14, scale: 2 }).notNull(),
+  discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  taxableAmount: numeric('taxable_amount', { precision: 14, scale: 2 }).notNull(),
+  cgstAmount: numeric('cgst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  sgstAmount: numeric('sgst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  igstAmount: numeric('igst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  totalAmount: numeric('total_amount', { precision: 14, scale: 2 }).notNull(),
+
+  termsAndConditions: text('terms_and_conditions'),
+  notes: text('notes'),
+
+  // Status: 'draft' | 'sent' | 'confirmed' (buyer agreed) | 'cancelled'
+  // Confirmed PIs are immutable and trigger Order creation
+  status: text('status').notNull().default('draft'),
+  sentAt: timestamp('sent_at'),
+  confirmedAt: timestamp('confirmed_at'),
+  cancelledAt: timestamp('cancelled_at'),
+  cancelledReason: text('cancelled_reason'),
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by').notNull(),
+});
+
+export const performaInvoiceLines = pgTable('performa_invoice_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  performaInvoiceId: uuid('performa_invoice_id').notNull(),
+  lineNumber: integer('line_number').notNull(),
+  productId: uuid('product_id').notNull(),
+  productSku: text('product_sku').notNull(),
+  productName: text('product_name').notNull(),
+  hsnCode: text('hsn_code').notNull(),
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
+  unitOfMeasure: text('unit_of_measure').notNull().default('Nos'),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+  gstRate: numeric('gst_rate', { precision: 5, scale: 2 }).notNull(),
+  lineTotal: numeric('line_total', { precision: 14, scale: 2 }).notNull(),
+  description: text('description'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+```
+
+A1.2. Create packages/db/src/schema/order.ts:
+
+```typescript
+export const orders = pgTable('orders', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+
+  orderNumber: text('order_number').notNull(), // e.g., ORD-2026-0001
+
+  // Source PI (Phase 1: every order comes from a confirmed PI)
+  performaInvoiceId: uuid('performa_invoice_id').notNull(),
+  quotationId: uuid('quotation_id').notNull(), // denormalized
+  dealId: uuid('deal_id'),
+
+  // Bill-To + Ship-To (copied from PI; cannot change once order is placed)
+  billToDealerId: uuid('bill_to_dealer_id').notNull(),
+  shipToDealerId: uuid('ship_to_dealer_id').notNull(),
+
+  tenantStateAtIssue: text('tenant_state_at_issue').notNull(),
+  placeOfSupply: text('place_of_supply').notNull(),
+
+  // Commercial
+  orderDate: date('order_date').notNull().defaultNow(),
+  expectedDispatchDate: date('expected_dispatch_date'),
+  currency: text('currency').notNull().default('INR'),
+
+  // Snapshot of totals from PI
+  subtotal: numeric('subtotal', { precision: 14, scale: 2 }).notNull(),
+  discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  taxableAmount: numeric('taxable_amount', { precision: 14, scale: 2 }).notNull(),
+  cgstAmount: numeric('cgst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  sgstAmount: numeric('sgst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  igstAmount: numeric('igst_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  totalAmount: numeric('total_amount', { precision: 14, scale: 2 }).notNull(),
+
+  // Status state machine:
+  // 'pending' → 'confirmed' → 'partially_dispatched' → 'fully_dispatched' → 'delivered' → 'closed'
+  // Or: any → 'cancelled' (admin only, with reason)
+  status: text('status').notNull().default('pending'),
+  confirmedAt: timestamp('confirmed_at'),
+  cancelledAt: timestamp('cancelled_at'),
+  cancelledReason: text('cancelled_reason'),
+
+  // Payment status (separate dimension)
+  paymentStatus: text('payment_status').notNull().default('unpaid'),
+  // 'unpaid' | 'partially_paid' | 'paid'
+
+  notes: text('notes'),
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by').notNull(),
+});
+
+export const orderLines = pgTable('order_lines', {
+  // Same shape as performaInvoiceLines, plus:
+  // reservedQuantity: numeric('reserved_quantity', { precision: 12, scale: 3 }).default('0')
+  // dispatchedQuantity: numeric('dispatched_quantity', { precision: 12, scale: 3 }).default('0')
+  // [other fields like in PI lines]
+});
+```
+
+A1.3. Constraints:
+
+- pi_number, order_number: UNIQUE (tenant_id, X_number)
+- status CHECKs for both tables matching the enum sets above
+- payment_status CHECK
+- Both tables have RLS, audit triggers
+- document_counters entries for 'performa_invoice' (PI) and 'order'
+
+A1.4. Create packages/db/src/pi/transitions.ts and packages/db/src/orders/transitions.ts following the Day 7/8 transition module pattern. Define allowed transitions explicitly.
+
+A1.5. Generate migration. Verify pnpm typecheck green.
+
+A1.6. Create packages/schemas/src/performa-invoice.ts and packages/schemas/src/order.ts with Zod schemas for create/update inputs.
+
+COMMIT 11a: `feat(orders): chunk a — PI + order schemas + state machines`
+
+## CHUNK 11b — Server actions: convert + lifecycle
+
+A2.1. apps/web/lib/actions/pi/ (using tenantAction()):
+
+- convertQuotationToPi (admin + sales) — creates a draft PI from an accepted quotation; copies lines, dealer, discount; recomputes totals via @dealerlink/tax with shipTo state if user changed it; default shipTo = billTo
+- updatePi (admin + prepared_by sales, only when status='draft') — line edits allowed
+- sendPi (admin + sales) — transitions draft → sent; queues PDF generation; logs email
+- confirmPi (admin + sales) — transitions sent → confirmed; CREATES THE ORDER ATOMICALLY (single transaction); advances deal stage from po_pending → payment_pending
+- cancelPi (admin only) — captures reason
+
+A2.2. apps/web/lib/actions/orders/ (using tenantAction()):
+
+- confirmOrder (admin + sales) — transitions pending → confirmed; CREATES INVENTORY RESERVATIONS using Day 6's inventory transitions module; if insufficient inventory, returns specific error with which products are short
+- updateOrderExpectedDispatch (admin + dispatch)
+- cancelOrder (admin only) — releases any inventory reservations back to in_stock; captures reason; advances deal stage backwards or to lost
+
+A2.3. CRITICAL: The PI confirmation flow is the most complex action in the build so far. It does:
+
+1.  Validates PI is in 'sent' status
+2.  In a single transaction:
+    a. Update PI: status='confirmed', confirmedAt=now
+    b. Insert orders row with status='pending'
+    c. Insert order_lines rows from PI lines (1:1)
+    d. Transition deal stage po_pending → payment_pending via deals/transitions.ts
+    e. Write audit log entries for each step
+3.  Returns the new orderId
+
+A2.4. Inventory reservation in confirmOrder:
+
+- For each order line, find inventory_items with status='in_stock' and product_id matching, ORDER BY procurement_date ASC, LIMIT to requested quantity
+- SELECT ... FOR UPDATE on those rows
+- For each: call inventory transitions.ts reserveForOrder(itemId, orderId, dealerId)
+- Atomic: if not enough in_stock, rollback the entire transaction with InsufficientInventoryError listing the short products + how many short
+- Update order_lines.reservedQuantity accordingly
+
+A2.5. Verify tests pass.
+
+COMMIT 11b: `feat(orders): chunk b — server actions (convert, confirm, reserve inventory)`
+
+## CHUNK 11c — UI: PI module
+
+A3.1. PI list (app/(app)/pi/page.tsx):
+
+- Dense table, columns: PI number, date, dealer, total, status pill, prepared by, deal link
+- Filters: status, dealer, date range
+- Empty state with CTA to convert a quotation
+
+A3.2. PI detail (app/(app)/pi/[id]/page.tsx):
+
+- Same inline-edit pattern as quotations
+- Hero: PI number, status pill, action menu (per status: Draft → Edit/Send/Cancel; Sent → Confirm/Cancel; Confirmed → View order, View invoice link Day 13; Cancelled → final)
+- Sections: identity, parties (Bill-To, Ship-To — if same, show one block with "Ship-To same as Bill-To"; if different, show both), commercial, line items, tax summary, T&Cs
+
+A3.3. Convert-from-quotation flow (app/(app)/quotations/[id]/convert-to-pi/page.tsx):
+
+- Loads quotation, prefills a PI draft
+- User can change Ship-To dealer (typeahead from dealers; defaults to quotation dealer)
+- When Ship-To changes to a different state, the tax recomputes (might switch from IGST to CGST/SGST or vice versa) — this is a visual confirmation moment per CLAUDE.md §6
+- User can adjust validity period
+- Submit creates draft PI; redirect to PI detail
+
+A3.4. PI PDF: reuse the Day 10 quotation template. Override the document title to "PERFORMA INVOICE" and pass both billTo and shipTo (the template already accepts them). Generate via the workers subprocess pattern from Day 10.
+
+COMMIT 11c: `feat(orders): chunk c — PI list, detail, convert flow, PDF`
+
+## CHUNK 11d — UI: Order module
+
+A4.1. Order list (app/(app)/orders/page.tsx):
+
+- Columns: order number, date, dealer (Bill-To), total, fulfillment status pill, payment status pill, expected dispatch date
+- Two status dimensions visible: order status (pending/confirmed/dispatching/delivered/closed) + payment status (unpaid/partial/paid)
+
+A4.2. Order detail (app/(app)/orders/[id]/page.tsx):
+
+- Hero: order number, both status pills, action menu
+- Tabs:
+  - Overview: header info, parties, totals
+  - Line items: shows ordered qty, reserved qty (live, with checkbox/eyeglass to see which serials), dispatched qty (placeholder for Day 13)
+  - Inventory reservations: list of inventory_items currently reserved for this order (joins with serials)
+  - Status history
+  - Activity (audit + access log)
+
+A4.3. Confirm order modal:
+
+- Shows expected reservation: "Will reserve N panels of SKU X, M panels of SKU Y..."
+- If inventory available: enable Confirm button
+- If short: show specific shortage details + "Cannot confirm — N panels short of X"
+
+COMMIT 11d: `feat(orders): chunk d — order list, detail, confirm flow with reservation`
+
+## CHUNK 11e — Seed, tests, closeout
+
+A5.1. Seed:
+
+- 10 PIs per tenant (mix of statuses: 3 draft, 4 sent, 2 confirmed, 1 cancelled)
+- For confirmed PIs: corresponding Order rows + inventory reservations on existing seeded inventory
+- Ensure at least 2 three-party scenarios (Ship-To differs from Bill-To)
+- Ensure at least 1 scenario where Ship-To is in a different state from Bill-To (forces tax recomputation)
+- Ensure deal stages advance correctly (linked deals show in payment_pending if order exists)
+
+A5.2. Tests:
+
+- Schemas/RLS for PIs and orders
+- PI transitions, order transitions (all allowed + several forbidden)
+- convertQuotationToPi: tax recomputation when shipTo state differs from quote state
+- confirmPi: atomic transaction (mock a failure at deal advancement, verify everything rolls back)
+- confirmOrder: inventory reservation with FOR UPDATE locking; concurrent reservation test (two orders trying to confirm same items — second should fail cleanly)
+- InsufficientInventoryError shape
+- Three-party PDF: render a PI where billTo and shipTo are different dealers, verify both blocks appear in PDF
+- verify-day-11.spec.ts: Playwright covering convert → PI sent → PI confirm → order pending → order confirm (with inventory reservation) → verify inventory_items status changed
+
+A5.3. Docs:
+
+- Update docs/WORKFLOWS.md with PI/Order lifecycle
+- Add docs/RUNBOOKS.md entries: "Converting a quotation to PI", "Confirming an order with inventory check", "Cancelling an order and releasing reservations"
+
+A5.4. Closeout per template:
+
+- pnpm preflight, verify (25/25), typecheck, lint, test, build all green
+- PROJECT_PLAN.md B.11 ✅
+- Auto-commit + push
+
+COMMIT 11e: `feat(orders): day 11 complete — PI + order lifecycle`
+
+==========================================================
+GUARDRAILS (DAY 11)
+==========================================================
+
+- Three-party support: PIs/Orders MUST support billTo ≠ shipTo. If shipTo state differs from billTo's state for tax purposes, place_of_supply must be the SHIP-TO state per Indian GST rules.
+- Place of supply MUST be recomputed when Ship-To changes. The tax engine sees the right state.
+- Order confirmation is atomic — PI + order + reservations + deal advance happen in ONE transaction. If any step fails, all roll back.
+- Inventory reservation uses SELECT FOR UPDATE on inventory_items. No race conditions.
+- Insufficient inventory blocks order confirmation with a structured error. User can see exactly what's short.
+- Document numbering is per-tenant per-fiscal-year (pattern from Day 8 quotations). PIs have their own counter, Orders have their own.
+- All money columns NUMERIC, never float.
+- @dealerlink/tax is called for every recomputation. No copy-paste of tax logic.
+- Chunk each phase commit. Day 7 and Day 10's lessons apply.
+
+WHEN DONE:
+
+- Print summary, 5 chunk commits
+- Confirm seeded order reservations work (inventory items show status='reserved')
+- Confirm three-party PI PDF renders correctly
+- Confirm verify is 25/25 (24 prior + verify-day-11)
+- Tell me Day 11 is complete and Day 12 (Payments) is next
+
+```
+
+### Verification checklist (after Day 11)
+
+#### Cross-module choreography
+- [ ] Convert a seeded accepted quotation → PI created → quotation status='accepted' stays (immutable now)
+- [ ] PI shipped → PDF generated and downloadable
+- [ ] Confirm PI → order auto-created → linked deal stage advances to `payment_pending`
+- [ ] Confirm order → inventory_items.status changes from 'in_stock' to 'reserved' for the reserved quantity
+- [ ] Try to confirm an order that exceeds inventory → blocked with specific shortage error
+
+#### Three-party document
+- [ ] Create a PI with Ship-To different from Bill-To (e.g., same dealer's two addresses, or two different dealers)
+- [ ] PDF shows both blocks distinctly
+- [ ] If Ship-To state differs from tenant state for inter-state purposes, tax recomputes per shipTo state (not billTo state) — manually verify the math
+
+#### Tax engine integration
+- [ ] PI with billTo in MH and shipTo in KA → IGST applies (inter-state)
+- [ ] PI with both in MH → CGST + SGST (intra-state)
+- [ ] Order created from PI has the same totals (snapshot match)
+
+#### Automated
+- [ ] `pnpm preflight` green
+- [ ] `pnpm verify` 25/25
+- [ ] All quality gates green
+- [ ] B.11 ✅ in PROJECT_PLAN.md
+
+---
+
+## Day 12 — Payments + Receipts
+
+*Will be added when Day 11 is complete. Day 12 builds payment recording (full + partial + advance), receipt PDF generation, credit period tracking, and payment status updates that drive order dispatchability.*
 
 ---
 
