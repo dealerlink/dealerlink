@@ -91,4 +91,26 @@ test.describe('Day 16 — accessibility', () => {
     await expect(page.getByText('No dealers match these filters')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Clear filters' })).toBeVisible();
   });
+
+  test('an unknown route renders the branded 404 page', async ({ page }) => {
+    await loginAs(page, 'demo', 'admin');
+    await skipIfPasswordRotation(page);
+    await page.goto('/this-route-does-not-exist-zzz');
+    await expect(page.getByText('This page could not be found')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Go to dashboard' })).toBeVisible();
+  });
+
+  test('key pages carry a non-default document title', async ({ page }) => {
+    await loginAs(page, 'demo', 'admin');
+    await skipIfPasswordRotation(page);
+
+    for (const [path, title] of [
+      ['/dashboard', 'Dashboard · Dealerlink'],
+      ['/dealers', 'Dealers · Dealerlink'],
+      ['/reports/sales-summary', 'Sales Summary · Dealerlink'],
+    ] as const) {
+      await page.goto(path);
+      await expect(page).toHaveTitle(title);
+    }
+  });
 });

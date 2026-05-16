@@ -15,6 +15,8 @@ import { ReportWidgets } from './report-widgets';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Dashboard' };
+
 function timeOfDay(date = new Date()): 'morning' | 'afternoon' | 'evening' {
   const hour = date.getHours();
   if (hour < 12) return 'morning';

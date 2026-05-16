@@ -27,6 +27,8 @@ interface PageProps {
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Quotations' };
+
 const PAGE_SIZE = 50;
 
 function statusTone(s: QuotationStatus): StatusTone {

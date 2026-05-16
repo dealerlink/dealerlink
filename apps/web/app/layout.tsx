@@ -19,11 +19,12 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Dealerlink',
-  description: 'Distributor CRM — built for India',
-  icons: {
-    icon: '/favicon.ico',
+  // Per-page `metadata.title` strings render as "<page> · Dealerlink".
+  title: {
+    default: 'Dealerlink',
+    template: '%s · Dealerlink',
   },
+  description: 'Distributor CRM — built for India',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

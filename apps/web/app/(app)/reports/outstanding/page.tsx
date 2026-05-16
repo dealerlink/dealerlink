@@ -11,6 +11,8 @@ import { ReportTable } from '../_components/report-table';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Outstanding Receivables' };
+
 interface PageProps {
   searchParams: { groupBy?: string };
 }

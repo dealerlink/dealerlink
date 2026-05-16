@@ -26,6 +26,8 @@ interface PageProps {
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Dealers' };
+
 const PAGE_SIZE = 50;
 
 function statusTone(s: string): StatusTone {

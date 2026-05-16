@@ -7,6 +7,8 @@ import { REPORT_DESCRIPTIONS, REPORT_TITLES, reportsForRole, type ReportKey } fr
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Reports' };
+
 const META: Record<ReportKey, { href: string; icon: typeof BarChart3 }> = {
   'sales-summary': { href: '/reports/sales-summary', icon: BarChart3 },
   outstanding: { href: '/reports/outstanding', icon: Wallet },

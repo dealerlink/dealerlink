@@ -13,6 +13,8 @@ import { ReportTable } from '../_components/report-table';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Inventory Valuation' };
+
 interface PageProps {
   searchParams: { category?: string; lowStock?: string };
 }

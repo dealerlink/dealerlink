@@ -16,6 +16,8 @@ import { paymentMethodLabel, paymentStatusLabel, paymentStatusTone } from './pay
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Payments' };
+
 const PAGE_SIZE = 50;
 
 interface PageProps {

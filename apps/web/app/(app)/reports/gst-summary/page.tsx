@@ -19,6 +19,8 @@ import { ReportTable } from '../_components/report-table';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'GST Summary' };
+
 interface PageProps {
   searchParams: { quarter?: string; supplyType?: string };
 }

@@ -20,6 +20,8 @@ import { orderStatusTone, paymentStatusTone } from './order-status';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Orders' };
+
 const PAGE_SIZE = 50;
 
 interface PageProps {

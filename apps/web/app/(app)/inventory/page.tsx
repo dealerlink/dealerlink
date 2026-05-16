@@ -22,6 +22,8 @@ interface PageProps {
 }
 
 export const dynamic = 'force-dynamic';
+
+export const metadata = { title: 'Inventory' };
 const PAGE_SIZE = 100;
 
 const STATUS_TONE: Record<string, StatusTone> = {

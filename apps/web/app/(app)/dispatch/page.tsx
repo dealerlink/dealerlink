@@ -16,6 +16,8 @@ import { dispatchStatusLabel, dispatchStatusTone } from './dispatch-status';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Dispatch' };
+
 const PAGE_SIZE = 50;
 
 interface PageProps {

@@ -16,6 +16,8 @@ import type { DealCardData } from './deal-card';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Pipeline' };
+
 export default async function PipelinePage() {
   const ctx = await getAuthContext();
   if (!ctx) redirect('/login');

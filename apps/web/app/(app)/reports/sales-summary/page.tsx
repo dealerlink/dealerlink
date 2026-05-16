@@ -18,6 +18,8 @@ import { ReportTable } from '../_components/report-table';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Sales Summary' };
+
 interface PageProps {
   searchParams: {
     from?: string;

@@ -25,6 +25,8 @@ interface PageProps {
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Performa Invoices' };
+
 const PAGE_SIZE = 50;
 
 export default async function PiListPage({ searchParams }: PageProps) {
