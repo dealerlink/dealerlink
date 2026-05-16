@@ -3705,7 +3705,444 @@ WHEN DONE:
 
 ## Day 13 — Dispatch + Delivery Tracking
 
-*Will be added when Day 12 is complete. Day 13 closes the order-to-cash cycle: pick reserved serial numbers, create dispatch records, transition inventory to dispatched/delivered states, generate dispatch notes / e-way bills, mark orders as fulfilled.*
+**Goal:** Close the order-to-cash cycle. Users pick reserved serial numbers, create dispatch notes, transition inventory through `reserved → dispatched → delivered`, generate dispatch note PDFs, mark orders fulfilled. Concurrent dispatch protection is mandatory.
+
+**Estimated time:** 5–6 hours + ~45 min verification
+
+**Deliverable:** Working `/dispatch/*` module. Order transitions `confirmed → partially_dispatched → fully_dispatched → delivered`. Inventory items move through dispatch states. Dispatch note PDF using Day 10 template. Concurrent-dispatch race test passing.
+
+### Prompt for Claude Code
+
+```
+
+You are implementing Day 13 of the Dealerlink build. Day 12 shipped successfully (26b73ff..7f6353e) — payments + allocations + receipts. Day 13 is the physical-fulfillment day: inventory leaves the warehouse against confirmed orders.
+
+THIS IS THE HIGHEST-STAKES DAY AFTER DAY 9. Tax bugs destroy trust; dispatch bugs send the wrong panels to the wrong customer. Concurrent dispatch is a real race condition. Slow is fast.
+
+PRELIMINARY:
+P.1. `pnpm preflight` — confirm 11 green.
+P.2. Read CLAUDE.md §5 (now Ship-To-driven place_of_supply per ADR-012), §6 (multi-party — dispatch note goes to Ship-To), §10 (auth — dispatch role primary).
+P.3. Read DECISIONS.md ADR-012 (place of supply).
+P.4. Read DEVIATIONS.md DEV.33 (state format), DEV.41 (Day 12 left orders pending — Day 13 confirms them in seed before dispatch), DEV.42 (correlated subquery ambiguity — scan other queries for the same pattern).
+P.5. Read packages/db/src/schema/inventory.ts — the inventory_items state machine: in_stock → reserved (Day 11) → dispatched (Day 13) → delivered (Day 13).
+P.6. Read packages/db/src/inventory/transitions.ts — extend today with dispatchItem() and deliverItem().
+P.7. Read Day 11's confirmOrder flow — Day 13's createDispatch is its mirror (reserved → dispatched, decrements order's reservedQuantity, increments dispatchedQuantity).
+P.8. Read apps/workers/src/templates/\_components/ — Day 13 adds a SerialsTable component for the dispatch note.
+
+PRIMARY REFERENCES:
+
+1. CLAUDE.md §5 + §6 (place of supply = Ship-To; dispatch note goes to Ship-To)
+2. BRD §7 (Dispatch requirements: serial pick, partial dispatch, vehicle/transporter details)
+3. ADR-012 (Ship-To-driven tax)
+4. Day 11 schemas (orders.status state machine — declared transitions: confirmed → partially_dispatched → fully_dispatched → delivered)
+5. Day 6 inventory schema + transitions module
+6. Day 10 template architecture (Header/PartyBlock/Footer reused; new SerialsTable added)
+
+==========================================================
+TRACK A — DISPATCH (CHUNKED — 5 chunks)
+==========================================================
+
+## CHUNK 13a — Schemas + state machine extensions
+
+A1.1. Create packages/db/src/schema/dispatch.ts:
+
+```typescript
+export const dispatches = pgTable('dispatches', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+
+  dispatchNumber: text('dispatch_number').notNull(), // DSP-2026-0001
+
+  // Source order (required — every dispatch comes from a confirmed order)
+  orderId: uuid('order_id').notNull(),
+
+  // Snapshot of parties from order (immutable once dispatched)
+  billToDealerId: uuid('bill_to_dealer_id').notNull(),
+  shipToDealerId: uuid('ship_to_dealer_id').notNull(),
+
+  // Logistics
+  dispatchDate: date('dispatch_date').notNull().defaultNow(),
+  vehicleNumber: text('vehicle_number'),
+  transporterName: text('transporter_name'),
+  transporterDocketNumber: text('transporter_docket_number'),
+  driverName: text('driver_name'),
+  driverPhone: text('driver_phone'),
+
+  // E-way bill placeholder (Phase 2 wires real API; today just stores manually-entered number)
+  ewayBillNumber: text('eway_bill_number'),
+  ewayBillDate: date('eway_bill_date'),
+
+  // Status: 'in_transit' → 'delivered' | 'returned'
+  status: text('status').notNull().default('in_transit'),
+  deliveredAt: timestamp('delivered_at'),
+  deliveredAcknowledgedBy: text('delivered_acknowledged_by'), // dealer-side person who signed
+  returnedAt: timestamp('returned_at'),
+  returnedReason: text('returned_reason'),
+
+  notes: text('notes'),
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by').notNull(),
+});
+
+export const dispatchLines = pgTable('dispatch_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  dispatchId: uuid('dispatch_id').notNull(),
+
+  // Mirrors order_lines structure (which mirrors PI lines, mirrors quotation lines)
+  lineNumber: integer('line_number').notNull(),
+  orderLineId: uuid('order_line_id').notNull(), // FK to the order_line being dispatched
+  productId: uuid('product_id').notNull(),
+  productSku: text('product_sku').notNull(),
+  productName: text('product_name').notNull(),
+
+  // The serials picked for this line (separate join table for granular tracking)
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
+
+  notes: text('notes'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const dispatchSerials = pgTable('dispatch_serials', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  dispatchId: uuid('dispatch_id').notNull(),
+  dispatchLineId: uuid('dispatch_line_id').notNull(),
+  inventoryItemId: uuid('inventory_item_id').notNull(), // the serial that was dispatched
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+```
+
+A1.2. Constraints:
+
+- dispatch_number UNIQUE (tenant_id, dispatch_number)
+- dispatches.status CHECK ('in_transit', 'delivered', 'returned')
+- dispatch_lines.quantity > 0
+- dispatch_serials: UNIQUE (tenant_id, inventory_item_id) — a serial can only appear in ONE dispatch ever
+- All tables: RLS, audit trigger, tenant_id index
+- document_counters entry for 'dispatch'
+
+A1.3. Extend packages/db/src/inventory/transitions.ts:
+
+- `dispatchItem(itemId, dispatchId)` — reserved → dispatched. Validates current status. Sets dispatch_id reference.
+- `deliverItem(itemId)` — dispatched → delivered. Updates delivered_at.
+- `returnItem(itemId)` — dispatched → in_stock (returned to warehouse). Clears dispatch reference.
+- All inside tenant-scoped transactions; SELECT FOR UPDATE on the inventory_items row.
+
+A1.4. Extend packages/db/src/orders/transitions.ts:
+
+- Wire the previously-declared but unimplemented transitions:
+  - confirmed → partially_dispatched (when first dispatch created and order has more reservedQuantity remaining)
+  - confirmed → fully_dispatched (when first dispatch satisfies entire order in one go)
+  - partially_dispatched → fully_dispatched (when subsequent dispatch completes remaining)
+  - fully_dispatched → delivered (when all dispatches marked delivered)
+  - partially_dispatched → delivered (when remaining lines marked delivered via dispatch deliveries)
+- Helper: deriveOrderFulfillmentStatus(orderId) — pure function that examines order_lines.dispatchedQuantity vs ordered quantity, plus all dispatch.status values, returns expected order status.
+
+A1.5. Generate migration. pnpm typecheck green.
+
+A1.6. Zod schemas in packages/schemas/src/dispatch.ts: createDispatchInput, pickSerialsInput, markDeliveredInput.
+
+COMMIT 13a: `feat(dispatch): chunk a — schemas + state transitions`
+
+## CHUNK 13b — Server actions: createDispatch (the high-stakes one)
+
+A2.1. apps/web/lib/actions/dispatch/ (using tenantAction()):
+
+- createDispatch (admin + dispatch role) — THE critical action. Input:
+
+  ```
+  {
+    orderId: uuid,
+    lines: [{
+      orderLineId: uuid,
+      serialIds: uuid[]  // exact inventory_item_ids being dispatched, all must be currently 'reserved' for this order
+    }],
+    vehicleNumber, transporterName, transporterDocketNumber,
+    driverName, driverPhone, ewayBillNumber, ewayBillDate, notes
+  }
+  ```
+
+  ATOMIC transaction:
+  1. SELECT FOR UPDATE on orders row
+  2. Validate order.status IN ('confirmed', 'partially_dispatched')
+  3. For each serialId, SELECT FOR UPDATE on inventory_items row
+  4. Validate every serial:
+     - status='reserved'
+     - reserved_for_order_id === orderId (cannot dispatch another order's serials)
+     - belongs to same tenant
+  5. Validate the serial count per orderLineId matches an integer quantity (e.g., 5 serials → quantity 5)
+  6. Validate sum of dispatched quantities per orderLineId ≤ remaining (order_line.quantity - order_line.dispatchedQuantity)
+  7. Allocate next dispatch_number via document_counters
+  8. INSERT dispatches row
+  9. INSERT dispatch_lines rows
+  10. INSERT dispatch_serials rows
+  11. For each serial: dispatchItem(itemId, dispatchId) — moves to status='dispatched'
+  12. For each affected order_line: UPDATE order_lines.dispatchedQuantity += dispatched count
+  13. Compute new order.status via deriveOrderFulfillmentStatus
+  14. UPDATE order row with new status, set partiallyDispatchedAt or fullyDispatchedAt timestamps
+  15. If deal pipeline linked + order becomes fully_dispatched, advance deal to 'closed_won' (final stage)
+  16. Audit log entries
+  17. Commit
+
+A2.2. markDispatchDelivered (admin + dispatch) — transitions dispatch.status: in_transit → delivered. ATOMIC:
+
+1.  SELECT FOR UPDATE on dispatch row
+2.  For each dispatch_serial → deliverItem() (dispatched → delivered)
+3.  If all dispatches for the order are now 'delivered', UPDATE order.status = 'delivered', set deliveredAt
+4.  Audit entries
+
+A2.3. returnDispatch (admin only) — transitions dispatch.status: in_transit → returned. ATOMIC:
+
+1.  SELECT FOR UPDATE on dispatch + all related inventory_items
+2.  For each serial → returnItem() (dispatched → in_stock; clears dispatch ref; also clears reserved_for_order_id since order may need re-reservation)
+3.  UPDATE order_lines.dispatchedQuantity -= returned quantities
+4.  Recompute order.status (may regress from partially_dispatched → confirmed)
+5.  Capture returnedReason
+6.  Audit entries
+
+A2.4. Helper queries:
+
+- getAvailableSerialsForOrder(orderId) — returns inventory_items.status='reserved' for this order, grouped by product, with serial_number
+- getDispatchableLines(orderId) — for each order_line, return: ordered, reserved, dispatched, remaining-to-dispatch counts
+- getDispatchesForOrder(orderId) — list of dispatches with their lines + serials
+
+A2.5. CRITICAL — Concurrent dispatch test (mandatory):
+Two operators try to dispatch the SAME serial numbers simultaneously. The SECOND must fail cleanly with a structured error. Test:
+
+```typescript
+test('concurrent dispatch of same serials — second fails', async () => {
+  // Setup: order with 5 reserved serials
+  const [r1, r2] = await Promise.allSettled([
+    createDispatch({ orderId, lines: [{ orderLineId, serialIds: serialIds.slice(0, 3) }], ... }),
+    createDispatch({ orderId, lines: [{ orderLineId, serialIds: serialIds.slice(0, 3) }], ... }), // same serials
+  ]);
+  // Exactly one succeeds, the other fails with a specific error code
+  expect([r1.status, r2.status].filter(s => s === 'fulfilled').length).toBe(1);
+  expect([r1, r2].find(r => r.status === 'rejected')?.reason).toMatchObject({ code: 'SERIAL_ALREADY_DISPATCHED' });
+});
+```
+
+This test must use ACTUAL concurrent transactions (Promise.allSettled), not sequential calls. The FOR UPDATE locks make this safe; the test proves it.
+
+A2.6. Tests for return flow + delivery flow + partial dispatch scenarios.
+
+COMMIT 13b: `feat(dispatch): chunk b — createDispatch with concurrent-safe serial pick`
+
+## CHUNK 13c — UI: dispatch list, create flow, detail
+
+A3.1. Dispatch list (app/(app)/dispatch/page.tsx):
+
+- Columns: dispatch number, date, order number (link), Ship-To dealer, vehicle, transporter, status pill (in_transit/delivered/returned), serials count
+- Filters: status, date range, transporter, dealer
+- "+ New dispatch" button (admin + dispatch role)
+
+A3.2. Create dispatch flow (app/(app)/dispatch/new/page.tsx OR /orders/[id]/dispatch/new):
+
+- Order selection: typeahead of orders in status='confirmed' or 'partially_dispatched' (those with remaining reserved quantities)
+- After order picked, load getDispatchableLines(orderId) to show:
+  - Per line: SKU, name, ordered qty, dispatched-so-far, remaining
+  - Quantity input (default = remaining; user can pick less for partial)
+  - Serial picker: list of reserved serials for that product, checkboxes, default all selected up to quantity input
+- Logistics section: vehicle, transporter, docket, driver info, e-way bill
+- Validation:
+  - At least one line with quantity > 0
+  - For each line: serialIds count exactly matches quantity input
+  - All picked serials are 'reserved' status (re-check at submit time, server validates again with FOR UPDATE)
+- Submit creates dispatch → redirects to dispatch detail
+
+A3.3. Dispatch detail (app/(app)/dispatch/[id]/page.tsx):
+
+- Hero: dispatch number, status pill, order number link, action menu
+- Sections:
+  - Identity (number, date, order link)
+  - Ship-To block (PartyBlock — Ship-To dealer)
+  - Logistics (vehicle, transporter, e-way bill)
+  - Line items + serials (table with each line's SKU, qty, expand to see serial numbers)
+  - Status history
+- Action menu by status:
+  - in_transit: Mark delivered (capture acknowledged_by), Return (admin only, capture reason)
+  - delivered: View only, "Generate POD" (proof of delivery) placeholder
+  - returned: View only
+
+A3.4. Order detail page update (Day 11 file):
+
+- Add "Dispatches" tab listing all dispatches for this order
+- Fulfillment status line: "X of Y units dispatched, Z delivered"
+- "New dispatch" button if order has remaining reserved quantity
+
+COMMIT 13c: `feat(dispatch): chunk c — dispatch UI + order integration`
+
+## CHUNK 13d — Dispatch note PDF + dashboard
+
+A4.1. Dispatch note PDF template (apps/workers/src/templates/dispatch-note.tsx):
+
+- Reuse Header (tenant branding), PartyBlock (Ship-To dealer; Bill-To shown as smaller "Invoice to" sub-block), Footer
+- New component: SerialsTable.tsx — line items + serial numbers grouped per product
+- Document title: "DISPATCH NOTE" + dispatch number + date
+- Logistics block: vehicle, transporter, docket, driver, e-way bill
+- Order reference: "Against Order: ORD-2026-XXXX dated YYYY-MM-DD"
+- Tax-neutral document (dispatch note is not a tax invoice; that's a separate Phase 2 module)
+- Acknowledgment section: signature line "Received by: ******\_\_\_\_****** Date: ****\_\_\_\_****"
+- Save sample to docs/samples/dispatch-sample.pdf during verification
+
+A4.2. PDF actions:
+
+- generateDispatchPdf (admin + dispatch + accounts) — same pattern as Day 10/12
+- downloadDispatchPdf
+- emailDispatchPdf — logs to email_delivery_log (Day 14 wires real send)
+- Auto-generate on dispatch creation (the "send to driver" use case)
+
+A4.3. Dashboard widgets on /dashboard:
+
+- "Dispatches today" — count + total units
+- "In-transit dispatches" — count, with expected delivery (next 7 days if expectedDeliveryDate captured)
+- "Orders ready to dispatch" — count of orders.status='confirmed' with reserved inventory
+
+COMMIT 13d: `feat(dispatch): chunk d — dispatch PDF + dashboard widgets`
+
+## CHUNK 13e — Seed, tests, closeout
+
+A5.1. Seed (packages/db/src/seeds/day13.ts):
+
+- First: take Day 12's seeded orders and CONFIRM the ones still in 'pending' (DEV.41 — orders deliberately left unconfirmed). Some need to be in 'confirmed' state with reservations.
+- 8 dispatches per tenant:
+  - 4 in_transit (recent dispatches, expected delivery in next 1-7 days)
+  - 3 delivered (older dispatches, acknowledged_by populated)
+  - 1 returned (with reason)
+- At least 2 partial dispatches (order has 10 units, dispatch only 6, leaves 4 remaining-to-dispatch)
+- At least 1 full-dispatch-then-delivered cycle (order moves through confirmed → fully_dispatched → delivered)
+- Realistic logistics data: actual-looking vehicle numbers (MH-12-AB-1234), transporter names, docket numbers
+
+A5.2. Tests (packages/db/tests/dispatch.test.ts):
+
+- Schema constraints + RLS
+- All transition cases for inventory_items + orders + dispatches
+- The concurrent-dispatch test (A2.5) — MANDATORY
+- Partial dispatch leaves order in 'partially_dispatched' with correct remaining counts
+- Return flow regresses order status
+- Cross-tenant dispatch attempt blocked
+- Cannot dispatch unreserved serials
+- Cannot dispatch other-order's serials
+- Cannot dispatch more than reserved quantity
+- Audit log invariant: every dispatch creation logs N audit entries (one per serial transition + dispatch insert + order update)
+
+A5.3. Playwright verify-day-13.spec.ts (use loginAs):
+
+- dispatch@demo.test can see /dispatch + create dispatches
+- sales@demo.test CANNOT access /dispatch (redirect to /dashboard per Day 12 pattern)
+- accounts@demo.test can view dispatches but cannot create
+- Create a dispatch from a seeded confirmed order via the UI, verify inventory_items status changes to 'dispatched'
+- Mark a dispatch delivered, verify order.status updates appropriately
+- Locators scoped to DSP-2026-, ORD-2026- per DEV.31
+
+A5.4. Docs:
+
+- Update docs/WORKFLOWS.md with full dispatch lifecycle
+- Update docs/STRUCTURE.md with new schemas
+- Add runbook entries: "Creating a dispatch", "Marking dispatch delivered", "Returning a dispatched order", "Handling partial dispatch"
+
+A5.5. Closeout per template:
+
+- pnpm preflight, verify (32/32 = 31 prior + 1 new), typecheck, lint, test, build all green
+- PROJECT_PLAN.md B.13 ✅
+- Final commit: `feat(dispatch): day 13 complete — dispatch creation, serial pick, fulfillment tracking`
+- Push
+
+COMMIT 13e: as above
+
+==========================================================
+GUARDRAILS (DAY 13)
+==========================================================
+
+- Serials are PHYSICAL ASSETS. Cannot dispatch a serial twice. dispatch_serials.UNIQUE constraint + status state machine + FOR UPDATE locking are the three layers protecting this.
+- ATOMIC TRANSACTIONS for every dispatch creation/delivery/return. No partial state.
+- Cross-tenant access blocked at RLS layer AND explicit validation in createDispatch (defense in depth).
+- Role enforcement: dispatch is the primary role, admin has full access. Sales/accounts can VIEW but not CREATE dispatches. UI hides buttons; server enforces via tenantAction.
+- Dispatch note PDF goes to Ship-To dealer (per CLAUDE.md §6 — physical goods location). Bill-To shown as reference only.
+- Concurrent dispatch test is NON-NEGOTIABLE. Must use Promise.allSettled with actual parallel transactions, not sequential calls.
+- Document numbering: per-tenant per-FY via document_counters. DSP-2026-XXXX format.
+- If creating a dispatch fails partway, the entire transaction rolls back — serials stay 'reserved', order status unchanged, no orphan dispatch row.
+- Chunk per phase. Day 7/10/11 lessons apply doubly — this day touches more rows per transaction than any prior day.
+
+WHEN DONE:
+
+- Print summary, 5 chunk commits
+- Confirm concurrent-dispatch test passes
+- Confirm seeded dispatches: count by status, sample serials show 'dispatched' state
+- Confirm dispatch PDF sample saved to docs/samples/dispatch-sample.pdf
+- Confirm verify 32/32
+- Tell me Day 13 is complete and Day 14 (Email + webhooks) is next
+
+````
+
+### Verification checklist
+
+#### Concurrent-dispatch correctness (the most important)
+- [ ] Confirm the concurrent-dispatch test exists and uses `Promise.allSettled` (not sequential)
+- [ ] Verify the test asserts exactly one succeeds, one fails with specific error code
+- [ ] Run `pnpm test` filter to that test — confirm it actually runs and passes
+
+#### Serial state machine
+- [ ] After Day 13 seed: query `SELECT status, COUNT(*) FROM inventory_items GROUP BY status;` — should show `in_stock`, `reserved`, `dispatched`, `delivered` rows
+- [ ] Pick one dispatched serial, verify its `dispatch_id` reference is set
+- [ ] Pick one delivered serial, verify it transitioned from `dispatched` not directly from `reserved`
+
+#### Order fulfillment status
+- [ ] Order with partial dispatch shows `partially_dispatched` status
+- [ ] Order with all units dispatched shows `fully_dispatched`
+- [ ] Order with all dispatches delivered shows `delivered`
+- [ ] Returned dispatch regresses order status correctly
+
+#### Role enforcement
+- [ ] sales@demo.test → /dispatch → redirects to /dashboard
+- [ ] dispatch@demo.test → /dispatch → full access
+- [ ] accounts@demo.test → /dispatch → can view, cannot create
+
+#### Dispatch PDF
+- [ ] Open `docs/samples/dispatch-sample.pdf`
+- [ ] Verify Ship-To prominently displayed; Bill-To shown as smaller reference
+- [ ] Serial numbers visible per line
+- [ ] Logistics block populated
+- [ ] Acknowledgment signature line present
+- [ ] No tax breakdown (dispatch note is not a tax invoice)
+
+#### Invariant queries (production-scoped)
+```sql
+-- No serial dispatched twice
+SELECT inventory_item_id, COUNT(*) FROM dispatch_serials GROUP BY inventory_item_id HAVING COUNT(*) > 1;
+-- Expect: 0 rows
+
+-- Every dispatched/delivered inventory item has a dispatch_serials entry
+SELECT i.id FROM inventory_items i WHERE i.status IN ('dispatched', 'delivered') AND NOT EXISTS (SELECT 1 FROM dispatch_serials ds WHERE ds.inventory_item_id = i.id);
+-- Expect: 0 rows
+
+-- Order dispatched quantities match sum of dispatch line quantities
+SELECT ol.id, ol.dispatched_quantity, COALESCE(SUM(dl.quantity), 0) AS computed
+FROM order_lines ol
+LEFT JOIN dispatch_lines dl ON dl.order_line_id = ol.id
+LEFT JOIN dispatches d ON d.id = dl.dispatch_id AND d.status <> 'returned'
+WHERE ol.tenant_id IN (SELECT id FROM tenants)
+GROUP BY ol.id
+HAVING ol.dispatched_quantity::numeric <> COALESCE(SUM(dl.quantity), 0);
+-- Expect: 0 rows
+````
+
+#### Automated
+
+- [ ] `pnpm verify` 32/32
+- [ ] All quality gates green
+- [ ] B.13 ✅ in PROJECT_PLAN.md
+
+---
+
+## Day 14 — Email + Inbound Webhooks
+
+_Will be added when Day 13 is complete. Day 14 closes R.13 by moving email dispatch from inline calls to pg-boss workers, generates RESEND_INBOUND_WEBHOOK_SECRET (parked A.10 from Stage A), wires the first inbound webhook signature verification._
 
 ---
 
@@ -3723,5 +4160,4 @@ This rhythm keeps each day clean, verifiable, and recoverable if something needs
 
 ---
 
-*Last updated: May 2026 · Day 1 prompt only · subsequent days added progressively*
-```
+_Last updated: May 2026 · Day 1 prompt only · subsequent days added progressively_
