@@ -5,6 +5,7 @@ import { getAuthContext } from '@/lib/auth/session';
 import { assertReportAccess, outstandingReport, type OutstandingGroupBy } from '@/lib/reports';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
+import { DownloadCsv } from '../_components/download-csv';
 import { FilterBar, type FilterField } from '../_components/filter-bar';
 import { ReportTable } from '../_components/report-table';
 
@@ -41,15 +42,18 @@ export default async function OutstandingPage({ searchParams }: PageProps) {
 
   return (
     <div className="px-6 py-5">
-      <div className="mb-4">
-        <div className="titlecaps mb-1">
-          <Link href="/reports" className="hover:underline">
-            Reports
-          </Link>{' '}
-          / Outstanding Receivables
+      <div className="mb-4 flex items-end justify-between">
+        <div>
+          <div className="titlecaps mb-1">
+            <Link href="/reports" className="hover:underline">
+              Reports
+            </Link>{' '}
+            / Outstanding Receivables
+          </div>
+          <h1 className="text-[28px] font-semibold tracking-[-0.02em]">Outstanding Receivables</h1>
+          <p className="text-mute mt-1 text-[13px]">{result.metadata.filterLabel}</p>
         </div>
-        <h1 className="text-[28px] font-semibold tracking-[-0.02em]">Outstanding Receivables</h1>
-        <p className="text-mute mt-1 text-[13px]">{result.metadata.filterLabel}</p>
+        <DownloadCsv report="outstanding" params={{ groupBy }} />
       </div>
 
       <FilterBar basePath="/reports/outstanding" fields={fields} values={{ groupBy }} />

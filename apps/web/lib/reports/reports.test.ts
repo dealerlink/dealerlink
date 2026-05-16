@@ -12,11 +12,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { adminDb, closeDbConnection, tenants } from '@dealerlink/db';
+import { adminDb, closeDbConnection, orders, tenants } from '@dealerlink/db';
 import { config as loadEnv } from 'dotenv';
-import { eq } from 'drizzle-orm';
+import { and, between, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { GST_SUPPLY_STATUSES, gstSummaryReport } from './gst-summary';
+import { inventoryValuationReport } from './inventory-valuation';
 import { fiscalYearOf, fiscalYearRange } from './period';
 import { outstandingReport } from './outstanding';
 import { salesSummaryReport } from './sales-summary';
@@ -106,5 +108,65 @@ describe('outstandingReport', () => {
       '61–90 days',
       '91+ days',
     ]);
+  });
+});
+
+describe('inventoryValuationReport', () => {
+  it('totals row sums qty and valuation; each row valuation = qty × cost', async () => {
+    const r = await inventoryValuationReport(tenantId, {});
+    expect(Number(r.totals!.qty)).toBe(sumColumn(r, 'qty'));
+    expect(Number(r.totals!.valuation)).toBeCloseTo(sumColumn(r, 'valuation'), 2);
+    for (const row of r.rows) {
+      expect(Number(row.valuation)).toBeCloseTo(Number(row.qty) * Number(row.unitCost), 2);
+    }
+  });
+
+  it('seeded demo tenant holds non-zero stock value', async () => {
+    const r = await inventoryValuationReport(tenantId, {});
+    expect(r.rows.length).toBeGreaterThan(0);
+    expect(Number(r.totals!.valuation)).toBeGreaterThan(0);
+  });
+});
+
+describe('gstSummaryReport', () => {
+  const range = fiscalYearRange(fiscalYearOf());
+
+  it('totals row equals the sum of the data rows', async () => {
+    const r = await gstSummaryReport(tenantId, range);
+    for (const key of ['orders', 'taxable', 'cgst', 'sgst', 'igst']) {
+      expect(Number(r.totals![key])).toBeCloseTo(sumColumn(r, key), 2);
+    }
+  });
+
+  it('parity: report totals match the stored order tax columns exactly', async () => {
+    // CLAUDE.md §6 — the report READS stored columns; it must agree with a
+    // direct SUM over the same orders. No @dealerlink/tax recomputation.
+    const r = await gstSummaryReport(tenantId, range);
+    const [direct] = await adminDb
+      .select({
+        cgst: sql<string>`coalesce(sum(${orders.cgstAmount}), 0)`,
+        sgst: sql<string>`coalesce(sum(${orders.sgstAmount}), 0)`,
+        igst: sql<string>`coalesce(sum(${orders.igstAmount}), 0)`,
+        taxable: sql<string>`coalesce(sum(${orders.taxableAmount}), 0)`,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.tenantId, tenantId),
+          inArray(orders.status, [...GST_SUPPLY_STATUSES]),
+          between(orders.orderDate, range.from, range.to),
+        ),
+      );
+    expect(Number(r.totals!.cgst)).toBeCloseTo(Number(direct!.cgst), 2);
+    expect(Number(r.totals!.sgst)).toBeCloseTo(Number(direct!.sgst), 2);
+    expect(Number(r.totals!.igst)).toBeCloseTo(Number(direct!.igst), 2);
+    expect(Number(r.totals!.taxable)).toBeCloseTo(Number(direct!.taxable), 2);
+  });
+
+  it('classifies each row as intra- or inter-state', async () => {
+    const r = await gstSummaryReport(tenantId, range);
+    for (const row of r.rows) {
+      expect(['Intra-state', 'Inter-state']).toContain(row.supplyType);
+    }
   });
 });

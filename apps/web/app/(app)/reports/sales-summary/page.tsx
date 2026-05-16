@@ -12,6 +12,7 @@ import {
 } from '@/lib/reports';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
+import { DownloadCsv } from '../_components/download-csv';
 import { FilterBar, type FilterField } from '../_components/filter-bar';
 import { ReportTable } from '../_components/report-table';
 
@@ -102,6 +103,16 @@ export default async function SalesSummaryPage({ searchParams }: PageProps) {
           <h1 className="text-[28px] font-semibold tracking-[-0.02em]">Sales Summary</h1>
           <p className="text-mute mt-1 text-[13px]">{result.metadata.filterLabel}</p>
         </div>
+        <DownloadCsv
+          report="sales-summary"
+          params={{
+            from,
+            to,
+            groupBy,
+            dealer: searchParams.dealer ?? '',
+            status: searchParams.status ?? '',
+          }}
+        />
       </div>
 
       <FilterBar
