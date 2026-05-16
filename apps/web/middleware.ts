@@ -59,6 +59,11 @@ export function middleware(req: NextRequest) {
 
   // Pass-through headers so Server Components can read scope cheaply.
   const requestHeaders = new Headers(req.headers);
+  // Stamp a request id at the edge — the Node runtime seeds it into the ALS
+  // log context (als.ts) so every log line for this request correlates.
+  if (!requestHeaders.has('x-request-id')) {
+    requestHeaders.set('x-request-id', crypto.randomUUID());
+  }
   requestHeaders.set('x-dealerlink-scope', scope.kind);
   if (scope.kind === 'tenant') {
     requestHeaders.set('x-dealerlink-tenant-slug', scope.slug);

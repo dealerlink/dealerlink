@@ -3,6 +3,8 @@ import 'server-only';
 import { ALL_QUEUES, EMAIL_QUEUE, type EmailJobPayload } from '@dealerlink/schemas';
 import PgBoss from 'pg-boss';
 
+import { logger } from '@/lib/observability/logger';
+
 /**
  * pg-boss client for the web process.
  *
@@ -29,8 +31,7 @@ function connectionString(): string {
 async function initBoss(): Promise<PgBoss> {
   const boss = new PgBoss({ connectionString: connectionString(), supervise: false });
   boss.on('error', (err) => {
-    // eslint-disable-next-line no-console
-    console.error('[pg-boss:web] error', err);
+    logger.error({ err }, 'pg-boss (web) error');
   });
   await boss.start();
   // Ensure every queue exists so a send never races queue creation.

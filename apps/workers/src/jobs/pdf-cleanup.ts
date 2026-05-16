@@ -13,6 +13,8 @@
 import { adminDb, generatedDocuments } from '@dealerlink/db';
 import { and, eq, isNotNull, lt } from 'drizzle-orm';
 
+import { logger } from '../observability/logger';
+
 /** Inline payloads older than this are purged. */
 export const PDF_RETENTION_DAYS = 30;
 
@@ -37,7 +39,6 @@ export async function runPdfCleanup(asOf: Date = new Date()): Promise<PdfCleanup
     .returning({ id: generatedDocuments.id });
 
   const result: PdfCleanupResult = { cutoff: cutoff.toISOString(), purged: purged.length };
-  // eslint-disable-next-line no-console
-  console.log(`[pdf-cleanup] ${asOf.toISOString().slice(0, 10)}`, JSON.stringify(result));
+  logger.info({ job: 'pdf-cleanup', ...result }, 'pdf-cleanup sweep complete');
   return result;
 }

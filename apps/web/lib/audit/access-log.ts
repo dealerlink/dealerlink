@@ -2,6 +2,7 @@ import { accessLog, db } from '@dealerlink/db';
 import { headers } from 'next/headers';
 
 import { getAuthContext } from '@/lib/auth/session';
+import { logger } from '@/lib/observability/logger';
 
 export type AccessAction = 'view' | 'export' | 'download' | 'operator_impersonation_view';
 
@@ -51,6 +52,6 @@ export async function recordAccess(
       userAgent,
     });
   } catch (err) {
-    console.error('[access-log] failed to record', { entityType, entityId, action, err });
+    logger.error({ entityType, entityId, action, err }, 'access-log: failed to record');
   }
 }

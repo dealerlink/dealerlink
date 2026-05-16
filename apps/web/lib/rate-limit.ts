@@ -1,6 +1,8 @@
 import { rateLimit, db } from '@dealerlink/db';
 import { sql } from 'drizzle-orm';
 
+import { logger } from '@/lib/observability/logger';
+
 export interface RateLimitOptions {
   /** Logical scope (e.g., 'login', 'health'). Joined with `key` into the row. */
   scope: string;
@@ -47,7 +49,7 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
     const remaining = Math.max(0, opts.limit - count);
     return { allowed: count <= opts.limit, remaining, resetAt };
   } catch (err) {
-    console.error('[rate-limit] check failed, failing open', { fullKey, err });
+    logger.error({ fullKey, err }, 'rate-limit: check failed, failing open');
     return { allowed: true, remaining: opts.limit, resetAt };
   }
 }

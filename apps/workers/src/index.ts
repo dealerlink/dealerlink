@@ -25,6 +25,7 @@ import { handleSendEmailJob } from './email/handler';
 import { runPdfCleanup } from './jobs/pdf-cleanup';
 import { handleRenderPdfJob, type RenderPdfPayload } from './jobs/render-pdf';
 import { runValidityExpiry } from './jobs/validity-expiry';
+import { logger } from './observability/logger';
 import { flushWorkerSentry, initWorkerSentry, instrumentJobHandler } from './observability/sentry';
 import { startBoss, stopBoss } from './queue/boss';
 
@@ -67,8 +68,7 @@ async function main(): Promise<void> {
   await boss.schedule(VALIDITY_EXPIRY_QUEUE, '0 2 * * *', undefined, { tz: 'Asia/Kolkata' });
   await boss.schedule(PDF_CLEANUP_QUEUE, '0 3 * * *', undefined, { tz: 'Asia/Kolkata' });
 
-  // eslint-disable-next-line no-console
-  console.log('Workers process started — pg-boss queues + daily crons registered.');
+  logger.info('Workers process started — pg-boss queues + daily crons registered.');
 }
 
 async function shutdown(): Promise<void> {
@@ -80,7 +80,6 @@ process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
 
 main().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
-  console.error('Workers process failed to start:', err);
+  logger.error({ err }, 'Workers process failed to start');
   process.exit(1);
 });

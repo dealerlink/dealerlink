@@ -13,6 +13,8 @@
 import { ALL_QUEUES, EMAIL_QUEUE } from '@dealerlink/schemas';
 import PgBoss from 'pg-boss';
 
+import { logger } from '../observability/logger';
+
 /** Retry policy for the outbound email queue — see Day 14 guardrails. */
 export const EMAIL_QUEUE_RETRY = {
   retryLimit: 5,
@@ -37,8 +39,7 @@ export async function startBoss(): Promise<PgBoss> {
   if (boss) return boss;
   const instance = new PgBoss(connectionString());
   instance.on('error', (err) => {
-    // eslint-disable-next-line no-console
-    console.error('[pg-boss] error', err);
+    logger.error({ err }, 'pg-boss error');
   });
   await instance.start();
   for (const queue of ALL_QUEUES) {

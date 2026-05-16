@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { requireRole, type AuthContext } from '@/lib/auth/require-role';
 import { AppError, isAppError, type AppErrorCode } from '@/lib/errors';
+import { runWithLogContext } from '@/lib/observability/als';
 import { setSentryTenant } from '@/lib/observability/context';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
@@ -31,7 +32,8 @@ function clientMeta() {
   const h = headers();
   const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null;
   const userAgent = h.get('user-agent') ?? null;
-  return { ip, userAgent };
+  const requestId = h.get('x-request-id') ?? crypto.randomUUID();
+  return { ip, userAgent, requestId };
 }
 
 function toActionError(err: unknown): { code: AppErrorCode; message: string } {
@@ -98,23 +100,27 @@ export function tenantAction<I, O>(
       // to a tenant.
       setSentryTenant({ tenantId });
 
-      const { ip, userAgent } = clientMeta();
+      const { ip, userAgent, requestId } = clientMeta();
 
-      const data = await withTenant(
-        tenantId,
-        async (tx) =>
-          fn({
-            tx,
-            auth,
-            input: parsed.data,
-            impersonating: !!impersonatingTenant,
-          }),
-        {
-          userId: auth.user.id,
-          ip,
-          userAgent,
-          readOnly: !!impersonatingTenant,
-        },
+      // Seed the ALS log context so every log line inside the action carries
+      // tenant / user / request id without threading them through.
+      const data = await runWithLogContext({ requestId, tenantId, userId: auth.user.id }, () =>
+        withTenant(
+          tenantId,
+          async (tx) =>
+            fn({
+              tx,
+              auth,
+              input: parsed.data,
+              impersonating: !!impersonatingTenant,
+            }),
+          {
+            userId: auth.user.id,
+            ip,
+            userAgent,
+            readOnly: !!impersonatingTenant,
+          },
+        ),
       );
 
       return { ok: true, data };
@@ -141,11 +147,12 @@ export function operatorAction<I, O>(
         });
       }
       const auth = await requireRole(['operator']);
-      const { ip, userAgent } = clientMeta();
-      const data = await withOperator(
-        auth.user.id,
-        async (tx) => fn({ tx, auth, input: parsed.data }),
-        { ip, userAgent },
+      const { ip, userAgent, requestId } = clientMeta();
+      const data = await runWithLogContext({ requestId, userId: auth.user.id }, () =>
+        withOperator(auth.user.id, async (tx) => fn({ tx, auth, input: parsed.data }), {
+          ip,
+          userAgent,
+        }),
       );
       return { ok: true, data };
     } catch (err) {

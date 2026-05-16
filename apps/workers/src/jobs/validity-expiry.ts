@@ -17,6 +17,8 @@
 import { adminDb, performaInvoices, quotations } from '@dealerlink/db';
 import { and, eq, lt } from 'drizzle-orm';
 
+import { logger } from '../observability/logger';
+
 export interface ValidityExpiryResult {
   asOf: string;
   quotationsExpired: number;
@@ -60,7 +62,6 @@ export async function runValidityExpiry(asOf: Date = new Date()): Promise<Validi
     pisExpired: expiredPis.length,
     perTenant,
   };
-  // eslint-disable-next-line no-console
-  console.log(`[validity-expiry] ${today}`, JSON.stringify(result));
+  logger.info({ job: 'validity-expiry', date: today, ...result }, 'validity-expiry sweep complete');
   return result;
 }

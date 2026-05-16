@@ -11,6 +11,8 @@
  * locally without a real Resend account.
  */
 
+import { logger } from '../observability/logger';
+
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 /** Stable error codes for classified Resend failures. */
@@ -94,10 +96,15 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
 
   if (!apiKey) {
     const devId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    // eslint-disable-next-line no-console
-    console.log(
-      `[email:dev] would send "${input.subject}" to ${input.to} ` +
-        `(tenant=${input.tenantId ?? 'platform'}, attachments=${input.attachments?.length ?? 0}) id=${devId}`,
+    logger.info(
+      {
+        subject: input.subject,
+        to: input.to,
+        tenantId: input.tenantId ?? 'platform',
+        attachments: input.attachments?.length ?? 0,
+        devId,
+      },
+      'email (dev): RESEND_API_KEY unset — message not actually sent',
     );
     return { providerMessageId: devId };
   }
