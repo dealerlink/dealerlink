@@ -4140,9 +4140,296 @@ HAVING ol.dispatched_quantity::numeric <> COALESCE(SUM(dl.quantity), 0);
 
 ---
 
-## Day 14 — Email + Inbound Webhooks
+## Day 14 — Email Dispatch + Inbound Webhooks
 
-_Will be added when Day 13 is complete. Day 14 closes R.13 by moving email dispatch from inline calls to pg-boss workers, generates RESEND_INBOUND_WEBHOOK_SECRET (parked A.10 from Stage A), wires the first inbound webhook signature verification._
+**Goal:** Close R.13 by moving email sending from inline calls to pg-boss workers. Wire Resend API for real outbound delivery. Set up the first inbound webhook (Resend delivery events) with HMAC signature verification. Generate the parked `RESEND_INBOUND_WEBHOOK_SECRET` from Stage A (A.10).
+
+**Estimated time:** 4–5 hours + ~30 min verification
+
+**Deliverable:** Working email dispatch via pg-boss + Resend. Sent quotation/PI/receipt/dispatch emails actually arrive in inboxes. Inbound delivery webhooks update `email_delivery_log` with bounce/open/delivered events. Signature verification rejects spoofed payloads.
+
+### Prompt for Claude Code
+
+```
+You are implementing Day 14 of the Dealerlink build. Day 13 shipped successfully (commits 37ea511..4581a01) — dispatch flow with concurrent-safe serial pick. Day 14 closes R.13 (inline email → pg-boss) and unparks A.10 (RESEND_INBOUND_WEBHOOK_SECRET).
+
+PRELIMINARY:
+P.1. `pnpm preflight` — confirm 13 green.
+P.2. Read CLAUDE.md §3 (stack — Resend + pg-boss), §10 (auth — webhook endpoint is public but signature-verified).
+P.3. Read DEVIATIONS.md DEV.13 (R.13 origin — inline email was Day 4 expedient), DEV.36 (Day 10 sync PDF via subprocess; pg-boss handler exists but unused), DEV.45 + DEV.46 (Day 13 seed observations — no Day 14 impact).
+P.4. Read packages/db/src/schema/email_delivery_log.ts — Day 4's table that captures every email attempt. Today extends it with bounce/open/click event tracking.
+P.5. Read apps/web/lib/email/ — current inline send code. Today this gets replaced.
+P.6. Read PROJECT_PLAN.md A.10 — the parked task for RESEND_INBOUND_WEBHOOK_SECRET. Today generates and stores it.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md §3 (Resend for email, pg-boss for queues — no Redis)
+2. https://resend.com/docs/api-reference/emails — Resend API contract
+3. https://resend.com/docs/dashboard/webhooks/introduction — Resend webhook payload + signature format
+4. Day 4 schema email_delivery_log + send helpers
+5. Day 10/12/13 templates — PDFs are attachments to outbound emails
+
+==========================================================
+TRACK A — EMAIL + WEBHOOKS (CHUNKED — 4 chunks)
+==========================================================
+
+CHUNK 14a — Schema extensions + secrets setup
+---------------------------------
+
+A1.1. Generate RESEND_INBOUND_WEBHOOK_SECRET:
+   - Use crypto.randomBytes(32).toString('base64url') in a one-off script
+   - Add to .env.local (NEXT_PUBLIC_? NO — server-only)
+   - Add to .env.example with a placeholder note
+   - Document in SETUP.md alongside the other secrets (RESEND_API_KEY etc)
+   - Update PROJECT_PLAN.md A.10 status from "parked" to "✅ closed by Day 14"
+
+A1.2. Extend email_delivery_log schema (packages/db/src/schema/email_delivery_log.ts):
+   - Existing columns: tenant_id, id, to, from, subject, body_preview, status, sent_at, error
+   - Add:
+     - provider_message_id (text, nullable) — Resend's id field from successful API response
+     - delivered_at (timestamp, nullable) — set on delivery webhook event
+     - opened_at (timestamp, nullable) — first open event
+     - clicked_at (timestamp, nullable) — first click event
+     - bounced_at (timestamp, nullable)
+     - bounced_type (text, nullable) — 'hard' | 'soft' from Resend
+     - bounced_reason (text, nullable)
+     - complained_at (timestamp, nullable) — spam complaints
+     - last_event_at (timestamp, nullable)
+     - last_event_type (text, nullable)
+   - Indexes: (tenant_id, provider_message_id) for webhook lookup, (tenant_id, status, last_event_at DESC)
+   - status enum extended: 'queued' | 'sending' | 'sent' | 'delivered' | 'bounced' | 'complained' | 'failed'
+   - RLS, audit trigger already there
+
+A1.3. Create packages/db/src/schema/webhook_events.ts — raw audit log for ALL inbound webhooks (not just Resend; pattern for future webhooks):
+   - id, provider (text — 'resend' | future ones), event_type, payload (jsonb), signature_verified (boolean), received_at, processed_at, processing_error
+   - No tenant_id at this layer — webhooks arrive before tenant context is determined; the processing step routes to the right tenant
+   - Index: (provider, received_at DESC)
+   - RLS DISABLED on this table (operator-only access; webhook handler bypasses RLS to insert)
+
+A1.4. Migration. pnpm typecheck green.
+
+A1.5. Zod schemas in packages/schemas/src/email.ts for the outbound email job payload + the inbound webhook payload shapes.
+
+COMMIT 14a: `feat(email): chunk a — schema + secrets for email dispatch and webhooks`
+
+CHUNK 14b — Outbound: pg-boss worker + Resend client
+---------------------------------
+
+A2.1. Create apps/workers/src/email/resend-client.ts — thin wrapper over Resend SDK:
+   - Lazy-init Resend client (one instance per process)
+   - Single function: sendEmail({ tenantId, to, from, subject, html, attachments }) → returns { providerMessageId } or throws
+   - Attachments are { filename, content: Buffer, contentType } — used for PDF receipts/quotations/dispatch notes
+   - Error mapping: Resend's structured errors → typed EmailSendError with code (RATE_LIMITED, INVALID_EMAIL, INVALID_API_KEY, BLOCKED_DOMAIN, etc)
+
+A2.2. Create apps/workers/src/email/handler.ts — pg-boss job handler for 'send-email':
+   - Input job data: { tenantId, emailLogId, to, from, subject, html, attachments? }
+   - Flow:
+     1. Load email_delivery_log row by emailLogId (validate tenant matches)
+     2. Update status='sending'
+     3. Call resendClient.sendEmail(...)
+     4. On success: update status='sent', provider_message_id=result.id, sent_at=now
+     5. On EmailSendError: update status='failed', error=message
+     6. On rate-limit error (RATE_LIMITED): re-queue with exponential backoff (pg-boss native retry — configure with retryLimit=5, retryBackoff=true)
+     7. Audit log entry
+   - Wire this handler into the workers boot path (apps/workers/src/index.ts) alongside the render-pdf handler from Day 10
+
+A2.3. Create apps/web/lib/email/send.ts — REPLACES the inline send code:
+   - Public function: queueEmail({ tenantId, to, from, subject, html, attachments }) — wrapped in tenantAction
+   - Inserts into email_delivery_log with status='queued'
+   - Enqueues pg-boss 'send-email' job with the new log row's id
+   - Returns { emailLogId } — caller can poll status if needed
+   - DOES NOT await delivery — async-first per R.13
+
+A2.4. Update all existing callers of inline email send to use queueEmail:
+   - Day 8 sendQuotation flow
+   - Day 11 sendPi flow
+   - Day 12 emailPaymentReceipt flow
+   - Day 13 emailDispatchNote flow
+   - Day 4 operator-tenant-onboarding welcome email
+   - Each caller already had an "email log" entry; now they just enqueue the job
+
+A2.5. PDF attachment integration: for callers that attach PDFs (quotation, PI, receipt, dispatch note):
+   - Load the generated_documents row created in earlier days
+   - Decode the base64 storage_ref (or fetch from DO Spaces in Stage D)
+   - Pass as Buffer in the attachments array
+   - File naming: `{document_type}-{document_number}.pdf` (e.g., `quotation-QT-2026-0042.pdf`)
+
+A2.6. Update the documented behavior: emails are async now. If the document is "Send now" + immediate visibility needed, the UI shows "Queued — will deliver within a few minutes" not "Sent."
+
+A2.7. Tests:
+- Mock Resend client; assert handler updates email_delivery_log correctly on success/failure
+- Rate-limit retry: assert pg-boss retry config triggers re-queue on RATE_LIMITED
+- Concurrent job processing: 10 emails queued, verify all transition to 'sent' with no double-sends
+- Tenant isolation: queueEmail from tenant A cannot read tenant B's email_delivery_log rows
+
+COMMIT 14b: `feat(email): chunk b — pg-boss outbound worker + Resend client (closes R.13)`
+
+CHUNK 14c — Inbound webhook: signature verification + event processing
+---------------------------------
+
+A3.1. Create apps/web/app/api/webhooks/resend/route.ts — Next.js Route Handler for POST:
+   - Read raw body (NOT JSON.parsed — needed for signature verification)
+   - Read 'svix-id', 'svix-timestamp', 'svix-signature' headers (Resend uses Svix for webhooks)
+   - Verify signature using RESEND_INBOUND_WEBHOOK_SECRET:
+     - Use the 'svix' npm package (Resend's recommended verification library)
+     - On verification failure: return 400, log to webhook_events with signature_verified=false
+     - On verification success: log to webhook_events with signature_verified=true, then process
+
+A3.2. Event processing (apps/workers/src/email/inbound-handler.ts):
+   - Event types from Resend: 'email.sent', 'email.delivered', 'email.delivery_delayed', 'email.complained', 'email.bounced', 'email.opened', 'email.clicked', 'email.failed'
+   - For each event:
+     1. Extract provider_message_id from payload.data.email_id
+     2. Find email_delivery_log row by provider_message_id (no tenant_id needed; provider_message_id is globally unique)
+     3. Update appropriate timestamp + status:
+        - 'email.delivered' → delivered_at, status='delivered'
+        - 'email.bounced' → bounced_at, bounced_type, bounced_reason, status='bounced'
+        - 'email.complained' → complained_at, status='complained'
+        - 'email.opened' → opened_at (first only; subsequent opens just update last_event_at)
+        - 'email.clicked' → clicked_at (first only)
+     4. Always update last_event_at + last_event_type
+     5. Write audit log entry (system-attributed, since webhook isn't user-initiated)
+
+A3.3. Webhook handler processes synchronously for now (low volume; deferred async processing is Phase 2). Mark webhook_events.processed_at when done.
+
+A3.4. Replay protection: webhook_events has an implicit dedup via Resend's event id in payload — if the same event id arrives twice, second insert fails (add UNIQUE (provider, payload->>'id') constraint).
+
+A3.5. Tests:
+- Signature verification: valid payload accepted, tampered payload rejected
+- Replay: same event submitted twice — second returns 200 but doesn't double-update
+- Event processing: each event type produces correct email_delivery_log update
+- Unknown event type: logged but doesn't crash
+- Webhook for unknown provider_message_id: logged with processing_error, returns 200 (don't tell sender we don't recognize their event — security)
+
+A3.6. Local dev setup: document in SETUP.md how to expose the webhook endpoint to Resend during local development:
+   - Option A: ngrok tunnel (recommended) — instructions for ngrok install + tunnel command
+   - Option B: deploy to a preview environment
+   - Option C: skip webhooks locally; test against staging in Stage D
+
+COMMIT 14c: `feat(email): chunk c — inbound webhook with signature verification (closes A.10)`
+
+CHUNK 14d — Validity-expiry cron + tests + closeout
+---------------------------------
+
+A4.1. Quotation/PI validity expiry job:
+   - Day 8 schema has quotations.valid_until + status. When that date passes and status is still 'sent', status should transition to 'expired'.
+   - Same for PIs (Day 11 — though PIs typically confirm fast, expiry exists for abandoned ones).
+   - Create apps/workers/src/jobs/validity-expiry.ts:
+     - Scheduled pg-boss job, runs daily at 02:00 IST
+     - Selects quotations where status='sent' AND valid_until < CURRENT_DATE, batch-updates to 'expired'
+     - Same for performa_invoices
+     - Logs count of expirations per tenant per run
+   - Wire scheduling: pg-boss has built-in cron support via boss.schedule()
+
+A4.2. PDF cleanup job:
+   - generated_documents rows with storage='inline' AND created_at < (now - 30 days): purge the base64 payload (set storage_ref=null, add storage_ref_purged_at)
+   - Daily at 03:00 IST
+   - Keeps audit history (row stays) but reclaims space
+
+A4.3. Tests:
+- Validity expiry: seed quotations with past valid_until in 'sent' state; run job; assert they transition to 'expired'
+- Validity expiry idempotency: run twice; second run is no-op
+- PDF cleanup: seed old generated_documents inline; run job; assert old ones purged, recent ones intact
+
+A4.4. Email-end-to-end Playwright spec:
+- Login, open a draft quotation, send it
+- Poll email_delivery_log for the quotation: should appear with status='queued', transition to 'sent' (with mock Resend client returning success)
+- (Webhook testing is integration-only — Playwright can't easily mock Svix headers; document this limitation)
+
+A4.5. Documentation:
+- Update docs/RUNBOOKS.md: "Setting up Resend webhook in production" + "Investigating a bounce" + "Why is an email stuck in 'sending'?"
+- Update docs/DEPLOYMENT.md: add RESEND_INBOUND_WEBHOOK_SECRET to required env vars
+- Update docs/WORKFLOWS.md: note that email is async now; UI shows "queued" not "sent"
+
+A4.6. Closeout:
+- pnpm preflight, verify (37/37 = 36 prior + 1 new), all gates green
+- Mark B.14 ✅ + close R.13 in PROJECT_PLAN.md
+- Mark A.10 ✅ closed
+- Final commit: `feat(email): day 14 complete — async email + webhooks + validity expiry`
+- Push
+
+COMMIT 14d: as above
+
+==========================================================
+GUARDRAILS (DAY 14)
+==========================================================
+
+- Email is ASYNC now. No code path should await delivery before responding to user. UI surfaces "queued" status.
+- RESEND_INBOUND_WEBHOOK_SECRET is server-only. NEVER expose via NEXT_PUBLIC_ env var.
+- Signature verification on EVERY inbound webhook. Reject (return 400) on any verification failure. Log to webhook_events for forensics.
+- Webhook endpoint is public (Resend calls it from their infrastructure) — but signature verification is the security boundary. No auth header needed; signature IS the auth.
+- Webhook events are deduplicated by Resend's event id (UNIQUE constraint catches replay attacks).
+- Audit log every status change on email_delivery_log even though triggered by webhook (system-attributed).
+- Resend API errors classified: rate-limit → retry; invalid-email → fail permanently; blocked-domain → fail permanently. Don't infinitely retry on permanent failures.
+- pg-boss retry config: retryLimit=5, retryBackoff=true (exponential).
+- The PDF attachment for outbound email is loaded from generated_documents — same source the download flow uses. No double-rendering.
+- Validity expiry runs daily. If skipped (worker down), next run catches up — it's just a batch update.
+- All money columns still NUMERIC. (Not applicable today but standing rule.)
+
+WHEN DONE:
+- Print summary, 4 chunk commits
+- Confirm: R.13 closed (inline email replaced), A.10 closed (webhook secret generated)
+- Confirm: signature verification test demonstrates a tampered payload gets rejected
+- Confirm: an end-to-end test sends an email through the pg-boss path and asserts email_delivery_log transitions
+- Confirm: verify 37/37
+- Tell me Day 14 is complete and Days 15+16 (Reports + Polish, batched per the structured plan) are next
+```
+
+### Verification checklist
+
+#### R.13 closure (inline → async)
+
+- [ ] Grep `apps/web/lib/email/` for direct Resend SDK calls — should be zero
+- [ ] All email sends go through `queueEmail` which inserts into log + enqueues pg-boss job
+- [ ] Worker handler in `apps/workers/src/email/handler.ts` does the actual send
+
+#### A.10 closure (webhook secret)
+
+- [ ] `RESEND_INBOUND_WEBHOOK_SECRET` in `.env.local`
+- [ ] `.env.example` updated with placeholder
+- [ ] `SETUP.md` documents the secret
+- [ ] PROJECT_PLAN.md A.10 marked ✅
+
+#### Signature verification (security boundary)
+
+- [ ] Test exists for tampered payload → 400 rejection
+- [ ] Test exists for valid payload → 200 + log update
+- [ ] Test exists for replay (same event twice) → 200 but no double-update
+- [ ] Webhook handler runs WITHOUT requiring user authentication (it's signature-verified instead)
+
+#### End-to-end email flow
+
+- [ ] Send a quotation from the UI as admin
+- [ ] Check `email_delivery_log` — row appears with `status='queued'`
+- [ ] Wait ~5-10 seconds — status should transition to `'sent'` with `provider_message_id` populated (if Resend API key is real and working) OR `status='failed'` (if running in dev without real key — acceptable as long as the flow ran)
+- [ ] Email arrives in dealer.email inbox (if real Resend key configured) — Day 14 manual check
+
+#### Validity expiry
+
+- [ ] Run the expiry job manually: a seeded quotation with past `valid_until` and `status='sent'` should move to `'expired'`
+- [ ] Job is idempotent (running again is no-op)
+
+#### Invariant queries (production-scoped)
+
+```sql
+-- Every queued email eventually transitions (no permanent stuck queue)
+SELECT status, COUNT(*) FROM email_delivery_log WHERE created_at < (now() - interval '1 hour') AND status IN ('queued', 'sending') GROUP BY status;
+-- Expect: 0 rows (after a few minutes of running)
+
+-- Webhook events have signature_verified=true except for known test failures
+SELECT signature_verified, COUNT(*) FROM webhook_events GROUP BY signature_verified;
+-- Expect: mostly/all 'true'; any 'false' rows are test fixtures
+```
+
+#### Automated
+
+- [ ] `pnpm verify` 37/37
+- [ ] All quality gates green
+- [ ] B.14 ✅ + R.13 closed in PROJECT_PLAN.md
+
+---
+
+## Days 15+16 — Reports + Polish (Batched)
+
+_Will be added when Day 14 is complete. Days 15 and 16 batch into a single Claude Code run per the structured plan — Reports module (sales/inventory/financial summaries with CSV/PDF export) + polish pass (empty states, error boundaries, loading skeletons, accessibility audit)._
 
 ---
 
