@@ -59,3 +59,11 @@ export {
   OrderNotFoundError,
   type OrderTransitionOptions,
 } from './orders/transitions';
+export {
+  reserveInventoryForOrder,
+  releaseInventoryForOrder,
+  InsufficientInventoryError,
+  type InventoryShortage,
+  type ReserveResult,
+  type ReserveLineResult,
+} from './orders/reserve';
