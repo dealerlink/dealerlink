@@ -6,12 +6,14 @@ import { users } from './user';
 
 /**
  * Document types that can be rendered to a PDF. Day 10 implements
- * `quotation`; `invoice`, `dispatch`, and `payment_receipt` follow in later
- * days but the enum is declared up front so the render-pdf job and the
- * storage table do not need a migration each time a new type ships.
+ * `quotation`; Day 11 adds `performa_invoice`; `invoice` (tax invoice),
+ * `dispatch`, and `payment_receipt` follow in later days. The enum is
+ * declared up front so the render-pdf job and the storage table do not need
+ * a migration each time a new type ships.
  */
 export const generatedDocumentType = pgEnum('generated_document_type', [
   'quotation',
+  'performa_invoice',
   'invoice',
   'dispatch',
   'payment_receipt',

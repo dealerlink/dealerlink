@@ -84,6 +84,8 @@ function QuotationDocument({ data }: { data: QuotationPdfData }) {
         <div className="doc">
           <Header
             billFrom={data.billFrom}
+            documentTitle={data.documentTitle}
+            numberLabel={data.numberLabel}
             quoteNumber={data.quoteNumber}
             revision={data.revision}
             quoteDate={data.quoteDate}
@@ -249,6 +251,8 @@ export async function loadQuotationPdfData(
       : null;
 
   const data: QuotationPdfData = {
+    documentTitle: 'QUOTATION',
+    numberLabel: 'Quote No.',
     quoteNumber: quote.quoteNumber,
     revision: quote.revision,
     quoteDate: quote.quoteDate,

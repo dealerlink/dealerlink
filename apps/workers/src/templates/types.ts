@@ -53,6 +53,11 @@ export interface PdfBankDetails {
 }
 
 export interface QuotationPdfData {
+  /** Banner title in the header, e.g. "QUOTATION" or "PERFORMA INVOICE". */
+  documentTitle: string;
+  /** Label for the document-number row, e.g. "Quote No." or "PI No.". */
+  numberLabel: string;
+
   quoteNumber: string;
   revision: number;
   quoteDate: string;

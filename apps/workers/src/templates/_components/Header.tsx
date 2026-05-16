@@ -10,13 +10,25 @@ import type { PdfBillFrom } from '../types';
 
 interface HeaderProps {
   billFrom: PdfBillFrom;
+  /** Banner title — "QUOTATION", "PERFORMA INVOICE", … */
+  documentTitle: string;
+  /** Label for the number row — "Quote No.", "PI No.", … */
+  numberLabel: string;
   quoteNumber: string;
   revision: number;
   quoteDate: string;
   validUntil: string;
 }
 
-export function Header({ billFrom, quoteNumber, revision, quoteDate, validUntil }: HeaderProps) {
+export function Header({
+  billFrom,
+  documentTitle,
+  numberLabel,
+  quoteNumber,
+  revision,
+  quoteDate,
+  validUntil,
+}: HeaderProps) {
   return (
     <div className="hdr">
       <div className="hdr-left">
@@ -43,13 +55,13 @@ export function Header({ billFrom, quoteNumber, revision, quoteDate, validUntil 
 
       <div className="hdr-right">
         <div className="doc-title">
-          QUOTATION
+          {documentTitle}
           {revision > 1 ? <span className="rev-badge">REV {revision}</span> : null}
         </div>
         <table className="doc-meta">
           <tbody>
             <tr>
-              <td className="k">Quote No.</td>
+              <td className="k">{numberLabel}</td>
               <td className="v mono">{quoteNumber}</td>
             </tr>
             <tr>

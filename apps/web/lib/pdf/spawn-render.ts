@@ -27,7 +27,7 @@ export interface SpawnRenderResult {
 }
 
 interface SpawnRenderInput {
-  documentType: 'quotation' | 'invoice' | 'dispatch' | 'payment_receipt';
+  documentType: 'quotation' | 'performa_invoice' | 'invoice' | 'dispatch' | 'payment_receipt';
   documentId: string;
   tenantId: string;
   userId: string | null;

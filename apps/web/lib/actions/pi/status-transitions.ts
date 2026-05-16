@@ -16,6 +16,7 @@ import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
+import { spawnPdfRender } from '@/lib/pdf/spawn-render';
 
 import {
   allocateDocumentNumber,
@@ -44,6 +45,20 @@ export const sendPi = tenantAction(
     }
 
     await transitionPi(tx, input.id, 'sent', { userId: auth.user.id, reason: 'sent_to_buyer' });
+
+    // Render the PDF on the draft → sent transition so the document is ready
+    // immediately. Best-effort — a render failure must not roll back the
+    // (successful) status change; the user can re-generate from the PI page.
+    try {
+      await spawnPdfRender({
+        documentType: 'performa_invoice',
+        documentId: input.id,
+        tenantId: pi.tenantId,
+        userId: auth.user.id,
+      });
+    } catch {
+      // Swallowed by design — see comment above.
+    }
 
     // Log the (queued) delivery so Day 14's email worker can pick it up.
     const [billTo] = await tx

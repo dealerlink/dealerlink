@@ -235,6 +235,11 @@ export function QuotationActions({
             </Button>
           </>
         )}
+        {status === 'accepted' && canEdit && (
+          <Button asChild variant="primary">
+            <a href={`/quotations/${id}/convert-to-pi`}>Convert to PI</a>
+          </Button>
+        )}
         {(status === 'accepted' || status === 'rejected' || status === 'expired') && canEdit && (
           <Button variant="default" onClick={doRevise} disabled={!!pending}>
             {pending === 'revise' ? 'Creating…' : 'Revise'}

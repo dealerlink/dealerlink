@@ -1,0 +1,1 @@
+ALTER TYPE "public"."generated_document_type" ADD VALUE 'performa_invoice' BEFORE 'invoice';
