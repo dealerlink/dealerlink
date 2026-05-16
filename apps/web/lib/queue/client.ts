@@ -1,0 +1,58 @@
+import 'server-only';
+
+import { ALL_QUEUES, EMAIL_QUEUE, type EmailJobPayload } from '@dealerlink/schemas';
+import PgBoss from 'pg-boss';
+
+/**
+ * pg-boss client for the web process.
+ *
+ * The web process only ever *enqueues* jobs — the workers process consumes
+ * them. pg-boss is started in send-only mode (`supervise: false`) so the web
+ * app does not run queue maintenance or job workers.
+ *
+ * The instance is cached on `globalThis` so Next.js hot-reload / multiple
+ * route invocations reuse one connection pool instead of leaking pools.
+ */
+const EMAIL_RETRY = { retryLimit: 5, retryBackoff: true } as const;
+
+interface BossGlobal {
+  __dealerlinkBoss?: Promise<PgBoss>;
+}
+const bossGlobal = globalThis as unknown as BossGlobal;
+
+function connectionString(): string {
+  const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_DIRECT_URL or DATABASE_URL must be set for pg-boss');
+  return url;
+}
+
+async function initBoss(): Promise<PgBoss> {
+  const boss = new PgBoss({ connectionString: connectionString(), supervise: false });
+  boss.on('error', (err) => {
+    // eslint-disable-next-line no-console
+    console.error('[pg-boss:web] error', err);
+  });
+  await boss.start();
+  // Ensure every queue exists so a send never races queue creation.
+  for (const queue of ALL_QUEUES) {
+    if (queue === EMAIL_QUEUE) {
+      await boss.createQueue(queue, { name: queue, ...EMAIL_RETRY });
+    } else {
+      await boss.createQueue(queue);
+    }
+  }
+  return boss;
+}
+
+function getBoss(): Promise<PgBoss> {
+  if (!bossGlobal.__dealerlinkBoss) {
+    bossGlobal.__dealerlinkBoss = initBoss();
+  }
+  return bossGlobal.__dealerlinkBoss;
+}
+
+/** Enqueue an outbound email job. Returns the pg-boss job id (or null). */
+export async function enqueueEmailJob(payload: EmailJobPayload): Promise<string | null> {
+  const boss = await getBoss();
+  return boss.send(EMAIL_QUEUE, payload, EMAIL_RETRY);
+}

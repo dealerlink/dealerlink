@@ -107,6 +107,9 @@ importers:
       next:
         specifier: 14.2.18
         version: 14.2.18(@playwright/test@1.59.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      pg-boss:
+        specifier: ^10.1.5
+        version: 10.4.2
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -168,6 +171,9 @@ importers:
       '@dealerlink/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@dealerlink/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       '@dealerlink/tax':
         specifier: workspace:*
         version: link:../../packages/tax

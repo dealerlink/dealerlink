@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { emailDeliveryLog, sessions, tenants, users, type DrizzleTx } from '@dealerlink/db';
+import { sessions, tenants, users, type DrizzleTx } from '@dealerlink/db';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { operatorAction } from '@/lib/actions/wrap';
@@ -13,6 +13,8 @@ import {
   updateTenantUserSchema,
 } from '@/lib/admin/schemas';
 import { hashPassword } from '@/lib/auth/password';
+import { queueEmail } from '@/lib/email/send';
+import { renderTenantWelcome } from '@/lib/email/templates/tenant-welcome';
 import { AppError } from '@/lib/errors';
 
 async function loadTenant(tx: DrizzleTx, tenantId: string) {
@@ -64,19 +66,21 @@ export const createTenantUser = operatorAction(createTenantUserSchema, async ({ 
   });
 
   const loginUrl = tenantLoginUrl(tenant.slug);
-  await tx.insert(emailDeliveryLog).values({
+  const welcome = renderTenantWelcome({
+    tenantDisplayName: tenant.displayName,
+    adminFullName: input.fullName,
+    adminEmail: input.email,
+    loginUrl,
+    temporaryPassword: tempPassword,
+  });
+  await queueEmail(tx, {
     tenantId: tenant.id,
-    recipient: input.email,
+    to: input.email,
     subject: `Dealerlink — your ${tenant.displayName} account`,
+    html: welcome.html,
+    text: welcome.text,
     template: 'tenant-welcome',
-    status: 'queued',
-    meta: {
-      adminFullName: input.fullName,
-      tenantDisplayName: tenant.displayName,
-      tenantSlug: tenant.slug,
-      loginUrl,
-      temporaryPassword: tempPassword,
-    },
+    extraMeta: { tenantSlug: tenant.slug },
   });
 
   return {
@@ -157,19 +161,21 @@ export const resetTenantUserPassword = operatorAction(
     await tx.delete(sessions).where(eq(sessions.userId, user.id));
 
     const loginUrl = tenantLoginUrl(tenant.slug);
-    await tx.insert(emailDeliveryLog).values({
+    const welcome = renderTenantWelcome({
+      tenantDisplayName: tenant.displayName,
+      adminFullName: user.fullName,
+      adminEmail: user.email,
+      loginUrl,
+      temporaryPassword: tempPassword,
+    });
+    await queueEmail(tx, {
       tenantId: tenant.id,
-      recipient: user.email,
+      to: user.email,
       subject: `Dealerlink — your password was reset`,
+      html: welcome.html,
+      text: welcome.text,
       template: 'tenant-welcome',
-      status: 'queued',
-      meta: {
-        adminFullName: user.fullName,
-        tenantDisplayName: tenant.displayName,
-        tenantSlug: tenant.slug,
-        loginUrl,
-        temporaryPassword: tempPassword,
-      },
+      extraMeta: { tenantSlug: tenant.slug, kind: 'password-reset' },
     });
 
     return {

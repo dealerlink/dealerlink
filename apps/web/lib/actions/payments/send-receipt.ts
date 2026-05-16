@@ -1,18 +1,21 @@
 'use server';
 
-import { dealers, emailDeliveryLog, payments } from '@dealerlink/db';
+import { dealers, payments, tenants } from '@dealerlink/db';
 import { generateReceiptInputSchema } from '@dealerlink/schemas';
 import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
+import { queueEmail } from '@/lib/email/send';
+import { renderDocumentEmail } from '@/lib/email/templates/document-delivery';
 import { AppError } from '@/lib/errors';
 import { spawnPdfRender } from '@/lib/pdf/spawn-render';
 
 /**
- * Email a payment receipt to the paying dealer (admin + accounts). The
- * receipt PDF is rendered if needed, then a `queued` email-delivery row is
- * written for Day 14's Resend worker to pick up. The receipt goes to the
- * Bill-To dealer — the payer (CLAUDE.md §6).
+ * Email a payment receipt to the paying dealer (admin + accounts).
+ *
+ * The receipt PDF is rendered, then `queueEmail` records a `queued`
+ * email_delivery_log row and enqueues the pg-boss `send-email` job (R.13 —
+ * async). The receipt goes to the Bill-To dealer — the payer (CLAUDE.md §6).
  */
 export const sendPaymentReceipt = tenantAction(
   ['admin', 'accounts'],
@@ -42,28 +45,43 @@ export const sendPaymentReceipt = tenantAction(
       );
     }
 
-    // Render the receipt PDF best-effort so the document is ready when the
-    // email worker sends. A render failure must not block the queue row.
+    // Render the receipt PDF. Best-effort — a render failure must not block
+    // the email; the worker simply sends without the attachment.
+    let receiptDocId: string | null = null;
     try {
-      await spawnPdfRender({
+      const rendered = await spawnPdfRender({
         documentType: 'payment_receipt',
         documentId: input.id,
         tenantId: payment.tenantId,
         userId: auth.user.id,
       });
+      receiptDocId = rendered.generatedDocumentId;
     } catch {
-      // Swallowed by design — the email worker re-renders if needed.
+      // Swallowed by design — see comment above.
     }
 
-    await tx.insert(emailDeliveryLog).values({
-      tenantId: payment.tenantId,
-      recipient: dealer.email,
-      subject: `Payment Receipt ${payment.paymentNumber}`,
-      template: 'payment-receipt-pdf',
-      status: 'queued',
-      meta: { paymentId: payment.id, paymentNumber: payment.paymentNumber, pendingSend: true },
+    const [tenant] = await tx
+      .select({ displayName: tenants.displayName })
+      .from(tenants)
+      .where(eq(tenants.id, payment.tenantId))
+      .limit(1);
+    const { html, text } = renderDocumentEmail({
+      documentTitle: `Payment Receipt ${payment.paymentNumber}`,
+      senderName: tenant?.displayName ?? 'Dealerlink',
+      intro: `Please find payment receipt ${payment.paymentNumber} attached as a PDF.`,
     });
 
-    return { id: input.id, queuedTo: dealer.email };
+    const { emailLogId } = await queueEmail(tx, {
+      tenantId: payment.tenantId,
+      to: dealer.email,
+      subject: `Payment Receipt ${payment.paymentNumber}`,
+      html,
+      text,
+      template: 'payment-receipt-pdf',
+      ...(receiptDocId ? { attachmentDocumentIds: [receiptDocId] } : {}),
+      extraMeta: { paymentId: payment.id, paymentNumber: payment.paymentNumber },
+    });
+
+    return { id: input.id, emailLogId, queuedTo: dealer.email };
   },
 );

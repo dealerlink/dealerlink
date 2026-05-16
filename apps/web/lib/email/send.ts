@@ -1,74 +1,76 @@
-/**
- * Resend wrapper with a dev fallback.
- *
- * When `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set, calls the Resend
- * API. Otherwise logs the rendered email to stdout and returns a synthetic
- * message id starting with `dev-`. Either way the `email_delivery_log` row
- * receives a non-empty `providerMessageId`, so downstream code can
- * distinguish dev rows by the prefix.
- */
+import 'server-only';
 
-export interface SendInput {
+import { emailDeliveryLog, type DrizzleTx } from '@dealerlink/db';
+import { enqueueEmailJob } from '@/lib/queue/client';
+
+/**
+ * Async-first outbound email (Day 14, closes R.13).
+ *
+ * `queueEmail` is the ONLY way the web app sends mail. It does NOT talk to
+ * Resend — the Day 4 inline `sendEmail` helper is gone. Instead it:
+ *
+ *   1. inserts an `email_delivery_log` row with `status='queued'`, stashing
+ *      the rendered HTML / text / attachment ids in `meta`;
+ *   2. enqueues a pg-boss `send-email` job carrying just the row id.
+ *
+ * The workers process picks the job up, calls Resend, and flips the row to
+ * `sent` / `failed`. The caller does NOT await delivery — it returns as soon
+ * as the job is queued (R.13: email is async). The UI shows "queued".
+ *
+ * Call this inside an existing tenant/operator action transaction (`tx`) so
+ * the log row is written under the right RLS + audit context.
+ */
+export interface QueueEmailInput {
+  /** Owning tenant, or null for platform mail (operator welcome). */
+  tenantId: string | null;
   to: string;
   subject: string;
+  /** Rendered HTML body — required. */
   html: string;
-  text: string;
-  /** Header used by Resend webhooks to correlate deliveries. */
-  tag?: string;
+  /** Optional plain-text alternative. */
+  text?: string;
+  /** Template marker for log filtering (e.g. 'quotation-pdf'). */
+  template?: string;
+  /** Overrides the default Resend From address. */
+  fromEmail?: string;
+  /** generated_documents row ids — the worker attaches each as a PDF. */
+  attachmentDocumentIds?: string[];
+  /** Extra non-body metadata to retain on the log row for traceability. */
+  extraMeta?: Record<string, unknown>;
 }
 
-export interface SendResult {
-  ok: boolean;
-  providerMessageId?: string;
-  error?: string;
+export interface QueueEmailResult {
+  emailLogId: string;
 }
 
-const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+export async function queueEmail(tx: DrizzleTx, input: QueueEmailInput): Promise<QueueEmailResult> {
+  const meta: Record<string, unknown> = {
+    html: input.html,
+    ...(input.text ? { text: input.text } : {}),
+    ...(input.fromEmail ? { fromEmail: input.fromEmail } : {}),
+    ...(input.attachmentDocumentIds && input.attachmentDocumentIds.length > 0
+      ? { attachmentDocumentIds: input.attachmentDocumentIds }
+      : {}),
+    ...(input.extraMeta ?? {}),
+  };
 
-export async function sendEmail(input: SendInput): Promise<SendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? 'Dealerlink <onboarding@resend.dev>';
+  const [row] = await tx
+    .insert(emailDeliveryLog)
+    .values({
+      tenantId: input.tenantId,
+      recipient: input.to,
+      subject: input.subject,
+      template: input.template ?? null,
+      status: 'queued',
+      meta,
+    })
+    .returning({ id: emailDeliveryLog.id });
+  if (!row) throw new Error('Failed to record the email in email_delivery_log');
 
-  if (!apiKey) {
-    // Dev fallback — log enough to verify content without leaking the
-    // raw HTML into terminals (which clutters scrollback).
-    const devId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    // eslint-disable-next-line no-console
-    console.log(
-      `[email:dev] would send "${input.subject}" to ${input.to} (tag=${input.tag ?? 'none'}) id=${devId}`,
-    );
-    return { ok: true, providerMessageId: devId };
-  }
+  // Enqueue the send. If the surrounding transaction later rolls back the
+  // log row vanishes; the worker treats a missing row as a no-op, so the
+  // orphaned job is harmless.
+  await enqueueEmailJob({ tenantId: input.tenantId, emailLogId: row.id });
 
-  try {
-    const res = await fetch(RESEND_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from,
-        to: [input.to],
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-        ...(input.tag ? { tags: [{ name: 'dl_template', value: input.tag }] } : {}),
-      }),
-    });
-    if (!res.ok) {
-      const detail = await res.text();
-      return { ok: false, error: `Resend ${res.status}: ${detail.slice(0, 200)}` };
-    }
-    const body = (await res.json()) as { id?: string };
-    if (!body.id) {
-      return { ok: false, error: 'Resend response missing id' };
-    }
-    return { ok: true, providerMessageId: body.id };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Unknown Resend error',
-    };
-  }
+  return { emailLogId: row.id };
 }

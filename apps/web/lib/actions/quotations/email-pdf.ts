@@ -1,9 +1,12 @@
 'use server';
 
-import { emailDeliveryLog } from '@dealerlink/db';
+import { tenants } from '@dealerlink/db';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { tenantAction } from '@/lib/actions/wrap';
+import { queueEmail } from '@/lib/email/send';
+import { renderDocumentEmail } from '@/lib/email/templates/document-delivery';
 import { AppError } from '@/lib/errors';
 import { getLatestGeneratedDocument } from '@/lib/queries/generated-documents';
 import { spawnPdfRender } from '@/lib/pdf/spawn-render';
@@ -18,12 +21,12 @@ const emailPdfSchema = z.object({
 });
 
 /**
- * Queue a quotation PDF for delivery to a dealer.
+ * Email a quotation PDF to a dealer (R.13 — async via pg-boss).
  *
- * Day 10 GENERATES the PDF and records the request in `email_delivery_log`
- * (status 'queued'); the actual Resend send is wired in Day 14 when the
- * email worker lands. The PDF is produced regardless so it is ready to
- * attach the moment delivery is enabled.
+ * Renders the PDF if it does not exist yet, then `queueEmail` writes a
+ * `queued` email_delivery_log row and enqueues the `send-email` job. The
+ * worker attaches the PDF (from generated_documents) and calls Resend.
+ * This action does NOT await delivery — the UI shows "queued".
  */
 export const emailQuotationPdf = tenantAction(
   ['admin', 'sales'],
@@ -50,23 +53,31 @@ export const emailQuotationPdf = tenantAction(
       }
     }
 
-    await tx.insert(emailDeliveryLog).values({
-      tenantId: existing.tenantId,
-      recipient: input.recipient,
-      subject: input.subject,
-      template: 'quotation-pdf',
-      status: 'queued',
-      meta: {
-        quotationId: input.id,
-        quoteNumber: existing.quoteNumber,
-        generatedDocumentId: generatedId,
-        body: input.body ?? null,
-        // Day 14: the email worker reads this row, attaches the PDF, sends
-        // via Resend, and flips status to 'sent'.
-        pendingSend: true,
-      },
+    const [tenant] = await tx
+      .select({ displayName: tenants.displayName })
+      .from(tenants)
+      .where(eq(tenants.id, existing.tenantId))
+      .limit(1);
+    const senderName = tenant?.displayName ?? 'Dealerlink';
+
+    const { html, text } = renderDocumentEmail({
+      documentTitle: `Quotation ${existing.quoteNumber}`,
+      senderName,
+      intro: `Please find quotation ${existing.quoteNumber} attached as a PDF.`,
+      customMessage: input.body ?? null,
     });
 
-    return { queued: true, generatedDocumentId: generatedId };
+    const { emailLogId } = await queueEmail(tx, {
+      tenantId: existing.tenantId,
+      to: input.recipient,
+      subject: input.subject,
+      html,
+      text,
+      template: 'quotation-pdf',
+      attachmentDocumentIds: [generatedId],
+      extraMeta: { quotationId: input.id, quoteNumber: existing.quoteNumber },
+    });
+
+    return { queued: true, emailLogId, generatedDocumentId: generatedId };
   },
 );

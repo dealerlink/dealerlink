@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@dealerlink/db": "workspace:*",
+    "@dealerlink/schemas": "workspace:*",
     "@dealerlink/tax": "workspace:*",
     "@sparticuz/chromium": "^131.0.0",
     "dotenv": "^16.4.7",

@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { emailDeliveryLog, tenantSettings, tenants, users } from '@dealerlink/db';
+import { tenantSettings, tenants, users } from '@dealerlink/db';
 import { eq, sql } from 'drizzle-orm';
 
 import { operatorAction } from '@/lib/actions/wrap';
@@ -14,6 +14,8 @@ import {
 } from '@/lib/admin/credentials';
 import { createTenantSchema } from '@/lib/admin/schemas';
 import { hashPassword } from '@/lib/auth/password';
+import { queueEmail } from '@/lib/email/send';
+import { renderTenantWelcome } from '@/lib/email/templates/tenant-welcome';
 import { AppError } from '@/lib/errors';
 
 /**
@@ -104,28 +106,26 @@ export const createTenant = operatorAction(createTenantSchema, async ({ tx, inpu
 
   const loginUrl = tenantLoginUrl(input.slug);
 
-  // 4. Queue the welcome email. The worker job
-  // `send-tenant-welcome-email` picks rows with status='queued' and a
-  // template marker (we use the same row to track delivery). The
-  // temporary password is stashed in `meta` so the worker can render
-  // the template without re-deriving it. The audit trigger on
-  // tenant_settings (and the `_token` redaction) keep this safe in
-  // log streams.
-  await tx.insert(emailDeliveryLog).values({
+  // 4. Queue the welcome email (R.13 — async via pg-boss). The welcome
+  // template is rendered now; `queueEmail` stores the HTML in the
+  // email_delivery_log row and enqueues the `send-email` job. The email
+  // worker drops the rendered body (which carries the temporary password)
+  // from `meta` once the send succeeds.
+  const welcome = renderTenantWelcome({
+    tenantDisplayName: input.displayName,
+    adminFullName: input.adminFullName,
+    adminEmail: input.adminEmail,
+    loginUrl,
+    temporaryPassword: tempPassword,
+  });
+  await queueEmail(tx, {
     tenantId,
-    recipient: input.adminEmail,
-    subject: `Welcome to Dealerlink — ${input.displayName}`,
+    to: input.adminEmail,
+    subject: welcome.subject,
+    html: welcome.html,
+    text: welcome.text,
     template: 'tenant-welcome',
-    status: 'queued',
-    meta: {
-      adminFullName: input.adminFullName,
-      tenantDisplayName: input.displayName,
-      tenantSlug: input.slug,
-      loginUrl,
-      // Stored briefly so the worker can render the template. In prod
-      // the worker should consume + delete this field after dispatch.
-      temporaryPassword: tempPassword,
-    },
+    extraMeta: { tenantSlug: input.slug },
   });
 
   return {

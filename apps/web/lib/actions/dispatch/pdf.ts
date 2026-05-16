@@ -1,10 +1,12 @@
 'use server';
 
-import { accessLog, dealers, dispatches, emailDeliveryLog, type DrizzleTx } from '@dealerlink/db';
+import { accessLog, dealers, dispatches, tenants, type DrizzleTx } from '@dealerlink/db';
 import { dispatchIdInputSchema } from '@dealerlink/schemas';
 import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
+import { queueEmail } from '@/lib/email/send';
+import { renderDocumentEmail } from '@/lib/email/templates/document-delivery';
 import { AppError } from '@/lib/errors';
 import { spawnPdfRender } from '@/lib/pdf/spawn-render';
 import {
@@ -135,30 +137,41 @@ export const emailDispatchPdf = tenantAction(
     }
 
     // Render best-effort so the document is ready when the email worker sends.
+    let dispatchDocId: string | null = null;
     try {
-      await spawnPdfRender({
+      const rendered = await spawnPdfRender({
         documentType: 'dispatch',
         documentId: input.id,
         tenantId: dispatch.tenantId,
         userId: auth.user.id,
       });
+      dispatchDocId = rendered.generatedDocumentId;
     } catch {
-      // Swallowed by design — the email worker re-renders if needed.
+      // Swallowed by design — the email still goes out, sans attachment.
     }
 
-    await tx.insert(emailDeliveryLog).values({
-      tenantId: dispatch.tenantId,
-      recipient: dealer.email,
-      subject: `Dispatch Note ${dispatch.dispatchNumber}`,
-      template: 'dispatch-note-pdf',
-      status: 'queued',
-      meta: {
-        dispatchId: dispatch.id,
-        dispatchNumber: dispatch.dispatchNumber,
-        pendingSend: true,
-      },
+    const [tenant] = await tx
+      .select({ displayName: tenants.displayName })
+      .from(tenants)
+      .where(eq(tenants.id, dispatch.tenantId))
+      .limit(1);
+    const { html, text } = renderDocumentEmail({
+      documentTitle: `Dispatch Note ${dispatch.dispatchNumber}`,
+      senderName: tenant?.displayName ?? 'Dealerlink',
+      intro: `Please find dispatch note ${dispatch.dispatchNumber} attached as a PDF.`,
     });
 
-    return { id: input.id, queuedTo: dealer.email };
+    const { emailLogId } = await queueEmail(tx, {
+      tenantId: dispatch.tenantId,
+      to: dealer.email,
+      subject: `Dispatch Note ${dispatch.dispatchNumber}`,
+      html,
+      text,
+      template: 'dispatch-note-pdf',
+      ...(dispatchDocId ? { attachmentDocumentIds: [dispatchDocId] } : {}),
+      extraMeta: { dispatchId: dispatch.id, dispatchNumber: dispatch.dispatchNumber },
+    });
+
+    return { id: input.id, emailLogId, queuedTo: dealer.email };
   },
 );

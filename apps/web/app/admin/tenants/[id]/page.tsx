@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { getAuthContext } from '@/lib/auth/session';
-import { dispatchPendingEmails } from '@/lib/email/dispatch';
 import { enterImpersonation } from '@/lib/impersonation/actions';
 
 import { ProvisionedBanner } from './provisioned-banner';
@@ -55,11 +54,8 @@ export default async function TenantDetailPage({ params, searchParams }: PagePro
     .orderBy(desc(inboundTokenHistory.retiredAt))
     .limit(5);
 
-  // Provisioning fresh: dispatch any pending welcome emails for this tenant
-  // so they go out in the same request cycle. Best-effort; never throws.
-  if (searchParams.provisioned === '1') {
-    void dispatchPendingEmails({ tenantId: tenant.id }).catch(() => null);
-  }
+  // The welcome email is enqueued to pg-boss at provisioning time (R.13 —
+  // async via the workers process); no inline dispatch needed here.
 
   return (
     <div className="mx-auto max-w-[920px] px-8 py-12">

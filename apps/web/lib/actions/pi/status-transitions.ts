@@ -4,12 +4,12 @@ import {
   DealInvalidTransitionError,
   HighRiskGuardError,
   dealers,
-  emailDeliveryLog,
   orderLines,
   orders,
   paymentAllocations,
   performaInvoiceLines,
   recomputeOrderPaymentStatus,
+  tenants,
   transitionDealStageDb,
   transitionPi,
 } from '@dealerlink/db';
@@ -17,6 +17,8 @@ import { cancelPiSchema, confirmPiSchema, sendPiSchema } from '@dealerlink/schem
 import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
+import { queueEmail } from '@/lib/email/send';
+import { renderDocumentEmail } from '@/lib/email/templates/document-delivery';
 import { AppError } from '@/lib/errors';
 import { spawnPdfRender } from '@/lib/pdf/spawn-render';
 
@@ -53,31 +55,46 @@ export const sendPi = tenantAction(
     // Render the PDF on the draft → sent transition so the document is ready
     // immediately. Best-effort — a render failure must not roll back the
     // (successful) status change; the user can re-generate from the PI page.
+    let piPdfDocId: string | null = null;
     try {
-      await spawnPdfRender({
+      const rendered = await spawnPdfRender({
         documentType: 'performa_invoice',
         documentId: input.id,
         tenantId: pi.tenantId,
         userId: auth.user.id,
       });
+      piPdfDocId = rendered.generatedDocumentId;
     } catch {
-      // Swallowed by design — see comment above.
+      // Swallowed by design — see comment above. The email still goes out;
+      // without an attachment if the render failed.
     }
 
-    // Log the (queued) delivery so Day 14's email worker can pick it up.
+    // Queue the delivery email to the Bill-To dealer (R.13 — async).
     const [billTo] = await tx
       .select({ email: dealers.email })
       .from(dealers)
       .where(eq(dealers.id, pi.billToDealerId))
       .limit(1);
     if (billTo?.email) {
-      await tx.insert(emailDeliveryLog).values({
+      const [tenant] = await tx
+        .select({ displayName: tenants.displayName })
+        .from(tenants)
+        .where(eq(tenants.id, pi.tenantId))
+        .limit(1);
+      const { html, text } = renderDocumentEmail({
+        documentTitle: `Performa Invoice ${pi.piNumber}`,
+        senderName: tenant?.displayName ?? 'Dealerlink',
+        intro: `Please find performa invoice ${pi.piNumber} attached as a PDF.`,
+      });
+      await queueEmail(tx, {
         tenantId: pi.tenantId,
-        recipient: billTo.email,
+        to: billTo.email,
         subject: `Performa Invoice ${pi.piNumber}`,
+        html,
+        text,
         template: 'performa-invoice-pdf',
-        status: 'queued',
-        meta: { performaInvoiceId: pi.id, piNumber: pi.piNumber, pendingSend: true },
+        ...(piPdfDocId ? { attachmentDocumentIds: [piPdfDocId] } : {}),
+        extraMeta: { performaInvoiceId: pi.id, piNumber: pi.piNumber },
       });
     }
 
