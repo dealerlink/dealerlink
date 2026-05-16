@@ -594,3 +594,74 @@ corresponds to a Lighthouse accessibility score in the 95–100 band.
 strictly than a one-off Lighthouse number. The manual Lighthouse spot-check
 remains in the `docs/STANDARDS.md` checklist for anyone who wants the headline
 score.
+
+## DEV.52 — Day 17 — zod pinned to 3.25.76 via pnpm override
+
+**Date:** 2026-05-16
+**Spec said:** N/A — install `@sentry/nextjs` + `@sentry/node`.
+**Found:** Installing the Sentry packages pulled `@opentelemetry/api` into the
+tree, which changed `drizzle-orm`'s optional-peer resolution and, separately,
+left two `zod` copies resolvable (`3.23.8` + `3.25.76`). `pnpm dedupe` fixed
+the drizzle split; the zod split broke `@hookform/resolvers` typing
+(`zodResolver` needs zod's Standard Schema `~standard`/`~validate`, added in
+zod 3.24).
+**Built:** Added a root `pnpm.overrides` entry pinning `zod` to `3.25.76` (the
+version `@hookform/resolvers` and the existing code were already green on), so
+the whole workspace resolves a single zod.
+**Impact:** None functional — one zod copy, typecheck clean. A pre-existing
+latent dual-zod risk is now closed.
+**Resolution:** Permanent — the override stays.
+
+## DEV.53 — Day 17 — pino-pretty is a regular dependency, not a devDependency
+
+**Date:** 2026-05-16
+**Spec said:** Chunk 17b A2.1 — "`pnpm add -D pino-pretty` to apps/web (dev
+only)".
+**Built:** `pino-pretty` is a regular `dependency` of `apps/web` and
+`apps/workers`.
+**Why:** The dev logger uses `pino-pretty` as an **in-process stream** (not a
+pino `transport` worker thread — a worker-thread transport is fragile under
+Next.js bundling). That means `logger.ts` statically imports `pino-pretty`. A
+static import of a devDependency would fail a production install
+(`pnpm install --prod` omits devDeps). Making it a regular dependency keeps the
+import valid in every environment; it is only ever _executed_ in dev.
+**Impact:** A small extra dependency present in the production install but
+never run there. No functional effect.
+**Resolution:** Intentional; not revisited.
+
+## DEV.54 — Day 17 — observability modules duplicated into apps/workers
+
+**Date:** 2026-05-16
+**Spec said:** Chunk 17a/17c describe the modules under `apps/web/lib/
+observability`.
+**Built:** `scrub.ts` and `event-types.ts` exist as byte-for-byte copies in
+`apps/workers/src/observability/`, and the workers process has its own thin
+`logger.ts` / `events.ts` / `sentry.ts`.
+**Why:** `apps/workers` is a separate app and cannot import from `apps/web`
+(doing so would drag the web bundle's dependencies into the workers process,
+and vice-versa — the same constraint that produced DEV.48). The duplicated
+files are pure (no app deps); each is exercised by its own process's tests.
+**Impact:** Two copies of the PII scrubber + event taxonomy must be kept in
+sync; both files carry a header comment saying so. A shared package was
+considered but rejected as disproportionate for ~80 pure lines.
+**Resolution:** Tracked; consolidate into a shared package only if the
+taxonomy starts churning.
+
+## DEV.55 — Day 17 — /health `resend` check degrades, never downs the endpoint
+
+**Date:** 2026-05-16
+**Spec said:** Chunk 17d A4.1/A4.2 — the `resend` sub-check status is
+`'ok' | 'down' | 'skipped'`, and A4.3 — "any check 'down' → status='down' →
+HTTP 503".
+**Built:** A failed Resend ping reports `status: 'degraded'`, not `'down'`, so
+it can never on its own push `/health` to a `503`.
+**Why:** Resend being unreachable does **not** make Dealerlink unable to serve
+traffic — outbound email is queued and retried by pg-boss (Day 14). Treating it
+as `down` would return `503`, and DO App Platform interprets `503` as
+unhealthy and would recycle a perfectly serving pod. `degraded` (HTTP 200)
+correctly says "alert, but keep serving" — exactly the A4.3 semantics for the
+mixed case. The database / migrations / RLS / audit-trigger checks remain
+hard `down` signals because those genuinely break the app.
+**Impact:** A Resend outage shows as `degraded` + 200, alertable via the
+Better Stack degraded rule (R16) without triggering a pod kill.
+**Resolution:** Intentional refinement of the aggregation rule.

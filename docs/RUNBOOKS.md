@@ -550,3 +550,52 @@ for a GSTR-1 filing (the actual GSTR-1 JSON export is Phase 2).
 4. If stored columns themselves are inconsistent with the tax engine, that is
    a Day 9/11 bug — record it in DEVIATIONS and fix at the source. Reports
    surface drift; they do not paper over it.
+
+## R16 — Observability alert thresholds
+
+Day 17 wired Sentry, Better Stack, and Axiom. The alert rules below are
+configured in each tool's UI. Routing destinations (`#____` Slack channels /
+email lists) are placeholders — fill them in during the Stage E launch.
+
+### Sentry — errors
+
+| Alert            | Condition                                        | Route   |
+| ---------------- | ------------------------------------------------ | ------- |
+| Error spike      | error events > **5/min** (project, 5-min window) | `#____` |
+| New issue        | a never-seen-before issue appears in production  | `#____` |
+| Workers job fail | any event tagged `job.type` (workers project)    | `#____` |
+
+To confirm Sentry is live post-deploy, hit `/api/internal/sentry-test` as an
+operator — it throws on demand and the error must appear in Sentry within a
+minute.
+
+### Better Stack — uptime + logs
+
+| Alert           | Condition                                             | Route   |
+| --------------- | ----------------------------------------------------- | ------- |
+| Uptime down     | `/health` returns `5xx` for **3 minutes** (3 strikes) | `#____` |
+| Uptime degraded | `/health` body `status` = `degraded` for 10 minutes   | `#____` |
+| Log error rate  | `level >= error` log lines > 20/min                   | `#____` |
+
+`/health` returns `503` only when a critical component is `down`; `degraded`
+still answers `200`, so the 5xx rule fires on genuine outages only. See
+`docs/DEPLOYMENT.md` for the uptime-monitor configuration.
+
+### DO Monitoring — infrastructure
+
+| Alert  | Condition                             | Route   |
+| ------ | ------------------------------------- | ------- |
+| CPU    | > **80%** sustained for **5 minutes** | `#____` |
+| Memory | > **90%**                             | `#____` |
+| Disk   | > 85% on the managed Postgres volume  | `#____` |
+
+### Axiom — business-event anomalies
+
+| Alert           | Condition                                                    | Route   |
+| --------------- | ------------------------------------------------------------ | ------- |
+| Payment bounces | `payment.bounced` > **5%** of `payment.recorded` (last hour) | `#____` |
+| Email bounces   | `email.bounced` > 10% of `email.sent` (last hour)            | `#____` |
+| Login failures  | a sustained drop in `user.logged_in` (possible auth outage)  | `#____` |
+
+These are analytics-derived alerts — they complement, never replace, the
+`audit_log` forensic trail.
