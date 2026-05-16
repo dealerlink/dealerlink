@@ -419,3 +419,83 @@ satisfy A2.2.
 **Why:** The new behaviour is correct (a return releases reservations); the prior test's "first row" assumption was fragile.
 **Impact:** None — verify-day-11 now passes deterministically regardless of Day 13 seed ordering.
 **Resolution:** Resolved.
+
+## DEV.45 — Day 13 seed pre-stamps inventory_items as dispatched/delivered
+
+**Surfaced during:** Day 13 closeout invariant verification.
+
+**Observation:** A naive invariant query —
+`SELECT i.id FROM inventory_items i WHERE i.status IN ('dispatched','delivered') AND NOT EXISTS (SELECT 1 FROM dispatch_serials ds WHERE ds.inventory_item_id = i.id)`
+— returned 81 rows. Diagnosis showed all 81 items were created during Day 13 seed (timestamps clustered 2026-05-16 04:04–04:12 UTC), at the same time as the 100 properly-tracked items created via `createDispatch`.
+
+**Root cause:** Day 13 seed creates 8 dispatches per tenant via the proper `createDispatch` action (those produce 100 inventory_items with corresponding `dispatch_serials` rows), AND pre-stamps an additional ~81 inventory_items directly to `dispatched`/`delivered` status without going through the action — likely to populate dashboard "delivered history" widget with broader demo data.
+
+**Production code is correct.** Verified by:
+
+- `createDispatch` concurrent test passes (parallel transactions race for same serials; loser fails with `SERIAL_ALREADY_DISPATCHED`)
+- `dispatch_serials` UNIQUE constraint holds (0 rows when grouping by inventory_item_id HAVING COUNT > 1)
+- 100/181 dispatched/delivered items have proper `dispatch_serials` rows (those that went through `createDispatch`)
+
+**Impact:** Seed inconsistency only. Future invariant queries asserting "every dispatched item has a dispatch_serials row" must either:
+
+- (a) backfill `dispatch_serials` for seed-shortcut items, or
+- (b) scope by `inventory_items.created_at` excluding seed pre-stamps, or
+- (c) accept the gap as documented and not assert this invariant globally.
+
+**Pattern:** Follows DEV.31 (test residue prefix scoping) and DEV.43 (self-contained seed).
+
+**Action:** Tracked, not blocking. Consider Stage C cleanup if dashboard widget logic depends on this pattern surviving production seed.
+
+## DEV.46 — Order-line dispatched-quantity invariant query: filter placement matters
+
+**Surfaced during:** Day 13 closeout invariant verification.
+
+**Observation:** The naive invariant query in the Day 13 prompt —
+
+```sql
+SELECT ol.id, ol.dispatched_quantity, COALESCE(SUM(dl.quantity), 0) AS computed
+FROM order_lines ol
+LEFT JOIN dispatch_lines dl ON dl.order_line_id = ol.id
+LEFT JOIN dispatches d ON d.id = dl.dispatch_id AND d.status <> 'returned'
+JOIN orders o ON o.id = ol.order_id
+WHERE o.order_number LIKE 'ORD-2026-%'
+GROUP BY ol.id, ol.dispatched_quantity
+HAVING ol.dispatched_quantity::numeric <> COALESCE(SUM(dl.quantity), 0);
+```
+
+— returned 2 false-positive rows where `dispatched_quantity = 0` but `computed = 5.000`.
+
+**Root cause:** The filter `d.status <> 'returned'` was placed on the JOIN condition, not on the SUM aggregate. When a dispatch is returned, the production code correctly:
+
+1. Decrements `order_lines.dispatched_quantity` back
+2. Releases serials back to `in_stock` / `reserved`
+3. Keeps `dispatch_lines` rows in place as audit trail (we keep history of what was once dispatched)
+
+The LEFT JOIN to `dispatches` with the status filter caused `d` to be NULL for returned dispatches, but `dl.quantity` was still summed because `dl` was joined unconditionally. Result: returned-dispatch quantities were incorrectly included in the computed sum.
+
+**Production code is correct.** Verified by re-running with the filter moved to the aggregate:
+
+```sql
+COALESCE(SUM(dl.quantity) FILTER (WHERE d.status <> 'returned'), 0) AS computed
+```
+
+This returns 0 rows — confirming `dispatched_quantity` denormalization is consistent.
+
+**Impact:** Query design error in the verification prompt. No production code change required.
+
+**Corrected invariant query for future use:**
+
+```sql
+SELECT ol.id, ol.dispatched_quantity,
+       COALESCE(SUM(dl.quantity) FILTER (WHERE d.status <> 'returned'), 0) AS computed
+FROM order_lines ol
+LEFT JOIN dispatch_lines dl ON dl.order_line_id = ol.id
+LEFT JOIN dispatches d ON d.id = dl.dispatch_id
+JOIN orders o ON o.id = ol.order_id
+WHERE o.order_number LIKE 'ORD-2026-%'
+GROUP BY ol.id, ol.dispatched_quantity
+HAVING ol.dispatched_quantity::numeric
+       <> COALESCE(SUM(dl.quantity) FILTER (WHERE d.status <> 'returned'), 0);
+```
+
+**Action:** Logged. Consider adding to docs/RUNBOOKS.md as part of "Daily invariant checks" reference.
