@@ -84,3 +84,17 @@ export {
 } from './payments/transitions';
 export { deriveOrderPaymentStatus } from './payments/propagation';
 export { recomputeOrderPaymentStatus, type RecomputeResult } from './payments/recompute';
+export {
+  createDispatchDb,
+  DispatchError,
+  type DispatchErrorCode,
+  type CreateDispatchDbInput,
+  type CreateDispatchDbLine,
+  type CreateDispatchDbResult,
+} from './dispatch/create';
+export {
+  markDispatchDeliveredDb,
+  returnDispatchDb,
+  type MarkDeliveredDbResult,
+  type ReturnDispatchDbResult,
+} from './dispatch/lifecycle';
