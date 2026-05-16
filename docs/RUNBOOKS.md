@@ -493,3 +493,60 @@ for more than a few minutes.
 4. Standing invariant check (also good as a monitoring query):
    `SELECT status, COUNT(*) FROM email_delivery_log WHERE queued_at < now() - interval '1 hour' AND status IN ('queued','sending') GROUP BY status;`
    — expect 0 rows on a healthy system.
+
+---
+
+## R13 — Pulling a sales summary for a sales-review meeting
+
+**When to use:** Preparing numbers for a periodic sales review.
+
+**Steps:**
+
+1. Open **Reports → Sales Summary** (admin, accounts or sales role).
+2. Set the **From / To** dates to the review period. The default is the
+   current Indian fiscal year (Apr 1 – Mar 31).
+3. Choose **Group by**: `month` for a trend, `dealer` for account ranking,
+   `product` for mix. Optionally narrow by dealer or document status.
+4. The totals row at the bottom is the period roll-up; **Avg deal size** is
+   `total ÷ document count`.
+5. **Download CSV** for the deck — it opens cleanly in Excel/Sheets with
+   Indian number formatting preserved.
+
+## R14 — Generating the GST summary at month-end
+
+**When to use:** Month- or quarter-end GST reconciliation; the base figures
+for a GSTR-1 filing (the actual GSTR-1 JSON export is Phase 2).
+
+**Steps:**
+
+1. Open **Reports → GST Summary** (admin or accounts).
+2. Pick the **Fiscal quarter** (Q1 Apr–Jun … Q4 Jan–Mar). Optionally filter to
+   intra- or inter-state supplies.
+3. Each row is one place of supply: taxable amount, CGST, SGST, IGST — read
+   straight from the orders' stored tax columns. Only supplied orders
+   (`confirmed` / dispatched / `delivered`) are counted; `pending` orders are
+   not supplies.
+4. The totals row is what carries to the return. Cross-check against the
+   invariant query in the verification checklist if anything looks off.
+5. Download the CSV for the filing working papers.
+
+## R15 — Investigating a discrepancy between two reports
+
+**When to use:** Two reports (or a report vs. a module screen) disagree.
+
+**Steps:**
+
+1. **Reports never recompute money** — they read stored columns. So a
+   discrepancy is either (a) a filter/scope difference or (b) genuinely
+   inconsistent stored data.
+2. Check scope first: Sales Summary counts quotations + PIs + orders (a deal
+   appears up to three times); GST Summary counts only supplied orders;
+   Outstanding counts only `unpaid` / `partially_paid` orders. Different
+   denominators are expected.
+3. For a GST figure that looks wrong, run the parity query:
+   `SELECT SUM(cgst_amount), SUM(sgst_amount), SUM(igst_amount) FROM orders WHERE status IN ('confirmed','partially_dispatched','fully_dispatched','delivered') AND order_date BETWEEN <from> AND <to>;`
+   It must equal the GST Summary totals. If it does, the report is correct and
+   the other surface is wrong.
+4. If stored columns themselves are inconsistent with the tax engine, that is
+   a Day 9/11 bug — record it in DEVIATIONS and fix at the source. Reports
+   surface drift; they do not paper over it.

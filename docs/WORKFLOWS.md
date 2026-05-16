@@ -252,3 +252,48 @@ captures who signed (`deliveredAcknowledgedBy`), and advances the order to
 `delivered` once all its dispatches are in. `returnDispatch` (admin only) sends
 every serial back to warehouse stock, decrements `dispatchedQuantity`, and
 recomputes the (possibly regressed) order status.
+
+---
+
+## Reports (Day 15)
+
+The reports module (`apps/web/lib/reports/`) is **read-only**. Every report is
+a pure typed function `(tenantId, filters) => ReportResult` — a
+`{ columns, rows, totals, metadata }` shape that drives both the on-screen
+table and the CSV export. No report ever mutates data.
+
+### The four reports
+
+| Report                  | Source                                                            | Group by                 |
+| ----------------------- | ----------------------------------------------------------------- | ------------------------ |
+| Sales Summary           | quotations (sent/accepted) + PIs (confirmed) + orders             | month / dealer / product |
+| Outstanding Receivables | orders `unpaid` / `partially_paid`, aged vs `order_date + credit` | dealer / aging bucket    |
+| Inventory Valuation     | `inventory_items` `in_stock`, valued at last procurement cost     | product                  |
+| GST Summary             | orders `confirmed` / `*_dispatched` / `delivered`                 | place of supply          |
+
+### Tax figures are read, never recomputed
+
+Per CLAUDE.md §6, reports **read stored columns** (`cgst_amount`,
+`sgst_amount`, `igst_amount`, `taxable_amount`, `total_amount`). The GST
+Summary in particular must agree to the paisa with a direct `SUM` over the
+underlying orders — `lib/reports/reports.test.ts` pins this parity. A
+discrepancy is a Day 9/11 tax-engine bug to surface, **not** something a
+report silently corrects.
+
+### Access control
+
+`lib/reports/access.ts` maps role → allowed reports. Enforcement is
+server-side: each report page calls `assertReportAccess` (renders 404 when
+denied) and the CSV export action calls `canAccessReport`. The `/reports`
+landing only renders cards the role may open — courtesy, not security.
+
+- **admin, accounts** — all four reports
+- **sales** — Sales Summary + Outstanding Receivables
+- **dispatch** — Inventory Valuation
+
+### CSV export
+
+`reportToCsv` (pure) serialises a `ReportResult`: Indian money formatting
+(`1,27,200.00`), ISO dates, RFC-4180 quoting, UTF-8 BOM. The `exportReportCsv`
+server action runs the query **and** the serialisation server-side — the
+dataset is never shipped to the browser to convert in JS.

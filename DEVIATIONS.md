@@ -527,3 +527,46 @@ HAVING ol.dispatched_quantity::numeric
 **Why:** A3.3 mandates the webhook be processed **synchronously inside the route handler** (low volume; async processing is Phase 2). The route runs in the web process. Placing the processing module in `apps/workers` would force the web bundle to import the workers package (which pulls in puppeteer-core + pg-boss workers) — a direct violation of the Day 10 guardrail that keeps Puppeteer out of the web build. The module depends only on `@dealerlink/db`, so it sits cleanly in the web app.
 
 **Impact:** None functional — same logic, same synchronous behaviour. Only the file location differs from the prompt's suggested path.
+
+## DEV.49 — Day 15 — reports render plain tables, not TanStack Table
+
+**Date:** 2026-05-16
+
+**Spec said:** Day 15 chunk 15a A1.4 — "TanStack Table for the data — sticky
+header, sortable columns, virtualized rows if >100 rows". CLAUDE.md §3 also
+lists TanStack Table v8 + TanStack Virtual as the locked table stack.
+
+**Built:** `ReportTable` is a plain `<table>` — sticky `<thead>`, client-side
+sortable columns, a `<tfoot>` totals row. No TanStack Table, no virtualization.
+
+**Why:** Every report is a **grouped aggregate**, not a row dump. The widest
+result sets are: Sales Summary by month (≤12 rows), by dealer (≈20), by
+product (≈20); Outstanding by dealer (≈20) or bucket (exactly 4); GST Summary
+by place of supply (≤~36 Indian states); Inventory Valuation by product
+(≈20). None approaches the >100-row threshold at which the prompt itself says
+virtualization kicks in, and `@tanstack/react-table` is not currently a web
+dependency. Pulling it in for ≤36-row tables is weight without benefit. The
+detail/list screens that _do_ show hundreds of rows (dealers, inventory,
+orders) remain the place for TanStack Table when row counts justify it.
+
+**Impact:** None functional — sticky header, sorting and the totals row are
+all present. If a future report ever returns >100 rows, swap `ReportTable`'s
+body for a TanStack Virtual list; the `ReportResult` shape already supports it.
+
+## DEV.50 — Day 15 — dealer filter is a select, not a typeahead
+
+**Date:** 2026-05-16
+
+**Spec said:** Day 15 chunk 15a A1.4 — "Filter bar … dealer typeahead".
+
+**Built:** The Sales Summary dealer filter is a plain `<select>` of active
+dealers, consistent with the existing `DealerFilters` component and every
+other filter dropdown in the app.
+
+**Why:** The seeded tenant has ~20 dealers; a typeahead adds a client
+component, an async search action and debounce handling for a list that fits
+in one dropdown. Matching the established filter-bar pattern keeps the reports
+UI consistent and the bundle small. A typeahead is a clean drop-in if a tenant
+ever grows past a few hundred dealers.
+
+**Impact:** None — same filter capability, fewer moving parts.

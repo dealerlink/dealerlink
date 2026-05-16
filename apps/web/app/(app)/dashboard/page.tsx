@@ -11,6 +11,7 @@ import { impersonationTenantId } from '@/lib/tenant/context';
 import { formatDate } from '@/lib/format';
 
 import { PipelineFunnel, PipelineHotStalled, PipelineKpiRow } from './pipeline-widgets';
+import { ReportWidgets } from './report-widgets';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +73,8 @@ export default async function DashboardPage() {
       <PipelineKpiRow metrics={pipelineMetrics} />
       <PipelineFunnel metrics={pipelineMetrics} />
       <PipelineHotStalled metrics={pipelineMetrics} />
+
+      {tenantId && ctx && <ReportWidgets tenantId={tenantId} role={ctx.user.role} />}
 
       {paymentDash && (
         <div className="mt-6 grid grid-cols-3 gap-4">
