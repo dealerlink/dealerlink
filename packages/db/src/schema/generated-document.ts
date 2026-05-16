@@ -38,9 +38,10 @@ export const generatedDocumentStorage = pgEnum('generated_document_storage', ['s
  * different table depending on `documentType` (quotations, invoices, …).
  * RLS + the audit trigger apply per the standard tenant-scoped pattern.
  *
- * Cleanup: `storage = 'inline'` rows older than 30 days are pruned by a
- * daily cron (wired in Day 14). `expiresAt` lets a render opt into an
- * explicit earlier expiry.
+ * Cleanup: `storage = 'inline'` rows older than 30 days are pruned by the
+ * daily `pdf-cleanup` cron (Day 14) — it nulls `storageRef` and stamps
+ * `storageRefPurgedAt`, keeping the audit row while reclaiming the base64
+ * payload. `expiresAt` lets a render opt into an explicit earlier expiry.
  */
 export const generatedDocuments = pgTable(
   'generated_documents',
@@ -58,7 +59,10 @@ export const generatedDocuments = pgTable(
     sizeBytes: integer().notNull(),
 
     storage: generatedDocumentStorage().notNull(),
-    storageRef: text().notNull(),
+    // Nullable: the daily pdf-cleanup cron nulls this when it purges an old
+    // inline payload (the row itself is retained for audit history).
+    storageRef: text(),
+    storageRefPurgedAt: timestamp({ withTimezone: true }),
 
     generatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     generatedBy: uuid().references(() => users.id, { onDelete: 'set null' }),

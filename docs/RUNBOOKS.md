@@ -132,7 +132,7 @@ Short, operator-facing procedures for actions that ship with the admin app. Each
    - Resend API key missing or invalid (`error_message` mentions auth)
    - Recipient bounced (configure correct email and re-issue)
    - Provider downtime
-3. If transient, flip `status` back to `queued` and the next dispatch pulse (operator-triggered from `/admin` or a future pg-boss tick) will retry. The `meta.attempts` counter caps at 3.
+3. If transient, flip `status` back to `queued` and re-enqueue a `send-email` job for the row id — the pg-boss worker (Day 14) picks it up. A transient `RATE_LIMITED` failure is already retried automatically (retryLimit=5, exponential backoff); a row only reaches `failed` on a permanent error.
 4. For repeated failures, fall back to R3 (reset password and hand off credentials manually).
 
 ---
@@ -427,3 +427,69 @@ quantity and the order sits at `partially_dispatched` with the balance shown as
 the order detail **Dispatches** tab tracks every dispatch and the
 units-dispatched roll-up. The order reaches `fully_dispatched` only when the
 last unit ships.
+
+---
+
+## R10 — Setting up the Resend webhook in production
+
+**When to use:** First production deploy, or after the inbound webhook stops
+receiving delivery/bounce events.
+
+**Steps:**
+
+1. In the Resend dashboard → **Webhooks** → **Add Endpoint**.
+2. Endpoint URL: `https://app.dealerlink.in/api/webhooks/resend`.
+3. Subscribe to the email events: `email.sent`, `email.delivered`,
+   `email.bounced`, `email.complained`, `email.opened`, `email.clicked`,
+   `email.delivery_delayed`, `email.failed`.
+4. Copy the **Signing Secret** Resend generates into the
+   `RESEND_INBOUND_WEBHOOK_SECRET` env var (DO dashboard → web component).
+   Redeploy so the value takes effect.
+5. Verify: use Resend's "Send test event" — a `webhook_events` row should
+   appear with `signature_verified = true` and `processed_at` set.
+6. If test events are rejected (400), the secret in DO does not match the one
+   Resend shows — re-copy it. Every rejection is logged to `webhook_events`
+   with `signature_verified = false` for forensics.
+
+---
+
+## R11 — Investigating an email bounce
+
+**When to use:** A dealer reports they never received a quotation / receipt,
+or the delivery dashboard shows a `bounced` row.
+
+**Steps:**
+
+1. Find the row:
+   `SELECT status, bounced_type, bounced_reason, last_event_at FROM email_delivery_log WHERE recipient = '<email>' ORDER BY queued_at DESC LIMIT 5;`
+2. `bounced_type = 'hard'` → the address is permanently undeliverable
+   (mailbox does not exist, domain invalid). Correct the dealer's email in
+   the Dealer master and re-send the document.
+3. `bounced_type = 'soft'` → transient (mailbox full, greylisting). Re-send
+   later; it often clears on its own.
+4. `status = 'complained'` → the recipient marked the mail as spam. Do NOT
+   keep emailing that address — confirm the contact out of band.
+5. Cross-check `webhook_events` for the raw Resend payload if `bounced_reason`
+   is not specific enough.
+
+---
+
+## R12 — Why is an email stuck in `sending`?
+
+**When to use:** An `email_delivery_log` row has been at `status='sending'`
+for more than a few minutes.
+
+**Steps:**
+
+1. `sending` means the worker started the Resend call but never recorded a
+   terminal state — almost always because the **workers process crashed or
+   was restarted mid-send**.
+2. Check the workers process is up (`pm2 status` / DO component health) and
+   review its logs around the row's `queued_at`.
+3. The pg-boss job is retried automatically if it was still in flight. If the
+   job is genuinely lost, re-enqueue a `send-email` job for the row id; the
+   handler is idempotent — a row already `sent`/`delivered` is skipped, so a
+   re-run never double-sends.
+4. Standing invariant check (also good as a monitoring query):
+   `SELECT status, COUNT(*) FROM email_delivery_log WHERE queued_at < now() - interval '1 hour' AND status IN ('queued','sending') GROUP BY status;`
+   — expect 0 rows on a healthy system.

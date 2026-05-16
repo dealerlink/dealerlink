@@ -25,10 +25,11 @@ pnpm dev:workers      # in another terminal
 
 ```
 DATABASE_URL=
-DATABASE_DIRECT_URL=          # for migrations (bypass connection pool)
+DATABASE_DIRECT_URL=          # migrations + pg-boss (bypass connection pool)
 SESSION_SECRET=
 RESEND_API_KEY=
-RESEND_INBOUND_WEBHOOK_SECRET=
+RESEND_INBOUND_WEBHOOK_SECRET=  # required — Svix signing secret from the Resend webhook endpoint
+RESEND_FROM_EMAIL=              # default From address for outbound mail
 DO_SPACES_KEY=
 DO_SPACES_SECRET=
 DO_SPACES_BUCKET=
@@ -38,3 +39,8 @@ AXIOM_TOKEN=
 AXIOM_DATASET=dealerlink
 NEXT_PUBLIC_APP_URL=
 ```
+
+`RESEND_INBOUND_WEBHOOK_SECRET` is **server-only** — never expose it via a
+`NEXT_PUBLIC_*` variable. The web process enqueues email and the workers
+process sends it; both connect pg-boss on `DATABASE_DIRECT_URL`, so that var
+must be set for **both** components.

@@ -499,3 +499,31 @@ HAVING ol.dispatched_quantity::numeric
 ```
 
 **Action:** Logged. Consider adding to docs/RUNBOOKS.md as part of "Daily invariant checks" reference.
+
+## DEV.47 — Day 14 — email_delivery_log is self-auditing; no audit_log trigger
+
+**Date:** 2026-05-16
+
+**Spec said:** Chunk 14a A1.2 — "RLS, audit trigger already there"; chunk 14b A2.2 step 7 + the Day 14 guardrails — "Audit log every status change on email_delivery_log".
+
+**Built:** `email_delivery_log` keeps RLS but has **no** `audit_trg`. Status changes are recorded on the row itself — `status`, `sent_at`, `delivered_at`/`opened_at`/`clicked_at`/`bounced_at`/`complained_at`, and `last_event_at`/`last_event_type`.
+
+**Why:**
+
+1. `email_delivery_log` IS an audit stream (docs/LOGGING.md row #4) — it is the email audit record. A second copy in `audit_log` is redundant.
+2. The generic `audit_log_writer()` trigger snapshots the whole row as JSONB. The row's `meta.html` carries the full rendered email body — including, for welcome/reset mails, a single-use temporary password. `audit_redact()` only redacts keys matching `password_hash` / `*_token` / `*_secret`, so `meta.html` would land in `audit_log` unredacted and bloat it (R.3).
+3. Every outbound email flips status 3–6 times (queued → sending → sent → delivered → opened → …). A trigger would multiply audit volume for no analytical gain.
+
+**Impact:** None. The email audit trail is complete on the log row; the webhook forensic trail is in `webhook_events`. Documented so a future reviewer does not "fix" a missing trigger.
+
+## DEV.48 — Day 14 — inbound webhook processing lives in apps/web, not apps/workers
+
+**Date:** 2026-05-16
+
+**Spec said:** Chunk 14c A3.2 — "Event processing (`apps/workers/src/email/inbound-handler.ts`)".
+
+**Built:** The verification + event-processing logic is `apps/web/lib/email/resend-webhook.ts`, imported by the route handler `apps/web/app/api/webhooks/resend/route.ts`.
+
+**Why:** A3.3 mandates the webhook be processed **synchronously inside the route handler** (low volume; async processing is Phase 2). The route runs in the web process. Placing the processing module in `apps/workers` would force the web bundle to import the workers package (which pulls in puppeteer-core + pg-boss workers) — a direct violation of the Day 10 guardrail that keeps Puppeteer out of the web build. The module depends only on `@dealerlink/db`, so it sits cleanly in the web app.
+
+**Impact:** None functional — same logic, same synchronous behaviour. Only the file location differs from the prompt's suggested path.

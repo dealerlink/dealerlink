@@ -34,15 +34,32 @@ Delivery confirmed
 
 All transitions are guarded by Postgres row locks (`SELECT ... FOR UPDATE`) inside transactions. No optimistic concurrency for inventory — the cost of a wrongly-allocated panel is too high.
 
-## Inbound email logging
+## Email dispatch (Day 14 — async)
 
-Distributors BCC a unique tenant email address (e.g., `<tenant-slug>+<token>@mail.dealerlink.in`). Resend Inbound webhook posts the parsed email to `/api/webhooks/resend-inbound`. Handler:
+Email is **asynchronous**. The web process never calls Resend directly — it
+writes a `queued` `email_delivery_log` row and enqueues a pg-boss `send-email`
+job. The workers process sends it via Resend, then flips the row to `sent`
+(or `failed`). UI copy reflects this: a "Send" action confirms the email was
+**queued for delivery**, not "sent".
 
-1. Verify Resend signature.
+Delivery events (delivered / bounced / opened / clicked / complained) arrive
+back via the Resend webhook at `POST /api/webhooks/resend` — Svix-signature
+verified — and update the same `email_delivery_log` row. Every inbound webhook
+is logged to `webhook_events`; replays are absorbed by a unique constraint on
+the Svix event id.
+
+## Inbound email logging (Phase 2)
+
+Distributors will BCC a unique tenant email address (e.g., `<tenant-slug>+<token>@mail.dealerlink.in`). The Resend **inbound** webhook would post the parsed message, and the handler would:
+
+1. Verify the Resend (Svix) signature.
 2. Match tenant by recipient address suffix.
 3. Match dealer by sender domain or sender email.
 4. Insert into `email_log` with direction = 'inbound'.
 5. If no dealer match, insert with `dealer_id = null` and flag for admin review.
+
+> Phase 1 ships the **outbound** email pipeline + delivery-event webhook
+> (above). Inbound message capture is a Phase 2 unlock.
 
 ## Operator impersonation flow
 
@@ -102,10 +119,10 @@ Quotation (accepted)
 
 ### PI state machine — `packages/db/src/pi/transitions.ts`
 
-`draft → sent → confirmed`; `draft`/`sent → cancelled`. `confirmed` and `cancelled` are terminal. `transitionPi()` row-locks the PI, validates the move, stamps the matching timestamp, and writes a `performa_invoice_status_history` row.
+`draft → sent → confirmed`; `draft`/`sent → cancelled`. `confirmed` and `cancelled` are terminal. `transitionPi()` row-locks the PI, validates the move, stamps the matching timestamp, and writes a `performa_invoice_status_history` row. A `sent` PI whose `valid_until` lapses without confirmation is moved to `expired` by the daily `validity-expiry` cron (Day 14) — a system batch sweep, not a user transition.
 
 - **`draft`** — the only editable status (`updatePi`; lines inherited from the source quotation per DEV.40).
-- **`sent`** — `sentAt` stamped; the PI PDF is rendered and a queued `email_delivery_log` row is written (Resend send lands Day 14, R.13).
+- **`sent`** — `sentAt` stamped; the PI PDF is rendered and the delivery email is queued to pg-boss via `queueEmail` (async — Day 14).
 - **`confirmed`** — immutable. Confirmation is the build's most choreographed action — see below.
 - **`cancelled`** — admin only, reason captured.
 

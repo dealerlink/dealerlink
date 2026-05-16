@@ -49,8 +49,9 @@ async function loadAttachments(
       .from(generatedDocuments)
       .where(and(eq(generatedDocuments.tenantId, tenantId), eq(generatedDocuments.id, docId)))
       .limit(1);
-    if (!doc) continue; // Document purged or never generated — send without it.
+    if (!doc) continue; // Document never generated — send without it.
     if (doc.storage !== 'inline') continue; // Spaces fetch is a Stage D activation.
+    if (!doc.storageRef) continue; // Payload purged by the pdf-cleanup cron.
     attachments.push({
       filename: doc.filename,
       content: Buffer.from(doc.storageRef, 'base64'),

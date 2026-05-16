@@ -16,7 +16,8 @@ export interface GeneratedDocumentSummary {
 
 export interface GeneratedDocumentPayload extends GeneratedDocumentSummary {
   mimeType: string;
-  storageRef: string;
+  /** Null when the daily pdf-cleanup cron has purged the inline payload. */
+  storageRef: string | null;
 }
 
 /** Latest render for a document, or null if it has never been generated. */
