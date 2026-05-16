@@ -40,3 +40,22 @@ export {
   type DealStatus,
   type TransitionOptions as DealTransitionOptions,
 } from './deals/transitions';
+export {
+  ALLOWED_TRANSITIONS as PI_ALLOWED_TRANSITIONS,
+  ALL_PI_STATUSES,
+  isPiTransitionAllowed,
+  transitionPi,
+  PiInvalidTransitionError,
+  PerformaInvoiceNotFoundError,
+  type PiTransitionOptions,
+} from './pi/transitions';
+export {
+  ALLOWED_TRANSITIONS as ORDER_ALLOWED_TRANSITIONS,
+  ALL_ORDER_STATUSES,
+  CANCELLABLE_FROM as ORDER_CANCELLABLE_FROM,
+  isOrderTransitionAllowed,
+  transitionOrder,
+  OrderInvalidTransitionError,
+  OrderNotFoundError,
+  type OrderTransitionOptions,
+} from './orders/transitions';

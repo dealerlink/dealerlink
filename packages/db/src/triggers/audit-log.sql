@@ -238,3 +238,26 @@ DROP TRIGGER IF EXISTS audit_trg ON generated_documents;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON generated_documents
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 11: performa_invoices + performa_invoice_lines and orders + order_lines
+-- are auditable. The *_status_history tables are themselves the audit log for
+-- status transitions, so no trigger on those.
+DROP TRIGGER IF EXISTS audit_trg ON performa_invoices;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON performa_invoices
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON performa_invoice_lines;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON performa_invoice_lines
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON orders;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON orders
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON order_lines;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON order_lines
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
