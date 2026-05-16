@@ -6,6 +6,9 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
+import { runWithLogContext } from '@/lib/observability/als';
+import { trackEvent } from '@/lib/observability/events';
+
 import { lucia } from './lucia';
 import { verifyPassword } from './password';
 import { getAuthContext } from './session';
@@ -113,6 +116,13 @@ export async function login(input: z.input<typeof loginSchema>): Promise<LoginRe
     ip,
     userAgent,
   });
+
+  // Business-event analytics — seed the log context so the event carries the
+  // user it belongs to (login runs outside the action wrapper's ALS scope).
+  runWithLogContext(
+    { userId: user.id, role: user.role, ...(user.tenantId ? { tenantId: user.tenantId } : {}) },
+    () => trackEvent('user.logged_in', { method: 'password' }),
+  );
 
   const redirectTo = user.role === 'operator' ? '/admin' : '/dashboard';
   return { ok: true, redirectTo };

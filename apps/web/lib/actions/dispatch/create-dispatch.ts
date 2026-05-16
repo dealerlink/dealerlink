@@ -4,6 +4,7 @@ import { createDispatchDb } from '@dealerlink/db';
 import { createDispatchInputSchema } from '@dealerlink/schemas';
 
 import { tenantAction } from '@/lib/actions/wrap';
+import { trackEvent } from '@/lib/observability/events';
 
 import { rethrowDispatchError } from './helpers';
 
@@ -22,7 +23,7 @@ export const createDispatch = tenantAction(
   createDispatchInputSchema,
   async ({ tx, input, auth }) => {
     try {
-      return await createDispatchDb(
+      const result = await createDispatchDb(
         tx,
         {
           orderId: input.orderId,
@@ -40,6 +41,11 @@ export const createDispatch = tenantAction(
         },
         { userId: auth.user.id },
       );
+      trackEvent('dispatch.created', {
+        dispatchId: result.id,
+        serialCount: result.serialCount,
+      });
+      return result;
     } catch (err) {
       rethrowDispatchError(err);
     }

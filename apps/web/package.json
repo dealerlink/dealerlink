@@ -12,6 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@axiomhq/js": "^1.6.1",
     "@dealerlink/db": "workspace:*",
     "@dealerlink/design-tokens": "workspace:*",
     "@dealerlink/schemas": "workspace:*",

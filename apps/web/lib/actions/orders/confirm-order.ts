@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
+import { trackEvent } from '@/lib/observability/events';
 
 /**
  * Confirm a pending order. Reserves serialised inventory FIFO for every line
@@ -58,6 +59,8 @@ export const confirmOrder = tenantAction(
       userId: auth.user.id,
       reason: 'inventory_reserved',
     });
+
+    trackEvent('order.confirmed', { orderId: input.id });
 
     return { id: input.id, status: 'confirmed' as const, reservedCount };
   },

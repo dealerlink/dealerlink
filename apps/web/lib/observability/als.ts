@@ -17,6 +17,7 @@ export interface LogContext {
   requestId?: string;
   tenantId?: string;
   userId?: string;
+  role?: string;
   route?: string;
 }
 

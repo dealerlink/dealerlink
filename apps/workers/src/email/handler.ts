@@ -19,6 +19,8 @@ import { adminDb, emailDeliveryLog, generatedDocuments } from '@dealerlink/db';
 import { emailLogMetaSchema, type EmailJobPayload } from '@dealerlink/schemas';
 import { and, eq } from 'drizzle-orm';
 
+import { trackEvent } from '../observability/events';
+
 import {
   EmailSendError,
   sendEmail as defaultSendEmail,
@@ -138,6 +140,7 @@ export async function runSendEmail(
         meta: slimMeta,
       })
       .where(eq(emailDeliveryLog.id, emailLogId));
+    trackEvent('email.sent', { emailLogId }, row.tenantId ? { tenantId: row.tenantId } : {});
     return { status: 'sent', emailLogId, providerMessageId: result.providerMessageId };
   } catch (err) {
     if (err instanceof EmailSendError && err.retryable) {

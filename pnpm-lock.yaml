@@ -41,6 +41,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@axiomhq/js':
+        specifier: ^1.6.1
+        version: 1.6.1
       '@dealerlink/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -189,6 +192,9 @@ importers:
 
   apps/workers:
     dependencies:
+      '@axiomhq/js':
+        specifier: ^1.6.1
+        version: 1.6.1
       '@dealerlink/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -333,6 +339,10 @@ packages:
     resolution: {integrity: sha512-h/kfksv4F0cVIDlKpT4700OehdRgpvuVskuQ2nb7/JmtWUXpe9ftHAPtwyXGvVSsa6SJ64A9ER7Zrzc/sIvC4w==}
     peerDependencies:
       playwright-core: '>= 1.0.0'
+
+  '@axiomhq/js@1.6.1':
+    resolution: {integrity: sha512-iNWOnGvP+R2lIWYk9jkfvRI/rfhOR9hlWJOBJhMKwZ9mfpE0KdnFnG2XPLoMcrbyrOBKj6Jw0hpIH5GhPucLog==}
+    engines: {node: '>=20'}
 
   '@babel/code-frame@7.29.0':
     resolution: {integrity: sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==}
@@ -3373,6 +3383,9 @@ packages:
       picomatch:
         optional: true
 
+  fetch-retry@6.0.0:
+    resolution: {integrity: sha512-BUFj1aMubgib37I3v4q78fYo63Po7t4HUPTpQ6/QE6yK6cIQrP+W43FYToeTEyg5m2Y7eFUtijUuAv/PDlWuag==}
+
   file-entry-cache@6.0.1:
     resolution: {integrity: sha512-7Gps/XWymbLk2QLYK4NzpMOrYjMhdIxXuIvy2QBsLE6ljuodKvdkWs/cpyJJ3CVIVpH0Oi1Hvg1ovbMzLdFBBg==}
     engines: {node: ^10.12.0 || >=12.0.0}
@@ -5215,6 +5228,10 @@ snapshots:
     dependencies:
       axe-core: 4.11.4
       playwright-core: 1.59.1
+
+  '@axiomhq/js@1.6.1':
+    dependencies:
+      fetch-retry: 6.0.0
 
   '@babel/code-frame@7.29.0':
     dependencies:
@@ -8193,6 +8210,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
       picomatch: 4.0.4
+
+  fetch-retry@6.0.0: {}
 
   file-entry-cache@6.0.1:
     dependencies:

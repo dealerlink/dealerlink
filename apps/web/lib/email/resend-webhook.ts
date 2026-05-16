@@ -6,6 +6,9 @@ import { resendWebhookPayloadSchema, type ResendWebhookPayload } from '@dealerli
 import { eq } from 'drizzle-orm';
 import { Webhook } from 'svix';
 
+import { runWithLogContext } from '@/lib/observability/als';
+import { trackEvent } from '@/lib/observability/events';
+
 /**
  * Inbound Resend webhook — verification + event processing.
  *
@@ -202,5 +205,17 @@ export async function processResendEvent(payload: ResendWebhookPayload): Promise
   }
 
   await adminDb.update(emailDeliveryLog).set(updates).where(eq(emailDeliveryLog.id, row.id));
+
+  // Business-event analytics for a hard signal — seed tenant context from the
+  // matched log row (the webhook runs outside any action's ALS scope).
+  if (payload.type === 'email.bounced') {
+    runWithLogContext(row.tenantId ? { tenantId: row.tenantId } : {}, () =>
+      trackEvent('email.bounced', {
+        emailLogId: row.id,
+        ...(updates.bouncedType ? { bounceType: updates.bouncedType } : {}),
+      }),
+    );
+  }
+
   return { matched: true };
 }

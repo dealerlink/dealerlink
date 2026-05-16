@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
+import { trackEvent } from '@/lib/observability/events';
 
 import {
   allocateQuoteNumber,
@@ -136,6 +137,12 @@ export const createQuotation = tenantAction(
         }
       }
     }
+
+    trackEvent('quotation.created', {
+      quotationId: created.id,
+      totalAmount: Number(totals.totalAmount),
+      dealerId: input.dealerId,
+    });
 
     return { id: created.id, quoteNumber: created.quoteNumber, status: initialStatus };
   },

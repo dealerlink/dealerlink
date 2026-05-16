@@ -12,6 +12,7 @@ import { and, eq, lte } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
+import { trackEvent } from '@/lib/observability/events';
 import { spawnPdfRender } from '@/lib/pdf/spawn-render';
 
 import { loadQuotationForGuard, writeStatusHistory } from './helpers';
@@ -89,6 +90,8 @@ export const sendQuotation = tenantAction(
         }
       }
     }
+
+    trackEvent('quotation.sent', { quotationId: input.id });
 
     return { id: input.id, status: 'sent' as const };
   },

@@ -104,23 +104,25 @@ export function tenantAction<I, O>(
 
       // Seed the ALS log context so every log line inside the action carries
       // tenant / user / request id without threading them through.
-      const data = await runWithLogContext({ requestId, tenantId, userId: auth.user.id }, () =>
-        withTenant(
-          tenantId,
-          async (tx) =>
-            fn({
-              tx,
-              auth,
-              input: parsed.data,
-              impersonating: !!impersonatingTenant,
-            }),
-          {
-            userId: auth.user.id,
-            ip,
-            userAgent,
-            readOnly: !!impersonatingTenant,
-          },
-        ),
+      const data = await runWithLogContext(
+        { requestId, tenantId, userId: auth.user.id, role: auth.user.role },
+        () =>
+          withTenant(
+            tenantId,
+            async (tx) =>
+              fn({
+                tx,
+                auth,
+                input: parsed.data,
+                impersonating: !!impersonatingTenant,
+              }),
+            {
+              userId: auth.user.id,
+              ip,
+              userAgent,
+              readOnly: !!impersonatingTenant,
+            },
+          ),
       );
 
       return { ok: true, data };
@@ -148,11 +150,13 @@ export function operatorAction<I, O>(
       }
       const auth = await requireRole(['operator']);
       const { ip, userAgent, requestId } = clientMeta();
-      const data = await runWithLogContext({ requestId, userId: auth.user.id }, () =>
-        withOperator(auth.user.id, async (tx) => fn({ tx, auth, input: parsed.data }), {
-          ip,
-          userAgent,
-        }),
+      const data = await runWithLogContext(
+        { requestId, userId: auth.user.id, role: auth.user.role },
+        () =>
+          withOperator(auth.user.id, async (tx) => fn({ tx, auth, input: parsed.data }), {
+            ip,
+            userAgent,
+          }),
       );
       return { ok: true, data };
     } catch (err) {

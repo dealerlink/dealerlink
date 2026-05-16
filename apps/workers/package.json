@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@axiomhq/js": "^1.6.1",
     "@dealerlink/db": "workspace:*",
     "@dealerlink/schemas": "workspace:*",
     "@dealerlink/tax": "workspace:*",
