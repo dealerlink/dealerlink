@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { requireRole, type AuthContext } from '@/lib/auth/require-role';
 import { AppError, isAppError, type AppErrorCode } from '@/lib/errors';
+import { setSentryTenant } from '@/lib/observability/context';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
 export type ActionResult<T> =
@@ -92,6 +93,10 @@ export function tenantAction<I, O>(
       if (!tenantId) {
         throw new AppError('FORBIDDEN', 'No tenant context for this action');
       }
+
+      // Tag the Sentry scope so any error inside this action is attributable
+      // to a tenant.
+      setSentryTenant({ tenantId });
 
       const { ip, userAgent } = clientMeta();
 

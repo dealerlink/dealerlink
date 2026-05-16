@@ -1,3 +1,4 @@
+import { withSentryConfig } from '@sentry/nextjs';
 import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +23,8 @@ const nextConfig = {
   },
   experimental: {
     typedRoutes: false,
+    // Required on Next 14 so `instrumentation.ts` (Sentry init) runs at boot.
+    instrumentationHook: true,
     serverComponentsExternalPackages: [
       '@node-rs/argon2',
       'postgres',
@@ -32,4 +35,11 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// `withSentryConfig` wires the Sentry bundler plugin (source maps, client
+// config auto-load, tunnelling). It needs no auth token to build — source-map
+// upload is simply skipped when SENTRY_AUTH_TOKEN is absent (dev + CI).
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  // No source-map widening / monitors without an authenticated project.
+  widenClientFileUpload: false,
+});

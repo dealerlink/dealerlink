@@ -38,6 +38,11 @@
     "prettier-plugin-tailwindcss": "^0.6.9",
     "typescript": "^5.7.3"
   },
+  "pnpm": {
+    "overrides": {
+      "zod": "3.25.76"
+    }
+  },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
       "prettier --write",

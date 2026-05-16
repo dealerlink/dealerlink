@@ -3,6 +3,8 @@ import { eq, sql } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 
+import { setSentryUser } from '@/lib/observability/context';
+
 import { lucia } from './lucia';
 
 export type AuthContext = {
@@ -60,6 +62,15 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   // Heartbeat into auth_events at most once per 24h per user
   void writeHeartbeatIfDue(result.user.id, result.user.tenantId).catch(() => {
     // Logging the heartbeat must never break a request
+  });
+
+  // Enrich the Sentry scope so any error in this request is attributable to a
+  // user + role. The email is scrubbed to a stable hash before any event is
+  // sent (see scrub.ts), so this is privacy-safe.
+  setSentryUser({
+    userId: result.user.id,
+    email: result.user.email,
+    role: result.user.role,
   });
 
   return {

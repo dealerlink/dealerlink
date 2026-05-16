@@ -13,6 +13,7 @@
     "@dealerlink/db": "workspace:*",
     "@dealerlink/schemas": "workspace:*",
     "@dealerlink/tax": "workspace:*",
+    "@sentry/node": "^10.53.1",
     "@sparticuz/chromium": "^131.0.0",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.38.3",
