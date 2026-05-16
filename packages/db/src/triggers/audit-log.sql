@@ -274,3 +274,22 @@ DROP TRIGGER IF EXISTS audit_trg ON payment_allocations;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON payment_allocations
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 13: dispatches + dispatch_lines + dispatch_serials are auditable.
+-- Every dispatch creation, delivery, and return becomes an audit row; each
+-- serial that physically leaves the warehouse is traceable via this trigger
+-- plus the inventory_items trigger (wired Day 5).
+DROP TRIGGER IF EXISTS audit_trg ON dispatches;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON dispatches
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON dispatch_lines;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON dispatch_lines
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON dispatch_serials;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON dispatch_serials
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();

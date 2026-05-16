@@ -153,6 +153,51 @@ export async function reserveSerials(
 }
 
 /**
+ * Dispatch a reserved serial (Day 13): reserved → dispatched. Stamps the
+ * `dispatch_id` reference and `dispatched_at`. The row is locked FOR UPDATE
+ * inside `transitionInventoryItem`, so two concurrent dispatches of the same
+ * serial serialise — the loser re-reads `status = 'dispatched'` and the
+ * `reserved → dispatched` transition is rejected.
+ */
+export async function dispatchItem(
+  tx: DrizzleTx,
+  itemId: string,
+  dispatchId: string,
+  userId: string,
+): Promise<InventoryItem> {
+  return transitionInventoryItem(tx, itemId, 'dispatched', { dispatchId, updatedBy: userId });
+}
+
+/** Deliver a dispatched serial (Day 13): dispatched → delivered. */
+export async function deliverItem(
+  tx: DrizzleTx,
+  itemId: string,
+  userId: string,
+  deliveredTo?: string | null,
+): Promise<InventoryItem> {
+  return transitionInventoryItem(tx, itemId, 'delivered', {
+    deliveredTo: deliveredTo ?? null,
+    updatedBy: userId,
+  });
+}
+
+/**
+ * Return a dispatched serial to warehouse stock (Day 13): dispatched →
+ * returned → in_stock. The state machine routes a return through the
+ * intermediate `returned` status; the final `in_stock` transition clears the
+ * dispatch reference AND `reserved_for_order_id` so the serial is fully free
+ * for a fresh reservation.
+ */
+export async function returnItem(
+  tx: DrizzleTx,
+  itemId: string,
+  userId: string,
+): Promise<InventoryItem> {
+  await transitionInventoryItem(tx, itemId, 'returned', { updatedBy: userId });
+  return transitionInventoryItem(tx, itemId, 'in_stock', { updatedBy: userId });
+}
+
+/**
  * Look up the current status of an inventory item without locking. Useful
  * for dashboard reads — never use this before a transition (use
  * transitionInventoryItem which takes the lock).

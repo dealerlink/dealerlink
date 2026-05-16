@@ -92,6 +92,10 @@ export const orders = pgTable(
 
     status: orderStatus().notNull().default('pending'),
     confirmedAt: timestamp({ withTimezone: true }),
+    // Dispatch-lifecycle timestamps (Day 13) — stamped by transitionOrder().
+    partiallyDispatchedAt: timestamp({ withTimezone: true }),
+    fullyDispatchedAt: timestamp({ withTimezone: true }),
+    deliveredAt: timestamp({ withTimezone: true }),
     cancelledAt: timestamp({ withTimezone: true }),
     cancelledReason: text(),
 
