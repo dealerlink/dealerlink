@@ -665,3 +665,59 @@ hard `down` signals because those genuinely break the app.
 **Impact:** A Resend outage shows as `degraded` + 200, alertable via the
 Better Stack degraded rule (R16) without triggering a pod kill.
 **Resolution:** Intentional refinement of the aggregation rule.
+
+## DEV.56 — Day 18 — issues surfaced by the critical-path E2E
+
+**Date:** 2026-05-16
+
+The Day 18 full critical-path E2E (`apps/web/tests/e2e/critical-path.spec.ts`)
+exercised every module across role boundaries for the first time as one
+continuous workflow. It surfaced four issues — two were genuine bugs and
+were fixed on Day 18; two are recorded as carried-forward items.
+
+### (a) FIXED — procurement-new page requested an out-of-range product limit
+
+`apps/web/app/(app)/inventory/procurements/new/page.tsx` called
+`listProducts(tenantId, { limit: 500 })`, but `productListFilterSchema` caps
+`limit` at **200**. Every visit threw a `ZodError` and rendered the Day-16
+error boundary — **recording a procurement through the UI was impossible**.
+This was latent since Day 6 (the seed inserts inventory directly, and no
+verify spec drove the procurement form). **Fix:** the page now requests
+`limit: 200`, which covers any realistic Phase-1 catalog (the seed has ~20
+products/tenant).
+
+### (b) FIXED — `submitSerials` mis-bound an array parameter
+
+`apps/web/lib/actions/procurements/submit-serials.ts` pre-checked serial
+uniqueness with a raw `tx.execute(sql\`… serial_number = ANY(${trimmed})\`)`.
+Under the `postgres.js`driver the JS array did not render as a SQL array, so
+the query always threw`PostgresError: op ANY/ALL (array) requires array on
+right side`(Postgres code 42809) — **serial entry always failed**, blocking
+the whole procure→stock→reserve→dispatch chain. Also latent since Day 6.
+**Fix:** rewritten with drizzle's`inArray(inventoryItems.serialNumber,
+trimmed)`, which renders a bound `IN (…)` list.
+
+### (c) CARRIED FORWARD — no force-password-change route
+
+CLAUDE.md §6 and the Day-4 plan describe a force-password-change screen gated
+by `users.must_change_password`. The flag is set on operator-provisioned
+admins and on password resets, and it rides the Lucia session attributes —
+but **no rotation route ships in Phase 1**: the login action redirects every
+user to `/dashboard` (or `/admin` for operators) regardless. The
+operator-onboarding spec (R.12) therefore asserts the new admin reaches the
+dashboard, not a rotation screen. Building the rotation UI is a Stage C / Day
+4-debt item — see `docs/STAGE_C_HANDOFF.md` §3.
+
+### (d) CARRIED FORWARD — dealer/product detail pages pass a function prop
+
+The dev log shows, on `/dealers/[id]` and `/catalog/[id]`, a recurring
+`Error: Functions cannot be passed directly to Client Components` — a Server
+Component passes `formatINR={formatINRExact}` (a function) into a Client
+Component. The detail pages still render (the error is non-fatal in dev) and
+neither page is on the critical path, so this was not fixed under the Day-18
+frozen scope. Recorded for Stage C: pass formatted strings, or move the
+formatter import into the client component.
+
+**Permanent fix:** (a) + (b) are fixed and now exercised end-to-end by the
+critical-path E2E on every `pnpm verify` run; (c) + (d) are in the Stage C
+handoff backlog.

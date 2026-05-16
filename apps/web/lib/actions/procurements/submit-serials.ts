@@ -2,7 +2,7 @@
 
 import { inventoryItems, procurementItems, procurements } from '@dealerlink/db';
 import { submitSerialsSchema } from '@dealerlink/schemas';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
@@ -59,16 +59,17 @@ export const submitSerials = tenantAction(
     }
 
     // Pre-check tenant uniqueness of incoming serials (gives a friendly error
-    // before the partial unique index kicks in).
+    // before the partial unique index kicks in). `inArray` renders an IN (…)
+    // list of bound params — a raw `= ANY(${array})` mis-binds under the
+    // postgres.js driver (DEV.56).
     if (trimmed.length > 0) {
-      const existing = await tx.execute<{ serial_number: string }>(sql`
-        SELECT serial_number FROM inventory_items
-        WHERE tenant_id = ${tenantId}
-          AND serial_number = ANY(${trimmed})
-      `);
-      const dupes = (existing as unknown as { serial_number: string }[]).map(
-        (r) => r.serial_number,
-      );
+      const existing = await tx
+        .select({ serialNumber: inventoryItems.serialNumber })
+        .from(inventoryItems)
+        .where(
+          and(eq(inventoryItems.tenantId, tenantId), inArray(inventoryItems.serialNumber, trimmed)),
+        );
+      const dupes = existing.map((r) => r.serialNumber).filter((s): s is string => s != null);
       if (dupes.length > 0) {
         throw new AppError('CONFLICT', `Serial(s) already exist in inventory: ${dupes.join(', ')}`);
       }

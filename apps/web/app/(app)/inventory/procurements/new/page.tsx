@@ -17,7 +17,9 @@ export default async function NewProcurementPage() {
     redirect('/inventory/procurements');
   }
 
-  const productsResult = await listProducts(tenantId, { limit: 500, offset: 0 });
+  // 200 is the max page size enforced by productListFilterSchema; it covers
+  // any realistic Phase-1 catalog. (limit: 500 threw a ZodError — DEV.56.)
+  const productsResult = await listProducts(tenantId, { limit: 200, offset: 0 });
   const productOptions = productsResult.rows.map((p) => ({
     id: p.id,
     name: p.name,

@@ -28,7 +28,7 @@ export async function loginAs(page: Page, tenant: TenantSlug, role: TenantRole):
   await page.fill('input[type="email"]', user.email);
   await page.fill('input[type="password"]', user.password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/dashboard|change-password|inventory|pipeline/, { timeout: 10_000 });
+  await page.waitForURL(/dashboard|change-password|inventory|pipeline/, { timeout: 30_000 });
 }
 
 export async function loginAsOperator(page: Page): Promise<void> {
@@ -37,5 +37,5 @@ export async function loginAsOperator(page: Page): Promise<void> {
   await page.fill('input[type="email"]', user.email);
   await page.fill('input[type="password"]', user.password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(/admin/, { timeout: 10_000 });
+  await page.waitForURL(/admin/, { timeout: 30_000 });
 }

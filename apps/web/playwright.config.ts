@@ -29,6 +29,10 @@ export default defineConfig({
   // the default 30s on a cold .next. Give it headroom so the suite is
   // not flaky.
   timeout: 60_000,
+  // Cold dev-server route compilation can take 5-10s on first hit; the
+  // default 5s expect timeout is too tight for that. 15s matches the
+  // per-step budget the critical-path spec is written against.
+  expect: { timeout: 15_000 },
   workers: 1,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
