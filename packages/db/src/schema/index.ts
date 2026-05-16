@@ -12,6 +12,7 @@ export * from './auth-events';
 export * from './access-log';
 export * from './rate-limit';
 export * from './email-delivery-log';
+export * from './webhook-events';
 export * from './inbound-token-history';
 export * from './dealer';
 export * from './product';

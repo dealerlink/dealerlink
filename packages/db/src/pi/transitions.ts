@@ -24,9 +24,19 @@ export const ALLOWED_TRANSITIONS: Record<PerformaInvoiceStatus, PerformaInvoiceS
   sent: ['confirmed', 'cancelled'],
   confirmed: [],
   cancelled: [],
+  // `expired` is reached only by the Day 14 validity-expiry batch job, which
+  // updates `status` directly (it is a system sweep, not a user transition).
+  // Terminal — listed here so the Record covers every enum member.
+  expired: [],
 };
 
-export const ALL_PI_STATUSES: PerformaInvoiceStatus[] = ['draft', 'sent', 'confirmed', 'cancelled'];
+export const ALL_PI_STATUSES: PerformaInvoiceStatus[] = [
+  'draft',
+  'sent',
+  'confirmed',
+  'cancelled',
+  'expired',
+];
 
 export function isPiTransitionAllowed(
   from: PerformaInvoiceStatus,

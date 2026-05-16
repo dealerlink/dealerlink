@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { quotationDiscountSchema, quotationLineInputSchema, stateCodeSchema } from './quotation';
 
-export const PI_STATUSES = ['draft', 'sent', 'confirmed', 'cancelled'] as const;
+export const PI_STATUSES = ['draft', 'sent', 'confirmed', 'cancelled', 'expired'] as const;
 export type PerformaInvoiceStatus = (typeof PI_STATUSES)[number];
 
 export const PI_DISCOUNT_TYPES = ['percent', 'amount'] as const;

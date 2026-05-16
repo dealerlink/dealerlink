@@ -233,8 +233,23 @@ Open `.env.local` in your editor and:
 1. Replace `replace_with_64_char_hex_string` with the generated secret
 2. Add your **Resend API key**: `RESEND_API_KEY=re_xxxxxxxx` (from https://resend.com/api-keys)
 3. Add your **Sentry DSN**: `SENTRY_DSN=https://xxxxx@xxxxx.ingest.sentry.io/xxxxx` (from sentry.io)
+4. Generate a **Resend inbound webhook secret** (`RESEND_INBOUND_WEBHOOK_SECRET`):
 
-Leave the deferred-to-Phase-2 variables (DO Spaces, Axiom, RESEND_INBOUND_WEBHOOK_SECRET) commented out.
+   ```bash
+   # Windows PowerShell / macOS / Linux (Node is already installed):
+   node -e "console.log('whsec_' + require('crypto').randomBytes(32).toString('base64url'))"
+   ```
+
+   This server-only secret signs/verifies inbound Resend webhook events
+   (delivery, bounce, open, click). In **local dev** any generated value
+   works — the webhook integration tests sign their fixtures with the same
+   secret. In **production**, replace it with the signing secret Resend
+   shows when you create the webhook endpoint in their dashboard (see
+   `docs/RUNBOOKS.md` → "Setting up Resend webhook in production").
+
+   ⚠️ Never expose this via a `NEXT_PUBLIC_*` variable — it is server-only.
+
+Leave the deferred-to-Phase-2 variables (DO Spaces, Axiom) commented out.
 
 ### 5. Run database migrations
 

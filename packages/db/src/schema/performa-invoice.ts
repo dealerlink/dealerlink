@@ -30,6 +30,9 @@ export const performaInvoiceStatus = pgEnum('performa_invoice_status', [
   'sent',
   'confirmed',
   'cancelled',
+  // Day 14: a `sent` PI whose validity lapsed without confirmation is moved
+  // to `expired` by the daily validity-expiry job. Terminal.
+  'expired',
 ]);
 
 export const performaInvoiceDiscountType = pgEnum('performa_invoice_discount_type', [

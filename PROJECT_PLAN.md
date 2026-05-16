@@ -50,20 +50,20 @@
 
 ## Stage A — Foundation Setup
 
-| #    | Task                                                | Status | Date | Notes                                                   |
-| ---- | --------------------------------------------------- | ------ | ---- | ------------------------------------------------------- |
-| A.1  | GitHub repo `dealerlink` created (private)          | ✅     |      |                                                         |
-| A.2  | Local dev environment configured                    | ✅     |      | Node 20, pnpm, Docker, Postgres 16                      |
-| A.3  | Repo scaffolded with starter files                  | ✅     |      | .gitignore, docker-compose.yml, .env.example, README.md |
-| A.4  | Documentation placed in /docs and CLAUDE.md at root | ✅     |      |                                                         |
-| A.5  | Local Postgres running with extensions              | ✅     |      | uuid-ossp, pg_trgm, btree_gin                           |
-| A.6  | Initial commit pushed to GitHub                     | ✅     |      |                                                         |
-| A.7  | Resend account + API key configured                 | ✅     |      | RESEND_API_KEY in .env.local                            |
-| A.8  | Sentry account + DSN configured                     | ✅     |      | dealerlink-web + dealerlink-workers projects            |
-| A.9  | .env.local populated with core secrets              | ✅     |      | SESSION_SECRET, RESEND_API_KEY, SENTRY_DSN              |
-| A.10 | RESEND_INBOUND_WEBHOOK_SECRET configured            | 🅿️     |      | Parked until Week 3 (when inbound email is wired up)    |
+| #    | Task                                                | Status | Date       | Notes                                                                                              |
+| ---- | --------------------------------------------------- | ------ | ---------- | -------------------------------------------------------------------------------------------------- |
+| A.1  | GitHub repo `dealerlink` created (private)          | ✅     |            |                                                                                                    |
+| A.2  | Local dev environment configured                    | ✅     |            | Node 20, pnpm, Docker, Postgres 16                                                                 |
+| A.3  | Repo scaffolded with starter files                  | ✅     |            | .gitignore, docker-compose.yml, .env.example, README.md                                            |
+| A.4  | Documentation placed in /docs and CLAUDE.md at root | ✅     |            |                                                                                                    |
+| A.5  | Local Postgres running with extensions              | ✅     |            | uuid-ossp, pg_trgm, btree_gin                                                                      |
+| A.6  | Initial commit pushed to GitHub                     | ✅     |            |                                                                                                    |
+| A.7  | Resend account + API key configured                 | ✅     |            | RESEND_API_KEY in .env.local                                                                       |
+| A.8  | Sentry account + DSN configured                     | ✅     |            | dealerlink-web + dealerlink-workers projects                                                       |
+| A.9  | .env.local populated with core secrets              | ✅     |            | SESSION_SECRET, RESEND_API_KEY, SENTRY_DSN                                                         |
+| A.10 | RESEND_INBOUND_WEBHOOK_SECRET configured            | ✅     | 2026-05-16 | ✅ closed by Day 14 — generated, in `.env.local` + documented in `SETUP.md`; inbound webhook wired |
 
-**Stage A status: ✅ Complete (9/10 active items, 1 parked)**
+**Stage A status: ✅ Complete (10/10)**
 
 ---
 

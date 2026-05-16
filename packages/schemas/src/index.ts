@@ -7,3 +7,4 @@ export * from './performa-invoice';
 export * from './order';
 export * from './payment';
 export * from './dispatch';
+export * from './email';
