@@ -5057,7 +5057,302 @@ SELECT COUNT(*) FROM audit_log WHERE created_at > now() - interval '1 hour' AND 
 
 ## Day 18 — E2E + Handoff (Final Day of Stage B)
 
-_Will be added when Day 17 is complete. Day 18 is the final day of Stage B — Playwright end-to-end test of the full critical-path workflow (login → onboard tenant → create dealer/product → procurement → deal → quotation → PI → order → payment → dispatch → delivered), add the deferred R.12 operator-onboarding spec, generate the user manual stub, prepare Stage C handoff._
+**Goal:** Close Stage B. Ship the full critical-path Playwright E2E test, close R.12 (deferred operator-onboarding spec from Day 4), produce the Stage C handoff document, and stub the user manual. After this, Stage B is done and the project moves into Stage C (Validation).
+
+**Estimated time:** 4–5 hours + ~30 min verification
+
+**Deliverable:** Full critical-path E2E test passing. R.12 closed. `docs/STAGE_C_HANDOFF.md` written. `docs/USER_MANUAL.md` stub with table of contents + first 2 sections. PROJECT_PLAN.md shows B.18 ✅ and Stage B fully complete.
+
+### Prompt for Claude Code
+
+```
+You are implementing Day 18 of the Dealerlink build — THE FINAL DAY of Stage B. Day 17 shipped successfully (commits b1ec83b..89f9378) — observability stack. Day 18 closes Stage B.
+
+PRELIMINARY:
+P.1. `pnpm preflight` — confirm 17 green.
+P.2. Read PROJECT_PLAN.md — note R.12 (operator-onboarding Playwright spec, deferred from Day 4) still open. Stage B ends today.
+P.3. Read CLAUDE.md (refresh — this is the final read before handoff).
+P.4. Read all 55 deviations in DEVIATIONS.md — synthesize a "carried-forward items" list for Stage C handoff.
+P.5. Read PROJECT_PLAN.md changelog — Stage B summary will reference this.
+
+PRIMARY REFERENCES:
+1. PROJECT_PLAN.md (Stage B status + R.12 + open items)
+2. DEVIATIONS.md (55 entries — distill carried-forward items)
+3. docs/WORKFLOWS.md (the critical path to E2E test)
+4. docs/RUNBOOKS.md (operator procedures — referenced in user manual)
+5. apps/web/tests/e2e/helpers.ts (SEEDED_USERS — E2E test uses these)
+
+==========================================================
+TRACK A — DAY 18 (CHUNKED — 4 chunks)
+==========================================================
+
+CHUNK 18a — Full critical-path E2E (the new test)
+---------------------------------
+
+A1.1. Create apps/web/tests/e2e/critical-path.spec.ts — the comprehensive smoke test that simulates a complete distributor workflow:
+
+```
+
+Scenario: New distributor receives an order, fulfills it, gets paid.
+
+Setup: fresh tenant (or use seeded 'demo' if isolation guaranteed).
+
+Steps (each is an assertion-rich Playwright block):
+
+1. Login as admin@demo.test
+2. Create a new dealer ("Test Dealer 2026") with all required fields
+3. Create a new product ("Test Panel 600W", SKU "TST-600", HSN 85414300, GST 18%)
+4. Record a procurement of 10 units of TST-600 at ₹15,000/unit from a supplier
+5. Confirm procurement creates 10 inventory_items with status='in_stock'
+6. Logout, login as sales@demo.test
+7. Create a new deal ("Test Distributor Q1 order") for Test Dealer 2026, qualification stage
+8. Advance deal through pipeline: qualification → needs_analysis
+9. Create a quotation from the deal: 5 units of TST-600 @ ₹16,000 (Markup over procurement)
+10. Verify quotation tax math: intra-state (assuming dealer in same state as tenant) shows CGST+SGST = 18% total
+11. Send quotation — deal stage advances to quotation_sent
+12. Manually advance deal: quotation_sent → negotiation → verbal_commit → po_pending
+13. Convert quotation to PI (Ship-To same as Bill-To for this test)
+14. Send PI, confirm PI — verify Order auto-created, deal advances to payment_pending, 5 inventory_items move to 'reserved'
+15. Logout, login as accounts@demo.test
+16. Record payment of the order total (full payment, bank transfer, with reference)
+17. Verify payment as accounts, mark cleared
+18. Allocate payment to the order — verify order.paymentStatus='paid', order moves to 'confirmed'
+19. Logout, login as dispatch@demo.test
+20. Create dispatch from the order: pick all 5 reserved serials, fill vehicle + transporter info
+21. Verify inventory_items move from 'reserved' to 'dispatched'
+22. Mark dispatch delivered with acknowledged_by="Test Person"
+23. Verify order.status='delivered', deal advances to 'closed_won'
+24. Logout, login as admin@demo.test
+25. Open /reports/sales-summary, filter to today, confirm the new order appears
+26. Open /reports/outstanding, confirm Test Dealer 2026 has 0 outstanding
+27. Cleanup: optional teardown (delete the test entities — only if seed isolation requires)
+
+Each step:
+
+- Uses semantic locators (getByRole, getByLabel) not fragile CSS selectors
+- Asserts the expected state change before proceeding
+- Captures a screenshot on failure
+- Times out at 15 seconds per step (not the default 30s)
+
+```
+
+A1.2. The test must not depend on seed data ordering. Either:
+   - (a) Use unique test prefixes ("CP-" for critical-path) and scope all locators/queries by that prefix, OR
+   - (b) Run in serial mode with full DB reset between runs (heavyweight; skip if (a) works)
+
+   Pick (a) per DEV.31 pattern.
+
+A1.3. Document the spec at the top of the file with the full 27-step narrative as a comment so future maintainers understand intent.
+
+A1.4. Run the spec locally to confirm it passes. This is THE smoke test — if anything in the build is broken end-to-end, this is what surfaces it.
+
+COMMIT 18a: `test(e2e): chunk a — full critical-path workflow`
+
+CHUNK 18b — R.12 closure: operator onboarding spec
+---------------------------------
+
+A2.1. Create apps/web/tests/e2e/operator-onboarding.spec.ts — closes R.12 (deferred from Day 4):
+
+Scenario: Operator onboards a new tenant from scratch.
+
+Steps:
+1. Login as operator@dealerlink.test (operator role from Day 4 seed)
+2. Navigate to /admin/tenants
+3. Click "+ New tenant", fill the form:
+   - Slug: "newtenant"
+   - Legal name: "New Tenant Solar Distributors Pvt Ltd"
+   - Primary admin email: "newadmin@newtenant.test"
+   - State: "Maharashtra"
+   - Default settings populated (fiscal year, currency=INR)
+4. Submit — confirm success message, redirect to tenant detail
+5. Confirm new tenant appears in tenants list
+6. Confirm a default admin user was created with a temp password (visible in operator UI per Day 4 pattern, OR logged for testing — depending on Day 4 implementation)
+7. Logout
+8. Login as the new admin user (newadmin@newtenant.test, temp password)
+9. Confirm force-password-change flow triggers (Lucia/Day 4 ADR-010 behavior)
+10. Set new password
+11. Verify redirected to /dashboard with empty state (no seeded data for new tenant)
+12. Verify subdomain routing works (URL contains `?tenant=newtenant` or actual subdomain in production)
+
+A2.2. The spec scopes to "newtenant"-prefixed entities for cleanup.
+
+A2.3. Update PROJECT_PLAN.md: mark R.12 ✅ closed.
+
+A2.4. Update CLAUDE.md if any operator-onboarding nuance surfaced (probably not; just verifying).
+
+COMMIT 18b: `test(e2e): chunk b — operator onboarding spec (closes R.12)`
+
+CHUNK 18c — User manual stub + Stage C handoff
+---------------------------------
+
+A3.1. Create docs/USER_MANUAL.md — the operator-facing manual:
+
+Structure (Phase 1 stub — full content fills out in Stage C):
+- Title page
+- Table of contents (10 sections planned)
+- Section 1: Getting Started
+  - First login + force-password-change
+  - Dashboard tour
+  - Role-based permissions overview
+- Section 2: Setting Up Your Catalog
+  - Adding dealers (with GSTIN validation notes)
+  - Adding products (HSN code + GST rate guidance)
+  - Recording procurements
+- Sections 3-10: stub headings only ("Sales Pipeline", "Quotations", "Performa Invoices", "Orders", "Payments", "Dispatch", "Reports", "Troubleshooting") — fill in Stage C
+
+Write sections 1 and 2 with screenshots-pending placeholders. Plain language; no technical jargon. Operator persona: distributor's office manager, not technical.
+
+A3.2. Create docs/STAGE_C_HANDOFF.md — the handoff document:
+
+Sections to include:
+1. **Stage B Summary**
+   - 18 days complete, all on time
+   - Final test counts (unit + verify)
+   - Final deviation count + categorization (resolved vs carried-forward)
+   - Commit range (Stage A end → Stage B end)
+   - All ADRs locked (12 total)
+2. **What's Working** (the feature matrix)
+   - Auth + multi-tenant routing ✅
+   - Dealer + product + inventory ✅
+   - Sales pipeline ✅
+   - Quotations + tax engine + PDFs ✅
+   - PI + Order + 3-party documents ✅
+   - Payments + receipts ✅
+   - Dispatch + serial pick ✅
+   - Email (async, with webhooks) ✅
+   - Reports (4 reports + CSV) ✅
+   - Observability ✅
+3. **What's Deferred to Stage C / Phase 2**
+   - DEV.33 — state code normalization (full names → 2-letter codes)
+   - DEV.45 — Day 13 seed pre-stamp cleanup
+   - DEV.15 → DO Spaces wiring (currently base64 inline)
+   - GST Returns API integration (Phase 2)
+   - E-way bill API integration (Phase 2)
+   - Real-time dashboard updates (currently page-refresh)
+   - Mobile-responsive admin UI (Phase 2)
+   - List any other carried-forward items from the 55 deviations
+4. **Stage C Validation Plan**
+   - Manual test plan (key workflows to exercise)
+   - Performance test plan (load test against pg-boss queue, DB connection pool)
+   - Security review checklist (RLS audit, role enforcement audit, secrets review)
+   - Data migration plan (move from dev seed → staging real data)
+5. **Known Risks for Stage D Production**
+   - DO App Platform sizing (current preflight estimate ~1GB RAM per pod)
+   - Sentry/BetterStack/Axiom production DSNs need provisioning
+   - DNS + SSL for dealerlink.in + per-tenant subdomains
+   - Backup strategy for DO Managed Postgres
+   - Resend domain verification + DKIM/SPF
+6. **Quick-Reference Operational Runbooks**
+   - List links to docs/RUNBOOKS.md entries
+7. **Test Account Credentials** (for Stage C testers)
+   - SEEDED_USERS from apps/web/tests/e2e/helpers.ts
+   - Reminder: dev DB only; production has no seed
+
+A3.3. Document the file structure for new contributors:
+- Update docs/STRUCTURE.md if Stage B added directories not yet captured
+- Sanity check: a new dev cloning the repo can run pnpm install + pnpm preflight + pnpm dev and see the app working
+
+COMMIT 18c: `docs: chunk c — user manual stub + Stage C handoff document`
+
+CHUNK 18d — Final closeout + Stage B summary
+---------------------------------
+
+A4.1. PROJECT_PLAN.md updates:
+- Mark B.18 ✅ with today's date
+- Mark Stage B "COMPLETE" with completion date
+- Append a Stage B summary block: total days, total commits, total tests, deviation summary
+- Update the changelog: "Stage B closed YYYY-MM-DD"
+- R.12 marked ✅
+- Confirm no other R.X risks remain open at Stage B exit; if any do, escalate to Stage C scope
+
+A4.2. CLAUDE.md final review:
+- Confirm §0-§9 navigation is intact
+- Confirm all ADR references are current
+- Confirm the "Reading Order" at the top still makes sense
+- No new content; this is a verification pass
+
+A4.3. Final test counts:
+- pnpm test — capture exact counts per workspace
+- pnpm verify — capture spec counts
+- Add a "Final Stage B numbers" block to PROJECT_PLAN.md
+
+A4.4. Git tag the Stage B endpoint:
+- `git tag stage-b-complete -m "Stage B complete — feature build done, ready for Stage C validation"`
+- Push the tag: `git push origin stage-b-complete`
+
+A4.5. Closeout:
+- pnpm preflight, verify (53/53 = 51 prior + 2 new from chunks 18a/18b), all gates green
+- Final commit: `chore: stage B complete — 18/18 days, all gates green`
+- Push (including the tag)
+
+COMMIT 18d: as above
+
+==========================================================
+GUARDRAILS (DAY 18)
+==========================================================
+
+- The critical-path E2E is THE smoke test for the whole build. If it doesn't pass, Stage B doesn't close. No exceptions.
+- Test entities use unique prefixes ("CP-", "newtenant"-) for cleanup safety.
+- The handoff doc is for a future engineer who didn't live through the build. Write for them, not for yourself. Explain WHY decisions were made, not just what.
+- The user manual is for a non-technical operator. Plain language. No "tenant" jargon — say "your company". No "RLS" — say "data isolation".
+- The git tag is permanent. Make sure the commit at stage-b-complete is the last one of Stage B.
+- Do NOT push fixes after tagging without bumping a Stage B patch tag. Stage B is frozen at tag.
+- If the critical-path E2E surfaces a real bug today, STOP. Fix it. Day 18 doesn't close until the test passes.
+
+WHEN DONE:
+- Print summary, 4 chunk commits
+- Confirm: critical-path E2E passes
+- Confirm: R.12 closed
+- Confirm: docs/STAGE_C_HANDOFF.md exists with 7 sections
+- Confirm: docs/USER_MANUAL.md exists with sections 1-2 written + 3-10 stubbed
+- Confirm: git tag stage-b-complete pushed
+- Confirm: verify 53/53
+- Confirm: PROJECT_PLAN.md marks Stage B COMPLETE
+- Tell me: "Stage B complete. Dealerlink is feature-complete and ready for Stage C validation."
+```
+
+### Verification checklist
+
+#### Critical-path E2E
+
+- [ ] `pnpm verify` includes `critical-path.spec.ts` — passes
+- [ ] All 27 steps execute in order
+- [ ] Test cleans up after itself (no permanent CP-prefixed data in dev DB)
+
+#### R.12 closure
+
+- [ ] `operator-onboarding.spec.ts` exists and passes
+- [ ] PROJECT_PLAN.md R.12 marked ✅
+
+#### Documentation
+
+- [ ] `docs/STAGE_C_HANDOFF.md` has 7 sections, all populated
+- [ ] `docs/USER_MANUAL.md` sections 1-2 complete, 3-10 stubbed
+- [ ] `PROJECT_PLAN.md` shows Stage B COMPLETE with date
+
+#### Git state
+
+- [ ] `git tag --list stage-b-*` shows the tag
+- [ ] `git log --oneline stage-b-complete -1` shows the closeout commit
+- [ ] Tag pushed to origin
+
+#### Final test counts
+
+- [ ] `pnpm verify` — 53/53
+- [ ] `pnpm test` — exact count captured in PROJECT_PLAN.md
+- [ ] All quality gates green one last time
+
+#### Stage B summary
+
+- [ ] PROJECT_PLAN.md changelog has a Stage B summary block
+- [ ] Total deviations counted (55+ at this point)
+- [ ] Carried-forward items in handoff doc match open deviations
+
+---
+
+## Stage B Complete
+
+_After Day 18, Stage B is closed. Stage C (Validation) begins separately — manual testing, performance testing, security review, data migration planning. Stage D (Production) wires DO App Platform deploy, DNS, SSL, real Resend domain. Stage E (Launch) is pilot tenant onboarding._
 
 ---
 
