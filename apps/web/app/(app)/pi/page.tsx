@@ -1,6 +1,9 @@
+import { FileCheck } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
+import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate, formatINRExact } from '@/lib/format';
@@ -108,16 +111,34 @@ export default async function PiListPage({ searchParams }: PageProps) {
 
       <div className="border-line overflow-hidden rounded-[6px] border bg-white">
         {result.rows.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="text-mute mb-2 text-[13px]">No performa invoices yet.</div>
-            <p className="text-mute text-[12.5px]">
-              A PI is created by converting an accepted quotation —{' '}
-              <Link href="/quotations?status=accepted" className="text-ink hover:underline">
-                view accepted quotations
-              </Link>
-              .
-            </p>
-          </div>
+          (() => {
+            const anyFilter = Boolean(
+              searchParams.search || searchParams.status || searchParams.from || searchParams.to,
+            );
+            return anyFilter ? (
+              <EmptyState
+                icon={FileCheck}
+                title="No performa invoices match these filters"
+                description="Try widening the date range or clearing a filter."
+                action={
+                  <Button asChild variant="default">
+                    <Link href="/pi">Clear filters</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={FileCheck}
+                title="No performa invoices yet"
+                description="A PI is created by converting an accepted quotation."
+                action={
+                  <Button asChild variant="default">
+                    <Link href="/quotations?status=accepted">View accepted quotations</Link>
+                  </Button>
+                }
+              />
+            );
+          })()
         ) : (
           <table className="w-full text-[13px]">
             <thead>

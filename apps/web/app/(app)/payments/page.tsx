@@ -1,6 +1,9 @@
+import { Banknote } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
+import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate, formatINRExact } from '@/lib/format';
@@ -112,18 +115,36 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
 
       <div className="border-line overflow-hidden rounded-[6px] border bg-white">
         {result.rows.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="text-mute mb-2 text-[13px]">No payments yet.</div>
-            {canRecord && (
-              <p className="text-mute text-[12.5px]">
-                Use{' '}
-                <Link href="/payments/new" className="text-ink hover:underline">
-                  Record payment
-                </Link>{' '}
-                to log a receipt.
-              </p>
-            )}
-          </div>
+          (() => {
+            const anyFilter = Boolean(
+              searchParams.search || searchParams.status || searchParams.method,
+            );
+            return anyFilter ? (
+              <EmptyState
+                icon={Banknote}
+                title="No payments match these filters"
+                description="Try a different status or clear the filters."
+                action={
+                  <Button asChild variant="default">
+                    <Link href="/payments">Clear filters</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Banknote}
+                title="No payments yet"
+                description="Record a payment to log a receipt against an order."
+                action={
+                  canRecord ? (
+                    <Button asChild variant="primary">
+                      <Link href="/payments/new">Record payment</Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
+            );
+          })()
         ) : (
           <table className="w-full text-[13px]">
             <thead>

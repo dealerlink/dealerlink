@@ -1,7 +1,8 @@
-import { Plus } from 'lucide-react';
+import { FileText, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
@@ -156,9 +157,41 @@ export default async function QuotationsPage({ searchParams }: PageProps) {
 
       <div className="border-line overflow-hidden rounded-[6px] border bg-white">
         {result.rows.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="text-mute text-[13px]">No quotations match this view.</div>
-          </div>
+          (() => {
+            const anyFilter = Boolean(
+              searchParams.search ||
+              searchParams.status ||
+              searchParams.dealerId ||
+              searchParams.preparedBy ||
+              searchParams.from ||
+              searchParams.to ||
+              searchParams.superseded,
+            );
+            return (
+              <EmptyState
+                icon={FileText}
+                title={anyFilter ? 'No quotations match these filters' : 'No quotations yet'}
+                description={
+                  anyFilter
+                    ? 'Try widening the date range or clearing a filter.'
+                    : 'Create your first quotation to start a deal.'
+                }
+                action={
+                  anyFilter ? (
+                    <Button asChild variant="default">
+                      <Link href="/quotations">Clear filters</Link>
+                    </Button>
+                  ) : canCreate ? (
+                    <Button asChild variant="primary">
+                      <Link href="/quotations/new">
+                        <Plus size={13} /> New quotation
+                      </Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
+            );
+          })()
         ) : (
           <table className="w-full text-[13px]">
             <thead>

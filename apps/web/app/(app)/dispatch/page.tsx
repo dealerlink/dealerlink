@@ -1,6 +1,9 @@
+import { Truck } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
+import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate } from '@/lib/format';
@@ -129,18 +132,40 @@ export default async function DispatchPage({ searchParams }: PageProps) {
 
       <div className="border-line overflow-hidden rounded-[6px] border bg-white">
         {result.rows.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="text-mute mb-2 text-[13px]">No dispatches yet.</div>
-            {canCreate && (
-              <p className="text-mute text-[12.5px]">
-                Use{' '}
-                <Link href="/dispatch/new" className="text-ink hover:underline">
-                  New dispatch
-                </Link>{' '}
-                to ship inventory against a confirmed order.
-              </p>
-            )}
-          </div>
+          (() => {
+            const anyFilter = Boolean(
+              searchParams.search ||
+              searchParams.status ||
+              searchParams.transporter ||
+              searchParams.from ||
+              searchParams.to,
+            );
+            return anyFilter ? (
+              <EmptyState
+                icon={Truck}
+                title="No dispatches match these filters"
+                description="Try widening the date range or clearing a filter."
+                action={
+                  <Button asChild variant="default">
+                    <Link href="/dispatch">Clear filters</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Truck}
+                title="No dispatches yet"
+                description="Create a dispatch to ship inventory against a confirmed order."
+                action={
+                  canCreate ? (
+                    <Button asChild variant="primary">
+                      <Link href="/dispatch/new">New dispatch</Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
+            );
+          })()
         ) : (
           <table className="w-full text-[13px]">
             <thead>

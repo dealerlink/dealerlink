@@ -1,6 +1,9 @@
+import { Receipt } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
+import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate, formatINRExact } from '@/lib/format';
@@ -105,16 +108,34 @@ export default async function OrdersPage({ searchParams }: PageProps) {
 
       <div className="border-line overflow-hidden rounded-[6px] border bg-white">
         {result.rows.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="text-mute mb-2 text-[13px]">No orders yet.</div>
-            <p className="text-mute text-[12.5px]">
-              An order is created when a{' '}
-              <Link href="/pi" className="text-ink hover:underline">
-                performa invoice
-              </Link>{' '}
-              is confirmed.
-            </p>
-          </div>
+          (() => {
+            const anyFilter = Boolean(
+              searchParams.search || searchParams.status || searchParams.payment,
+            );
+            return anyFilter ? (
+              <EmptyState
+                icon={Receipt}
+                title="No orders match these filters"
+                description="Try a different status or clear the filters."
+                action={
+                  <Button asChild variant="default">
+                    <Link href="/orders">Clear filters</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={Receipt}
+                title="No orders yet"
+                description="An order is created when a performa invoice is confirmed."
+                action={
+                  <Button asChild variant="default">
+                    <Link href="/pi">Go to performa invoices</Link>
+                  </Button>
+                }
+              />
+            );
+          })()
         ) : (
           <table className="w-full text-[13px]">
             <thead>

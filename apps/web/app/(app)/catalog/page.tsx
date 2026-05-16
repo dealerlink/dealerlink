@@ -1,7 +1,8 @@
-import { Plus, Upload } from 'lucide-react';
+import { Package, Plus, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
@@ -54,6 +55,13 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   });
 
   const canCreate = ctx.user.role === 'admin';
+  const anyFilter = Boolean(
+    searchParams.search ||
+    searchParams.status ||
+    searchParams.category ||
+    searchParams.subcategory ||
+    searchParams.manufacturer,
+  );
 
   return (
     <div className="px-6 py-5">
@@ -93,10 +101,29 @@ export default async function CatalogPage({ searchParams }: PageProps) {
 
       <div className="mt-4">
         {result.rows.length === 0 ? (
-          <div className="border-line rounded-[6px] border bg-white px-6 py-16 text-center">
-            <div className="text-mute text-[13px]">
-              {searchParams.search ? 'No products match this search.' : 'No products yet.'}
-            </div>
+          <div className="border-line rounded-[6px] border bg-white">
+            <EmptyState
+              icon={Package}
+              title={anyFilter ? 'No products match these filters' : 'No products yet'}
+              description={
+                anyFilter
+                  ? 'Try widening the search or clearing a filter.'
+                  : 'Add your first product to build out the catalog.'
+              }
+              action={
+                anyFilter ? (
+                  <Button asChild variant="default">
+                    <Link href="/catalog">Clear filters</Link>
+                  </Button>
+                ) : canCreate ? (
+                  <Button asChild variant="primary">
+                    <Link href="/catalog/new">
+                      <Plus size={13} /> New product
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
           </div>
         ) : view === 'table' ? (
           <div className="border-line overflow-hidden rounded-[6px] border bg-white">

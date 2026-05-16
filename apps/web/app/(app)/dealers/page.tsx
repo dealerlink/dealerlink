@@ -1,7 +1,8 @@
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Upload, UsersRound } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
@@ -67,6 +68,14 @@ export default async function DealersPage({ searchParams }: PageProps) {
 
   const canCreate = ctx.user.role === 'admin' || ctx.user.role === 'sales';
   const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+  const anyFilter = Boolean(
+    searchParams.search ||
+    searchParams.status ||
+    searchParams.type ||
+    searchParams.category ||
+    searchParams.riskLevel ||
+    searchParams.state,
+  );
 
   return (
     <div className="px-6 py-5">
@@ -106,11 +115,28 @@ export default async function DealersPage({ searchParams }: PageProps) {
 
       <div className="border-line mt-4 overflow-hidden rounded-[6px] border bg-white">
         {result.rows.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="text-mute text-[13px]">
-              {searchParams.search ? 'No dealers match this search.' : 'No dealers yet.'}
-            </div>
-          </div>
+          <EmptyState
+            icon={UsersRound}
+            title={anyFilter ? 'No dealers match these filters' : 'No dealers yet'}
+            description={
+              anyFilter
+                ? 'Try widening the search or clearing a filter.'
+                : 'Add your first dealer to start building your network.'
+            }
+            action={
+              anyFilter ? (
+                <Button asChild variant="default">
+                  <Link href="/dealers">Clear filters</Link>
+                </Button>
+              ) : canCreate ? (
+                <Button asChild variant="primary">
+                  <Link href="/dealers/new">
+                    <Plus size={13} /> New dealer
+                  </Link>
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
           <table className="w-full text-[13px]">
             <thead>

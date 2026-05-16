@@ -1,7 +1,8 @@
-import { Plus } from 'lucide-react';
+import { Box, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { EmptyState } from '@/app/_components';
 import { Button } from '@/components/ui/button';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
@@ -97,11 +98,19 @@ export default async function InventoryPage({ searchParams }: PageProps) {
 
       <div className="border-line mt-4 overflow-hidden rounded-[6px] border bg-white">
         {result.rows.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <div className="text-mute text-[13px]">
-              {searchParams.search ? 'No items match this search.' : 'No inventory yet.'}
-            </div>
-          </div>
+          <EmptyState
+            icon={Box}
+            title={
+              searchParams.search || searchParams.status || searchParams.productId
+                ? 'No items match these filters'
+                : 'No inventory yet'
+            }
+            description={
+              searchParams.search || searchParams.status || searchParams.productId
+                ? 'Try widening the search or clearing a filter.'
+                : 'Inventory items are created when a procurement is received.'
+            }
+          />
         ) : (
           <table className="w-full text-[13px]">
             <thead>
