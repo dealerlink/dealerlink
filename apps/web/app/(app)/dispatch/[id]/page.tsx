@@ -33,6 +33,7 @@ export default async function DispatchDetailPage({ params }: PageProps) {
   const role = ctx.user.role;
   const isAdmin = role === 'admin';
   const canManage = role === 'admin' || role === 'dispatch';
+  const canDownload = role === 'admin' || role === 'dispatch' || role === 'accounts';
   const totalSerials = dispatch.lines.reduce((n, l) => n + l.serials.length, 0);
 
   return (
@@ -67,6 +68,7 @@ export default async function DispatchDetailPage({ params }: PageProps) {
           status={dispatch.status}
           isAdmin={isAdmin}
           canManage={canManage}
+          canDownload={canDownload}
         />
       </div>
 

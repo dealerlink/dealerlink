@@ -4,7 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { markDispatchDelivered, returnDispatch } from '@/lib/actions/dispatch';
+import {
+  downloadDispatchPdf,
+  emailDispatchPdf,
+  markDispatchDelivered,
+  returnDispatch,
+} from '@/lib/actions/dispatch';
 import type { DispatchStatus } from '@dealerlink/schemas';
 
 interface Props {
@@ -13,18 +18,66 @@ interface Props {
   status: DispatchStatus;
   isAdmin: boolean;
   canManage: boolean;
+  canDownload: boolean;
 }
 
-type Pending = null | 'deliver' | 'return';
+type Pending = null | 'deliver' | 'return' | 'download' | 'email';
 
-export function DispatchActions({ id, dispatchNumber, status, isAdmin, canManage }: Props) {
+export function DispatchActions({
+  id,
+  dispatchNumber,
+  status,
+  isAdmin,
+  canManage,
+  canDownload,
+}: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<Pending>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [acknowledgedBy, setAcknowledgedBy] = useState('');
   const [returnReason, setReturnReason] = useState('');
+
+  async function doDownload() {
+    setPending('download');
+    setError(null);
+    setNotice(null);
+    const r = await downloadDispatchPdf({ id });
+    setPending(null);
+    if (!r.ok) {
+      setError(r.error.message);
+      return;
+    }
+    if (r.data.url) {
+      window.open(r.data.url, '_blank');
+      return;
+    }
+    if (r.data.base64) {
+      const bytes = Uint8Array.from(atob(r.data.base64), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: r.data.mimeType });
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = r.data.filename;
+      a.click();
+      URL.revokeObjectURL(href);
+    }
+  }
+
+  async function doEmail() {
+    setPending('email');
+    setError(null);
+    setNotice(null);
+    const r = await emailDispatchPdf({ id });
+    setPending(null);
+    if (!r.ok) {
+      setError(r.error.message);
+      return;
+    }
+    setNotice(`Dispatch note queued to ${r.data.queuedTo}.`);
+  }
 
   async function doDeliver() {
     if (acknowledgedBy.trim().length < 2) {
@@ -65,6 +118,16 @@ export function DispatchActions({ id, dispatchNumber, status, isAdmin, canManage
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {canDownload && (
+          <Button variant="default" onClick={doDownload} disabled={!!pending}>
+            {pending === 'download' ? 'Preparing…' : 'Download dispatch note'}
+          </Button>
+        )}
+        {canManage && status !== 'returned' && (
+          <Button variant="default" onClick={doEmail} disabled={!!pending}>
+            {pending === 'email' ? 'Queuing…' : 'Email to consignee'}
+          </Button>
+        )}
         {status === 'in_transit' && canManage && (
           <Button variant="primary" onClick={() => setDeliverOpen((o) => !o)} disabled={!!pending}>
             Mark delivered
@@ -130,6 +193,11 @@ export function DispatchActions({ id, dispatchNumber, status, isAdmin, canManage
         </div>
       )}
 
+      {notice && (
+        <div className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-700">
+          {notice}
+        </div>
+      )}
       {error && (
         <div className="rounded-[6px] border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700">
           {error}

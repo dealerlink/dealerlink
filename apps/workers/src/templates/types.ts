@@ -140,3 +140,56 @@ export interface PaymentReceiptPdfData {
 
   generatedAt: Date;
 }
+
+/** Logistics block for the dispatch note (Day 13). */
+export interface PdfDispatchLogistics {
+  vehicleNumber: string | null;
+  transporterName: string | null;
+  transporterDocketNumber: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  ewayBillNumber: string | null;
+  ewayBillDate: string | null;
+  expectedDeliveryDate: string | null;
+}
+
+/** One dispatch-note line — a product and the serial numbers shipped on it. */
+export interface PdfDispatchLine {
+  lineNumber: number;
+  sku: string;
+  name: string;
+  quantity: number;
+  /** Serial numbers shipped on this line (may include "—" for unserialised). */
+  serials: string[];
+}
+
+/**
+ * Typed inputs for the dispatch-note PDF template (Day 13). A dispatch note
+ * is tax-neutral — no GST breakdown. The consignee is the Ship-To dealer
+ * (CLAUDE.md §6 — physical goods follow delivery); Bill-To is shown only as
+ * a reference sub-block.
+ */
+export interface DispatchNotePdfData {
+  billFrom: PdfBillFrom;
+
+  dispatchNumber: string;
+  dispatchDate: string;
+  status: string;
+
+  /** Source order reference. */
+  orderNumber: string;
+  orderDate: string;
+
+  /** Consignee — where the goods physically go. */
+  shipTo: PdfParty;
+  /** Payer — shown for reference only. */
+  billTo: PdfParty;
+
+  logistics: PdfDispatchLogistics;
+  lines: PdfDispatchLine[];
+  notes: string | null;
+
+  bank: PdfBankDetails | null;
+
+  generatedAt: Date;
+}

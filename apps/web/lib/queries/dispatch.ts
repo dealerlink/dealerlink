@@ -315,6 +315,57 @@ export async function getDispatchableOrders(tenantId: string): Promise<Dispatcha
   });
 }
 
+export interface DispatchDashboard {
+  /** Dispatches raised today + the serial count across them. */
+  todayCount: number;
+  todayUnits: number;
+  /** In-transit dispatches + those with an expected delivery in the next 7 days. */
+  inTransitCount: number;
+  arrivingSoonCount: number;
+  /** Orders confirmed / partially dispatched with reserved stock still to ship. */
+  readyToDispatchCount: number;
+}
+
+/** Dispatch widgets for the dashboard. */
+export async function getDispatchDashboard(tenantId: string): Promise<DispatchDashboard> {
+  const ready = await getDispatchableOrders(tenantId);
+  return withTenant(tenantId, async (tx) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const in7 = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+
+    const [todayAgg] = await tx
+      .select({ count: count(dispatches.id), units: count(dispatchSerials.id) })
+      .from(dispatches)
+      .leftJoin(dispatchSerials, eq(dispatchSerials.dispatchId, dispatches.id))
+      .where(and(eq(dispatches.tenantId, tenantId), eq(dispatches.dispatchDate, today)));
+
+    const [inTransitAgg] = await tx
+      .select({ count: count() })
+      .from(dispatches)
+      .where(and(eq(dispatches.tenantId, tenantId), eq(dispatches.status, 'in_transit')));
+
+    const [arrivingAgg] = await tx
+      .select({ count: count() })
+      .from(dispatches)
+      .where(
+        and(
+          eq(dispatches.tenantId, tenantId),
+          eq(dispatches.status, 'in_transit'),
+          gte(dispatches.expectedDeliveryDate, today),
+          lte(dispatches.expectedDeliveryDate, in7),
+        ),
+      );
+
+    return {
+      todayCount: todayAgg?.count ?? 0,
+      todayUnits: Number(todayAgg?.units ?? 0),
+      inTransitCount: inTransitAgg?.count ?? 0,
+      arrivingSoonCount: arrivingAgg?.count ?? 0,
+      readyToDispatchCount: ready.length,
+    };
+  });
+}
+
 export interface DispatchDetailSerial {
   id: string;
   inventoryItemId: string;

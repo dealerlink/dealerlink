@@ -17,6 +17,7 @@ import { withTenant } from '@dealerlink/db';
 
 import { renderPdfFromHtml } from '../pdf/render';
 import { storeRenderedPdf } from '../pdf/store';
+import { buildDispatchNoteHtml } from '../templates/dispatch-note';
 import { buildPaymentReceiptHtml } from '../templates/payment-receipt';
 import { buildPerformaInvoiceHtml } from '../templates/performa-invoice';
 import { buildQuotationHtml } from '../templates/quotation';
@@ -53,11 +54,13 @@ export async function runRenderPdf(payload: RenderPdfPayload): Promise<RenderPdf
   if (
     payload.documentType !== 'quotation' &&
     payload.documentType !== 'performa_invoice' &&
-    payload.documentType !== 'payment_receipt'
+    payload.documentType !== 'payment_receipt' &&
+    payload.documentType !== 'dispatch'
   ) {
     throw new Error(
       `render-pdf: documentType "${payload.documentType}" is not implemented yet ` +
-        '(Day 10 ships quotation; Day 11 adds performa_invoice; Day 12 adds payment_receipt).',
+        '(Day 10 ships quotation; Day 11 adds performa_invoice; Day 12 adds ' +
+        'payment_receipt; Day 13 adds dispatch).',
     );
   }
   const documentType = payload.documentType;
@@ -70,7 +73,9 @@ export async function runRenderPdf(payload: RenderPdfPayload): Promise<RenderPdf
           ? await buildQuotationHtml(tx, payload.tenantId, payload.documentId)
           : documentType === 'performa_invoice'
             ? await buildPerformaInvoiceHtml(tx, payload.tenantId, payload.documentId)
-            : await buildPaymentReceiptHtml(tx, payload.tenantId, payload.documentId);
+            : documentType === 'dispatch'
+              ? await buildDispatchNoteHtml(tx, payload.tenantId, payload.documentId)
+              : await buildPaymentReceiptHtml(tx, payload.tenantId, payload.documentId);
       const buffer = await renderPdfFromHtml(built.html, {
         format: 'A4',
         margin: { top: '14mm', bottom: '20mm' },

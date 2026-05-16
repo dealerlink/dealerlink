@@ -186,3 +186,46 @@ export const PAYMENT_RECEIPT_CSS = `${QUOTATION_CSS}
     font-size: 9.5px; font-weight: 600; break-inside: avoid;
   }
 `;
+
+/**
+ * Dispatch-note stylesheet (Day 13) — the shared document CSS plus
+ * dispatch-only blocks: the logistics grid, the per-line serial chips, and
+ * the receiver-acknowledgment panel. A dispatch note is tax-neutral, so it
+ * reuses the header / parties / footer rules verbatim.
+ */
+export const DISPATCH_NOTE_CSS = `${QUOTATION_CSS}
+  /* ---- order reference + logistics --------------------------------- */
+  .order-ref {
+    margin-top: 14px; font-size: 9.5px; font-weight: 600; color: var(--ink-2);
+  }
+  .order-ref .mono { color: var(--accent); }
+
+  .logistics {
+    display: flex; flex-wrap: wrap; gap: 10px 30px; margin-top: 10px;
+    border: 1px solid var(--line); border-radius: 5px; padding: 10px 12px;
+    background: var(--tile); break-inside: avoid;
+  }
+  .logistics .log-item { min-width: 110px; }
+  .logistics .log-item .v { font-size: 9.5px; font-weight: 600; margin-top: 1px; }
+
+  /* ---- serials table ----------------------------------------------- */
+  .serial-line td { vertical-align: top; }
+  .serial-chips { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+  .serial-chip {
+    border: 1px solid var(--line-2); border-radius: 3px; padding: 1px 5px;
+    font-size: 7.5px; background: #fff;
+  }
+
+  /* ---- acknowledgment ---------------------------------------------- */
+  .ack {
+    margin-top: 22px; border: 1px dashed var(--line-2); border-radius: 5px;
+    padding: 14px 16px; break-inside: avoid;
+  }
+  .ack .titlecaps { margin-bottom: 10px; }
+  .ack-row { display: flex; gap: 40px; }
+  .ack-field { flex: 1; }
+  .ack-line {
+    border-bottom: 1px solid var(--ink); height: 26px; margin-bottom: 3px;
+  }
+  .ack-field .k { font-size: 8px; }
+`;

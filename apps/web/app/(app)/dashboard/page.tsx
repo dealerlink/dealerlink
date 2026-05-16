@@ -4,6 +4,7 @@ import { getAuthContext } from '@/lib/auth/session';
 import { formatINRExact } from '@/lib/format';
 import { displayNameFrom } from '@/lib/format/initials';
 import { getDealMetrics } from '@/lib/queries/deals';
+import { getDispatchDashboard } from '@/lib/queries/dispatch';
 import { getPaymentDashboard } from '@/lib/queries/payments';
 import { inventoryDashboardStats } from '@/lib/queries/procurements';
 import { impersonationTenantId } from '@/lib/tenant/context';
@@ -42,6 +43,8 @@ export default async function DashboardPage() {
   // Payment widgets are for the cash side — admin + accounts only.
   const showPayments = !!tenantId && (ctx?.user.role === 'admin' || ctx?.user.role === 'accounts');
   const paymentDash = showPayments ? await getPaymentDashboard(tenantId) : null;
+
+  const dispatchDash = tenantId ? await getDispatchDashboard(tenantId) : null;
 
   const fullDisplay = ctx ? displayNameFrom(ctx.user.fullName, ctx.user.email) : 'there';
   const firstName = fullDisplay.split(' ')[0] ?? fullDisplay;
@@ -120,6 +123,51 @@ export default async function DashboardPage() {
             </div>
             <div className="text-mute mt-1 text-[12.5px]">
               Verified / cleared payments with an advance balance waiting to be applied.
+            </div>
+          </section>
+        </div>
+      )}
+
+      {dispatchDash && (
+        <div className="mt-6 grid grid-cols-3 gap-4">
+          <section className="border-line rounded-[6px] border bg-white p-5">
+            <div className="titlecaps mb-3 flex items-center justify-between">
+              <span>Dispatches today</span>
+              <Link href="/dispatch" className="text-accent text-[11px] hover:underline">
+                Dispatch →
+              </Link>
+            </div>
+            <div className="mono text-[28px] font-semibold tracking-tight text-indigo-700">
+              {dispatchDash.todayCount.toLocaleString('en-IN')}
+            </div>
+            <div className="text-mute mt-1 text-[12.5px]">
+              {dispatchDash.todayUnits.toLocaleString('en-IN')} unit(s) shipped today
+            </div>
+          </section>
+
+          <section className="border-line rounded-[6px] border bg-white p-5">
+            <div className="titlecaps mb-3">In-transit dispatches</div>
+            <div className="mono text-[28px] font-semibold tracking-tight text-amber-600">
+              {dispatchDash.inTransitCount.toLocaleString('en-IN')}
+            </div>
+            <div className="text-mute mt-1 text-[12.5px]">
+              {dispatchDash.arrivingSoonCount.toLocaleString('en-IN')} with delivery expected in the
+              next 7 days
+            </div>
+          </section>
+
+          <section className="border-line rounded-[6px] border bg-white p-5">
+            <div className="titlecaps mb-3 flex items-center justify-between">
+              <span>Orders ready to dispatch</span>
+              <Link href="/dispatch/new" className="text-accent text-[11px] hover:underline">
+                New dispatch →
+              </Link>
+            </div>
+            <div className="mono text-[28px] font-semibold tracking-tight text-emerald-700">
+              {dispatchDash.readyToDispatchCount.toLocaleString('en-IN')}
+            </div>
+            <div className="text-mute mt-1 text-[12.5px]">
+              Confirmed orders with reserved inventory still to ship.
             </div>
           </section>
         </div>
