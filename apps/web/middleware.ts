@@ -89,7 +89,9 @@ export function middleware(req: NextRequest) {
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
-// Bypass static assets, /_next, /api/health, and favicon.
+// Bypass static assets, /_next, favicon, and public API routes
+// (/api/health, /api/webhooks/* — the latter is signature-verified, not
+// session-gated, so tenant-scope middleware must not touch it).
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|api/health|.*\\..*).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|api/health|api/webhooks|.*\\..*).*)'],
 };

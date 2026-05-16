@@ -298,6 +298,36 @@ Open in your browser:
 
 Sign in with the seeded admin credentials (printed by the seed script).
 
+### 9. (Optional) Receiving Resend webhooks locally
+
+Outbound email works locally with no extra setup — without a real
+`RESEND_API_KEY` the worker logs a dev fallback and marks the email `sent`.
+
+**Inbound** Resend webhooks (delivery / bounce / open / click events) need a
+publicly reachable URL, because Resend calls `POST /api/webhooks/resend` from
+their infrastructure. Three options:
+
+- **Option A — ngrok tunnel (recommended).** Install ngrok
+  (`https://ngrok.com/download`), then:
+
+  ```bash
+  ngrok http 3000
+  ```
+
+  Use the printed `https://<id>.ngrok-free.app/api/webhooks/resend` as the
+  endpoint URL in the Resend dashboard (Webhooks → Add Endpoint). Copy the
+  signing secret Resend generates into `RESEND_INBOUND_WEBHOOK_SECRET`.
+
+- **Option B — preview deployment.** Point the Resend webhook at a deployed
+  preview environment instead of localhost.
+
+- **Option C — skip locally.** Webhook handling is covered by the
+  integration tests (`apps/web/lib/email/resend-webhook.test.ts`), which sign
+  fixtures with your local secret. Defer real webhook testing to staging
+  (Stage D). The outbound path is unaffected.
+
+See `docs/RUNBOOKS.md` → "Setting up Resend webhook in production".
+
 ---
 
 ## Daily Commands
