@@ -135,3 +135,37 @@ A PI/Order captures `place_of_supply` = the **Ship-To dealer's state**. Converti
 - All-or-nothing: if any line is short, `InsufficientInventoryError` (carrying the per-product shortage list) rolls the whole transaction back — no partial reservation survives.
 - Each reserved serial moves `in_stock → reserved` (`reserved_for_order_id` + `reserved_for_dealer_id` set); `order_lines.reserved_quantity` is updated.
 - Cancelling an order (`cancelOrder`, admin) calls `releaseInventoryForOrder` — every `reserved` serial returns to `in_stock` — and nudges the deal back `payment_pending → po_pending`.
+
+## Payments (Day 12)
+
+### Payment lifecycle — `packages/db/src/payments/transitions.ts`
+
+A payment is money received from a dealer (the **Bill-To** party — receipts always go to whoever pays, CLAUDE.md §6). Receipts are **tax-neutral** documents: no GST breakdown, no place of supply.
+
+`pending_verification → verified → cleared → refunded`; `verified → bounced`. Forbidden by construction: `pending_verification → cleared` (verify first), anything `→ pending_verification`, `cleared → bounced`. `bounced` and `refunded` are terminal.
+
+- **`pending_verification`** — recorded, not yet confirmed by accounts. No allocations possible.
+- **`verified`** — accounts confirmed receipt; allocations may be made.
+- **`cleared`** — cheque cleared / bank receipt confirmed; allocations final.
+- **`bounced`** — `verified → bounced` (admin + accounts), reason captured. **Reverses every allocation.**
+- **`refunded`** — `cleared → refunded` (admin only), reason captured. **Reverses every allocation.**
+
+Role rule: payments are **admin + accounts** only — `sales` never sees the cash side. `refund` is **admin only**. Enforced server-side via `tenantAction`.
+
+### Allocation + order paymentStatus propagation
+
+A payment is allocated against orders (and PI advances) via `payment_allocations` rows. `payments.allocated_amount` is a denormalised mirror of `SUM(payment_allocations.amount)`; the unallocated remainder is a floating **advance**.
+
+`allocatePayment` (`apps/web/lib/actions/payments/`) is atomic: it locks the payment `SELECT … FOR UPDATE`, rejects over-allocation (`SUM(new) + allocated ≤ amount`) and per-order over-allocation, inserts the rows, updates the denormalised total, then recomputes each affected order's `paymentStatus` via `recomputeOrderPaymentStatus`. An order's `paymentStatus` is derived from the sum of allocations from payments in `verified`/`cleared` status: `unpaid` / `partially_paid` / `paid` (over-allocation clamps to `paid`).
+
+**Funds-received-then-confirm:** when an allocation makes a `pending` order fully `paid`, `tryAutoConfirmOrder` reserves inventory and advances it `pending → confirmed`. Best-effort — an inventory shortfall leaves the order `pending` rather than rolling back the money.
+
+**Bounce / refund** reverse every allocation of the payment (rows deleted, `allocated_amount` zeroed) and recompute each affected order — orders may regress `paid → partially_paid → unpaid`.
+
+### Advance-on-PI transfer
+
+A payment may be allocated against a draft/sent PI as an **advance** (`applyAdvancePayment`). When that PI is later confirmed, `confirmPi` transfers the advance allocation onto the spawned order (`performa_invoice_id → order_id`) inside its existing atomic transaction, recomputes the new order's `paymentStatus`, and auto-confirms it if the advance fully covers the order.
+
+### Overdue tracking
+
+An order is **overdue** when `paymentStatus` is `unpaid`/`partially_paid` and `orderDate + creditPeriodDays` (dealer credit period, falling back to `tenant_settings.default_credit_period`) is in the past. Surfaced by `getOverdueOrders` and the dashboard "Overdue payments" widget.

@@ -350,6 +350,41 @@ describe('concurrent allocation — FOR UPDATE serialises competing operators', 
   });
 });
 
+describe('seed invariant — denormalised allocatedAmount matches its allocations', () => {
+  it('every seeded payment: allocatedAmount === SUM(payment_allocations.amount)', async () => {
+    // Filter to seeded payment numbers (PAY-2026-…) to dodge this file's own
+    // committed test residue (PAY-TEST-…) — DEV.31.
+    const rows = await asTenant(demoId, (tx) =>
+      tx.execute<{ id: string; allocated_amount: string; alloc_sum: string }>(sql`
+        SELECT p.id, p.allocated_amount,
+               COALESCE((SELECT SUM(a.amount) FROM payment_allocations a
+                          WHERE a.payment_id = p.id), 0) AS alloc_sum
+          FROM payments p
+         WHERE p.payment_number LIKE 'PAY-2026-%'
+      `),
+    );
+    const list = rows as unknown as {
+      id: string;
+      allocated_amount: string;
+      alloc_sum: string;
+    }[];
+    expect(list.length).toBeGreaterThan(0);
+    for (const r of list) {
+      expect(Number(r.allocated_amount), `payment ${r.id}`).toBeCloseTo(Number(r.alloc_sum), 2);
+    }
+  });
+
+  it('no payment allocates more than its amount', async () => {
+    const rows = await asTenant(demoId, (tx) =>
+      tx.execute<{ id: string }>(sql`
+        SELECT id FROM payments
+         WHERE allocated_amount > amount AND payment_number LIKE 'PAY-2026-%'
+      `),
+    );
+    expect((rows as unknown as { id: string }[]).length).toBe(0);
+  });
+});
+
 describe('RLS — payments + payment_allocations', () => {
   it('both tables have RLS enabled + forced', async () => {
     for (const table of ['payments', 'payment_allocations']) {

@@ -4,8 +4,10 @@ import {
   paymentAllocations,
   payments,
   performaInvoices,
+  tenantSettings,
   users,
   withTenant,
+  type DrizzleTx,
   type PaymentMethod,
   type PaymentStatus,
 } from '@dealerlink/db';
@@ -244,6 +246,29 @@ export interface OutstandingOrderRow {
 }
 
 /**
+ * Sum of verified/cleared allocations per order id. A single grouped query —
+ * no correlated subquery, so every column stays unambiguously qualified.
+ */
+async function allocatedByOrder(tx: DrizzleTx, orderIds: string[]): Promise<Map<string, number>> {
+  if (orderIds.length === 0) return new Map();
+  const rows = await tx
+    .select({
+      orderId: paymentAllocations.orderId,
+      total: sql<string>`SUM(${paymentAllocations.amount})`,
+    })
+    .from(paymentAllocations)
+    .innerJoin(payments, eq(payments.id, paymentAllocations.paymentId))
+    .where(
+      and(
+        inArray(paymentAllocations.orderId, orderIds),
+        inArray(payments.status, ['verified', 'cleared']),
+      ),
+    )
+    .groupBy(paymentAllocations.orderId);
+  return new Map(rows.filter((r) => r.orderId).map((r) => [r.orderId!, Number(r.total)]));
+}
+
+/**
  * Orders of a dealer that still owe money — for the allocation modal. Returns
  * unpaid / partially-paid, non-cancelled orders with the outstanding balance
  * (total − allocations from verified/cleared payments).
@@ -259,12 +284,6 @@ export async function getDealerOutstandingOrders(
         orderNumber: orders.orderNumber,
         orderDate: orders.orderDate,
         totalAmount: orders.totalAmount,
-        allocated: sql<string>`COALESCE((
-          SELECT SUM(pa.amount) FROM payment_allocations pa
-            JOIN payments p ON p.id = pa.payment_id
-           WHERE pa.order_id = ${orders.id}
-             AND p.status IN ('verified', 'cleared')
-        ), 0)`,
       })
       .from(orders)
       .where(
@@ -276,18 +295,151 @@ export async function getDealerOutstandingOrders(
       )
       .orderBy(asc(orders.orderDate));
 
+    const allocated = await allocatedByOrder(
+      tx,
+      rows.map((r) => r.id),
+    );
+
     return rows.map((r) => {
       const total = Number(r.totalAmount);
-      const allocated = Number(r.allocated);
+      const alloc = allocated.get(r.id) ?? 0;
       return {
         id: r.id,
         orderNumber: r.orderNumber,
         orderDate: r.orderDate,
         totalAmount: total,
-        allocatedAmount: allocated,
-        outstanding: Math.max(0, total - allocated),
+        allocatedAmount: alloc,
+        outstanding: Math.max(0, total - alloc),
       };
     });
+  });
+}
+
+export interface OverdueOrderRow {
+  id: string;
+  orderNumber: string;
+  orderDate: string;
+  dealerName: string;
+  creditPeriodDays: number;
+  dueDate: string;
+  daysOverdue: number;
+  outstanding: number;
+}
+
+/**
+ * Orders whose payment is past the dealer's credit period. The due date is
+ * `orderDate + creditPeriodDays` (dealer credit period, falling back to the
+ * tenant default). Only unpaid / partially-paid, non-cancelled orders count.
+ */
+export async function getOverdueOrders(tenantId: string): Promise<OverdueOrderRow[]> {
+  return withTenant(tenantId, async (tx) => {
+    const [settings] = await tx
+      .select({ defaultCreditPeriod: tenantSettings.defaultCreditPeriod })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+      .limit(1);
+    const tenantDefault = settings?.defaultCreditPeriod ?? 30;
+
+    const rows = await tx
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        orderDate: orders.orderDate,
+        totalAmount: orders.totalAmount,
+        dealerName: dealers.displayName,
+        creditPeriodDays: dealers.creditPeriodDays,
+      })
+      .from(orders)
+      .leftJoin(dealers, eq(dealers.id, orders.billToDealerId))
+      .where(
+        and(
+          ne(orders.status, 'cancelled'),
+          inArray(orders.paymentStatus, ['unpaid', 'partially_paid']),
+        ),
+      );
+
+    const allocated = await allocatedByOrder(
+      tx,
+      rows.map((r) => r.id),
+    );
+    const now = Date.now();
+    const overdue: OverdueOrderRow[] = [];
+    for (const r of rows) {
+      const creditPeriod = r.creditPeriodDays ?? tenantDefault;
+      const due = new Date(`${r.orderDate}T00:00:00Z`);
+      due.setUTCDate(due.getUTCDate() + creditPeriod);
+      const daysOverdue = Math.floor((now - due.getTime()) / 86_400_000);
+      if (daysOverdue <= 0) continue;
+      overdue.push({
+        id: r.id,
+        orderNumber: r.orderNumber,
+        orderDate: r.orderDate,
+        dealerName: r.dealerName ?? '—',
+        creditPeriodDays: creditPeriod,
+        dueDate: due.toISOString().slice(0, 10),
+        daysOverdue,
+        outstanding: Math.max(0, Number(r.totalAmount) - (allocated.get(r.id) ?? 0)),
+      });
+    }
+    overdue.sort((a, b) => b.daysOverdue - a.daysOverdue);
+    return overdue;
+  });
+}
+
+export interface PaymentDashboard {
+  overdueCount: number;
+  overdueOutstanding: number;
+  recentPayments: Array<{
+    id: string;
+    paymentNumber: string;
+    dealerName: string;
+    amount: number;
+    receivedDate: string;
+  }>;
+  unallocatedCount: number;
+}
+
+/** Roll-up for the dashboard payment widgets. */
+export async function getPaymentDashboard(tenantId: string): Promise<PaymentDashboard> {
+  const overdue = await getOverdueOrders(tenantId);
+  return withTenant(tenantId, async (tx) => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+    const recent = await tx
+      .select({
+        id: payments.id,
+        paymentNumber: payments.paymentNumber,
+        dealerName: dealers.displayName,
+        amount: payments.amount,
+        receivedDate: payments.receivedDate,
+      })
+      .from(payments)
+      .leftJoin(dealers, eq(dealers.id, payments.dealerId))
+      .where(gte(payments.receivedDate, sevenDaysAgo))
+      .orderBy(desc(payments.receivedDate), desc(payments.createdAt))
+      .limit(8);
+
+    const [unalloc] = await tx
+      .select({ n: count() })
+      .from(payments)
+      .where(
+        and(
+          inArray(payments.status, ['verified', 'cleared']),
+          sql`${payments.allocatedAmount} < ${payments.amount}`,
+        ),
+      );
+
+    return {
+      overdueCount: overdue.length,
+      overdueOutstanding: overdue.reduce((s, o) => s + o.outstanding, 0),
+      recentPayments: recent.map((r) => ({
+        id: r.id,
+        paymentNumber: r.paymentNumber,
+        dealerName: r.dealerName ?? '—',
+        amount: Number(r.amount),
+        receivedDate: r.receivedDate,
+      })),
+      unallocatedCount: unalloc?.n ?? 0,
+    };
   });
 }
 

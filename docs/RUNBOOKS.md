@@ -319,3 +319,66 @@ The card lands in the destination column and the history row is marked `overridd
 
 - Once an order is dispatched it can no longer be cancelled here — that becomes a returns process (Day 13+).
 - To withdraw before an order exists, cancel the PI instead (`Cancel PI`, admin) — a confirmed PI cannot be cancelled; cancel its order.
+
+## R? — Recording a payment
+
+**When to use:** A dealer has paid — by bank transfer, cheque, UPI, cash or card — and the receipt must be logged.
+
+**Time:** ~1 minute.
+
+**Background:** Recording is **admin + accounts** only. The payment starts in `pending_verification`; it cannot be allocated until an accountant verifies it.
+
+**Steps:**
+
+1. Go to `/payments` and click **Record payment** (or use **Record payment** on an order's **Payments** tab).
+2. Pick the paying dealer, enter the amount, method, reference (txn / cheque no.), received date, and optional bank-deposit details.
+3. Submit — you land on the new payment at `/payments/<id>`, status `pending verification`.
+4. Click **Verify** once the receipt is confirmed. To finalise a cheque/bank receipt, click **Mark cleared**.
+
+## R? — Allocating a payment (or an advance) to an order
+
+**When to use:** A verified/cleared payment must be applied against the dealer's outstanding orders.
+
+**Time:** ~1 minute.
+
+**Background:** Allocation drives the order's payment status. Allocating a payment that fully covers a `pending` order auto-confirms it (reserves inventory). A payment may also be applied to a draft/sent PI as an advance — that advance transfers onto the order when the PI is confirmed.
+
+**Steps:**
+
+1. Open the payment at `/payments/<id>` (status must be `verified` or `cleared`).
+2. Click **Allocate** — the panel lists the dealer's outstanding orders with their balances.
+3. Enter an amount against one or more orders and submit. The total cannot exceed the payment's unallocated balance, and no order can be over-allocated.
+4. Affected orders' payment status updates immediately (`unpaid → partially_paid → paid`).
+
+**Notes:**
+
+- An unallocated remainder is a floating **advance balance** — held as dealer credit until applied.
+- Use **Remove** on an allocation row to undo a mistake (recomputes the order's status).
+
+## R? — Reversing a bounced cheque
+
+**When to use:** A cheque that was recorded and verified has bounced.
+
+**Time:** ~1 minute.
+
+**Background:** Reversing is **admin + accounts** only and atomic — it deletes every allocation of the payment and recomputes each affected order. Orders may regress from `paid`/`partially_paid` back toward `unpaid`.
+
+**Steps:**
+
+1. Open the payment at `/payments/<id>` (status must be `verified`).
+2. Click **Mark bounced**, enter the reason (e.g. "cheque returned — insufficient funds"), and confirm.
+3. The payment moves to `bounced`; its allocations are reversed.
+
+## R? — Refunding a payment
+
+**When to use:** A cleared payment must be returned to the dealer (e.g. duplicate payment, cancelled order).
+
+**Time:** ~1 minute.
+
+**Background:** Refunding is **admin only** and, like a bounce, reverses every allocation.
+
+**Steps:**
+
+1. Open the payment at `/payments/<id>` (status must be `cleared`).
+2. Click **Refund**, enter the reason, and confirm.
+3. The payment moves to `refunded`; its allocations are reversed and affected orders recomputed.

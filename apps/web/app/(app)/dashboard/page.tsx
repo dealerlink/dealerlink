@@ -4,8 +4,10 @@ import { getAuthContext } from '@/lib/auth/session';
 import { formatINRExact } from '@/lib/format';
 import { displayNameFrom } from '@/lib/format/initials';
 import { getDealMetrics } from '@/lib/queries/deals';
+import { getPaymentDashboard } from '@/lib/queries/payments';
 import { inventoryDashboardStats } from '@/lib/queries/procurements';
 import { impersonationTenantId } from '@/lib/tenant/context';
+import { formatDate } from '@/lib/format';
 
 import { PipelineFunnel, PipelineHotStalled, PipelineKpiRow } from './pipeline-widgets';
 
@@ -37,6 +39,10 @@ export default async function DashboardPage() {
         stalledSample: [] as never[],
       };
 
+  // Payment widgets are for the cash side — admin + accounts only.
+  const showPayments = !!tenantId && (ctx?.user.role === 'admin' || ctx?.user.role === 'accounts');
+  const paymentDash = showPayments ? await getPaymentDashboard(tenantId) : null;
+
   const fullDisplay = ctx ? displayNameFrom(ctx.user.fullName, ctx.user.email) : 'there';
   const firstName = fullDisplay.split(' ')[0] ?? fullDisplay;
   const tod = timeOfDay();
@@ -63,6 +69,61 @@ export default async function DashboardPage() {
       <PipelineKpiRow metrics={pipelineMetrics} />
       <PipelineFunnel metrics={pipelineMetrics} />
       <PipelineHotStalled metrics={pipelineMetrics} />
+
+      {paymentDash && (
+        <div className="mt-6 grid grid-cols-3 gap-4">
+          <section className="border-line rounded-[6px] border bg-white p-5">
+            <div className="titlecaps mb-3 flex items-center justify-between">
+              <span>Overdue payments</span>
+              <Link href="/payments" className="text-accent text-[11px] hover:underline">
+                Payments →
+              </Link>
+            </div>
+            <div className="mono text-[28px] font-semibold tracking-tight text-rose-700">
+              {paymentDash.overdueCount.toLocaleString('en-IN')}
+            </div>
+            <div className="text-mute mt-1 text-[12.5px]">
+              {formatINRExact(paymentDash.overdueOutstanding)} outstanding past credit period
+            </div>
+          </section>
+
+          <section className="border-line rounded-[6px] border bg-white p-5">
+            <div className="titlecaps mb-3">Recent payments · 7 days</div>
+            {paymentDash.recentPayments.length === 0 ? (
+              <div className="text-mute text-[12.5px]">No payments in the last 7 days.</div>
+            ) : (
+              <ul className="space-y-2">
+                {paymentDash.recentPayments.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                    <div className="min-w-0">
+                      <Link href={`/payments/${p.id}`} className="mono text-[12px] hover:underline">
+                        {p.paymentNumber}
+                      </Link>
+                      <div className="text-mute truncate text-[11.5px]">{p.dealerName}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="mono text-[12px]">{formatINRExact(p.amount)}</div>
+                      <div className="text-mute mono text-[11px]">
+                        {formatDate(new Date(p.receivedDate + 'T00:00:00Z'))}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="border-line rounded-[6px] border bg-white p-5">
+            <div className="titlecaps mb-3">Unallocated payments</div>
+            <div className="mono text-[28px] font-semibold tracking-tight text-indigo-700">
+              {paymentDash.unallocatedCount.toLocaleString('en-IN')}
+            </div>
+            <div className="text-mute mt-1 text-[12.5px]">
+              Verified / cleared payments with an advance balance waiting to be applied.
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-4">
         <section className="border-line rounded-[6px] border bg-white p-5">
