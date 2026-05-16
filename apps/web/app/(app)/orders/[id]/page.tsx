@@ -6,8 +6,10 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate, formatINRExact } from '@/lib/format';
 import { getOrderById, getReservationPreview } from '@/lib/queries/orders';
+import { getOrderPayments } from '@/lib/queries/payments';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
+import { paymentStatusTone as paymentRowTone } from '../../payments/payment-status';
 import { orderStatusTone, paymentStatusTone } from '../order-status';
 import { OrderActions } from './order-actions';
 
@@ -17,6 +19,7 @@ const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'lines', label: 'Line items' },
   { key: 'reservations', label: 'Inventory reservations' },
+  { key: 'payments', label: 'Payments' },
   { key: 'history', label: 'Status history' },
 ] as const;
 
@@ -68,6 +71,9 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
 
   const preview =
     order.status === 'pending' ? (await getReservationPreview(tenantId, order.id)).lines : null;
+
+  const canRecordPayment = role === 'admin' || role === 'accounts';
+  const orderPayments = tab === 'payments' ? await getOrderPayments(tenantId, order.id) : null;
 
   return (
     <div className="mx-auto max-w-[1100px] px-8 py-10">
@@ -288,6 +294,88 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
                 </tbody>
               </table>
             )}
+          </section>
+        )}
+
+        {tab === 'payments' && orderPayments && (
+          <section className="space-y-4">
+            <div className="border-line overflow-hidden rounded-[6px] border bg-white">
+              {orderPayments.rows.length === 0 ? (
+                <div className="text-mute px-6 py-12 text-center text-[13px]">
+                  No payments allocated to this order yet.
+                </div>
+              ) : (
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-line bg-tile text-mute border-b text-left text-[11px] uppercase tracking-[0.06em]">
+                      <th className="px-4 py-3 font-medium">Payment #</th>
+                      <th className="px-4 py-3 text-right font-medium">Allocated</th>
+                      <th className="px-4 py-3 font-medium">Payment status</th>
+                      <th className="px-4 py-3 font-medium">Allocated by</th>
+                      <th className="px-4 py-3 font-medium">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orderPayments.rows.map((p) => (
+                      <tr key={p.allocationId} className="border-line border-b last:border-b-0">
+                        <td className="mono px-4 py-2.5 text-[12.5px]">
+                          <Link href={`/payments/${p.paymentId}`} className="hover:underline">
+                            {p.paymentNumber}
+                          </Link>
+                        </td>
+                        <td className="mono px-4 py-2.5 text-right tabular-nums">
+                          {formatINRExact(p.amount)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <StatusPill tone={paymentRowTone(p.paymentStatus)}>
+                            {p.paymentStatus.replace(/_/g, ' ')}
+                          </StatusPill>
+                        </td>
+                        <td className="text-mute px-4 py-2.5 text-[12px]">
+                          {p.allocatedByName ?? '—'}
+                        </td>
+                        <td className="text-mute mono px-4 py-2.5 text-[12px]">
+                          {p.allocatedAt.toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="border-line flex items-center justify-between rounded-[6px] border bg-white px-5 py-3 text-[13px]">
+              <div className="flex items-center gap-5">
+                <span className="text-mute">
+                  Total paid{' '}
+                  <span className="mono text-ink font-semibold">
+                    {formatINRExact(orderPayments.totalPaid)}
+                  </span>
+                </span>
+                <span className="text-mute">
+                  Outstanding{' '}
+                  <span className="mono text-ink font-semibold">
+                    {formatINRExact(Math.max(0, order.totalAmount - orderPayments.totalPaid))}
+                  </span>
+                </span>
+                <StatusPill tone={paymentStatusTone(order.paymentStatus)}>
+                  {order.paymentStatus.replace(/_/g, ' ')}
+                </StatusPill>
+              </div>
+              {canRecordPayment &&
+                order.totalAmount - orderPayments.totalPaid > 0 &&
+                order.status !== 'cancelled' && (
+                  <Link
+                    href={`/payments/new?dealer=${order.billTo.id}`}
+                    className="bg-ink rounded-[6px] px-3 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90"
+                  >
+                    Record payment
+                  </Link>
+                )}
+            </div>
           </section>
         )}
 

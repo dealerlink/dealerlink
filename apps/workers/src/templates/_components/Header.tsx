@@ -18,6 +18,8 @@ interface HeaderProps {
   revision: number;
   quoteDate: string;
   validUntil: string;
+  /** Drop the "Valid Until" row — payment receipts have no validity (Day 12). */
+  hideValidUntil?: boolean;
 }
 
 export function Header({
@@ -28,6 +30,7 @@ export function Header({
   revision,
   quoteDate,
   validUntil,
+  hideValidUntil,
 }: HeaderProps) {
   return (
     <div className="hdr">
@@ -68,10 +71,12 @@ export function Header({
               <td className="k">Date</td>
               <td className="v mono">{formatDocDate(quoteDate)}</td>
             </tr>
-            <tr>
-              <td className="k">Valid Until</td>
-              <td className="v mono">{formatDocDate(validUntil)}</td>
-            </tr>
+            {hideValidUntil ? null : (
+              <tr>
+                <td className="k">Valid Until</td>
+                <td className="v mono">{formatDocDate(validUntil)}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

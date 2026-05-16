@@ -97,3 +97,46 @@ export interface QuotationPdfData {
 
   generatedAt: Date;
 }
+
+/** One row in a receipt's allocation breakdown — an order/PI + amount. */
+export interface PdfReceiptAllocation {
+  /** "Order" or "Proforma Invoice". */
+  documentLabel: string;
+  documentNumber: string;
+  amount: number;
+}
+
+/**
+ * Typed inputs for the payment-receipt PDF template (Day 12). Receipts are
+ * tax-neutral — no GST breakdown, no place of supply. The payer is the
+ * Bill-To dealer (CLAUDE.md §6).
+ */
+export interface PaymentReceiptPdfData {
+  billFrom: PdfBillFrom;
+
+  receiptNumber: string;
+  /** Date the money was received. */
+  receiptDate: string;
+  status: string;
+  currency: string;
+
+  /** The paying dealer (Bill-To). */
+  receivedFrom: PdfParty;
+
+  amount: number;
+  amountInWords: string;
+
+  /** Human-readable method label, e.g. "Bank Transfer". */
+  method: string;
+  reference: string | null;
+  depositedToBank: string | null;
+  depositedDate: string | null;
+
+  allocations: PdfReceiptAllocation[];
+  /** Amount not yet allocated — a positive advance balance. */
+  unallocatedAmount: number;
+
+  bank: PdfBankDetails | null;
+
+  generatedAt: Date;
+}

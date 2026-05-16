@@ -151,3 +151,38 @@ export const QUOTATION_CSS = `
   .summary, .bank, .words { break-inside: avoid; }
   .items thead { display: table-header-group; }
 `;
+
+/**
+ * Payment-receipt stylesheet — the shared document CSS plus a few
+ * receipt-only blocks (the hero amount panel and the method grid). Receipts
+ * are tax-neutral so they reuse the parties / table / footer rules verbatim.
+ */
+export const PAYMENT_RECEIPT_CSS = `${QUOTATION_CSS}
+  /* ---- receipt hero amount ----------------------------------------- */
+  .receipt-amount {
+    margin-top: 16px; border: 2px solid var(--ink); border-radius: 6px;
+    padding: 14px 16px; background: var(--tile); break-inside: avoid;
+  }
+  .receipt-amount .titlecaps { margin-bottom: 3px; }
+  .receipt-amount .amount-value {
+    font-size: 30px; font-weight: 700; letter-spacing: -0.01em;
+    color: var(--accent); line-height: 1.1;
+  }
+  .receipt-amount .amount-words {
+    margin-top: 4px; font-size: 9.5px; font-weight: 600; color: var(--ink-2);
+  }
+
+  /* ---- method / reference grid ------------------------------------- */
+  .receipt-meta {
+    display: flex; flex-wrap: wrap; gap: 10px 30px; margin-top: 14px;
+    border: 1px solid var(--line); border-radius: 5px; padding: 10px 12px;
+  }
+  .receipt-meta .meta-item { min-width: 120px; }
+  .receipt-meta .meta-item .v { font-size: 9.5px; font-weight: 600; margin-top: 1px; }
+
+  .advance-note {
+    margin-top: 12px; border: 1px solid #C7D2FE; background: #EEF2FF;
+    color: var(--accent); border-radius: 5px; padding: 8px 12px;
+    font-size: 9.5px; font-weight: 600; break-inside: avoid;
+  }
+`;
