@@ -382,3 +382,21 @@ on every page, as A2.2 requires.
 **Resolution:** N/A — this is the only mechanism Chromium offers for true
 per-page numbering; the divergence from A1.4's literal flag is required to
 satisfy A2.2.
+
+## DEV.39 — Day 11 — CLAUDE.md §5 corrected: place of supply is Ship-To, not Bill-To
+
+**Date:** 2026-05-16
+**Spec said:** Pre-Day-11 CLAUDE.md §5 stated "Ship To state does NOT affect tax. Only Bill To matters," and the tax-engine signature comment read `dealerState // Bill To, NOT Ship To`.
+**Found:** Day 11's three-party PI/Order (a Bill-To dealer plus a possibly different Ship-To dealer) surfaced that the simplification contradicts the IGST Act 2017 §10 — the place of supply for goods is the delivery (Ship-To) location, and place of supply is what determines IGST vs CGST+SGST. The "Bill-To only" wording was a single-dealer artefact: through Day 8 a quotation had one dealer, so Bill-To and place of supply coincided and the rule was never wrong in practice.
+**Resolution:** Adopted Ship-To as the place of supply for PIs/Orders (and, by extension, Tax Invoices + Dispatch Notes) per **ADR-012**. Quotations keep `place_of_supply = dealer.state` because they have no separate Ship-To. CLAUDE.md §5 rewritten; the engine signature comment now reads `placeOfSupply // Ship-To for goods per IGST Act §10`. No `@dealerlink/tax` code change — the engine already consumed an opaque `placeOfSupply` string; only the callers changed.
+**Impact:** A PI/Order may classify differently (IGST vs CGST/SGST) from its originating quotation when Ship-To is in a different state. The convert-to-PI flow shows an explicit tax-change banner. The user explicitly approved this direction.
+**Permanent fix:** ADR-012 is the durable record; CLAUDE.md §5 is the corrected reference.
+
+## DEV.40 — Day 11 — draft-PI edit page edits header fields only; line items inherited
+
+**Date:** 2026-05-16
+**Spec said:** Chunk 11c A3.2 — "Same inline-edit pattern as quotations" for the PI detail/edit.
+**Built:** `/pi/[id]/edit` is a focused form that edits Ship-To, validity, terms and notes. Line items are shown read-only — they are inherited from the source quotation. The `updatePi` Server Action still accepts (and re-resolves) a full `lines` array; the edit form simply submits the PI's current lines unchanged, so totals are always recomputed authoritatively.
+**Why:** A PI is a point-in-time snapshot of an _accepted_ quotation. Re-quoting line items on the PI is unusual — the realistic path to different lines is to revise the quotation and re-convert. A full line-item editor would duplicate the Day 8 quotation builder (a Client Component tree of ~5 files) for a rarely-used surface. Header-only editing covers the genuine PI-stage adjustments (redirect Ship-To, extend validity, tweak T&Cs).
+**Impact:** To change a PI's line items, cancel/recreate or revise the source quotation. `updatePi` itself is fully capable of line edits if a future builder UI wants them.
+**Resolution:** Tracked; revisit if a PI line-editor is genuinely needed. Not blocking.

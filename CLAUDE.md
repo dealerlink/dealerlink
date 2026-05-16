@@ -233,16 +233,19 @@ Every document tracks three distinct parties:
 // All tax math lives here. NEVER inline in routes.
 export function calculateGST(input: {
   distributorState: IndianState;
-  dealerState: IndianState; // Bill To, NOT Ship To
+  placeOfSupply: IndianState; // Ship-To for goods per IGST Act §10
   lineItems: LineItem[];
 }): TaxBreakdown;
 ```
 
 Rules:
 
-- **Inter-state** (distributor state ≠ dealer state): apply **IGST** at full GST rate.
+- **Inter-state** (distributor state ≠ place of supply): apply **IGST** at full GST rate.
 - **Intra-state** (same state): apply **CGST + SGST**, each at half the GST rate.
-- **Ship To state does NOT affect tax.** Only Bill To matters.
+- **Place of supply drives tax — and place of supply is the SHIP-TO location for goods** (IGST Act 2017 §10 — delivery location). Bill-To state does **not** affect tax classification.
+  - **Quotations** have a single dealer and no separate Ship-To, so `place_of_supply` = `dealer.state` (the dealer is effectively both Bill-To and Ship-To).
+  - **PIs, Orders, Tax Invoices, Dispatch Notes** carry a distinct Ship-To: `place_of_supply` = the **Ship-To dealer's state**. When Ship-To differs from Bill-To and sits in another state, the document can be classified differently (IGST vs CGST/SGST) from its originating quotation.
+  - The rationale is recorded in **ADR-012** (`DECISIONS.md`); the original "Bill-To only" simplification was a single-dealer artefact corrected on Day 11.
 - **TDS on Purchase**: optional deduction at order level (e.g., 0.1%).
 - **Round-off**: applied at grand total, not per line. Handle ±0.99 paise per BRD reference PO.
 
@@ -250,6 +253,7 @@ Rules:
 
 - Live, on every line item change in Quotation Builder (debounce 150ms).
 - On dealer change (state may change → CGST↔IGST flip).
+- On **Ship-To change** when converting a quotation to a PI, or editing a PI — a new Ship-To state moves the place of supply and may flip IGST↔CGST/SGST.
 - On product change (HSN/GST rate may differ).
 
 The recalc happens in a **pure function** in `packages/tax/`. UI never duplicates this logic. Tests must cover at least: same-state, different-state, mixed GST rates in one quotation, TDS toggle, rounding edge cases.

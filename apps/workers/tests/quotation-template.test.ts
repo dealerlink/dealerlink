@@ -31,6 +31,8 @@ function makeLine(over: Partial<PdfLineItem> = {}): PdfLineItem {
 
 function makeData(over: Partial<QuotationPdfData> = {}): QuotationPdfData {
   return {
+    documentTitle: 'QUOTATION',
+    numberLabel: 'Quote No.',
     quoteNumber: 'QT-2026-0001',
     revision: 1,
     quoteDate: '2026-05-15',

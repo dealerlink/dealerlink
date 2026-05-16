@@ -256,3 +256,66 @@ The card lands in the destination column and the history row is marked `overridd
 - The render runs in the workers process (Puppeteer). It is spawned as a one-shot subprocess by the web action (Phase 1 — DEV.36); from Day 14 it moves to the pg-boss `render-pdf` queue.
 - A `draft → sent` transition auto-generates the PDF, so a freshly-sent quotation already has a current render.
 - If a render fails ("Could not generate the PDF…"), check that the workers Chromium is available — see `docs/PDF_PIPELINE.md`.
+
+---
+
+## R? — Converting a quotation to a Performa Invoice
+
+**When to use:** A dealer has accepted a quotation and you need to issue a Performa Invoice (PI) — the priced document the buyer confirms before an order is placed.
+
+**Time:** ~1 minute.
+
+**Background:** A PI can only be created from an **accepted** quotation. The PI snapshots the quotation's line items; you may redirect the Ship-To and adjust validity / terms before sending. Place of supply follows the **Ship-To** dealer (ADR-012), so a Ship-To in a different state can change the tax (IGST ↔ CGST/SGST).
+
+**Steps:**
+
+1. Open the accepted quotation at `/quotations/<id>`.
+2. Click **Convert to PI**.
+3. (Optional) Pick a different **Ship-To** dealer. If the new Ship-To sits in another state, a banner shows the tax classification change — confirm this is intended.
+4. (Optional) Adjust **Valid until**, terms, and internal notes.
+5. Click **Create draft PI** — you land on the new PI (`draft`).
+6. Review, then **Send** the PI. Sending renders the PI PDF and queues it for delivery (Resend send lands Day 14).
+
+**Notes:**
+
+- A draft PI is editable (`Edit`) for Ship-To / validity / terms / notes; line items are inherited from the quotation (DEV.40).
+- A quotation can be converted more than once (e.g. to re-issue) — each conversion is an independent PI.
+
+## R? — Confirming an order with the inventory check
+
+**When to use:** A buyer has agreed to a sent PI and you are ready to commit stock.
+
+**Time:** ~1 minute.
+
+**Background:** Confirming a **PI** atomically creates an **Order** (`pending`) and advances the linked deal to _Payment Pending_. Confirming the **Order** then reserves serialised inventory FIFO — this is the step that earmarks physical stock.
+
+**Steps:**
+
+1. Open the sent PI at `/pi/<id>` and click **Confirm PI**. An order is created; follow **View order ORD-…**.
+2. On the order (`pending`), click **Confirm order**. A modal previews, per line, how many serials will be reserved.
+3. If every line shows **reserve N**, click **Confirm & reserve** — the serials move to `reserved` and the order becomes `confirmed`.
+4. If a line shows **N short**, the order cannot be confirmed. Procure more stock for the short product(s) (see the procurement runbook), then retry.
+
+**Notes:**
+
+- Reservation is all-or-nothing — a shortage on any line blocks the whole order; nothing is partially reserved.
+- Reserved serials appear on the order's **Inventory reservations** tab.
+
+## R? — Cancelling an order and releasing reservations
+
+**When to use:** A confirmed or pending order must be withdrawn before dispatch.
+
+**Time:** ~1 minute.
+
+**Background:** Cancellation is **admin only**. It releases every serial reserved for the order back to `in_stock` and nudges the linked deal back from _Payment Pending_ to _PO Pending_.
+
+**Steps:**
+
+1. Open the order at `/orders/<id>` (status must be `pending` or `confirmed`).
+2. Click **Cancel order**, enter a reason, and confirm.
+3. The order moves to `cancelled`; the page reports how many reservations were released.
+
+**Notes:**
+
+- Once an order is dispatched it can no longer be cancelled here — that becomes a returns process (Day 13+).
+- To withdraw before an order exists, cancel the PI instead (`Cancel PI`, admin) — a confirmed PI cannot be cancelled; cancel its order.

@@ -76,28 +76,29 @@ export async function reserveInventoryForOrder(
     .where(eq(orderLines.orderId, orderId));
 
   const shortages: InventoryShortage[] = [];
-  const picks: { orderLineId: string; productId: string; itemIds: string[] }[] = [];
-  // Across lines that share a product, never count the same serial twice.
-  const alreadyPicked: string[] = [];
+  const reservedItemIds: string[] = [];
+  const perLine: ReserveLineResult[] = [];
 
   for (const line of lines) {
     const requested = Math.round(Number(line.quantity));
     if (requested <= 0) {
-      picks.push({ orderLineId: line.id, productId: line.productId, itemIds: [] });
+      perLine.push({ orderLineId: line.id, productId: line.productId, reserved: 0 });
       continue;
     }
     // FIFO lock: oldest procurement first. FOR UPDATE serialises competing
-    // confirmations on the very rows we intend to reserve.
+    // confirmations on the very rows we intend to reserve — a racing
+    // confirmation blocks here, then re-reads the now-`reserved` rows and
+    // finds them excluded by the `status = 'in_stock'` filter.
     const locked = await tx.execute<{ id: string }>(sql`
       SELECT id FROM inventory_items
       WHERE product_id = ${line.productId}
         AND status = 'in_stock'
-        AND id <> ALL(${alreadyPicked}::uuid[])
       ORDER BY procurement_date ASC NULLS LAST, created_at ASC
       LIMIT ${requested}
       FOR UPDATE
     `);
     const itemIds = (locked as unknown as { id: string }[]).map((r) => r.id);
+
     if (itemIds.length < requested) {
       shortages.push({
         productId: line.productId,
@@ -107,19 +108,14 @@ export async function reserveInventoryForOrder(
         available: itemIds.length,
         short: requested - itemIds.length,
       });
+      // Do not reserve a short line — but keep scanning so the thrown error
+      // lists every short product, not just the first.
+      continue;
     }
-    alreadyPicked.push(...itemIds);
-    picks.push({ orderLineId: line.id, productId: line.productId, itemIds });
-  }
 
-  if (shortages.length > 0) {
-    // Throwing rolls back the whole transaction — no partial reservation.
-    throw new InsufficientInventoryError(shortages);
-  }
-
-  const reservedItemIds: string[] = [];
-  for (const pick of picks) {
-    for (const itemId of pick.itemIds) {
+    // Full line — reserve immediately. Transitioning now means a later line
+    // for the same product cannot double-count these serials.
+    for (const itemId of itemIds) {
       await transitionInventoryItem(tx, itemId, 'reserved', {
         reservedForOrderId: orderId,
         reservedForDealerId: opts.dealerId,
@@ -129,18 +125,18 @@ export async function reserveInventoryForOrder(
     }
     await tx
       .update(orderLines)
-      .set({ reservedQuantity: pick.itemIds.length.toFixed(3) })
-      .where(eq(orderLines.id, pick.orderLineId));
+      .set({ reservedQuantity: itemIds.length.toFixed(3) })
+      .where(eq(orderLines.id, line.id));
+    perLine.push({ orderLineId: line.id, productId: line.productId, reserved: itemIds.length });
   }
 
-  return {
-    reservedItemIds,
-    perLine: picks.map((p) => ({
-      orderLineId: p.orderLineId,
-      productId: p.productId,
-      reserved: p.itemIds.length,
-    })),
-  };
+  if (shortages.length > 0) {
+    // Throwing rolls back the whole transaction — including any lines already
+    // reserved above. No partial reservation ever survives.
+    throw new InsufficientInventoryError(shortages);
+  }
+
+  return { reservedItemIds, perLine };
 }
 
 /**

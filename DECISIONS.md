@@ -451,4 +451,39 @@ Onboarding speed is one of Day 4's success criteria (<2 minutes from operator cl
 
 ---
 
+## ADR-012 — Place of supply uses Ship-To, not Bill-To
+
+### Context
+
+CLAUDE.md §5 originally simplified GST classification to "Ship-To state does NOT affect tax — only Bill-To matters." That held through Days 1–8 because a quotation has exactly **one** dealer: there is no separate Ship-To, so Bill-To and the place of supply are the same row.
+
+Day 11 introduced the three-party document (PI / Order) with a Bill-To dealer and a potentially **different** Ship-To dealer. The simplification then became wrong: under the IGST Act 2017 **§10**, the place of supply for goods is where delivery to the recipient is completed — the Ship-To location — and place of supply, not the payer's address, decides IGST vs CGST+SGST.
+
+### Decision
+
+**Place of supply = the Ship-To dealer's state.** Tax classification is decided by `tenant_state` vs `place_of_supply`, where `place_of_supply` is sourced as:
+
+- **Quotations** — `dealer.state`. A quotation has no distinct Ship-To, so its single dealer is effectively both Bill-To and Ship-To. Behaviour unchanged from Day 8/9.
+- **PIs, Orders, Tax Invoices, Dispatch Notes** — the **Ship-To dealer's state**. Bill-To state never enters the tax decision.
+
+The `@dealerlink/tax` engine already takes an opaque `placeOfSupply` string, so no engine change was needed — only the callers feeding it the right state. CLAUDE.md §5 was rewritten; DEV.39 records the correction.
+
+### Alternatives considered
+
+- **Keep Bill-To-only** — contradicts Indian GST law; would misclassify every three-party PI/Order and break GST-return filing in Phase 2.
+- **Make it a tenant setting** — unnecessary; §10 is statute, not tenant policy.
+
+### Why this matters
+
+Misclassifying inter/intra-state misstates the tax on the invoice — a compliance defect. The three-party scenario (a Maharashtra distributor billing a Maharashtra dealer but shipping to that dealer's Karnataka site) is common in distribution and must classify as inter-state IGST.
+
+### Consequences
+
+- A PI/Order can carry a **different tax classification than its originating quotation** when Ship-To differs in state from the quotation's dealer. The convert-to-PI flow surfaces this with an explicit banner.
+- `place_of_supply` is recomputed whenever Ship-To changes (convert, PI edit).
+- Quotations are unaffected — they have no separate Ship-To.
+- Supersedes the "Ship-To does not affect tax" sentence in the pre-Day-11 CLAUDE.md §5.
+
+---
+
 _This log is append-only. Locked decisions are not edited; if a decision changes, write a new ADR that supersedes the old one._
