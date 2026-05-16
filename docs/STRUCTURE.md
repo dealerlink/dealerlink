@@ -51,9 +51,11 @@ dealerlink/
 │   │   │   ├── audit/              ← logging hooks
 │   │   │   ├── format/             ← formatINR, formatGSTIN
 │   │   │   └── tenant/             ← tenant context helpers
-│   │   └── server/
-│   │       ├── routers/            ← tRPC routers
-│   │       └── modules/            ← business logic per BRD module
+│   │   ├── server/
+│   │   │   ├── routers/            ← tRPC routers
+│   │   │   └── modules/            ← business logic per BRD module
+│   │   └── tests/e2e/              ← Playwright: verify-day-N specs +
+│   │                                 critical-path + operator-onboarding
 │   └── workers/                    ← Puppeteer + pg-boss (Process 2)
 │       ├── src/
 │       │   ├── index.ts            ← pg-boss bootstrap
