@@ -5,10 +5,12 @@ import { notFound, redirect } from 'next/navigation';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate, formatINRExact } from '@/lib/format';
+import { getDispatchesForOrder } from '@/lib/queries/dispatch';
 import { getOrderById, getReservationPreview } from '@/lib/queries/orders';
 import { getOrderPayments } from '@/lib/queries/payments';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
+import { dispatchStatusLabel, dispatchStatusTone } from '../../dispatch/dispatch-status';
 import { paymentStatusTone as paymentRowTone } from '../../payments/payment-status';
 import { orderStatusTone, paymentStatusTone } from '../order-status';
 import { OrderActions } from './order-actions';
@@ -19,6 +21,7 @@ const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'lines', label: 'Line items' },
   { key: 'reservations', label: 'Inventory reservations' },
+  { key: 'dispatches', label: 'Dispatches' },
   { key: 'payments', label: 'Payments' },
   { key: 'history', label: 'Status history' },
 ] as const;
@@ -74,6 +77,14 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
 
   const canRecordPayment = role === 'admin' || role === 'accounts';
   const orderPayments = tab === 'payments' ? await getOrderPayments(tenantId, order.id) : null;
+
+  const canDispatch = role === 'admin' || role === 'dispatch';
+  const orderDispatches =
+    tab === 'dispatches' ? await getDispatchesForOrder(tenantId, order.id) : null;
+  // Fulfilment roll-up across all order lines.
+  const orderedUnits = order.lines.reduce((n, l) => n + l.quantity, 0);
+  const dispatchedUnits = order.lines.reduce((n, l) => n + l.dispatchedQuantity, 0);
+  const isDispatchable = order.status === 'confirmed' || order.status === 'partially_dispatched';
 
   return (
     <div className="mx-auto max-w-[1100px] px-8 py-10">
@@ -294,6 +305,71 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
                 </tbody>
               </table>
             )}
+          </section>
+        )}
+
+        {tab === 'dispatches' && orderDispatches && (
+          <section className="space-y-4">
+            <div className="border-line flex items-center justify-between rounded-[6px] border bg-white px-5 py-3 text-[13px]">
+              <div className="text-mute">
+                <span className="mono text-ink font-semibold">{dispatchedUnits}</span> of{' '}
+                <span className="mono text-ink font-semibold">{orderedUnits}</span> units dispatched
+                ·{' '}
+                <span className="mono text-ink">
+                  {orderDispatches.filter((d) => d.status === 'delivered').length}
+                </span>{' '}
+                of <span className="mono text-ink">{orderDispatches.length}</span> dispatch(es)
+                delivered
+              </div>
+              {canDispatch && isDispatchable && dispatchedUnits < orderedUnits && (
+                <Link
+                  href={`/dispatch/new?order=${order.id}`}
+                  className="bg-ink rounded-[6px] px-3 py-1.5 text-[12.5px] font-medium text-white hover:opacity-90"
+                >
+                  New dispatch
+                </Link>
+              )}
+            </div>
+            <div className="border-line overflow-hidden rounded-[6px] border bg-white">
+              {orderDispatches.length === 0 ? (
+                <div className="text-mute px-6 py-12 text-center text-[13px]">
+                  No dispatches raised against this order yet.
+                </div>
+              ) : (
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-line bg-tile text-mute border-b text-left text-[11px] uppercase tracking-[0.06em]">
+                      <th className="px-4 py-3 font-medium">Dispatch #</th>
+                      <th className="px-4 py-3 font-medium">Date</th>
+                      <th className="px-4 py-3 text-right font-medium">Serials</th>
+                      <th className="px-4 py-3 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orderDispatches.map((d) => (
+                      <tr key={d.id} className="border-line border-b last:border-b-0">
+                        <td className="mono px-4 py-2.5 text-[12.5px]">
+                          <Link href={`/dispatch/${d.id}`} className="hover:underline">
+                            {d.dispatchNumber}
+                          </Link>
+                        </td>
+                        <td className="text-mute mono px-4 py-2.5 text-[12px]">
+                          {formatDate(new Date(d.dispatchDate + 'T00:00:00Z'))}
+                        </td>
+                        <td className="mono text-ink px-4 py-2.5 text-right tabular-nums">
+                          {d.serialCount}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <StatusPill tone={dispatchStatusTone(d.status)}>
+                            {dispatchStatusLabel(d.status)}
+                          </StatusPill>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </section>
         )}
 
