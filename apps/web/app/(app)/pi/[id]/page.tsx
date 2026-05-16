@@ -9,7 +9,7 @@ import { getLatestGeneratedDocument } from '@/lib/queries/generated-documents';
 import { getPerformaInvoiceById } from '@/lib/queries/performa-invoices';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
-import { piStatusTone } from '../page';
+import { piStatusTone } from '../pi-status';
 import { PiActions } from './pi-actions';
 
 export const dynamic = 'force-dynamic';

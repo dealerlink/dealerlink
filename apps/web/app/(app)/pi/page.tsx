@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
+import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { formatDate, formatINRExact } from '@/lib/format';
 import { listPerformaInvoices } from '@/lib/queries/performa-invoices';
 import { impersonationTenantId } from '@/lib/tenant/context';
 import { PI_STATUSES, type PerformaInvoiceStatus } from '@dealerlink/schemas';
+
+import { piStatusTone } from './pi-status';
 
 interface PageProps {
   searchParams: {
@@ -21,21 +23,6 @@ interface PageProps {
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 50;
-
-export function piStatusTone(s: PerformaInvoiceStatus): StatusTone {
-  switch (s) {
-    case 'draft':
-      return 'mu';
-    case 'sent':
-      return 'in';
-    case 'confirmed':
-      return 'em';
-    case 'cancelled':
-      return 'ro';
-    default:
-      return 'mu';
-  }
-}
 
 export default async function PiListPage({ searchParams }: PageProps) {
   const ctx = await getAuthContext();
