@@ -228,3 +228,43 @@ A handful of cross-module patterns were settled in Days 4-5. Reuse them instead 
 - **Bulk import is atomic.** Both dealers and products use the same shape: a `bulkImport*Schema` Zod array cap at 500 rows, a single `tenantAction` transaction that pre-checks conflicts, then inserts each row, and rolls back on any single failure. No partial imports in Phase 1 — the operator UI guarantees this contract.
 - **Inline-edit sections.** The dealer + product detail pages use the same "Edit / Save / Cancel" section pattern established by the tenant settings page in Day 4. Each section maps to a Zod schema; commercial terms (`creditLimit`, `creditPeriodDays`, `discountPercent`) require `admin` while profile edits accept `sales`.
 - **Access logging on detail views.** Dealer detail pages call `recordAccess('dealer', id, 'view')` from a Server Component. Payment, dispatch, and export routes will do the same per docs/LOGGING.md.
+
+---
+
+## Accessibility checklist (Day 16)
+
+Every new page or component must clear this bar before it ships. The
+`verify-day-16.spec.ts` axe pass enforces the automated half; the rest is a
+manual walk-through.
+
+### Automated (axe-core, enforced in CI)
+
+- [ ] 0 `serious` / `critical` axe violations on the page (`wcag2a` + `wcag2aa`).
+- [ ] Every `<img>` / decorative icon: real `alt`, or `aria-hidden="true"` on
+      a decorative SVG.
+- [ ] Every icon-only button / link has an `aria-label`.
+- [ ] Every form control has a programmatic label — a wrapping/`htmlFor`
+      `<label>`, or an `aria-label`. Filter `<select>`s included.
+- [ ] Muted text clears 4.5:1 contrast (the `--mute` token is tuned for this,
+      including over the `--paper-2` row-hover background).
+
+### Keyboard (manual)
+
+- [ ] Every flow completes with the keyboard alone — no mouse.
+- [ ] Tab order follows the visual order (top→bottom, left→right).
+- [ ] A visible focus ring appears on every interactive element (buttons
+      carry their own ring; `globals.css` covers links/selects/inputs).
+- [ ] The skip-to-content link is the first tab stop and jumps to
+      `#main-content`.
+- [ ] Modals (Radix `Dialog`) trap focus, close on `Escape`, and restore
+      focus to the trigger — this is Radix default; do not regress it by
+      hand-rolling a modal.
+- [ ] `Enter` submits forms; `Escape` cancels modals.
+
+### Screen reader (manual)
+
+- [ ] Loading states use `role="status"`; error states use `role="alert"`.
+- [ ] Validation errors are associated with their input (`aria-describedby`)
+      and announced (`aria-live="polite"`).
+- [ ] Required fields carry the `required` attribute (implicit
+      `aria-required`) and a visible asterisk marked `aria-hidden`.

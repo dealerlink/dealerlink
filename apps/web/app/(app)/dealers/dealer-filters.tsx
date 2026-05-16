@@ -62,6 +62,7 @@ export function DealerFilters({ initial }: { initial: Initial }) {
           key={s.name}
           value={initial[s.name]}
           onChange={(e) => setFilter(s.name, e.target.value)}
+          aria-label={`Filter by ${s.label.toLowerCase()}`}
           className="border-line text-ink h-[34px] rounded-[5px] border bg-white px-2 text-[12.5px]"
         >
           <option value="">All {s.label.toLowerCase()}</option>

@@ -58,6 +58,7 @@ export function LineItemsTable({ lines, products, onLinesChange }: Props) {
         <div className="titlecaps text-mute">Line items</div>
         <select
           value=""
+          aria-label="Add a product line"
           onChange={(e) => {
             if (e.target.value) {
               addRow(e.target.value);
@@ -104,6 +105,7 @@ export function LineItemsTable({ lines, products, onLinesChange }: Props) {
                     type="number"
                     min="0"
                     step="0.001"
+                    aria-label={`Quantity for ${l.productName}`}
                     value={l.quantity}
                     onChange={(e) => update(idx, { quantity: e.target.value })}
                     className="text-right tabular-nums"
@@ -113,6 +115,7 @@ export function LineItemsTable({ lines, products, onLinesChange }: Props) {
                     type="number"
                     min="0"
                     step="0.01"
+                    aria-label={`Unit price for ${l.productName}`}
                     value={l.unitPrice}
                     onChange={(e) => update(idx, { unitPrice: e.target.value })}
                     className="text-right tabular-nums"
@@ -131,6 +134,7 @@ export function LineItemsTable({ lines, products, onLinesChange }: Props) {
                 </div>
                 <Input
                   value={l.description}
+                  aria-label={`Description for ${l.productName}`}
                   onChange={(e) => update(idx, { description: e.target.value })}
                   placeholder="Description override (optional)"
                   maxLength={500}

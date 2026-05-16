@@ -148,9 +148,10 @@ export function Sidebar({ user, tenant }: SidebarProps) {
           </div>
           <Link
             href="/settings"
+            aria-label="Settings"
             className="icon-btn flex-shrink-0 !text-[#7C7E89] hover:!bg-white/5"
           >
-            <Settings size={14} />
+            <Settings size={14} aria-hidden="true" />
           </Link>
         </div>
       </div>

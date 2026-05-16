@@ -250,6 +250,7 @@ export function QuotationBuilderForm({
           </div>
           <textarea
             rows={4}
+            aria-label="Terms and conditions"
             value={form.termsAndConditions}
             onChange={(e) => update('termsAndConditions', e.target.value)}
             className="border-line bg-paper focus:ring-accent w-full rounded-[4px] border px-2 py-1.5 text-[13px] focus:outline-none focus:ring-1"
@@ -260,6 +261,7 @@ export function QuotationBuilderForm({
           <div className="titlecaps text-mute">Internal notes (not on PDF)</div>
           <textarea
             rows={3}
+            aria-label="Internal notes"
             value={form.notes}
             onChange={(e) => update('notes', e.target.value)}
             className="border-line bg-paper focus:ring-accent w-full rounded-[4px] border px-2 py-1.5 text-[13px] focus:outline-none focus:ring-1"
@@ -301,13 +303,20 @@ function Field({
   required?: boolean;
   children: React.ReactNode;
 }) {
+  // The control is nested inside the <label> so it is programmatically
+  // associated without needing an explicit id/htmlFor pair (Day 16 a11y).
   return (
-    <div>
-      <label className="text-ink mb-1 block text-[12px] font-medium">
+    <label className="block">
+      <span className="text-ink mb-1 block text-[12px] font-medium">
         {label}
-        {required && <span className="text-rose-700"> *</span>}
-      </label>
+        {required && (
+          <span className="text-rose-700" aria-hidden="true">
+            {' '}
+            *
+          </span>
+        )}
+      </span>
       {children}
-    </div>
+    </label>
   );
 }
