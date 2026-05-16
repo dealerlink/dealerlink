@@ -3324,7 +3324,388 @@ WHEN DONE:
 
 ## Day 12 — Payments + Receipts
 
-*Will be added when Day 11 is complete. Day 12 builds payment recording (full + partial + advance), receipt PDF generation, credit period tracking, and payment status updates that drive order dispatchability.*
+**Goal:** Ship the payment recording module. By end of day, users can record payments (full / partial / advance), allocate one payment across multiple PIs/Orders, generate payment receipts, see auto-updated payment status on orders, and track credit-period overdues. Payment receipt PDFs reuse the Day 10 template architecture.
+
+**Estimated time:** 4–5 hours + ~30 min verification
+
+**Deliverable:** Working `/payments/*` module with list, detail, record, allocate, receipt PDF, refund. Order payment status propagates automatically.
+
+### Prompt for Claude Code
+
+```
+
+You are implementing Day 12 of the Dealerlink build. Day 11 shipped successfully (commits f1def0d..93c6900) — PI + Order lifecycle with atomic transactions and inventory reservation. Day 12 adds the cash side: payment recording, allocation, receipts.
+
+PRELIMINARY:
+P.1. Run `pnpm preflight` — confirm 11 green checks.
+P.2. Read CLAUDE.md §6 (multi-party doc logic — receipts go to Bill-To, not Ship-To), §10 (auth — payments are admin + accounts roles only, NOT sales).
+P.3. Read DECISIONS.md ADR-012 (place of supply — receipts are not goods/services and don't apply tax; this is informational so receipts are tax-neutral documents).
+P.4. Read DEVIATIONS.md DEV.31 (verify spec locator pattern) and DEV.40 (PI line items inherited from quotation; same pattern for payments).
+P.5. Read packages/db/src/schema/order.ts — the `paymentStatus` field on orders is what we'll be propagating to.
+P.6. Read apps/workers/src/templates/\_components/ — Day 10/11 shared template parts; today's receipt uses Header, PartyBlock, Footer (no LineItemsTable since receipts have no line items per se).
+
+PRIMARY REFERENCES:
+
+1. CLAUDE.md §6 (Bill-To is the payment party — receipts always go to whoever pays)
+2. BRD §6 (Payment requirements, partial payment, advance payment, credit period)
+3. docs/Distribyte.html — Payments screen reference
+4. Day 11 schemas — Order.paymentStatus is the propagation target
+5. Day 10 template architecture — receipt PDF extends this
+
+==========================================================
+TRACK A — PAYMENTS (CHUNKED — 4 chunks)
+==========================================================
+
+## CHUNK 12a — Schemas + state machine + helpers
+
+A1.1. Create packages/db/src/schema/payment.ts:
+
+```typescript
+export const payments = pgTable('payments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+
+  paymentNumber: text('payment_number').notNull(), // PAY-2026-0001 (per-tenant per-FY)
+
+  // Payer (Bill-To from one or more orders)
+  dealerId: uuid('dealer_id').notNull(),
+
+  // Money: receipts are tax-neutral documents
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  currency: text('currency').notNull().default('INR'),
+
+  // Method
+  method: text('method').notNull(), // 'bank_transfer' | 'cheque' | 'cash' | 'upi' | 'card' | 'other'
+  reference: text('reference'), // bank txn ID, cheque number, UPI ref, etc.
+  receivedDate: date('received_date').notNull(),
+
+  // Bank deposit details (for accountant reconciliation)
+  depositedToBank: text('deposited_to_bank'),
+  depositedDate: date('deposited_date'),
+
+  // Status
+  status: text('status').notNull().default('pending_verification'),
+  // 'pending_verification' (accounts hasn't confirmed yet)
+  // | 'verified' (accounts confirmed receipt; allocations can be made)
+  // | 'cleared' (cheque cleared / bank receipt confirmed; allocations final)
+  // | 'bounced' (cheque bounced / payment reversed)
+  // | 'refunded' (refunded back to dealer)
+
+  // Verification trail
+  verifiedAt: timestamp('verified_at'),
+  verifiedBy: uuid('verified_by'),
+  clearedAt: timestamp('cleared_at'),
+  bouncedAt: timestamp('bounced_at'),
+  bouncedReason: text('bounced_reason'),
+  refundedAt: timestamp('refunded_at'),
+  refundedReason: text('refunded_reason'),
+
+  // Allocation summary (denormalized for fast queries; equals SUM of payment_allocations.amount where payment_id = this.id)
+  allocatedAmount: numeric('allocated_amount', { precision: 14, scale: 2 }).notNull().default('0'),
+  // Unallocated = amount - allocatedAmount. Positive = advance / floating credit.
+
+  notes: text('notes'),
+
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  createdBy: uuid('created_by').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  updatedBy: uuid('updated_by').notNull(),
+});
+
+export const paymentAllocations = pgTable('payment_allocations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  paymentId: uuid('payment_id').notNull(),
+
+  // Allocated against — exactly one of these is set
+  orderId: uuid('order_id'),
+  performaInvoiceId: uuid('performa_invoice_id'),
+  // Phase 1: payment can be allocated to Order (after order is confirmed) OR PI advance.
+  // If orderId is set, performaInvoiceId is null. Vice versa.
+
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+
+  allocatedAt: timestamp('allocated_at').notNull().defaultNow(),
+  allocatedBy: uuid('allocated_by').notNull(),
+  notes: text('notes'),
+});
+```
+
+A1.2. Constraints:
+
+- payment_number: UNIQUE (tenant_id, payment_number)
+- payments.amount > 0
+- payments.allocated_amount >= 0 AND <= amount
+- payments.method IN the listed enum
+- payments.status IN the listed enum
+- payment_allocations.amount > 0
+- CHECK: exactly one of (order_id, performa_invoice_id) is non-null per allocation
+- No allocations against bounced/refunded payments (enforced in transition guards)
+
+A1.3. Indexes:
+
+- payments: (tenant_id, dealer_id, received_date DESC), (tenant_id, status, received_date DESC)
+- payment_allocations: (tenant_id, payment_id), (tenant_id, order_id), (tenant_id, performa_invoice_id)
+- For overdue queries: (tenant_id, dealer_id) on orders combined with (tenant_id, status) for paymentStatus='unpaid' or 'partially_paid'
+
+A1.4. RLS + audit trigger on both tables. document_counters entry for 'payment'.
+
+A1.5. Create packages/db/src/payments/transitions.ts — state machine:
+
+- pending_verification → verified (admin + accounts)
+- verified → cleared (admin + accounts)
+- verified → bounced (admin + accounts, captures reason; reverses any allocations)
+- cleared → refunded (admin only, captures reason; reverses allocations)
+- Forbidden: pending → cleared directly (must verify first); any → pending; cleared → bounced
+
+A1.6. Create packages/db/src/payments/propagation.ts — pure helper that computes order.paymentStatus given an order's totalAmount and the sum of cleared/verified allocations against it:
+
+```typescript
+export function deriveOrderPaymentStatus(
+  orderTotal: Decimal,
+  allocatedAmount: Decimal, // sum of allocations from payments where status IN ('verified','cleared')
+): 'unpaid' | 'partially_paid' | 'paid' {
+  if (allocatedAmount.isZero()) return 'unpaid';
+  if (allocatedAmount.greaterThanOrEqualTo(orderTotal)) return 'paid';
+  return 'partially_paid';
+}
+```
+
+Unit-test this helper with edge cases (over-allocation, exact match, etc).
+
+A1.7. Generate migration. Verify pnpm typecheck green.
+
+A1.8. Zod schemas in packages/schemas/src/payment.ts: createPaymentInput, allocatePaymentInput, transitionPaymentInput.
+
+COMMIT 12a: `feat(payments): chunk a — schemas + state machine + propagation helper`
+
+## CHUNK 12b — Server actions
+
+A2.1. apps/web/lib/actions/payments/ (using tenantAction()):
+
+- recordPayment (admin + accounts) — creates payment with status='pending_verification', amount, method, reference, date. Returns paymentId.
+
+- verifyPayment (admin + accounts) — pending_verification → verified. Triggers propagation: for any orders where this payment has allocations (none yet for new payment), recompute paymentStatus.
+
+- markPaymentCleared (admin + accounts) — verified → cleared. Triggers propagation.
+
+- markPaymentBounced (admin + accounts) — verified → bounced. ATOMIC: reverses all allocations (deletes payment_allocations rows for this payment, recomputes paymentStatus on affected orders). Captures bouncedReason.
+
+- refundPayment (admin only) — cleared → refunded. Same atomic reversal as bounced.
+
+- allocatePayment (admin + accounts) — partial allocation. Input: paymentId, allocations[] = [{ orderId | performaInvoiceId, amount, notes? }]. Validates:
+  - Payment status IN ('verified', 'cleared')
+  - SUM(new allocations) + payment.allocatedAmount <= payment.amount (no over-allocation)
+  - For each order allocation: amount <= (orderTotal - already-allocated-to-that-order)
+  - All in one transaction. After insert, recompute paymentStatus on each affected order via the propagation helper. Update orders.paymentStatus accordingly.
+  - If order.paymentStatus moves to 'paid' AND the order was 'pending', advance to 'confirmed' (the funds-received-then-confirm flow; Day 11's manual confirm flow still works for credit terms).
+
+- deallocatePayment (admin + accounts) — removes an allocation by id. Recomputes paymentStatus. Used to fix mistakes.
+
+A2.2. CRITICAL: All payment status transitions and allocations are inside a single transaction. The pattern is:
+
+1.  Open withTenant transaction
+2.  SELECT FOR UPDATE on payment row
+3.  Validate status transition allowed
+4.  Apply DB changes (status update, allocation insert/delete)
+5.  For each affected order: SELECT FOR UPDATE order row, recompute paymentStatus, update
+6.  Audit log entries
+7.  Commit
+
+A2.3. Add `applyAdvancePayment` convenience action (admin + accounts) — for the common flow: dealer pays an advance against a PI before order is confirmed.
+
+- Input: paymentId, piId, amount
+- Creates allocation against PI
+- When PI is later confirmed → order created, advance allocation auto-transfers to the new order (in the confirmPi action; update Day 11's confirmPi to check for PI-allocated payments and transfer them)
+
+A2.4. Update Day 11's confirmPi action — add the advance-transfer step inside the atomic transaction:
+
+- Before deal advance, query for payment_allocations where performaInvoiceId = this PI
+- For each, update the allocation: set orderId = newOrderId, performaInvoiceId = null
+- Recompute paymentStatus on the new order
+- If paymentStatus = 'paid', set order.status = 'confirmed' (effectively merged the funds-received-confirm flow)
+- All in the same atomic transaction Day 11 already established
+
+A2.5. Tests for all of the above. Include:
+
+- recordPayment with various methods
+- verify → cleared happy path
+- bounced reverses allocations and propagates back to 'unpaid' on affected orders
+- allocation validation (over-allocation rejected, allocating to wrong-tenant order rejected)
+- Concurrent allocation attempt on same payment (two operators try to allocate ₹100k from a ₹100k payment to different orders simultaneously — second should fail with payment-fully-allocated)
+- Order paymentStatus propagation: 0 → unpaid, partial → partially_paid, exact → paid, over → paid (clamped, not error)
+- Advance payment on PI transfers to order on confirmPi
+
+COMMIT 12b: `feat(payments): chunk b — server actions with atomic allocation`
+
+## CHUNK 12c — UI: payments + receipt PDF
+
+A3.1. Payment list (app/(app)/payments/page.tsx):
+
+- Columns: payment number, date, dealer, amount, method, allocated % (visual progress bar), status pill, action menu
+- Filters: status (multi), method, dealer, date range
+- Sort by date desc
+
+A3.2. Payment detail (app/(app)/payments/[id]/page.tsx):
+
+- Hero: payment number, status pill, dealer name, amount, action menu (per status)
+- Sections:
+  - Identity (number, date, dealer, reference, method)
+  - Allocations table — list of payment_allocations rows with order/PI number, amount, allocated by, action to deallocate (admin + accounts)
+  - "Allocate to..." button (visible if unallocated > 0 and status IN verified/cleared) — opens modal showing dealer's unpaid orders + outstanding amounts; user picks orders + enters amounts; submit
+  - Status history
+  - Activity (audit + access log)
+
+A3.3. Record payment flow (app/(app)/payments/new/page.tsx):
+
+- Form: dealer (typeahead), amount, method, reference, received date, deposited bank/date, notes
+- "Allocate now" toggle: if on, after creating payment, redirects directly to allocation modal pre-filtered to that dealer's unpaid orders
+- Default to admin@demo + accounts roles only — sales should NOT see the New Payment button (server-side enforced; UI hides it)
+
+A3.4. Order detail page update (Day 11 file):
+
+- Add "Payments" tab showing allocations against this order
+- Each row: payment number (link), allocated amount, allocated date, allocated by
+- Footer: "Total paid: ₹X, Outstanding: ₹Y, Status: <pill>"
+- "Record Payment" button (admin + accounts, visible if outstanding > 0)
+
+A3.5. Payment receipt PDF (apps/workers/src/templates/payment-receipt.tsx):
+
+- Reuse Day 10 Header (tenant branding) + PartyBlock (dealer) + Footer
+- Body content (replaces line items):
+  - Receipt header: "PAYMENT RECEIPT" + payment number + date
+  - "Received From" block: dealer Bill-To address + GSTIN
+  - Amount: large mono, amount in words below
+  - Method + reference (bank txn / cheque number)
+  - Allocation breakdown (if any): table of which order numbers + amounts
+  - Unallocated remainder (if any): "Advance balance: ₹X"
+  - Bank details (tenant's bank — same as quotation footer)
+- Note: receipts are tax-neutral. No GST breakdown. No place_of_supply.
+
+A3.6. PDF generation server action (apps/web/lib/actions/payments/generate-receipt.ts) — same pattern as Day 10's quotation PDF:
+
+- Loads payment + allocations + dealer + tenant
+- Renders to PDF via the workers subprocess
+- Stores in generated_documents
+- Returns download URL / stream
+
+A3.7. "Send Receipt" action — emails the PDF to dealer.email (logs to email_delivery_log; actual Resend send wires up Day 14).
+
+COMMIT 12c: `feat(payments): chunk c — UI + receipt PDF`
+
+## CHUNK 12d — Overdue tracking, dashboard, seed, tests, closeout
+
+A4.1. Overdue calculation:
+
+- A query helper getOverdueOrders(tenantId): returns orders where paymentStatus IN ('unpaid', 'partially_paid') AND (orderDate + dealer.creditPeriodDays) < today
+- Each row includes: order, dealer, days overdue, outstanding amount
+- ORDER BY days overdue DESC
+
+A4.2. Dashboard widget on /dashboard:
+
+- "Overdue payments" card — count of overdue orders + total outstanding amount
+- "Recent payments (last 7 days)" — list with payment number, dealer, amount
+- "Unallocated payments" — count of payments with allocatedAmount < amount AND status IN ('verified', 'cleared') — these are advances waiting to be applied
+
+A4.3. Seed (packages/db/src/seeds/day12.ts):
+
+- 15 payments per tenant covering all states:
+  - 6 fully allocated to confirmed orders (status='cleared')
+  - 3 partially allocated (advance with remainder unallocated)
+  - 2 unverified (pending_verification)
+  - 2 bounced (with allocations reversed)
+  - 1 refunded
+  - 1 advance against a PI (linked to a PI that's later confirmed in another seed step → allocation transfers to the resulting order)
+- After seed, several orders should have paymentStatus='paid' (fully allocated cleared payments) and a couple 'partially_paid'
+- A couple of overdue orders for dashboard widget testing (set orderDate far enough back that creditPeriodDays has elapsed)
+
+A4.4. Tests:
+
+- All transition + allocation cases per chunk 12b
+- Propagation helper unit tests
+- Concurrent allocation race (the FOR UPDATE proof)
+- Seed assertion: SUM(payment_allocations.amount) WHERE payment_id = X equals payment.allocatedAmount for every payment (denormalization invariant)
+- Receipt PDF renders with allocations and amount-in-words
+- verify-day-12.spec.ts (Playwright):
+  - Login, navigate /payments, see seeded payments
+  - Click "Record payment", fill form, submit → appears in list
+  - Open a payment, verify it, allocate to an unpaid order → order paymentStatus updates to paid/partial
+  - Generate receipt PDF, verify download
+  - Filter spec locators with PAY-2026-/ORD-2026- patterns to ignore test residue (per DEV.31)
+
+A4.5. Docs:
+
+- Update docs/WORKFLOWS.md with payment lifecycle and the advance-transfer-on-confirmPi behavior
+- Add runbook entries: "Recording a payment", "Allocating an advance to an order", "Reversing a bounced cheque", "Refunding a payment"
+
+A4.6. Closeout:
+
+- pnpm preflight, verify (28/28 = 27 prior + 1 new), typecheck, lint, test, build all green
+- PROJECT_PLAN.md B.12 ✅
+- Final commit: `feat(payments): day 12 complete — payments, allocations, receipts, overdue`
+- Push
+
+COMMIT 12d: as above
+
+==========================================================
+GUARDRAILS (DAY 12)
+==========================================================
+
+- Payments are MONEY. Every column is NUMERIC, never float. Every computation goes through Decimal via @dealerlink/tax's decimal helpers (you may import @dealerlink/tax's exported decimal module if useful, or use decimal.js directly — pick one and stay consistent).
+- Allocation validation is non-negotiable: cannot allocate more than payment.amount; cannot allocate to other-tenant orders (RLS catches but validate explicitly with friendly errors).
+- ATOMIC TRANSACTIONS for all status changes and allocations. SELECT FOR UPDATE on payment and affected orders.
+- Bounce/refund REVERSES allocations and recomputes order paymentStatus. The orders may regress from 'paid' to 'partially_paid' or 'unpaid'.
+- Receipts are tax-neutral documents. No CGST/SGST/IGST fields. No tax engine call in the receipt path.
+- Receipt PDF uses Bill-To dealer (per CLAUDE.md §6 — receipts go to the payer). Not Ship-To.
+- Role enforcement: sales role does NOT see payment UI or buttons. Accounts is the primary role; admin has full access. Server-side enforcement via tenantAction, UI hiding is cosmetic.
+- Document number per-tenant per-FY using existing document_counters.
+- Chunk each phase. Day 7/10/11 lessons apply.
+
+WHEN DONE:
+
+- Print summary, 4 chunk commits
+- Confirm seeded data: orders show paymentStatus correctly propagated, overdue widget shows expected count
+- Confirm receipt PDF generated for one payment (mention allocation count + total in receipt)
+- Confirm verify 28/28
+- Tell me Day 12 is complete and Day 13 (Dispatch) is next
+
+```
+
+### Verification checklist (after Day 12)
+
+#### Allocation correctness
+- [ ] Open a seeded order with `paymentStatus='paid'` — confirm Payments tab shows allocations summing to order total
+- [ ] Open an order with `paymentStatus='partially_paid'` — confirm partial allocation reflected
+- [ ] Record a new payment, allocate part of it to an unpaid order — order moves to `partially_paid`
+- [ ] Try to over-allocate (allocate ₹110k from a ₹100k payment) — blocked with clear error
+- [ ] Mark a verified-and-allocated payment as bounced — affected orders regress in payment status, allocations reversed
+
+#### Receipt PDF
+- [ ] Generate a receipt for a payment with multiple allocations — PDF lists each allocation
+- [ ] Generate a receipt for an unallocated advance — PDF shows "Advance balance"
+- [ ] Amount in words matches digits
+- [ ] No GST breakdown visible on receipt
+
+#### Role enforcement
+- [ ] Log in as `sales@demo.test` — /payments redirects to dashboard OR shows access denied (NOT visible in sidebar)
+- [ ] Log in as `accounts@demo.test` — full payments access
+- [ ] Server-side: try to call recordPayment from a sales-role session via direct invocation — blocked
+
+#### Dashboard
+- [ ] /dashboard shows overdue payments widget with seeded overdue count
+- [ ] Recent payments shown
+- [ ] Unallocated advances shown
+
+#### Automated
+- [ ] `pnpm verify` 28/28
+- [ ] All quality gates green
+- [ ] B.12 ✅ in PROJECT_PLAN.md
+
+---
+
+## Day 13 — Dispatch + Delivery Tracking
+
+*Will be added when Day 12 is complete. Day 13 closes the order-to-cash cycle: pick reserved serial numbers, create dispatch records, transition inventory to dispatched/delivered states, generate dispatch notes / e-way bills, mark orders as fulfilled.*
 
 ---
 
