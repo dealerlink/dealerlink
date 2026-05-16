@@ -4427,9 +4427,335 @@ SELECT signature_verified, COUNT(*) FROM webhook_events GROUP BY signature_verif
 
 ---
 
-## Days 15+16 — Reports + Polish (Batched)
+## Days 15 + 16 — Reports + Polish (Batched)
 
-_Will be added when Day 14 is complete. Days 15 and 16 batch into a single Claude Code run per the structured plan — Reports module (sales/inventory/financial summaries with CSV/PDF export) + polish pass (empty states, error boundaries, loading skeletons, accessibility audit)._
+**Goal:** Day 15 ships the Reports module (sales summary, inventory valuation, outstanding receivables, tax reports) with CSV export. Day 16 ships the polish pass (empty states, loading skeletons, error boundaries, a11y audit, keyboard navigation, micro-copy improvements). Batched per the structured plan because both days are read-mostly composition of existing data.
+
+**Estimated time:** 6–8 hours combined + ~45 min verification
+
+**Deliverable:** Working `/reports/*` module with 4 reports + CSV exports + date-range filtering. Polished UX across all existing modules — every list has empty state + loading skeleton + error boundary. Keyboard nav works throughout. Lighthouse a11y score ≥ 95.
+
+### Prompt for Claude Code
+
+```
+You are implementing Days 15 + 16 of the Dealerlink build, BATCHED. Day 14 shipped successfully (b8bf23b..b5681e3) — async email + webhooks. Days 15-16 are read-mostly: no new state machines, no money math beyond reading what's already computed, no concurrent operations. Both days fit one Claude Code run with 6 distinct chunks.
+
+PRELIMINARY:
+P.1. `pnpm preflight` — confirm 14 green.
+P.2. Read CLAUDE.md §3 (stack — TanStack Table for dense data grids), §6 (GST — reports surface CGST/SGST/IGST breakdowns; do NOT recompute, read from stored columns).
+P.3. Read DEVIATIONS.md — note DEV.33 (state format full names; reports group/filter by state with full names), DEV.45 (Day 13 seed pre-stamps; report counts should match this reality).
+P.4. Read docs/STANDARDS.md (a11y baseline for Day 16), docs/DESIGN_SYSTEM.md (loading skeletons + empty states patterns).
+P.5. Skim each existing module's list page (dealers, products, inventory, pipeline, quotations, PIs, orders, payments, dispatches). Day 16 polishes all of them consistently.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md §6 (tax computations — REPORTS NEVER RECOMPUTE; always read stored columns)
+2. BRD §8 (Reports requirements — list of expected reports)
+3. docs/Distribyte.html — reports screen reference from prototype
+4. docs/DESIGN_SYSTEM.md — empty/loading/error states existing patterns
+5. Days 8-13 schemas — reports query these directly
+
+==========================================================
+TRACK A — DAY 15: REPORTS (3 chunks)
+==========================================================
+
+CHUNK 15a — Report query infrastructure + 2 reports
+---------------------------------
+
+A1.1. Create apps/web/lib/reports/ as the report query layer. Pattern:
+   - Each report is a pure typed function: salesSummaryReport(tenantId, filters) → ReportResult
+   - Reports compose SQL via Drizzle but expose typed inputs (date range, group-by, dealer filter)
+   - Output shape: { columns, rows, totals, metadata } — meant to drive both UI tables and CSV exports
+
+A1.2. REPORT 1 — Sales Summary
+   - Source: quotations (sent/accepted), PIs (confirmed), orders (all statuses)
+   - Filters: date range, status, dealer, prepared_by user
+   - Group by: month, dealer, OR product (user picks one)
+   - Columns: group key, count, subtotal sum, discount sum, tax sum (CGST+SGST+IGST), total sum, average deal size
+   - Totals row at bottom
+
+A1.3. REPORT 2 — Outstanding Receivables (Aging)
+   - Source: orders where paymentStatus IN ('unpaid', 'partially_paid')
+   - For each order: total - allocated = outstanding amount
+   - Aging buckets: 0-30 days, 31-60 days, 61-90 days, 91+ days (calculated from orderDate vs today, modulo creditPeriodDays)
+   - Group by: dealer (default) or aging bucket
+   - Columns: dealer, total outstanding, by-bucket breakdown, oldest invoice date, days overdue
+
+A1.4. UI scaffold for both reports:
+   - app/(app)/reports/page.tsx — landing page with cards for each report
+   - app/(app)/reports/sales-summary/page.tsx
+   - app/(app)/reports/outstanding/page.tsx
+   - Filter bar at top (date range picker, group-by dropdown, dealer typeahead)
+   - TanStack Table for the data — sticky header, sortable columns, virtualized rows if >100 rows
+   - Numbers in mono (IBM Plex Mono per design system), Indian formatting (1,27,200.00)
+   - Loading state during filter changes (skeleton rows)
+   - Empty state if no data: "No sales in this date range. Try broadening the filter."
+
+A1.5. Tests for the two report query functions (snapshot-style — seed data produces known totals).
+
+COMMIT 15a: `feat(reports): chunk a — sales summary + outstanding receivables`
+
+CHUNK 15b — 2 more reports + CSV export
+---------------------------------
+
+A2.1. REPORT 3 — Inventory Valuation
+   - Source: inventory_items WHERE status='in_stock' + procurements for cost basis
+   - Per product: SKU, name, in-stock qty, last procurement cost, total valuation (qty × cost)
+   - Total at bottom
+   - Filter: product category, low-stock toggle (qty < reorder threshold)
+   - Note: cost basis uses last procurement price (FIFO would be more correct but is Phase 2)
+
+A2.2. REPORT 4 — GST Summary (the compliance-critical one)
+   - Source: orders (confirmed/dispatched/delivered states only — pending orders are not "supplies" for GST purposes)
+   - Filters: fiscal quarter (Apr-Jun, Jul-Sep, Oct-Dec, Jan-Mar per ADR-005), tax type (intra-state vs inter-state)
+   - Per row: place_of_supply (state), supply type (intra/inter), taxable_amount sum, CGST sum, SGST sum, IGST sum
+   - Group by place_of_supply state
+   - Totals row matching what would go on GSTR-1 filing (Phase 2 will export to the actual GSTR-1 JSON)
+   - CRITICAL: this report's numbers MUST match the underlying orders exactly. DO NOT recompute via @dealerlink/tax. READ stored values. If they don't match the engine's reading, that's a Day 9/11 bug to surface — but Day 15 surfaces it, doesn't fix it.
+
+A2.3. CSV export:
+   - Create apps/web/lib/reports/csv.ts — pure function: reportToCsv(result: ReportResult): string
+   - Headers row from columns metadata
+   - Each data row + totals row
+   - Indian formatting preserved (e.g., "1,27,200.00" not "127200")
+   - Numbers wrapped in quotes if they contain commas (CSV escaping)
+   - Date format ISO (2026-05-16) for export portability
+   - UTF-8 with BOM (Excel-friendly)
+
+A2.4. "Download CSV" button on each report page:
+   - Triggers a server action that runs the report query and returns the CSV
+   - Filename: `{report-name}-{tenant-slug}-{date-range}.csv` (e.g., `sales-summary-demo-2026-Q1.csv`)
+
+A2.5. UI for the 2 new reports + CSV button on all 4.
+
+A2.6. Tests:
+   - CSV escaping (commas in dealer names, quotes in product names, newlines in notes)
+   - Each report's totals row arithmetic
+   - GST summary parity check: SUM of stored cgst/sgst/igst across orders for a period == report's totals (no recomputation drift)
+
+COMMIT 15b: `feat(reports): chunk b — inventory valuation + GST summary + CSV export`
+
+CHUNK 15c — Dashboard widget refresh + role enforcement + seed-data sanity
+---------------------------------
+
+A3.1. Dashboard updates (/dashboard):
+   - Replace placeholder report widgets (if any) with live links to the 4 reports
+   - "Top dealer this month" widget — references sales summary report grouped by dealer
+   - "Tax payable estimate" widget — references GST summary for current month
+   - "Slow-moving inventory" widget — references inventory valuation report filtered to age > 60 days since procurement
+
+A3.2. Role enforcement on /reports:
+   - admin, accounts: full access to all 4 reports
+   - sales: access to sales summary + outstanding only (not inventory valuation or GST summary)
+   - dispatch: access to inventory valuation only
+   - Server-side enforcement via tenantAction with role param; UI hides cards user can't access
+   - verify-day-15.spec.ts asserts each role sees the right set
+
+A3.3. Seed-data sanity:
+   - Run all 4 reports against the existing seeded data and confirm reasonable outputs:
+     - Sales summary for this fiscal year shows non-zero totals
+     - Outstanding shows the 2 overdue orders from Day 12
+     - Inventory valuation shows non-zero stock value
+     - GST summary shows CGST/SGST/IGST totals matching the stored order columns
+   - If any report returns empty or weird data, that's a seed gap; document if needed.
+
+A3.4. Playwright verify-day-15.spec.ts:
+   - Login as admin → see all 4 reports
+   - Login as sales → see only 2 reports (sales summary + outstanding); GST summary returns 403 if hit directly
+   - Run a report, change date filter, see results update
+   - Download CSV, assert content-type and first row is the headers
+   - Scope locators with SALES-2026-, OUTSTANDING-, etc. patterns if applicable
+
+A3.5. Docs:
+   - Update docs/WORKFLOWS.md with reports section
+   - Add runbook entries: "Pulling a sales summary for a sales review meeting", "Generating GST summary at month-end", "Investigating a discrepancy between two reports"
+
+COMMIT 15c: `feat(reports): day 15 complete — 4 reports + CSV + dashboard widgets`
+
+==========================================================
+TRACK B — DAY 16: POLISH PASS (3 chunks)
+==========================================================
+
+CHUNK 16a — Empty states, loading skeletons, error boundaries
+---------------------------------
+
+B1.1. Audit every list page in apps/web/app/(app)/ for these states:
+   - Loading (first paint while data fetches)
+   - Empty (query returned no rows — distinct from "no data exists" vs "filter excluded everything")
+   - Error (query threw — network, RLS denial, etc.)
+   - Pages to cover: dealers, products, inventory (items + procurements), pipeline, quotations, pi, orders, payments, dispatch, reports
+
+B1.2. Shared components in apps/web/app/_components/:
+   - <EmptyState icon="..." title="..." description="..." action={...} />
+   - <LoadingSkeleton rows={5} columns={6} />  — matches table column structure
+   - <ErrorState error={err} retry={fn} /> — shows safe error message, retry button, "report issue" link
+
+B1.3. Apply consistently:
+   - Empty state for "no data at all" is friendly (e.g., "No dealers yet. Add your first dealer to get started.") with a CTA
+   - Empty state for "filter excluded everything" is informative (e.g., "No quotations match these filters. Try widening the date range.") with a "Clear filters" button
+   - Loading skeletons match the actual table layout (same column count, similar widths) — no layout shift on data arrival
+   - Error states never leak internals (no stack traces, no SQL errors); show a friendly message + retry
+
+B1.4. Error boundaries at the page level:
+   - app/(app)/error.tsx (Next.js convention) — catches any unhandled error in the app section
+   - Logs to Sentry (Day 17 wires the actual Sentry client; today just call a placeholder logger that writes to console + audit_log)
+   - Renders a friendly error page with "Go back" + "Reload" actions
+
+B1.5. Tests:
+   - Storybook-style component tests for EmptyState, LoadingSkeleton, ErrorState
+   - Playwright: induce an empty list via filter, assert empty state shows
+   - Playwright: simulate a network error (route mock), assert error state shows
+
+COMMIT 16a: `feat(polish): chunk a — empty states, loading skeletons, error boundaries`
+
+CHUNK 16b — Accessibility audit + keyboard navigation
+---------------------------------
+
+B2.1. A11y baseline target: Lighthouse score ≥ 95 on key pages (dashboard, dealers list, dealer detail, quotation builder, order detail).
+
+B2.2. Run an automated a11y pass:
+   - Use @axe-core/playwright or similar inside verify-day-16.spec.ts
+   - For each key page, assert 0 'serious' or 'critical' violations
+   - Common findings to fix proactively:
+     - Missing alt text on images (logos, icons)
+     - Color contrast (mono font on background — verify ratios)
+     - Missing labels on form inputs
+     - Buttons without accessible names (icon-only buttons need aria-label)
+     - Focus indicators visible on all interactive elements
+
+B2.3. Keyboard navigation audit:
+   - Every page should be fully usable with keyboard only
+   - Tab order is logical (top-to-bottom, left-to-right)
+   - Focus visible on every focusable element (don't rely on browser default; ensure design system focus ring)
+   - Modals trap focus (no escape to underlying page via Tab)
+   - Escape key closes modals
+   - Enter key submits forms
+   - Skip-to-content link at the top of each page
+
+B2.4. Form a11y:
+   - Every input has an associated <label> (via htmlFor / id or wrapping)
+   - Error messages reference the input via aria-describedby
+   - Required fields marked with aria-required AND visible asterisk
+   - Validation errors announced to screen readers (aria-live="polite")
+
+B2.5. Tests:
+   - verify-day-16.spec.ts runs axe on key pages
+   - Manual checklist documented in docs/STANDARDS.md for future pages
+
+COMMIT 16b: `feat(polish): chunk b — accessibility audit + keyboard navigation`
+
+CHUNK 16c — Micro-copy + visual consistency + closeout
+---------------------------------
+
+B3.1. Micro-copy audit:
+   - Walk every modal title, button label, confirmation message
+   - Fix inconsistencies (e.g., "Save" vs "Update" vs "Submit" — pick one verb per action class)
+   - Action labels say what happens (e.g., "Send quotation" not "Submit")
+   - Destructive actions named clearly ("Cancel order" not "Delete order" if it's a soft cancel)
+   - Empty values rendered as "—" (em-dash), not "null" or blank
+   - Loading verbs in present continuous ("Generating PDF…" not "Generate")
+
+B3.2. Visual consistency:
+   - All money columns aligned right, mono font, 2 decimals
+   - All status pills use the same shape, padding, font weight
+   - All "row hover" interactions consistent (color + cursor)
+   - All page heroes (title + status + actions) use the same vertical rhythm
+   - Spot-check 3 modules side-by-side; if any feels different, normalize
+
+B3.3. Final touches:
+   - Favicon + apple-touch-icon for /
+   - Document title tags for every page (e.g., "Quotation QT-2026-0042 · Dealerlink")
+   - 404 page (app/not-found.tsx) — branded, with sensible action
+   - 500 page (app/error.tsx) — already done in 16a but verify branded
+
+B3.4. Tests:
+   - verify-day-16.spec.ts adds: navigate to a non-existent route → 404 page renders
+   - verify-day-16.spec.ts adds: every key page has a non-default <title>
+
+B3.5. Closeout:
+   - pnpm preflight, verify (40/40 = 37 prior + 2 day-15 + 1 day-16), all gates green
+   - Mark B.15 ✅ + B.16 ✅ in PROJECT_PLAN.md
+   - Final commit: `feat(polish): days 15-16 complete — reports + polish pass`
+   - Push
+
+COMMIT 16c: as above
+
+==========================================================
+GUARDRAILS (DAYS 15-16)
+==========================================================
+
+- Reports NEVER recompute taxes. Always read stored columns. Any drift between report and underlying data must be surfaced as a deviation, not silently fixed.
+- Reports are READ-ONLY. No mutations from the reports module.
+- CSV export is server-side, not client-side. Don't bundle large datasets to the client and convert in JS.
+- Role enforcement on reports is BOTH server-side (tenantAction) and UI (cards hidden). Server is the security boundary; UI is courtesy.
+- Loading skeletons match real table dimensions to prevent layout shift.
+- Error boundaries never leak internal error details. Friendly messages only; log details to audit_log + Day 17's Sentry.
+- A11y target is meaningful (Lighthouse ≥ 95, 0 critical axe violations) not aspirational. If a page can't hit it, document why in DEVIATIONS.md.
+- Keyboard navigation is mandatory, not optional. Every flow must complete without a mouse.
+- Micro-copy is part of the product, not an afterthought. Spend 15 minutes walking the app as a new user; fix anything that's awkward.
+
+WHEN DONE:
+- Print summary, 6 chunk commits total
+- Confirm: 4 reports working, CSV exports correct, role enforcement tested
+- Confirm: Lighthouse a11y ≥ 95 on 5 key pages (paste scores)
+- Confirm: empty/loading/error states across all list pages
+- Confirm: verify 40/40
+- Tell me Days 15+16 are complete and Day 17 (Observability) is next
+```
+
+### Verification checklist
+
+#### Reports correctness
+
+- [ ] Open `/reports/sales-summary` — totals match a manual SQL count of `quotations` + `pis` + `orders`
+- [ ] Open `/reports/outstanding` — outstanding amount matches `SELECT order_total - allocated_total FROM ...`
+- [ ] Open `/reports/gst-summary` — sums match `SELECT SUM(cgst), SUM(sgst), SUM(igst) FROM orders WHERE confirmed/dispatched/delivered`
+- [ ] Download a CSV, open in Excel/Google Sheets — opens cleanly, numbers preserved, headers correct
+
+#### Role enforcement
+
+- [ ] sales@demo.test → sees sales-summary + outstanding only
+- [ ] dispatch@demo.test → sees inventory valuation only
+- [ ] accounts@demo.test → sees all 4
+- [ ] Direct URL to /reports/gst-summary as sales user → blocked
+
+#### A11y
+
+- [ ] Run Lighthouse in DevTools on dashboard, dealers list, quotation builder, order detail, payment list
+- [ ] All five score ≥ 95 on accessibility tab
+- [ ] Tab through dashboard with keyboard only — focus visible everywhere, logical order
+- [ ] Open a modal, Tab cycles within modal, Escape closes
+
+#### Empty/loading/error states
+
+- [ ] Filter dealers list to non-existent name → empty state with "Clear filters"
+- [ ] Throttle network in DevTools, reload a list page → loading skeleton matches eventual table layout
+- [ ] Stop Postgres, reload a page → friendly error state with retry button (no stack trace shown)
+
+#### Invariant: report numbers match stored data
+
+```sql
+-- GST summary parity (production-scoped)
+SELECT
+  SUM(cgst_amount) AS cgst_orders,
+  SUM(sgst_amount) AS sgst_orders,
+  SUM(igst_amount) AS igst_orders
+FROM orders
+WHERE order_number LIKE 'ORD-2026-%'
+  AND status IN ('confirmed', 'partially_dispatched', 'fully_dispatched', 'delivered');
+-- Compare to /reports/gst-summary totals for full FY. Must match.
+```
+
+#### Automated
+
+- [ ] `pnpm verify` 40/40
+- [ ] All quality gates green
+- [ ] B.15 + B.16 ✅ in PROJECT_PLAN.md
+
+---
+
+## Day 17 — Observability (Sentry + Better Stack + Axiom)
+
+_Will be added when Days 15+16 are complete. Day 17 wires the observability stack — Sentry for errors, Better Stack for logs/uptime, Axiom for structured event analytics, /health endpoint enrichment with DB/Resend/queue depth checks. Standalone day per the structured plan._
 
 ---
 
