@@ -217,6 +217,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@dealerlink/tax':
+        specifier: workspace:*
+        version: link:../tax
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2
@@ -230,9 +233,6 @@ importers:
         specifier: ^3.4.5
         version: 3.4.9
     devDependencies:
-      '@dealerlink/tax':
-        specifier: workspace:*
-        version: link:../tax
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0

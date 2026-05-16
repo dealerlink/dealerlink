@@ -67,3 +67,15 @@ export {
   type ReserveResult,
   type ReserveLineResult,
 } from './orders/reserve';
+export {
+  ALLOWED_TRANSITIONS as PAYMENT_ALLOWED_TRANSITIONS,
+  ALL_PAYMENT_STATUSES,
+  ALLOCATABLE_STATUSES as PAYMENT_ALLOCATABLE_STATUSES,
+  isPaymentTransitionAllowed,
+  transitionPayment,
+  PaymentInvalidTransitionError,
+  PaymentNotFoundError,
+  type PaymentTransitionOptions,
+} from './payments/transitions';
+export { deriveOrderPaymentStatus } from './payments/propagation';
+export { recomputeOrderPaymentStatus, type RecomputeResult } from './payments/recompute';

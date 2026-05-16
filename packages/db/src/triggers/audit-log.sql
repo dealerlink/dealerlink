@@ -261,3 +261,16 @@ DROP TRIGGER IF EXISTS audit_trg ON order_lines;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON order_lines
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- Day 12: payments + payment_allocations are auditable. Every status change
+-- (verify/clear/bounce/refund) and every allocation insert/delete becomes an
+-- audit row, so a tenant admin can reconstruct the full cash trail.
+DROP TRIGGER IF EXISTS audit_trg ON payments;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON payments
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON payment_allocations;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON payment_allocations
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();

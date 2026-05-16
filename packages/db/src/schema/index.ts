@@ -20,4 +20,5 @@ export * from './deal';
 export * from './quotation';
 export * from './performa-invoice';
 export * from './order';
+export * from './payment';
 export * from './generated-document';
