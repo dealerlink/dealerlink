@@ -24,6 +24,7 @@ function fmtDate(d: string | null): string {
 export default async function DispatchDetailPage({ params }: PageProps) {
   const ctx = await getAuthContext();
   if (!ctx) redirect('/login');
+  if (ctx.user.role === 'sales') redirect('/dashboard');
   const tenantId = ctx.user.tenantId ?? impersonationTenantId();
   if (!tenantId) redirect('/login');
 

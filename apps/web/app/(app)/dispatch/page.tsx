@@ -29,6 +29,9 @@ interface PageProps {
 export default async function DispatchPage({ searchParams }: PageProps) {
   const ctx = await getAuthContext();
   if (!ctx) redirect('/login');
+  // Dispatch is the warehouse surface — admin + dispatch manage it, accounts
+  // may view for reconciliation. Sales has no business here (Day 12 pattern).
+  if (ctx.user.role === 'sales') redirect('/dashboard');
   const tenantId = ctx.user.tenantId ?? impersonationTenantId();
   if (!tenantId) redirect('/login');
 

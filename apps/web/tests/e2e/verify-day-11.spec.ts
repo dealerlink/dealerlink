@@ -88,21 +88,35 @@ test.describe('Day 11 — PI + order lifecycle', () => {
     await loginAs(page, 'demo', 'admin');
     await skipIfPasswordRotation(page);
 
-    // Walk confirmed orders for a seeded ORD-2026- one (DB-test residue uses
-    // ORD-TEST-… numbers and has no reservations).
+    // Walk confirmed orders for a seeded ORD-2026- one WITH reservations.
+    // DB-test residue uses ORD-TEST-… numbers; and since Day 13 a returned
+    // dispatch can leave a confirmed order with its serials released — so
+    // pick the first confirmed order that actually has reserved serials.
     await page.goto('/orders?status=confirmed');
     const seededRows = page.locator('table tbody tr', {
       has: page.locator('td.mono', { hasText: /ORD-\d{4}-/ }),
     });
-    expect(await seededRows.count()).toBeGreaterThan(0);
-    await seededRows.first().locator('a[href^="/orders/"]').click();
-    await expect(page.locator('h1').first()).toContainText(/ORD-/);
+    const count = await seededRows.count();
+    expect(count).toBeGreaterThan(0);
+    const orderHrefs: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const href = await seededRows.nth(i).locator('a[href^="/orders/"]').getAttribute('href');
+      if (href) orderHrefs.push(href);
+    }
 
-    await page.getByRole('link', { name: 'Inventory reservations' }).click();
-    const rows = page.locator('table tbody tr');
-    await expect(rows.first()).toBeVisible();
-    expect(await rows.count()).toBeGreaterThan(0);
-    await expect(page.getByText('reserved').first()).toBeVisible();
+    let foundReservations = false;
+    for (const href of orderHrefs) {
+      await page.goto(`${href}?tab=reservations`);
+      await expect(page.locator('h1').first()).toContainText(/ORD-/);
+      const rows = page.locator('table tbody tr');
+      if ((await rows.count()) > 0 && (await page.getByText('reserved').count()) > 0) {
+        await expect(rows.first()).toBeVisible();
+        await expect(page.getByText('reserved').first()).toBeVisible();
+        foundReservations = true;
+        break;
+      }
+    }
+    expect(foundReservations, 'a seeded confirmed order with reserved serials').toBe(true);
   });
 
   test('a three-party PI shows distinct Bill-To and Ship-To blocks', async ({ page }) => {

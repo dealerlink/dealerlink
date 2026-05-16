@@ -382,3 +382,48 @@ The card lands in the destination column and the history row is marked `overridd
 1. Open the payment at `/payments/<id>` (status must be `cleared`).
 2. Click **Refund**, enter the reason, and confirm.
 3. The payment moves to `refunded`; its allocations are reversed and affected orders recomputed.
+
+## R? — Creating a dispatch
+
+1. **Dispatch** → **+ New dispatch** (admin or dispatch role).
+2. Pick a confirmed (or partially-dispatched) order from the list — only orders
+   with reserved inventory still to ship appear.
+3. For each line, tick the serial numbers leaving the warehouse, or use
+   **Select up to remaining**. The selected count is the dispatched quantity;
+   it cannot exceed `ordered − already-dispatched`.
+4. Fill the logistics block (vehicle, transporter, docket, driver, e-way bill).
+5. **Create dispatch** — the order advances to `partially_dispatched` or
+   `fully_dispatched`, the picked serials become `dispatched`, and you land on
+   the dispatch note.
+6. **Download dispatch note** for the driver, or **Email to consignee** to
+   queue it to the Ship-To dealer.
+
+If two people dispatch the same serials at once, exactly one succeeds — the
+other fails cleanly with a "serial already dispatched" error. Nothing is left
+half-done.
+
+## R? — Marking a dispatch delivered
+
+1. Open the dispatch (status `in transit`).
+2. **Mark delivered** → enter who received the goods → **Confirm delivery**.
+3. Every serial becomes `delivered`. When all of the order's dispatches are
+   delivered, the order itself advances to `delivered`.
+
+## R? — Returning a dispatched order
+
+1. Open the dispatch (status `in transit`) as an **admin**.
+2. **Return** → enter the reason → **Confirm return**.
+3. Every serial goes back to warehouse stock (`in_stock`, reservation cleared),
+   the order line dispatched quantities are decremented, and the order's
+   fulfilment status is recomputed — it may regress (e.g. `fully_dispatched →
+partially_dispatched`). Re-reserving the freed serials for that order is a
+   fresh confirmation step.
+
+## R? — Handling a partial dispatch
+
+An order does not have to ship in one go. Dispatch fewer serials than the line
+quantity and the order sits at `partially_dispatched` with the balance shown as
+**remaining**. Raise a second dispatch later for the rest from the same order —
+the order detail **Dispatches** tab tracks every dispatch and the
+units-dispatched roll-up. The order reaches `fully_dispatched` only when the
+last unit ships.

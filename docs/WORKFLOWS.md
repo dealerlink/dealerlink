@@ -169,3 +169,69 @@ A payment may be allocated against a draft/sent PI as an **advance** (`applyAdva
 ### Overdue tracking
 
 An order is **overdue** when `paymentStatus` is `unpaid`/`partially_paid` and `orderDate + creditPeriodDays` (dealer credit period, falling back to `tenant_settings.default_credit_period`) is in the past. Surfaced by `getOverdueOrders` and the dashboard "Overdue payments" widget.
+
+## Dispatch (Day 13)
+
+Dispatch is the physical-fulfilment day — serialised inventory leaves the
+warehouse against a confirmed order. A **dispatch note is tax-neutral** (it is
+not a tax invoice — that is a Phase 2 module) and is addressed to the
+**Ship-To** dealer, the consignee (CLAUDE.md §6).
+
+### Dispatch state machine — `packages/db/src/dispatch/lifecycle.ts`
+
+```
+in_transit ─deliver─▶ delivered
+     └────return────▶ returned
+```
+
+`in_transit` is the only state a dispatch is created in. Both transitions are
+terminal; a delivered/returned dispatch is immutable.
+
+### Inventory + order state changes
+
+A serial moves `reserved → dispatched → delivered` as its dispatch progresses;
+a returned dispatch routes it `dispatched → returned → in_stock` (clearing both
+the dispatch reference and `reserved_for_order_id`, so the serial is fully free
+stock again). The order's fulfilment status is **derived**, never set directly —
+`deriveOrderFulfillmentStatus(tx, orderId)` examines the order lines'
+`dispatchedQuantity` against the ordered quantity plus every dispatch's status:
+
+- no units dispatched → `confirmed`
+- some units dispatched → `partially_dispatched`
+- all units dispatched → `fully_dispatched`
+- all dispatched **and** every live dispatch delivered → `delivered`
+
+A returned dispatch decrements `order_lines.dispatchedQuantity`, so the order
+can legitimately regress (`fully_dispatched → partially_dispatched`, or
+`partially_dispatched → confirmed`).
+
+### createDispatch — one atomic transaction
+
+`createDispatchDb` (Server Action `createDispatch`, admin + dispatch) does all
+of the following inside one transaction; any failure rolls everything back, so
+a serial is never half-dispatched and no orphan dispatch row survives:
+
+1. `SELECT … FOR UPDATE` on the order; it must be `confirmed` or
+   `partially_dispatched`.
+2. `SELECT … FOR UPDATE` on every picked serial; each must be `reserved`, owned
+   by this order (`reserved_for_order_id`), this tenant, and the right product.
+3. Reject a per-line dispatch quantity that exceeds `ordered − dispatched`.
+4. Allocate the `DSP-2026-NNNN` number, insert the dispatch + lines + serials.
+5. Transition each serial `reserved → dispatched`, bump
+   `order_lines.dispatchedQuantity`.
+6. Recompute + transition the order status; close a linked deal if the order
+   becomes `fully_dispatched`.
+
+**Concurrency:** two operators dispatching the same serials serialise on the
+order row lock; the loser re-reads the now-`dispatched` serial and fails with
+`SERIAL_ALREADY_DISPATCHED`. The `dispatch_serials` `UNIQUE (tenant_id,
+inventory_item_id)` constraint is the final backstop. Proven by the mandatory
+concurrent-dispatch test in `packages/db/tests/dispatch.test.ts`.
+
+### Delivery + return
+
+`markDispatchDelivered` (admin + dispatch) moves every serial to `delivered`,
+captures who signed (`deliveredAcknowledgedBy`), and advances the order to
+`delivered` once all its dispatches are in. `returnDispatch` (admin only) sends
+every serial back to warehouse stock, decrements `dispatchedQuantity`, and
+recomputes the (possibly regressed) order status.

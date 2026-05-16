@@ -400,3 +400,22 @@ satisfy A2.2.
 **Why:** A PI is a point-in-time snapshot of an _accepted_ quotation. Re-quoting line items on the PI is unusual — the realistic path to different lines is to revise the quotation and re-convert. A full line-item editor would duplicate the Day 8 quotation builder (a Client Component tree of ~5 files) for a rarely-used surface. Header-only editing covers the genuine PI-stage adjustments (redirect Ship-To, extend validity, tweak T&Cs).
 **Impact:** To change a PI's line items, cancel/recreate or revise the source quotation. `updatePi` itself is fully capable of line edits if a future builder UI wants them.
 **Resolution:** Tracked; revisit if a PI line-editor is genuinely needed. Not blocking.
+
+## DEV.43 — Day 13 — seed creates its own backing orders instead of confirming Day 12's pending orders
+
+**Date:** 2026-05-16
+**Spec said:** Chunk 13e A5.1 — "take Day 12's seeded orders and CONFIRM the ones still in `pending` (DEV.41)" before creating dispatches.
+**Built:** `seeds/day13.ts` creates its own dedicated dispatch product, stock, confirmed PIs and confirmed backing orders (each with reserved serials), then raises 8 dispatches against them. The Day 12 `pending` orders are left untouched.
+**Why:** Day 12's orders are abstract payment carriers — they have an order line but no inventory backing. Confirming them via `reserveInventoryForOrder` would require fabricating stock for whatever product each line happens to reference, and would shadow Day 11's deliberately-seeded confirmed-order reservations. A self-contained Day 13 seed is cleaner, fully re-runnable (tags rows, truncates dispatch tables), and produces every fulfilment state deterministically.
+**Impact:** Day 12's pending orders stay pending — the Day 12 verify surface is unchanged. Day 13's dispatchable orders are the new `ORD-2026-…` rows it seeds.
+**Resolution:** Tracked. Not blocking.
+
+## DEV.44 — Day 13 — verify-day-11 reservations test hardened against post-Day-13 state
+
+**Date:** 2026-05-16
+**Spec said:** Chunk 13e closeout — verify 32/32 green; Day 13 must not regress prior days.
+**Found:** `verify-day-11.spec.ts` "a seeded confirmed order lists its reserved serials" opened the _first_ `ORD-2026-` confirmed order and asserted reservations. A Day 13 _returned_ dispatch correctly regresses its order back to `confirmed` with serials released (per the dispatch spec) — so a confirmed-but-unreserved order can now exist and shadow the test.
+**Built:** Hardened the Day 11 test to walk confirmed orders and assert on the first one that _has_ reserved serials (the DEV.31-style resilience pattern). The Day 13 seed additionally old-dates its returned-dispatch order so it never sorts ahead of Day 11's reserved orders (defence in depth).
+**Why:** The new behaviour is correct (a return releases reservations); the prior test's "first row" assumption was fragile.
+**Impact:** None — verify-day-11 now passes deterministically regardless of Day 13 seed ordering.
+**Resolution:** Resolved.

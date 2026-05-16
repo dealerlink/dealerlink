@@ -478,6 +478,37 @@ describe('cross-tenant isolation', () => {
     expect(visible).toHaveLength(0);
   });
 
+  it('a dispatch creation writes audit_log rows for the dispatch + serials', async () => {
+    const o = await makeConfirmedOrder(3);
+    const created = await asTenant(demoId, (tx) =>
+      createDispatchDb(
+        tx,
+        { orderId: o.orderId, lines: [{ orderLineId: o.orderLineId, serialIds: o.serialIds }] },
+        { userId },
+      ),
+    );
+    // audit_log is RLS-scoped — read it inside the tenant context.
+    const counts = await asTenant(demoId, async (tx) => {
+      const dispatchRows = await tx.execute<{ n: number }>(
+        sql`SELECT count(*)::int AS n FROM audit_log
+              WHERE entity_type = 'dispatches' AND entity_id = ${created.id}`,
+      );
+      const serialRows = await tx.execute<{ n: number }>(
+        sql`SELECT count(*)::int AS n FROM audit_log a
+              JOIN dispatch_serials ds ON ds.inventory_item_id = a.entity_id
+             WHERE a.entity_type = 'inventory_items' AND a.action = 'update'
+               AND ds.dispatch_id = ${created.id}`,
+      );
+      return {
+        dispatch: (dispatchRows as unknown as { n: number }[])[0]!.n,
+        serial: (serialRows as unknown as { n: number }[])[0]!.n,
+      };
+    });
+    expect(counts.dispatch).toBeGreaterThanOrEqual(1);
+    // Each dispatched serial is an inventory_items UPDATE → audit row.
+    expect(counts.serial).toBeGreaterThanOrEqual(3);
+  });
+
   it('a serial appears in dispatch_serials at most once (UNIQUE backstop)', async () => {
     const o = await makeConfirmedOrder(2);
     const created = await asTenant(demoId, (tx) =>
