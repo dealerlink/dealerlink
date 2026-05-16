@@ -4753,9 +4753,311 @@ WHERE order_number LIKE 'ORD-2026-%'
 
 ---
 
-## Day 17 — Observability (Sentry + Better Stack + Axiom)
+## Day 17 — Observability (Sentry + Better Stack + Axiom + /health)
 
-_Will be added when Days 15+16 are complete. Day 17 wires the observability stack — Sentry for errors, Better Stack for logs/uptime, Axiom for structured event analytics, /health endpoint enrichment with DB/Resend/queue depth checks. Standalone day per the structured plan._
+**Goal:** Wire the production observability stack. Sentry captures errors with tenant + user context. Better Stack tails logs and runs uptime checks. Axiom receives structured events for analytics. `/health` endpoint enriches with DB connectivity, Resend reachability, and pg-boss queue depth — gives DO App Platform real signals to act on.
+
+**Estimated time:** 4–5 hours + ~30 min verification
+
+**Deliverable:** Errors flow to Sentry tagged by tenant/user/route. Logs ship to Better Stack with proper severity. Key events (login, quotation_sent, order_confirmed, payment_recorded, dispatch_created, email_bounced) write to Axiom. `/health` returns granular component status. Dev environments stub out external services so the build still works without secrets configured.
+
+### Prompt for Claude Code
+
+````
+You are implementing Day 17 of the Dealerlink build. Days 15+16 shipped successfully (commits caebe49..be12406) — reports module + polish pass. Day 16 left a `reportError` shim in apps/web/lib/observability/log.ts as the Sentry wiring point; today fills it in.
+
+PRELIMINARY:
+P.1. `pnpm preflight` — confirm 16 green.
+P.2. Read CLAUDE.md §3 (stack — Sentry + Better Stack + Axiom + /health endpoint).
+P.3. Read DEVIATIONS.md — note nothing observability-specific is open. DEV.47 (email_delivery_log self-auditing) is the pattern we follow today: structured columns over audit triggers.
+P.4. Read apps/web/lib/observability/log.ts — the existing shim from Day 16.
+P.5. Read app/api/health/route.ts — current /health endpoint is minimal; today enriches it.
+P.6. Read packages/db/src/schema/audit_log.ts — audit_log stays the source of truth for who-did-what; Axiom captures business events for analytics, which is a different concern.
+
+PRIMARY REFERENCES:
+1. CLAUDE.md §3 (observability stack contract)
+2. https://docs.sentry.io/platforms/javascript/guides/nextjs/ — Sentry Next.js integration
+3. https://betterstack.com/docs/logs/javascript/nextjs — Better Stack ingestion
+4. https://axiom.co/docs/send-data/nextjs — Axiom ingestion
+5. https://docs.digitalocean.com/products/app-platform/how-to/configure-alerts/ — DO health check contract (responds 200 for healthy, anything else for unhealthy)
+
+==========================================================
+TRACK A — OBSERVABILITY (CHUNKED — 4 chunks)
+==========================================================
+
+CHUNK 17a — Sentry: error capture with tenant + user context
+---------------------------------
+
+A1.1. Install Sentry:
+   - pnpm add @sentry/nextjs to apps/web/package.json
+   - pnpm add @sentry/node to apps/workers/package.json
+   - Run `npx @sentry/wizard@latest -i nextjs` OR manually create the 3 config files:
+     - apps/web/sentry.client.config.ts
+     - apps/web/sentry.server.config.ts
+     - apps/web/sentry.edge.config.ts
+   - Each config uses environment variables: SENTRY_DSN, SENTRY_ENVIRONMENT, SENTRY_RELEASE
+   - DSN added to .env.example with placeholder; .env.local can be blank in dev (Sentry SDK gracefully no-ops when DSN is empty)
+
+A1.2. Workers Sentry init:
+   - apps/workers/src/observability/sentry.ts — init Sentry at process start
+   - Wrap each pg-boss job handler with Sentry.captureException on error
+   - Capture job context: jobId, jobType, attempt number
+
+A1.3. Enrich error context (this is the value-add):
+   - Create apps/web/lib/observability/context.ts:
+     - `setSentryUser({ userId, email, role })` — called by Lucia auth middleware after session resolution
+     - `setSentryTenant({ tenantId, tenantSlug })` — called by tenant middleware after tenant resolution
+     - `setSentryRoute({ route, method })` — auto-captured via Sentry's Next.js integration
+   - Result: every Sentry event has scope tags for tenant.slug, user.email, user.role, route
+
+A1.4. Replace the Day 16 reportError shim:
+   - Old: `export function reportError(err: unknown, context?: Record<string, unknown>) { console.error(err, context); }`
+   - New: same signature, but routes to Sentry.captureException with context attached as tags or extra. Console.error is kept ALSO (so dev still sees the error in terminal).
+
+A1.5. PII filtering (critical):
+   - Configure beforeSend hook in sentry config to scrub:
+     - Email addresses (replace with hashes)
+     - Phone numbers
+     - GSTIN numbers
+     - PAN numbers
+     - Any text matching credit-card-like patterns (defensive)
+   - Test the scrubber with a unit test: inject email/phone into an Error, capture, assert payload is sanitized
+
+A1.6. Trigger test:
+   - Add a /api/internal/sentry-test endpoint (operator-only) that throws on demand. Useful for verifying Sentry wiring post-deploy.
+   - Hide behind operator role check; not exposed in normal navigation.
+
+A1.7. Tests:
+   - PII scrubber unit tests (10 cases)
+   - context.ts unit tests (setSentryUser/Tenant attach correct tags)
+   - Integration test: induce an error via the test endpoint, mock the Sentry transport, assert payload structure (user, tenant, route tags present; PII scrubbed)
+
+COMMIT 17a: `feat(obs): chunk a — Sentry with tenant/user context + PII scrubbing`
+
+CHUNK 17b — Better Stack: structured logging
+---------------------------------
+
+A2.1. Install pino + pino-pretty (dev) + Better Stack transport:
+   - pnpm add pino to apps/web/package.json (and apps/workers)
+   - pnpm add -D pino-pretty to apps/web (dev only — pretty terminal output)
+   - pnpm add @logtail/pino to apps/web/package.json (Better Stack's pino transport)
+
+A2.2. Create apps/web/lib/observability/logger.ts:
+   - Single pino instance per process
+   - In dev (NODE_ENV !== 'production'): pretty-prints to stdout with colors
+   - In production: ships to Better Stack via @logtail/pino transport if BETTERSTACK_SOURCE_TOKEN set, else stdout (DO Logs picks up stdout)
+   - Standard severity levels (trace/debug/info/warn/error/fatal)
+   - Structured fields included on every log:
+     - service ('web' or 'workers')
+     - tenantId (set via async-local-storage by tenant middleware)
+     - userId (set via ALS by auth middleware)
+     - requestId (set via ALS by request middleware)
+     - route (auto-captured)
+
+A2.3. Async local storage for context propagation:
+   - apps/web/lib/observability/als.ts wraps Node's AsyncLocalStorage
+   - Middleware sets context at request entry; logger.ts reads it on each log call
+   - Works across await boundaries (the whole point of ALS)
+
+A2.4. Replace any remaining console.log/console.error in the codebase with logger.*:
+   - grep for console.log in apps/web/src — should be near-zero after this chunk
+   - keep console.error in the reportError shim (parallel to Sentry; useful for dev terminal)
+   - workers similarly migrated
+
+A2.5. Better Stack uptime monitor configuration:
+   - Document in docs/DEPLOYMENT.md: how to set up uptime monitor pointing at /health endpoint with 60-second interval, 3-strike rule
+   - No code change for this (BetterStack uptime is configured in their UI), just docs
+
+A2.6. Tests:
+   - logger.ts dev-mode formatting test (snapshot of pretty output structure)
+   - ALS propagation test: nested async function reads the same tenantId set at request entry
+   - Production-mode test mocks @logtail/pino transport, asserts log payloads include service/tenantId/userId
+
+COMMIT 17b: `feat(obs): chunk b — Better Stack structured logging with ALS context`
+
+CHUNK 17c — Axiom: business event analytics
+---------------------------------
+
+A3.1. Install Axiom client:
+   - pnpm add @axiomhq/js to apps/web/package.json (and apps/workers)
+
+A3.2. Create apps/web/lib/observability/events.ts:
+   - Public function: trackEvent(eventName, properties)
+   - In dev: log via logger.info({event: eventName, ...properties}) — visible in terminal
+   - In production: send to Axiom dataset 'dealerlink-events' if AXIOM_TOKEN + AXIOM_DATASET set
+   - Async, non-blocking — caller never awaits the network call (fire and forget with bounded buffer)
+   - Standard properties auto-attached: tenantId, userId, role, timestamp (ISO), service
+
+A3.3. Define the canonical event taxonomy:
+   - apps/web/lib/observability/event-types.ts — TypeScript union of all valid event names
+   - Initial set (extends naturally as Phase 2 needs more):
+     - 'user.logged_in'
+     - 'user.password_changed'
+     - 'tenant.created' (operator)
+     - 'dealer.created'
+     - 'product.created'
+     - 'inventory.procurement_created'
+     - 'deal.created'
+     - 'deal.stage_advanced'
+     - 'quotation.created'
+     - 'quotation.sent'
+     - 'quotation.accepted'
+     - 'pi.created'
+     - 'pi.confirmed'
+     - 'order.confirmed'
+     - 'order.cancelled'
+     - 'payment.recorded'
+     - 'payment.allocated'
+     - 'payment.bounced'
+     - 'dispatch.created'
+     - 'dispatch.delivered'
+     - 'email.sent'
+     - 'email.bounced'
+     - 'pdf.generated'
+   - Each event type has a typed properties shape (e.g., quotation.created carries quotationId, totalAmount, dealerName)
+
+A3.4. Wire trackEvent calls at the right points:
+   - Inside successful Server Actions, after the DB transaction commits but before returning
+   - In auth middleware after Lucia validates session (user.logged_in)
+   - In pg-boss email handler after Resend succeeds (email.sent)
+   - In webhook handler when bounced event arrives (email.bounced)
+
+A3.5. CRITICAL — do NOT replace audit_log:
+   - audit_log captures who-did-what for forensics + tenant audit trail (legal requirement)
+   - Axiom captures business events for analytics + product insights
+   - Both write happen for many actions; that's intentional. Different audiences, different retention.
+
+A3.6. Tests:
+   - trackEvent unit tests (dev mode logs, production mode mock-sends)
+   - Event taxonomy type tests (TypeScript only — if a caller uses an undefined event name, build fails)
+   - Integration: complete a quotation send flow, assert one 'quotation.sent' event hits the mock Axiom transport
+
+COMMIT 17c: `feat(obs): chunk c — Axiom event analytics with typed taxonomy`
+
+CHUNK 17d — /health enrichment + alerts config + closeout
+---------------------------------
+
+A4.1. Enrich /health endpoint:
+   - Current: returns {status: 'ok'} unconditionally
+   - New: app/api/health/route.ts returns granular component status
+
+   ```typescript
+   {
+     status: 'ok' | 'degraded' | 'down',
+     timestamp: '2026-05-16T...',
+     version: process.env.SENTRY_RELEASE ?? 'dev',
+     checks: {
+       database: { status: 'ok' | 'down', latencyMs: number },
+       resend: { status: 'ok' | 'down' | 'skipped', message?: string },
+       queue: { status: 'ok' | 'degraded' | 'down', depthByType: Record<string, number> }
+     }
+   }
+````
+
+A4.2. Each sub-check:
+
+- database: `SELECT 1` with 2-second timeout. Latency measured.
+- resend: ping Resend's status endpoint (or list-domains if cheaper) with 3-second timeout. If RESEND_API_KEY missing, status='skipped' (dev).
+- queue: query pg-boss for job counts per queue. Depth >100 in any queue = degraded. Depth >500 = down.
+
+A4.3. Status aggregation:
+
+- All checks ok → status='ok' → HTTP 200
+- Any check 'down' → status='down' → HTTP 503 (DO interprets non-200 as unhealthy)
+- Mixed (some ok, some degraded but none down) → status='degraded' → HTTP 200 (still serving traffic; alert but don't kill the pod)
+
+A4.4. Rate limit /health to prevent abuse:
+
+- Public endpoint; should not be expensive to call
+- In-memory rate limit: 1 req/sec per IP (DO uptime checks at 60-sec interval will be well under this)
+
+A4.5. Alerts config (docs only):
+
+- docs/RUNBOOKS.md additions:
+  - "Sentry alert thresholds (error rate > 5/min)"
+  - "Better Stack uptime alert (/health 5xx for 3 minutes)"
+  - "DO alert: CPU > 80% sustained 5 minutes, memory > 90%"
+  - "Axiom alert: payment.bounced rate > 5% of payment.recorded (last hour)"
+  - Each alert routes to a Slack channel or email distribution list — fill in actual destinations during Stage E launch
+
+A4.6. Final closeout:
+
+- pnpm preflight, verify (51/51 = 50 prior + 1 new), all gates green
+- Mark B.17 ✅ in PROJECT_PLAN.md
+- Final commit: `feat(obs): day 17 complete — Sentry + BetterStack + Axiom + /health enrichment`
+- Push
+
+COMMIT 17d: as above
+
+==========================================================
+GUARDRAILS (DAY 17)
+==========================================================
+
+- Observability stack is ADDITIVE, not replacing existing infrastructure. audit_log stays. console.log in tests stays. reportError still works.
+- PII scrubbing is non-negotiable. Sentry events go through GDPR/privacy review — no raw emails, phone numbers, GSTINs, or PANs.
+- All SDKs gracefully no-op when env vars are unset. Dev environment runs without Sentry/BetterStack/Axiom configured.
+- /health responds in <500ms always. If any check takes longer than its timeout, it returns 'down' for that component and proceeds.
+- Sentry DSN is server-only for the workers; client-only for the browser (different DSN OK if needed). NEXT*PUBLIC* prefix needed for browser DSN.
+- Async local storage is the context propagation mechanism. NEVER pass tenantId/userId through global variables or request headers in app code.
+- Event taxonomy is closed: only events defined in event-types.ts can be sent. New events go through a type addition + reviewer approval.
+- Logs ship to Better Stack from production only. In dev, pino-pretty to stdout (Docker logs picks them up).
+- Axiom events are async-fire-and-forget. A failed Axiom send must NEVER affect the user-facing request.
+
+WHEN DONE:
+
+- Print summary, 4 chunk commits
+- Confirm: Sentry test endpoint exists; calling it produces a captured error visible in dev terminal (mock or real depending on DSN configured)
+- Confirm: /health returns granular component status
+- Confirm: at least 5 events fire to Axiom (mock or real) during a smoke test (login + create quotation + send + confirm + dispatch)
+- Confirm: verify 51/51
+- Tell me Day 17 is complete and Day 18 (E2E + handoff) is the final day
+
+````
+
+### Verification checklist
+
+#### Sentry wiring
+- [ ] Hit `/api/internal/sentry-test` as operator, see captured error in dev terminal (console.error path)
+- [ ] If SENTRY_DSN is configured, error appears in Sentry dashboard with tenant + user tags
+- [ ] PII scrubber test passes (10 cases)
+- [ ] Workers handler also wraps with Sentry capture
+
+#### Better Stack logging
+- [ ] `grep -r "console.log" apps/web/src` returns near-zero (allowed in tests, scripts, dev tools only)
+- [ ] Logger output in dev shows pretty colored format with tenantId/userId
+- [ ] In production mode (NODE_ENV=production), logs are JSON-formatted (Better Stack-friendly)
+- [ ] ALS propagation test passes (nested async functions see same tenant context)
+
+#### Axiom events
+- [ ] Complete a smoke flow: login → create quote → send → confirm PI → create dispatch
+- [ ] Check logger output for 5+ events flowing
+- [ ] If AXIOM_TOKEN configured, events appear in Axiom dataset
+- [ ] Type test: try to call `trackEvent('foo.bar', ...)` with an undefined event name → build fails
+
+#### /health endpoint
+- [ ] `curl http://localhost:3000/api/health` returns granular JSON
+- [ ] Stop Postgres, hit /health → returns 503 with database.status='down'
+- [ ] Start Postgres, hit again → returns 200 with all checks ok
+- [ ] Latency on all checks < 500ms
+
+#### Critical invariant
+```sql
+-- audit_log must still capture every Server Action mutation (Axiom is additive, not replacement)
+SELECT COUNT(*) FROM audit_log WHERE created_at > now() - interval '1 hour' AND action LIKE '%.create%';
+-- Should be non-zero after recent activity
+````
+
+#### Automated
+
+- [ ] `pnpm verify` 51/51
+- [ ] All quality gates green
+- [ ] B.17 ✅ in PROJECT_PLAN.md
+
+---
+
+## Day 18 — E2E + Handoff (Final Day of Stage B)
+
+_Will be added when Day 17 is complete. Day 18 is the final day of Stage B — Playwright end-to-end test of the full critical-path workflow (login → onboard tenant → create dealer/product → procurement → deal → quotation → PI → order → payment → dispatch → delivered), add the deferred R.12 operator-onboarding spec, generate the user manual stub, prepare Stage C handoff._
 
 ---
 
