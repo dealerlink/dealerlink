@@ -7,7 +7,9 @@ import {
   emailDeliveryLog,
   orderLines,
   orders,
+  paymentAllocations,
   performaInvoiceLines,
+  recomputeOrderPaymentStatus,
   transitionDealStageDb,
   transitionPi,
 } from '@dealerlink/db';
@@ -17,6 +19,8 @@ import { eq } from 'drizzle-orm';
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
 import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+
+import { tryAutoConfirmOrder } from '../payments/helpers';
 
 import {
   allocateDocumentNumber,
@@ -182,6 +186,26 @@ export const confirmPi = tenantAction(
       reason: `created_from_${pi.piNumber}`,
     });
 
+    // Day 12: transfer any advance payments allocated to this PI onto the
+    // freshly spawned order. If the transferred advance fully covers the
+    // order it auto-confirms (funds-received-then-confirm) — all inside this
+    // same atomic transaction.
+    const transferred = await tx
+      .update(paymentAllocations)
+      .set({ orderId: order.id, performaInvoiceId: null })
+      .where(eq(paymentAllocations.performaInvoiceId, pi.id))
+      .returning({ id: paymentAllocations.id });
+    let advanceTransferred = 0;
+    let orderAutoConfirmed = false;
+    if (transferred.length > 0) {
+      advanceTransferred = transferred.length;
+      const recompute = await recomputeOrderPaymentStatus(tx, order.id, auth.user.id);
+      if (recompute.toStatus === 'paid') {
+        const res = await tryAutoConfirmOrder(tx, order.id, auth.user.id);
+        orderAutoConfirmed = res.confirmed;
+      }
+    }
+
     // Pipeline: advance the deal po_pending → payment_pending. A deal sitting
     // in another stage (or a high-risk guard) is not an error here — the PI
     // confirmation stands. Any OTHER failure rolls the whole txn back.
@@ -200,7 +224,14 @@ export const confirmPi = tenantAction(
       }
     }
 
-    return { id: pi.id, status: 'confirmed' as const, orderId: order.id, orderNumber };
+    return {
+      id: pi.id,
+      status: 'confirmed' as const,
+      orderId: order.id,
+      orderNumber,
+      advanceTransferred,
+      orderAutoConfirmed,
+    };
   },
 );
 
