@@ -721,3 +721,61 @@ formatter import into the client component.
 **Permanent fix:** (a) + (b) are fixed and now exercised end-to-end by the
 critical-path E2E on every `pnpm verify` run; (c) + (d) are in the Stage C
 handoff backlog.
+
+## DEV.57 — Stage C Day 1 — `00-app-role.sql` failed on DO Managed Postgres
+
+**Date:** 2026-05-21
+**Spec said:** Stage C Day 1 A1.3 — apply migrations against staging DB.
+**Found:** Running `pnpm --filter @dealerlink/db db:migrate` against the new
+DO Managed Postgres cluster failed at `rls/00-app-role.sql` with
+`permission denied to alter role` (`Only roles with the SUPERUSER attribute
+may change the SUPERUSER attribute`). DO's `doadmin` is a managed admin, not
+a true Postgres SUPERUSER, so it cannot run `ALTER ROLE ... NOSUPERUSER
+NOBYPASSRLS` — **even when the role already has those attrs.** Locally this
+never tripped because the docker-compose `dealerlink` user is a real
+SUPERUSER. Drizzle migrations 0000-0014 applied cleanly first; only the
+RLS-bootstrap step broke.
+**Built:** Rewrote `00-app-role.sql` so the `CREATE ROLE` statement bakes
+`NOSUPERUSER NOBYPASSRLS` into the role from the start (no follow-up ALTER
+needed on a fresh role). The defensive ALTER for older dev DBs that may have
+been created with the old SQL is now wrapped in a `DO` block that (i) only
+runs if the role currently has the wrong attrs and (ii) catches
+`insufficient_privilege` with a `RAISE NOTICE` so managed-Postgres
+deployments don't fail the migration. Verified on staging: fresh role has
+`rolsuper=false, rolbypassrls=false, rolcanlogin=true`, RLS smoke confirms
+`dealerlink_app` sees zero dealers without `app.tenant_id` and 20 dealers
+with the demo tenant set.
+**Why this is the right shape:** The old SQL implicitly required SUPERUSER
+on the caller for any subsequent run, even no-op runs. The new shape (a)
+matches the existing intent — `dealerlink_app` is NOSUPERUSER NOBYPASSRLS
+from creation — and (b) keeps the repair path for old dev DBs where it can
+actually succeed.
+**Impact:** Backward-compatible on the local Docker Postgres (we re-ran the
+local `pnpm db:migrate` and it remains green — fresh roles get the right
+attrs at CREATE, existing roles with already-correct attrs skip the
+defensive ALTER). Unblocks every future managed-Postgres deploy
+(staging + production).
+**Resolution:** Permanent.
+
+## DEV.58 — Stage C Day 1 — staging bootstrap scripts live in packages/db/scripts
+
+**Date:** 2026-05-21
+**Spec said:** A1.2 — "Connect via psql, run extension setup".
+**Found:** `psql` is not installed on the build machine, and `uuid-ossp` +
+`btree_gin` are required by `scripts/preflight.mjs` but never created by any
+Drizzle migration — locally they ride on docker's `scripts/init-db.sql`
+auto-load. DO Managed Postgres has no equivalent init hook.
+**Built:** `packages/db/scripts/staging-db-bootstrap.mjs` (two phases —
+`pre`: creates the named DB + missing extensions before migrations;
+`finalize`: rotates `dealerlink_app` away from the dev-default password
+after migrations) and `packages/db/scripts/staging-db-smoke.mjs` (verifies
+RLS enforcement post-seed). Both placed under `packages/db/scripts/`, not
+the repo-root `scripts/`, because Node ESM resolves `import postgres from
+'postgres'` against the script's location and `postgres-js` is only hoisted
+into `packages/db/node_modules`. They take all secrets via env vars and are
+safe to commit.
+**Impact:** Reproducible staging refreshes (drop cluster → recreate → 6
+commands → identical state). Documented in
+`C:\Users\rohit\.dealerlink\staging-secrets.txt` operational reference.
+**Resolution:** Permanent — these are the canonical staging-bootstrap
+scripts.

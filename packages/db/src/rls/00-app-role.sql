@@ -13,12 +13,32 @@ DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dealerlink_app') THEN
     -- Password matches DATABASE_URL in .env.local; rotate before any non-dev use.
-    CREATE ROLE dealerlink_app LOGIN PASSWORD 'dev_app_password_change_me';
+    -- NOSUPERUSER NOBYPASSRLS are PG defaults but we set them explicitly so
+    -- the role is correct without a follow-up ALTER. Managed-Postgres admins
+    -- (e.g. DO `doadmin`) cannot run ALTER ROLE ... NOSUPERUSER, so anything
+    -- that needs ALTER to fix attrs fails on those environments.
+    CREATE ROLE dealerlink_app LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'dev_app_password_change_me';
   END IF;
 END $$;
 
--- Strip any inherited bypass capability defensively.
-ALTER ROLE dealerlink_app NOSUPERUSER NOBYPASSRLS;
+-- Defensive repair for older dev databases where the role was created without
+-- the desired attrs. Only runs when the attrs are wrong, and tolerates
+-- managed environments where ALTER ROLE on attrs is forbidden — in that case
+-- the role must already have been created with the correct attrs above.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_roles
+    WHERE rolname = 'dealerlink_app' AND (rolsuper OR rolbypassrls)
+  ) THEN
+    BEGIN
+      ALTER ROLE dealerlink_app NOSUPERUSER NOBYPASSRLS;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE
+        'Cannot ALTER dealerlink_app attrs (insufficient privilege); assuming role was created with correct attrs.';
+    END;
+  END IF;
+END $$;
 
 GRANT USAGE ON SCHEMA public TO dealerlink_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO dealerlink_app;

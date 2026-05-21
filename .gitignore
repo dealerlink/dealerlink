@@ -36,5 +36,9 @@ playwright-report/
 *.pem
 *.key
 secrets/
+# Belt-and-braces: actual staging-secrets.txt lives at
+# C:\Users\rohit\.dealerlink\staging-secrets.txt (outside the repo). This
+# guards against an accidental copy landing at repo root.
+/staging-secrets.txt
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
