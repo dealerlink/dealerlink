@@ -37,7 +37,18 @@ function connectionString(): string {
  */
 export async function startBoss(): Promise<PgBoss> {
   if (boss) return boss;
-  const instance = new PgBoss(connectionString());
+  const url = connectionString();
+  // pg-boss is built on pg-pool which validates TLS chains strictly. DO
+  // Managed Postgres uses a Let's Encrypt cert chain that includes a
+  // self-signed intermediate not present in Node's bundled CA store, so
+  // strict validation fails with SELF_SIGNED_CERT_IN_CHAIN. When the
+  // connection string already opts into TLS (sslmode=require/verify-*),
+  // tell pg-pool to skip chain validation; the connection is still
+  // encrypted, just not chain-verified.
+  const sslRequested = url.includes('sslmode=') || url.includes('ssl=true');
+  const instance = sslRequested
+    ? new PgBoss({ connectionString: url, ssl: { rejectUnauthorized: false } })
+    : new PgBoss(url);
   instance.on('error', (err) => {
     logger.error({ err }, 'pg-boss error');
   });

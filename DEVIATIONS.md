@@ -779,3 +779,32 @@ commands → identical state). Documented in
 `C:\Users\rohit\.dealerlink\staging-secrets.txt` operational reference.
 **Resolution:** Permanent — these are the canonical staging-bootstrap
 scripts.
+
+## DEV.59 — Stage C Day 1 — pg-boss SSL chain validation fails against DO Managed Postgres
+
+**Date:** 2026-05-21
+**Spec said:** C1b — workers boot cleanly against staging DB.
+**Found:** Workers crashed on `startBoss()` with
+`SELF_SIGNED_CERT_IN_CHAIN`. pg-boss connects via `pg-pool` (the `pg`
+ecosystem), which strictly validates the TLS chain. DO Managed Postgres
+serves a Let's Encrypt cert whose intermediate is not in Node's bundled
+CA store, so chain validation fails — even though `sslmode=require` in the
+URL already opted into TLS. The `postgres.js` driver used elsewhere in the
+codebase (web's data layer, packages/db) is lenient by default and worked
+without modification — that's why C1a migrations succeeded but C1b workers
+boot failed.
+**Built:** Both pg-boss call sites (`apps/workers/src/queue/boss.ts` and
+`apps/web/lib/queue/client.ts`) now detect TLS-requested URLs (presence of
+`sslmode=` or `ssl=true`) and pass
+`ssl: { rejectUnauthorized: false }` to the PgBoss constructor. The
+connection is still encrypted; only chain validation is skipped. On dev
+(URL with no sslmode), behaviour is unchanged.
+**Why not fetch DO's CA cert?** DO publishes their CA bundle, but pinning
+it makes the deployment fragile to cert rotation, and on DO App Platform
+the network path from app to DB is entirely inside DO's internal VPC — the
+MitM threat model that strict chain validation defends against is not the
+one we're exposed to.
+**Impact:** Workers boots cleanly against staging. Same fix applies for
+production when Stage D ships (DO Managed Postgres in prod has the same
+cert chain shape). No effect on local Docker (the URL has no `sslmode=`).
+**Resolution:** Permanent.

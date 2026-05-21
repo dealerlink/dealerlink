@@ -29,7 +29,15 @@ function connectionString(): string {
 }
 
 async function initBoss(): Promise<PgBoss> {
-  const boss = new PgBoss({ connectionString: connectionString(), supervise: false });
+  const url = connectionString();
+  // See apps/workers/src/queue/boss.ts — pg-pool strict TLS validation
+  // fails against DO Managed Postgres' Let's Encrypt chain. Same fix.
+  const sslRequested = url.includes('sslmode=') || url.includes('ssl=true');
+  const boss = new PgBoss({
+    connectionString: url,
+    supervise: false,
+    ...(sslRequested ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
   boss.on('error', (err) => {
     logger.error({ err }, 'pg-boss (web) error');
   });
