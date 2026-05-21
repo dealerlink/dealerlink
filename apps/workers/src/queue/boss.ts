@@ -46,8 +46,19 @@ export async function startBoss(): Promise<PgBoss> {
   // tell pg-pool to skip chain validation; the connection is still
   // encrypted, just not chain-verified.
   const sslRequested = url.includes('sslmode=') || url.includes('ssl=true');
+  // pg-connection-string parses sslmode= from the URL into its own ssl
+  // config and that overrides the explicit `ssl` config we pass. To make
+  // our { rejectUnauthorized: false } actually win, strip sslmode= from
+  // the URL when we provide explicit ssl config.
+  const cleanedUrl = sslRequested
+    ? url
+        .replace(/[?&]sslmode=[^&]+/g, '')
+        .replace(/[?&]ssl=true/g, '')
+        .replace(/\?&/, '?')
+        .replace(/\?$/, '')
+    : url;
   const instance = sslRequested
-    ? new PgBoss({ connectionString: url, ssl: { rejectUnauthorized: false } })
+    ? new PgBoss({ connectionString: cleanedUrl, ssl: { rejectUnauthorized: false } })
     : new PgBoss(url);
   instance.on('error', (err) => {
     logger.error({ err }, 'pg-boss error');

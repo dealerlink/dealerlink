@@ -33,8 +33,18 @@ async function initBoss(): Promise<PgBoss> {
   // See apps/workers/src/queue/boss.ts — pg-pool strict TLS validation
   // fails against DO Managed Postgres' Let's Encrypt chain. Same fix.
   const sslRequested = url.includes('sslmode=') || url.includes('ssl=true');
+  // pg-connection-string parses sslmode= and that overrides our explicit
+  // ssl config; strip it from the URL so only our { rejectUnauthorized:
+  // false } applies.
+  const cleanedUrl = sslRequested
+    ? url
+        .replace(/[?&]sslmode=[^&]+/g, '')
+        .replace(/[?&]ssl=true/g, '')
+        .replace(/\?&/, '?')
+        .replace(/\?$/, '')
+    : url;
   const boss = new PgBoss({
-    connectionString: url,
+    connectionString: cleanedUrl,
     supervise: false,
     ...(sslRequested ? { ssl: { rejectUnauthorized: false } } : {}),
   });
