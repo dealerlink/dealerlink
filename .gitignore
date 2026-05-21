@@ -40,5 +40,7 @@ secrets/
 # C:\Users\rohit\.dealerlink\staging-secrets.txt (outside the repo). This
 # guards against an accidental copy landing at repo root.
 /staging-secrets.txt
+# Rendered App Platform spec — contains injected secret values, never commit.
+.do/app.rendered.yaml
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock

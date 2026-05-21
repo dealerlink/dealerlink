@@ -1,0 +1,161 @@
+# Dealerlink staging — DO App Platform spec
+#
+# Source of truth for the staging deploy. Manual UI changes drift; always
+# update this file + push.
+#
+# Conventions:
+#   - `type: SECRET` env vars have NO `value:` here — they are committed
+#     intentionally blank. Real values live in
+#     C:\Users\rohit\.dealerlink\staging-secrets.txt and are populated into
+#     the running app via the UI or `doctl apps spec update`. This file
+#     is committed; secrets are not.
+#   - `scope: RUN_AND_BUILD_TIME` is used for anything Next.js needs at build
+#     (NEXT_PUBLIC_*, NODE_ENV, Sentry build-time config). Server-only
+#     secrets are RUN_TIME so they don't bake into the client bundle.
+#
+# Provision the cluster separately (see staging-secrets.txt). This spec
+# attaches an existing DB cluster, it doesn't create one.
+
+name: dealerlink-staging
+region: blr
+
+services:
+  - name: web
+    github:
+      repo: dealerlink/dealerlink
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    build_command: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web build
+    run_command: pnpm --filter web start
+    http_port: 3000
+    instance_size_slug: basic-xs
+    instance_count: 1
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 30
+      period_seconds: 30
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    envs:
+      # --- DB (app role for runtime queries — RLS enforced) ---
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      # --- DB (doadmin for Lucia session validation + pg-boss enqueue) ---
+      - key: DATABASE_DIRECT_URL
+        scope: RUN_TIME
+        type: SECRET
+      # --- Auth ---
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      # --- Email (Resend) ---
+      - key: RESEND_INBOUND_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: RESEND_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: RESEND_FROM_EMAIL
+        scope: RUN_TIME
+        value: onboarding@resend.dev
+      # --- Sentry ---
+      - key: SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: SENTRY_ENVIRONMENT
+        scope: RUN_AND_BUILD_TIME
+        value: staging
+      - key: NEXT_PUBLIC_SENTRY_ENVIRONMENT
+        scope: RUN_AND_BUILD_TIME
+        value: staging
+      # --- Observability ---
+      - key: BETTERSTACK_SOURCE_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_DATASET
+        scope: RUN_TIME
+        value: dealerlink-events
+      # --- App ---
+      # NEXT_PUBLIC_APP_URL is set to the eventual custom domain even before
+      # SSL is live so the client bundle's absolute URLs (emails, share links)
+      # are correct from day one. The DO-provided *.ondigitalocean.app URL
+      # still serves traffic until C1c switches DNS.
+      - key: NEXT_PUBLIC_APP_URL
+        scope: RUN_AND_BUILD_TIME
+        value: https://staging.dealerlink.in
+      - key: NODE_ENV
+        scope: RUN_AND_BUILD_TIME
+        value: production
+      - key: TZ
+        scope: RUN_TIME
+        value: Asia/Kolkata
+
+workers:
+  - name: workers
+    github:
+      repo: dealerlink/dealerlink
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    build_command: corepack enable && pnpm install --frozen-lockfile
+    run_command: pnpm --filter workers start
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DATABASE_DIRECT_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: RESEND_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: RESEND_FROM_EMAIL
+        scope: RUN_TIME
+        value: onboarding@resend.dev
+      - key: SENTRY_DSN
+        scope: RUN_TIME
+        type: SECRET
+      - key: SENTRY_ENVIRONMENT
+        scope: RUN_TIME
+        value: staging
+      - key: BETTERSTACK_SOURCE_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_DATASET
+        scope: RUN_TIME
+        value: dealerlink-events
+      - key: NODE_ENV
+        scope: RUN_TIME
+        value: production
+      - key: TZ
+        scope: RUN_TIME
+        value: Asia/Kolkata
+
+databases:
+  # production: true attaches an existing managed cluster (provisioned out-of-
+  # band via `doctl databases create`). production: false would create an
+  # inline dev DB bundled with the app, which is not what we want.
+  - name: dealerlink-staging-db
+    engine: PG
+    version: '16'
+    production: true
+    cluster_name: dealerlink-staging-db
+    db_name: dealerlink_staging
+    db_user: doadmin
