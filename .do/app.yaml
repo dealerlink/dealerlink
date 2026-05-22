@@ -120,13 +120,14 @@ services:
         value: '1'
       # How long a PDF Server Action waits for the workers process to render +
       # persist the document before returning a friendly "try again" error.
-      # Code default is 15s; staging uses 60s to absorb a cold @sparticuz/chromium
-      # launch on the basic-xxs worker (DEV.66). The workers process also
-      # eager-warms Chromium at boot (PDF_EAGER_WARM, default on), so a cold
-      # render should normally only occur after a 10-min idle recycle.
+      # Code default is 15s; staging uses 120s so the FIRST render of a session
+      # — a cold Chromium *launch* on the basic-xxs worker, ~60-90s (DEV.66/67) —
+      # completes within the wait rather than erroring. Warm renders are ~5s.
+      # Chromium's idle-recycle is 45 min (DEV.67), so the cold launch is paid
+      # roughly once per active session. Revisit for production based on load.
       - key: PDF_RENDER_TIMEOUT_MS
         scope: RUN_TIME
-        value: '60000'
+        value: '120000'
 
 workers:
   - name: workers

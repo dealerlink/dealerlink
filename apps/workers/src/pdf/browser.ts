@@ -24,15 +24,26 @@ import { existsSync } from 'node:fs';
 import type { Browser } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 
+import { logger } from '../observability/logger';
+
 /** Recycle the Chromium process after this many pages — memory-leak guard. */
 const RENDER_LIMIT = 100;
-/** Close an idle browser after this long with no render. */
-const IDLE_LIMIT_MS = 10 * 60 * 1000;
+/**
+ * Close an idle browser after this long with no render. Widened from 10 to
+ * 45 min (DEV.67): a cold relaunch on the small worker is slow (~60 s), so
+ * keeping the warm browser longer means an active pilot session pays the cold
+ * launch once rather than every 10 min. The RENDER_LIMIT page-cap recycle
+ * stays as the memory-leak backstop, and 45 min is still a hard cap — not
+ * "keep alive forever".
+ */
+const IDLE_LIMIT_MS = 45 * 60 * 1000;
 
 interface BrowserState {
   browser: Browser;
   pagesOpened: number;
   lastUsed: number;
+  /** When this browser was launched — feeds the recycle uptime log (DEV.67). */
+  startedAt: number;
 }
 
 let state: BrowserState | null = null;
@@ -121,7 +132,8 @@ async function launch(): Promise<BrowserState> {
     args: config.args,
     headless: config.headless,
   });
-  return { browser, pagesOpened: 0, lastUsed: Date.now() };
+  const now = Date.now();
+  return { browser, pagesOpened: 0, lastUsed: now, startedAt: now };
 }
 
 async function disposeState(s: BrowserState): Promise<void> {
@@ -143,9 +155,14 @@ export async function getBrowser(): Promise<Browser> {
     const overUsed = state.pagesOpened >= RENDER_LIMIT;
     const dead = !state.browser.connected;
     if (idle || overUsed || dead) {
+      const reason = dead ? 'crash' : overUsed ? 'page-cap' : 'idle';
+      const uptimeM = ((Date.now() - state.startedAt) / 60_000).toFixed(1);
       const old = state;
       state = null;
       await disposeState(old);
+      // Recycle visibility (DEV.67) — track how often Chromium turns over
+      // under real load to inform the Stage D worker-sizing decision.
+      logger.info(`PDF: Chromium recycled — reason: ${reason} | uptime: ${uptimeM}m`);
     }
   }
 

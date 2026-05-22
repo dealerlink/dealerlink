@@ -1076,3 +1076,33 @@ cold-launch frequency. Both deferred to Stage D / the user's call (instance size
 is held this stage per the cost guardrail).
 **Resolution:** Mitigations permanent; instance-size + idle-recycle tuning =
 Stage D.
+
+## DEV.67 — Stage C — widen Chromium idle-recycle to 45 min + 120s render timeout
+
+**Date:** 2026-05-22
+**Spec said:** Follow-up to DEV.66 — reduce how often users hit the slow cold
+Chromium launch on the basic-xxs worker, and stop the cold first render from
+erroring.
+**Built:**
+
+- **Idle-recycle 10 min → 45 min** (`apps/workers/src/pdf/browser.ts`). A cold
+  relaunch is ~60–90 s on this box (DEV.66), so the old 10-min recycle made an
+  active session re-pay it repeatedly. 45 min keeps the warm browser across a
+  pilot session; the per-100-pages (`RENDER_LIMIT`) recycle stays as the
+  memory-leak backstop, and 45 min is still a hard cap — not keep-alive-forever.
+  Each recycle now logs
+  `PDF: Chromium recycled — reason: idle|page-cap|crash | uptime: Xm` for
+  visibility into turnover under real load.
+- **`PDF_RENDER_TIMEOUT_MS` 60 s → 120 s** (web; applied via doctl live-spec
+  merge, DEV.64) so the cold first render (~60–90 s) completes within the wait
+  instead of returning the "try again" message.
+
+**Net behaviour:** first render of a session ~60–90 s (spinner shown, no error);
+subsequent renders ~5 s; a cold launch is paid roughly once per 45-min idle gap.
+**Production sizing consideration (Stage D):** these are mitigations for a
+512 MB / shared-vCPU worker, not a fix. The workers instance size should be
+re-evaluated in Stage D against real PDF load — the new recycle logs (frequency,
+uptime) plus pilot usage are the inputs. A roomier instance would make cold
+launches fast and let the timeout + idle-recycle return to tighter values.
+Instance size is held this stage per the cost guardrail.
+**Resolution:** Permanent (mitigations); production sizing review = Stage D.

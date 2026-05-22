@@ -95,7 +95,9 @@ tenant-scoped pattern.
 
 - **Browser:** one lazy Chromium singleton, shared across renders.
   - Recycled after **100 pages** (memory-leak guard).
-  - Recycled after **10 min idle**, and on crash/disconnect.
+  - Recycled after **45 min idle** (widened from 10 min, DEV.67), and on
+    crash/disconnect. Each recycle logs
+    `PDF: Chromium recycled — reason: idle|page-cap|crash | uptime: Xm`.
   - In production (Linux container) it uses `@sparticuz/chromium`; on dev
     machines it falls back to a system Chrome/Chromium install (the
     `@sparticuz` binary pack is Linux-only). Override with
@@ -110,9 +112,12 @@ tenant-scoped pattern.
 ## Cold start + eager-warm (DEV.66)
 
 On the small production worker (`basic-xxs`, 512 MB / shared vCPU) a **cold
-Chromium launch is slow** — ~60 s+. The slow part is the launch itself (process
-spawn + DevTools handshake), **not** `@sparticuz/chromium`'s binary extraction
-(which is ~3 s). A warm render is ~5 s.
+Chromium launch is slow** — ~60–90 s. The slow part is the launch itself
+(process spawn + DevTools handshake), **not** `@sparticuz/chromium`'s binary
+extraction (which is ~3 s). A warm render is ~5 s.
+
+**Cold-start expectation:** the **first render of a session is ~60–90 s**;
+**subsequent renders are ~5 s** until the browser is recycled.
 
 Mitigations:
 
@@ -122,13 +127,18 @@ Mitigations:
   `warmChromium()` triggers only the binary **extraction** (`executablePath()`),
   not a full launch — a boot-time launch hung on this box. Toggle with
   `PDF_EAGER_WARM=false`.
-- **`PDF_RENDER_TIMEOUT_MS`** (web; default 15 s, staging 60 s) bounds how long
-  the Server Action polls `generated_documents` before returning a retryable
-  message.
-- The first render after a boot or a 10-min idle-recycle still pays a cold
-  launch; the UI shows `components/ui/pdf-progress.tsx` during the wait.
-- **Stage D:** a roomier worker instance makes cold launches fast; widening the
-  idle-recycle window reduces their frequency. See DEV.66.
+- **`PDF_RENDER_TIMEOUT_MS`** (web; default 15 s, **staging 120 s**, DEV.67)
+  bounds how long the Server Action polls `generated_documents`. 120 s lets the
+  cold first render complete within the wait rather than erroring. Revisit for
+  production based on real load data.
+- **45-min idle-recycle** (DEV.67, was 10 min) so an active session pays the
+  cold launch ~once, not every 10 min.
+- The UI shows `components/ui/pdf-progress.tsx` during the wait so a slow first
+  render never looks frozen.
+- **Stage D:** a roomier worker instance makes cold launches fast (and could let
+  the timeout drop back). The production worker-sizing decision is deferred to
+  Stage D, informed by the recycle-frequency logs + real PDF load from staging
+  and the pilot. See DEV.66/67.
 
 ## Troubleshooting
 
