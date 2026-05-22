@@ -1026,3 +1026,53 @@ integrity check is unaffected. Version stays pinned to package.json's
 `packageManager` field.
 **Resolution:** Permanent. Stage D could instead set `COREPACK_INTEGRITY_KEYS`
 or bump corepack, but the direct npm install is simplest and deterministic.
+
+## DEV.66 — Stage C — PDF render cold-start on basic-xxs workers (Chromium launch, not extraction)
+
+**Date:** 2026-05-22
+**Spec said:** Mitigate the cold-start the DEV.63 smoke surfaced — bump
+`PDF_RENDER_TIMEOUT_MS` to 60s and eager-warm Chromium at worker boot.
+**Found (investigating the cold start):**
+
+- A staging measurement showed a **fresh cold render exceeds even 60s**, while a
+  warm render is **~5s**. Instrumenting the boot warm revealed
+  `@sparticuz/chromium`'s binary **extraction is fast — 2.7s**. So the slow part
+  of a cold render is the Chromium **launch itself** (process spawn + DevTools
+  handshake) on the 512 MB / shared-vCPU `basic-xxs` worker, **not** extraction.
+- The first eager-warm attempt — a **blocking** full launch + close **before**
+  registering pg-boss consumers — **stalled the worker for 8+ min** (the launch
+  hung at boot, plausibly under rolling-deploy resource contention with the
+  outgoing container). Because it was `await`ed before `boss.work()`, the worker
+  never registered consumers: emails, renders, and crons all stopped. A real
+  regression caught on staging.
+
+**Built (mitigations):**
+
+1. **`PDF_RENDER_TIMEOUT_MS` 30s → 60s** (web; applied via doctl live-spec
+   merge, DEV.64).
+2. **Eager-warm, fixed to be safe** (`apps/workers/src/index.ts` +
+   `warmChromium()` in `pdf/browser.ts`): runs **after** consumers are
+   registered and is **fire-and-forget** (a slow/failed warm can never block job
+   processing), and warms **only the binary extraction** via
+   `chromium.executablePath()` — no Chromium process is spawned at boot, so it
+   can't hang on a launch handshake or OOM the worker. Logs
+   `PDF: eager-warmed Chromium in Xs` (2.7s observed). Toggle: `PDF_EAGER_WARM`
+   (default on).
+3. **Inline spinner** (`components/ui/pdf-progress.tsx`) on all four PDF actions
+   so a render wait never looks frozen.
+
+**Verified on staging:** worker boots functional ("Workers process started"
+appears immediately); `PDF: eager-warmed Chromium in 2.7s`; a warm render
+completes in ~5s. The **first render after a boot or a 10-min idle-recycle still
+pays a cold Chromium launch** (~60s+) — the launch cannot be reliably warmed at
+boot on this box — surfaced to the user via the spinner and, if it exceeds the
+timeout, the "try again" message + a fast warm retry.
+**Production consideration (Stage D):** the basic-xxs (512 MB, shared vCPU)
+worker is the real constraint — cold Chromium launch is slow there. Re-evaluate
+the workers instance size against real PDF load (concurrent renders, cold-launch
+frequency); a roomier instance would make cold launches fast and could let the
+timeout drop again. Widening the browser idle-recycle window would also reduce
+cold-launch frequency. Both deferred to Stage D / the user's call (instance size
+is held this stage per the cost guardrail).
+**Resolution:** Mitigations permanent; instance-size + idle-recycle tuning =
+Stage D.

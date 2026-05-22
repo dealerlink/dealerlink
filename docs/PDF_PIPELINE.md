@@ -107,11 +107,39 @@ tenant-scoped pattern.
   see DEV.37). The branded _header_ is body HTML.
 - All CSS + fonts are inlined into the HTML — no external stylesheet.
 
+## Cold start + eager-warm (DEV.66)
+
+On the small production worker (`basic-xxs`, 512 MB / shared vCPU) a **cold
+Chromium launch is slow** — ~60 s+. The slow part is the launch itself (process
+spawn + DevTools handshake), **not** `@sparticuz/chromium`'s binary extraction
+(which is ~3 s). A warm render is ~5 s.
+
+Mitigations:
+
+- **Eager-warm at boot.** `apps/workers/src/index.ts` calls `warmChromium()`
+  **after** registering pg-boss consumers and **fire-and-forget** (never blocks
+  job processing — an early blocking version stalled the worker, DEV.66).
+  `warmChromium()` triggers only the binary **extraction** (`executablePath()`),
+  not a full launch — a boot-time launch hung on this box. Toggle with
+  `PDF_EAGER_WARM=false`.
+- **`PDF_RENDER_TIMEOUT_MS`** (web; default 15 s, staging 60 s) bounds how long
+  the Server Action polls `generated_documents` before returning a retryable
+  message.
+- The first render after a boot or a 10-min idle-recycle still pays a cold
+  launch; the UI shows `components/ui/pdf-progress.tsx` during the wait.
+- **Stage D:** a roomier worker instance makes cold launches fast; widening the
+  idle-recycle window reduces their frequency. See DEV.66.
+
 ## Troubleshooting
 
 - _"No Chromium executable found"_ — install Google Chrome, or set
   `PUPPETEER_EXECUTABLE_PATH` to a Chromium binary.
-- _"Could not generate the PDF…"_ from a Server Action — the render-cli
-  subprocess failed; run it directly to see the error:
+- _"Could not generate the PDF…"_ / _"taking longer than expected"_ from a
+  Server Action — the web process enqueued a `render-pdf` job but no
+  `generated_documents` row appeared within `PDF_RENDER_TIMEOUT_MS` (DEV.63).
+  Check the workers process is up and consuming (`doctl apps logs <app>
+workers --type run` → "Workers process started"); a cold first render can
+  exceed the timeout (DEV.66) — retry once warm. To reproduce a render
+  off-queue, run the standalone CLI:
   `node --import tsx apps/workers/src/pdf/render-cli.ts --document <id> --tenant <id>`.
 - A sample render lives at `docs/samples/quotation-sample.pdf`.
