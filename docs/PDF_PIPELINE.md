@@ -111,13 +111,16 @@ tenant-scoped pattern.
 
 ## Cold start + eager-warm (DEV.66)
 
-On the small production worker (`basic-xxs`, 512 MB / shared vCPU) a **cold
-Chromium launch is slow** — ~60–90 s. The slow part is the launch itself
-(process spawn + DevTools handshake), **not** `@sparticuz/chromium`'s binary
-extraction (which is ~3 s). A warm render is ~5 s.
+On the small production worker (`basic-xxs`, 512 MB / shared vCPU), steady-state
+renders are **~3–5 s** — both a cold launch (Chromium not yet spawned this boot;
+eager-warm only does the ~3 s binary extraction) and a warm reuse. The slow part
+of a cold start is the launch (spawn + DevTools handshake), not extraction.
 
-**Cold-start expectation:** the **first render of a session is ~60–90 s**;
-**subsequent renders are ~5 s** until the browser is recycled.
+**Cold-start expectation:** ~3–5 s in steady state. A launch can spike toward
+the `PDF_RENDER_TIMEOUT_MS` (120 s) only **transiently right after a deploy** —
+during the rolling-deploy window the outgoing container still contends for the
+512 MB, so a render in that ~1–2 min window is slow (DEV.66/67). The 120 s
+timeout covers that window; the spinner keeps the wait visible.
 
 Mitigations:
 

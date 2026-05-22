@@ -1097,12 +1097,22 @@ erroring.
   merge, DEV.64) so the cold first render (~60–90 s) completes within the wait
   instead of returning the "try again" message.
 
-**Net behaviour:** first render of a session ~60–90 s (spinner shown, no error);
-subsequent renders ~5 s; a cold launch is paid roughly once per 45-min idle gap.
-**Production sizing consideration (Stage D):** these are mitigations for a
-512 MB / shared-vCPU worker, not a fix. The workers instance size should be
-re-evaluated in Stage D against real PDF load — the new recycle logs (frequency,
-uptime) plus pilot usage are the inputs. A roomier instance would make cold
-launches fast and let the timeout + idle-recycle return to tighter values.
-Instance size is held this stage per the cost guardrail.
+**Verified on staging (corrects the DEV.66 estimate):** once the worker has
+**settled** after a deploy, a genuine cold render (Chromium not yet launched
+this boot — eager-warm only extracts) is **~4 s**, and a warm render **~3 s**.
+The ~60 s+ launches seen in DEV.66 were measured **immediately after a deploy**:
+during the rolling-deploy window the outgoing container is still alive and
+contends for the 512 MB, so a launch in that ~1–2 min window is very slow. The
+120 s timeout exists to cover exactly that transient window; in steady state
+renders are a few seconds.
+**Net behaviour:** steady-state renders ~3–5 s (cold or warm); a launch can
+briefly spike toward the 120 s timeout only in the rolling-deploy window;
+Chromium is recycled at most once per 45-min idle gap.
+**Production sizing consideration (Stage D):** the 120 s timeout + 45-min
+recycle are mitigations for a 512 MB / shared-vCPU worker, not a fix for the
+deploy-window contention. Re-evaluate workers instance size in Stage D against
+real PDF load — the new recycle logs (frequency, uptime) plus pilot usage are
+the inputs. A roomier instance would remove the deploy-window slowness and let
+the timeout return to a tighter value. Instance size is held this stage per the
+cost guardrail.
 **Resolution:** Permanent (mitigations); production sizing review = Stage D.
