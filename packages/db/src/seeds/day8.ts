@@ -158,7 +158,7 @@ const PLANS: QuotePlan[] = [
     status: 'sent',
     daysAgo: 14,
     validityDays: 30,
-    forcePlaceOfSupply: 'Tamil Nadu',
+    forcePlaceOfSupply: 'TN', // Tamil Nadu — inter-state vs MH (DEV.33)
   },
   {
     lineIdx: [0, 1],
@@ -168,7 +168,7 @@ const PLANS: QuotePlan[] = [
     status: 'sent',
     daysAgo: 18,
     validityDays: 30,
-    forcePlaceOfSupply: 'Karnataka',
+    forcePlaceOfSupply: 'KA', // Karnataka — inter-state vs MH (DEV.33)
   },
   // 3 accepted
   {
@@ -296,7 +296,7 @@ async function seedTenant(
     .from(tenantSettings)
     .where(sql`tenant_id = ${tenantId}`)
     .limit(1);
-  const tenantState = tenantStateRow[0]?.state ?? 'Maharashtra';
+  const tenantState = tenantStateRow[0]?.state ?? 'MH';
 
   await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);

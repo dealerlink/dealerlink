@@ -67,19 +67,22 @@ function panFromGSTIN(g: string): string {
 // Dealer seed data
 // ---------------------------------------------------------------------------
 interface StateInfo {
+  /** GSTN numeric state code (first two GSTIN digits). */
   code: string;
+  /** ISO 3166-2:IN 2-letter code — what we persist (DEV.33). */
+  iso: string;
   name: string;
   cities: string[];
 }
 
 const STATES: StateInfo[] = [
-  { code: '27', name: 'Maharashtra', cities: ['Mumbai', 'Pune', 'Nashik'] },
-  { code: '18', name: 'Assam', cities: ['Guwahati', 'Dibrugarh'] },
-  { code: '29', name: 'Karnataka', cities: ['Bangalore', 'Mysore'] },
-  { code: '33', name: 'Tamil Nadu', cities: ['Chennai', 'Coimbatore'] },
-  { code: '24', name: 'Gujarat', cities: ['Ahmedabad', 'Surat', 'Vadodara'] },
-  { code: '09', name: 'Uttar Pradesh', cities: ['Lucknow', 'Kanpur', 'Noida'] },
-  { code: '08', name: 'Rajasthan', cities: ['Jaipur', 'Jodhpur'] },
+  { code: '27', iso: 'MH', name: 'Maharashtra', cities: ['Mumbai', 'Pune', 'Nashik'] },
+  { code: '18', iso: 'AS', name: 'Assam', cities: ['Guwahati', 'Dibrugarh'] },
+  { code: '29', iso: 'KA', name: 'Karnataka', cities: ['Bangalore', 'Mysore'] },
+  { code: '33', iso: 'TN', name: 'Tamil Nadu', cities: ['Chennai', 'Coimbatore'] },
+  { code: '24', iso: 'GJ', name: 'Gujarat', cities: ['Ahmedabad', 'Surat', 'Vadodara'] },
+  { code: '09', iso: 'UP', name: 'Uttar Pradesh', cities: ['Lucknow', 'Kanpur', 'Noida'] },
+  { code: '08', iso: 'RJ', name: 'Rajasthan', cities: ['Jaipur', 'Jodhpur'] },
 ];
 
 const INDIAN_FIRSTS = [
@@ -214,7 +217,7 @@ function generateDealersForTenant(slug: string, n: number): DealerSpec[] {
       email: `${first.toLowerCase()}.${last.toLowerCase()}@${slug}-${i}.example.in`,
       addressLine1: `${100 + i}, ${biz.split(' ')[0]} Road`,
       city,
-      state: state.name,
+      state: state.iso,
       pincode: `${state.code}000${i.toString().padStart(2, '0')}`.slice(0, 6),
       gstin,
       pan,

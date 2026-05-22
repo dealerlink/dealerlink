@@ -177,7 +177,7 @@ describe('tenant provisioning — transactional create', () => {
       slug,
       legalName: `${slug} Pvt Ltd`,
       displayName: `${slug} Display`,
-      state: 'Maharashtra',
+      state: 'MH',
       gstin: '27AABCD1234E1Z8',
       adminEmail: `admin@${slug}.test`,
       adminFullName: 'Test Admin',
@@ -197,7 +197,7 @@ describe('tenant provisioning — transactional create', () => {
       .where(eq(tenantSettings.tenantId, out.tenantId))
       .limit(1);
     expect(settings?.gstin).toBe('27AABCD1234E1Z8');
-    expect(settings?.state).toBe('Maharashtra');
+    expect(settings?.state).toBe('MH');
     expect(settings?.inboundEmailToken).toBeTruthy();
     expect(settings?.fiscalYearStart).toBe(4);
 
@@ -225,7 +225,7 @@ describe('tenant provisioning — transactional create', () => {
       slug,
       legalName: `${slug} Pvt Ltd`,
       displayName: `${slug} Display`,
-      state: 'Karnataka',
+      state: 'KA',
       gstin: '29AABCS9999P1ZY',
       adminEmail: `admin@${slug}.test`,
       adminFullName: 'Audit Admin',
@@ -248,7 +248,7 @@ describe('tenant provisioning — transactional create', () => {
       slug,
       legalName: `${slug} Pvt Ltd`,
       displayName: `${slug} Display`,
-      state: 'Maharashtra',
+      state: 'MH',
       gstin: '27AABCD1234E1Z8',
       adminEmail: `admin@${slug}.test`,
       adminFullName: 'Redaction Admin',
@@ -290,7 +290,7 @@ describe('tenant provisioning — transactional create', () => {
       slug,
       legalName: 'A Pvt Ltd',
       displayName: 'A',
-      state: 'Maharashtra',
+      state: 'MH',
       gstin: '27AABCD1234E1Z8',
       adminEmail: `a@${slug}.test`,
       adminFullName: 'A Admin',
@@ -301,7 +301,7 @@ describe('tenant provisioning — transactional create', () => {
         slug, // same slug
         legalName: 'B Pvt Ltd',
         displayName: 'B',
-        state: 'Karnataka',
+        state: 'KA',
         gstin: '29AABCS9999P1ZY',
         adminEmail: `b@${slug}.test`,
         adminFullName: 'B Admin',
@@ -316,7 +316,7 @@ describe('tenant provisioning — isolation', () => {
       slug: `t-${Date.now().toString(36)}-iso-a`,
       legalName: 'Iso A',
       displayName: 'Iso A',
-      state: 'Maharashtra',
+      state: 'MH',
       gstin: '27AABCD1234E1Z8',
       adminEmail: `a@iso.test`,
       adminFullName: 'A',
@@ -325,7 +325,7 @@ describe('tenant provisioning — isolation', () => {
       slug: `t-${Date.now().toString(36)}-iso-b`,
       legalName: 'Iso B',
       displayName: 'Iso B',
-      state: 'Karnataka',
+      state: 'KA',
       gstin: '29AABCS9999P1ZY',
       adminEmail: `b@iso.test`,
       adminFullName: 'B',
@@ -352,7 +352,7 @@ describe('tenant provisioning — isolation', () => {
       slug: `t-${Date.now().toString(36)}-demo-iso`,
       legalName: 'Demo-iso',
       displayName: 'Demo-iso',
-      state: 'Karnataka',
+      state: 'KA',
       gstin: '29AABCS9999P1ZY',
       adminEmail: 'iso@demo-iso.test',
       adminFullName: 'Iso',
@@ -372,7 +372,7 @@ describe('inbound token rotation', () => {
       slug: `t-${Date.now().toString(36)}-rot`,
       legalName: 'Rot Co',
       displayName: 'Rot Co',
-      state: 'Maharashtra',
+      state: 'MH',
       gstin: '27AABCD1234E1Z8',
       adminEmail: 'rot@rot.test',
       adminFullName: 'Rot Admin',
@@ -417,7 +417,7 @@ describe('inbound token rotation', () => {
       slug: `t-${Date.now().toString(36)}-rot-audit`,
       legalName: 'Rot Audit',
       displayName: 'Rot Audit',
-      state: 'Maharashtra',
+      state: 'MH',
       gstin: '27AABCD1234E1Z8',
       adminEmail: 'rota@rot.test',
       adminFullName: 'Rot A',
@@ -452,7 +452,7 @@ describe('email_delivery_log', () => {
       slug: `t-${Date.now().toString(36)}-mail`,
       legalName: 'Mail Co',
       displayName: 'Mail Co',
-      state: 'Maharashtra',
+      state: 'MH',
       gstin: '27AABCD1234E1Z8',
       adminEmail: 'mail@mail.test',
       adminFullName: 'Mail Admin',

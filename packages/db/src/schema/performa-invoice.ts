@@ -117,9 +117,10 @@ export const performaInvoices = pgTable(
     index('performa_invoices_tenant_billto_ix').on(t.tenantId, t.billToDealerId),
     index('performa_invoices_tenant_quotation_ix').on(t.tenantId, t.quotationId),
     index('performa_invoices_tenant_deal_ix').on(t.tenantId, t.dealId),
+    // ISO 3166-2:IN 2-letter codes (DEV.33, normalized Stage C Day C.2).
     check(
       'performa_invoices_state_codes_chk',
-      sql`length(${t.tenantStateAtIssue}) >= 2 AND length(${t.placeOfSupply}) >= 2`,
+      sql`${t.tenantStateAtIssue} ~ '^[A-Z]{2}$' AND ${t.placeOfSupply} ~ '^[A-Z]{2}$'`,
     ),
     check(
       'performa_invoices_discount_value_chk',

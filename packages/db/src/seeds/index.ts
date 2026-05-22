@@ -52,7 +52,7 @@ const TENANT_SEEDS: TenantSeed[] = [
     slug: 'demo',
     legalName: 'Demo Solar Distributors Pvt Ltd',
     displayName: 'Demo Solar Distributors',
-    state: 'Maharashtra',
+    state: 'MH', // Maharashtra — ISO 3166-2:IN code (DEV.33)
     gstin: '27AABCD1234E1Z8',
     pan: 'AABCD1234E',
     bank: {
@@ -72,7 +72,7 @@ const TENANT_SEEDS: TenantSeed[] = [
     slug: 'sample',
     legalName: 'Sample Industrial Co Pvt Ltd',
     displayName: 'Sample Industrial Co',
-    state: 'Karnataka',
+    state: 'KA', // Karnataka — ISO 3166-2:IN code (DEV.33)
     gstin: '29AABCS9999P1ZY',
     pan: 'AABCS9999P',
     bank: {

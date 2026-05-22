@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenant';
 
@@ -64,6 +73,14 @@ export const tenantSettings = pgTable(
     uniqueIndex('tenant_settings_inbound_token_uq')
       .on(t.inboundEmailToken)
       .where(sql`${t.inboundEmailToken} IS NOT NULL`),
+    // ISO 3166-2:IN 2-letter codes, or NULL when unset (DEV.33, Stage C Day C.2).
+    // `state` drives CGST/SGST vs IGST; `address_state` is the registered-
+    // address state shown on documents — both come from the same dropdown.
+    check('tenant_settings_state_chk', sql`${t.state} IS NULL OR ${t.state} ~ '^[A-Z]{2}$'`),
+    check(
+      'tenant_settings_address_state_chk',
+      sql`${t.addressState} IS NULL OR ${t.addressState} ~ '^[A-Z]{2}$'`,
+    ),
   ],
 );
 

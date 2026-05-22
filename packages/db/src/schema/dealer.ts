@@ -105,6 +105,8 @@ export const dealers = pgTable(
     ),
     check('dealers_discount_chk', sql`${t.discountPercent} >= 0 AND ${t.discountPercent} <= 100`),
     check('dealers_gstin_not_empty_chk', sql`${t.gstin} IS NULL OR ${t.gstin} <> ''`),
+    // ISO 3166-2:IN 2-letter code, or NULL when unset (DEV.33, Stage C Day C.2).
+    check('dealers_state_chk', sql`${t.state} IS NULL OR ${t.state} ~ '^[A-Z]{2}$'`),
   ],
 );
 

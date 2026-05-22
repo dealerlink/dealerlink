@@ -63,7 +63,7 @@ async function asTenant<T>(tenantId: string, fn: (tx: DrizzleTx) => Promise<T>):
 }
 
 /** Insert a draft PI for the demo tenant; returns its id. */
-async function makePi(tx: DrizzleTx, placeOfSupply = 'MAHARASHTRA'): Promise<string> {
+async function makePi(tx: DrizzleTx, placeOfSupply = 'MH'): Promise<string> {
   const [pi] = await tx
     .insert(performaInvoices)
     .values({
@@ -72,7 +72,7 @@ async function makePi(tx: DrizzleTx, placeOfSupply = 'MAHARASHTRA'): Promise<str
       quotationId,
       billToDealerId: dealerA,
       shipToDealerId: dealerA,
-      tenantStateAtIssue: 'MAHARASHTRA',
+      tenantStateAtIssue: 'MH',
       placeOfSupply,
       preparedBy: userId,
       validUntil: '2027-01-01',
@@ -97,8 +97,8 @@ async function makeOrder(tx: DrizzleTx, piId: string, qty: number): Promise<stri
       quotationId,
       billToDealerId: dealerA,
       shipToDealerId: dealerA,
-      tenantStateAtIssue: 'MAHARASHTRA',
-      placeOfSupply: 'MAHARASHTRA',
+      tenantStateAtIssue: 'MH',
+      placeOfSupply: 'MH',
       subtotal: '1000.00',
       taxableAmount: '1000.00',
       totalAmount: '1180.00',
@@ -374,8 +374,8 @@ describe('concurrent reservation — FOR UPDATE serialises competing orders', ()
             quotationId,
             billToDealerId: dealerA,
             shipToDealerId: dealerA,
-            tenantStateAtIssue: 'MAHARASHTRA',
-            placeOfSupply: 'MAHARASHTRA',
+            tenantStateAtIssue: 'MH',
+            placeOfSupply: 'MH',
             subtotal: '2000.00',
             taxableAmount: '2000.00',
             totalAmount: '2360.00',

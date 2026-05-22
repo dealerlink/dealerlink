@@ -259,6 +259,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@dealerlink/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       '@dealerlink/tax':
         specifier: workspace:*
         version: link:../tax

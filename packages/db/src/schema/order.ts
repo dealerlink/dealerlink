@@ -119,9 +119,10 @@ export const orders = pgTable(
     index('orders_tenant_billto_ix').on(t.tenantId, t.billToDealerId),
     index('orders_tenant_pi_ix').on(t.tenantId, t.performaInvoiceId),
     index('orders_tenant_deal_ix').on(t.tenantId, t.dealId),
+    // ISO 3166-2:IN 2-letter codes (DEV.33, normalized Stage C Day C.2).
     check(
       'orders_state_codes_chk',
-      sql`length(${t.tenantStateAtIssue}) >= 2 AND length(${t.placeOfSupply}) >= 2`,
+      sql`${t.tenantStateAtIssue} ~ '^[A-Z]{2}$' AND ${t.placeOfSupply} ~ '^[A-Z]{2}$'`,
     ),
     check('orders_subtotal_chk', sql`${t.subtotal} >= 0`),
     check('orders_total_chk', sql`${t.totalAmount} >= 0`),

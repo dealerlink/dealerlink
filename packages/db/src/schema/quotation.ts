@@ -109,9 +109,10 @@ export const quotations = pgTable(
     index('quotations_tenant_prepared_ix').on(t.tenantId, t.preparedBy),
     index('quotations_tenant_parent_ix').on(t.tenantId, t.parentQuotationId),
     check('quotations_revision_chk', sql`${t.revision} >= 1`),
+    // ISO 3166-2:IN 2-letter codes (DEV.33, normalized Stage C Day C.2).
     check(
       'quotations_state_codes_chk',
-      sql`length(${t.tenantStateAtIssue}) >= 2 AND length(${t.placeOfSupply}) >= 2`,
+      sql`${t.tenantStateAtIssue} ~ '^[A-Z]{2}$' AND ${t.placeOfSupply} ~ '^[A-Z]{2}$'`,
     ),
     check(
       'quotations_discount_value_chk',

@@ -174,7 +174,7 @@ async function seedTenant(
     .from(tenantSettings)
     .where(sql`tenant_id = ${tenantId}`)
     .limit(1);
-  const tenantState = (stateRow[0]?.state ?? 'Maharashtra').toUpperCase();
+  const tenantState = (stateRow[0]?.state ?? 'MH').toUpperCase();
 
   await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);

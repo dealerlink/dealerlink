@@ -29,6 +29,7 @@
     "drizzle-orm": "^0.38.3",
     "pg": "^8.13.1",
     "postgres": "^3.4.5",
+    "@dealerlink/schemas": "workspace:*",
     "@dealerlink/tax": "workspace:*"
   },
   "devDependencies": {
