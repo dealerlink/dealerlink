@@ -41,8 +41,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# --- pnpm via corepack ------------------------------------------------------
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# --- pnpm -------------------------------------------------------------------
+# Installed directly via npm rather than corepack: the corepack bundled with
+# this node image fails `corepack prepare pnpm@…` with "Cannot find matching
+# keyid" — it ships stale npm-registry signing keys (DEV.65). npm's own
+# integrity check installs pnpm fine. Version pinned to match packageManager.
+RUN npm install -g pnpm@9.15.9
 
 WORKDIR /app
 
