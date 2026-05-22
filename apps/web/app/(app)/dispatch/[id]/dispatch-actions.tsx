@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { PdfProgress } from '@/components/ui/pdf-progress';
 import {
   downloadDispatchPdf,
   emailDispatchPdf,
@@ -146,6 +147,7 @@ export function DispatchActions({
           <span className="text-mute text-[12px]">Proof of delivery — coming soon</span>
         )}
       </div>
+      <PdfProgress show={pending === 'download' || pending === 'email'} />
 
       {deliverOpen && (
         <div className="border-line w-[340px] space-y-2 rounded-[6px] border bg-white p-3">

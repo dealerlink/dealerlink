@@ -120,11 +120,13 @@ services:
         value: '1'
       # How long a PDF Server Action waits for the workers process to render +
       # persist the document before returning a friendly "try again" error.
-      # Code default is 15s; staging uses 30s to absorb cold @sparticuz/chromium
-      # launches on the basic-xxs worker plus pg-boss pickup latency. See DEV.63.
+      # Code default is 15s; staging uses 60s to absorb a cold @sparticuz/chromium
+      # launch on the basic-xxs worker (DEV.66). The workers process also
+      # eager-warms Chromium at boot (PDF_EAGER_WARM, default on), so a cold
+      # render should normally only occur after a 10-min idle recycle.
       - key: PDF_RENDER_TIMEOUT_MS
         scope: RUN_TIME
-        value: '30000'
+        value: '60000'
 
 workers:
   - name: workers
@@ -188,6 +190,10 @@ workers:
       - key: PGBOSS_POOL_MAX
         scope: RUN_TIME
         value: '2'
+      # The workers process eager-warms Chromium at boot (DEV.66) so the first
+      # PDF render isn't a slow cold start. It is ON by default in code; to
+      # disable, add `PDF_EAGER_WARM` here with value 'false' (and apply the
+      # spec — see docs/DEPLOYMENT.md / DEV.64).
 
 databases:
   # production: true attaches an existing managed cluster (provisioned out-of-

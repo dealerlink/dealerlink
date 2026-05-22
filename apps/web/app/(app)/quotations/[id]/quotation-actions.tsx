@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { PdfProgress } from '@/components/ui/pdf-progress';
 import { deleteQuotation } from '@/lib/actions/quotations/delete-quotation';
 import { downloadQuotationPdf } from '@/lib/actions/quotations/download-pdf';
 import { emailQuotationPdf } from '@/lib/actions/quotations/email-pdf';
@@ -265,6 +266,7 @@ export function QuotationActions({
           </Button>
         )}
       </div>
+      <PdfProgress show={pending === 'pdf'} />
       {lastGeneratedAt && (
         <p className="text-mute text-[11.5px]">
           Last generated:{' '}

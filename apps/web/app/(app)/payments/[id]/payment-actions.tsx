@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { PdfProgress } from '@/components/ui/pdf-progress';
 import {
   allocatePayment,
   downloadPaymentReceipt,
@@ -212,6 +213,7 @@ export function PaymentActions({
           </Button>
         )}
       </div>
+      <PdfProgress show={pending === 'download' || pending === 'send'} />
 
       {panel === 'allocate' && (
         <div className="border-line w-[460px] space-y-2 rounded-[6px] border bg-white p-4">

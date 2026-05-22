@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { PdfProgress } from '@/components/ui/pdf-progress';
 import { downloadPerformaInvoicePdf, generatePerformaInvoicePdf } from '@/lib/actions/pi/pdf';
 import { cancelPi, confirmPi, sendPi } from '@/lib/actions/pi/status-transitions';
 import type { PerformaInvoiceStatus } from '@dealerlink/schemas';
@@ -187,6 +188,7 @@ export function PiActions({
           </Button>
         )}
       </div>
+      <PdfProgress show={pending === 'pdf'} />
       {lastGeneratedAt && (
         <p className="text-mute text-[11.5px]">
           Last generated:{' '}

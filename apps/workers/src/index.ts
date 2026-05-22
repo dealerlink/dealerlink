@@ -27,6 +27,7 @@ import { handleRenderPdfJob, type RenderPdfPayload } from './jobs/render-pdf';
 import { runValidityExpiry } from './jobs/validity-expiry';
 import { logger } from './observability/logger';
 import { flushWorkerSentry, initWorkerSentry, instrumentJobHandler } from './observability/sentry';
+import { warmChromium } from './pdf/browser';
 import { startBoss, stopBoss } from './queue/boss';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -39,6 +40,20 @@ async function main(): Promise<void> {
   initWorkerSentry();
 
   const boss = await startBoss();
+
+  // Eager-warm Chromium so the first PDF render isn't a slow cold start on the
+  // small worker (DEV.66). Done before registering job consumers so the warm's
+  // launch/close can't race a real render's use of the shared browser. Disable
+  // with PDF_EAGER_WARM=false if it ever causes boot trouble.
+  if (process.env.PDF_EAGER_WARM !== 'false') {
+    const startedAt = Date.now();
+    try {
+      await warmChromium();
+      logger.info(`PDF: eager-warmed Chromium in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
+    } catch (err) {
+      logger.warn({ err }, 'PDF: eager-warm Chromium failed; first render will be a cold start');
+    }
+  }
 
   // --- Outbound email ------------------------------------------------------
   await boss.work(EMAIL_QUEUE, instrumentJobHandler(EMAIL_QUEUE, handleSendEmailJob));
