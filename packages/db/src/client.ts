@@ -40,28 +40,31 @@ function makeClient(envKey: 'DATABASE_URL' | 'DATABASE_DIRECT_URL') {
   });
 }
 
+// The pg client + drizzle instance are memoized on globalThis in EVERY
+// environment (incl. production). DO App Platform runs a long-lived Node
+// process, so without this each property access on the `db`/`adminDb`
+// proxies below would spin up a fresh postgres() pool — exhausting the DB's
+// connection budget within seconds (DEV.62). Build-time safety is provided
+// by the proxy's laziness: `next build` never accesses a property, so no
+// client is created at build.
 function makeDb() {
   const client = globalThis.__dealerlinkPg ?? makeClient('DATABASE_URL');
-  if (process.env.NODE_ENV !== 'production') {
-    globalThis.__dealerlinkPg = client;
-  }
+  globalThis.__dealerlinkPg = client;
   return drizzle(client, { schema, casing: 'snake_case' });
 }
 
 function makeAdminDb() {
   const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_DIRECT_URL or DATABASE_URL must be set');
   const client =
     globalThis.__dealerlinkAdminPg ??
-    postgres(url!, {
+    postgres(url, {
       max: poolMax('DB_ADMIN_POOL_MAX', process.env.NODE_ENV === 'production' ? 5 : 3),
       idle_timeout: 30,
       connect_timeout: 10,
       prepare: false,
     });
-  if (!url) throw new Error('DATABASE_DIRECT_URL or DATABASE_URL must be set');
-  if (process.env.NODE_ENV !== 'production') {
-    globalThis.__dealerlinkAdminPg = client;
-  }
+  globalThis.__dealerlinkAdminPg = client;
   return drizzle(client, { schema, casing: 'snake_case' });
 }
 
@@ -79,9 +82,7 @@ const dbProxyTarget: DrizzleDb = Object.create(null);
 export const db: DrizzleDb = new Proxy(dbProxyTarget, {
   get(_target, prop) {
     const real = globalThis.__dealerlinkDb ?? makeDb();
-    if (process.env.NODE_ENV !== 'production') {
-      globalThis.__dealerlinkDb = real;
-    }
+    globalThis.__dealerlinkDb = real;
     const value = real[prop as keyof DrizzleDb];
     return typeof value === 'function' ? value.bind(real) : value;
   },
@@ -98,9 +99,7 @@ const adminDbProxyTarget: DrizzleDb = Object.create(null);
 export const adminDb: DrizzleDb = new Proxy(adminDbProxyTarget, {
   get(_target, prop) {
     const real = globalThis.__dealerlinkAdminDb ?? makeAdminDb();
-    if (process.env.NODE_ENV !== 'production') {
-      globalThis.__dealerlinkAdminDb = real;
-    }
+    globalThis.__dealerlinkAdminDb = real;
     const value = real[prop as keyof DrizzleDb];
     return typeof value === 'function' ? value.bind(real) : value;
   },

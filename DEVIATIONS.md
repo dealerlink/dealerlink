@@ -868,3 +868,30 @@ Stage D refinement; capping pool sizes is the right staging-scoped fix.
 **Impact:** /health stable on every host; no more 53300 errors. Production
 should either run a bigger DB tier or revisit pooling — tracked for Stage D.
 **Resolution:** Permanent (env-configurable); pooling revisited in Stage D.
+
+## DEV.62 — Stage C Day 1 — db client created a new pool on every access in prod
+
+**Date:** 2026-05-22
+**Spec said:** C1c/C1d — stable app + green /health.
+**Found:** Even after capping pool sizes (DEV.61), `/api/health` kept
+intermittently 503'ing with PG 53300 (`connection slots reserved for
+superuser`). Root cause: `packages/db/src/client.ts` only memoised the
+postgres client + drizzle instance on `globalThis` when
+`NODE_ENV !== 'production'`. DO App Platform runs a **long-lived** Node
+process, so in production every property access on the `db` / `adminDb`
+proxies re-ran `makeClient()` → a brand-new `postgres()` pool. Each query
+(every rate-limit check, every health sub-check) created and leaked a fresh
+pool, churning through the 25-connection budget within seconds regardless of
+per-pool `max`. The prod-skip was presumably meant to avoid a build-time
+client, but the proxy is already lazy — `next build` never triggers it.
+**Built:** Memoise the client + drizzle instance on `globalThis`
+unconditionally (all four sites: `makeDb`, `makeAdminDb`, and both proxy
+getters). Build-time safety is unchanged — the proxy stays lazy, so
+`next build` (which never accesses a `db` property; all DB routes are
+`force-dynamic`) still creates no client. Verified locally: rls +
+impersonation suites green; typecheck clean.
+**Impact:** One app pool + one admin pool + one pg-boss pool per process,
+reused for the process lifetime. Combined with DEV.61's caps, staging holds
+~10 steady connections. This was the real fix; DEV.61's caps are the
+secondary bound.
+**Resolution:** Permanent.
