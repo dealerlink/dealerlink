@@ -11,7 +11,7 @@ import { useForm } from 'react-hook-form';
 
 import { checkSlugAvailable } from '@/lib/actions/admin/check-slug';
 import { createTenant } from '@/lib/actions/admin/create-tenant';
-import { INDIAN_STATES } from '@/lib/admin/constants';
+import { INDIAN_STATE_OPTIONS } from '@dealerlink/schemas';
 import { createTenantSchema, type CreateTenantInput } from '@/lib/admin/schemas';
 import { isValidGSTINFormat, panFromGSTIN } from '@/lib/format';
 
@@ -451,9 +451,9 @@ const StateSelect = React.forwardRef<
       {...props}
     >
       <option value="">Select…</option>
-      {INDIAN_STATES.map((s) => (
-        <option key={s} value={s}>
-          {s}
+      {INDIAN_STATE_OPTIONS.map((s) => (
+        <option key={s.code} value={s.code}>
+          {s.name}
         </option>
       ))}
     </select>

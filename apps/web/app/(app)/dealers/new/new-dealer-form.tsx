@@ -5,8 +5,8 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { StateSelect } from '@/components/ui/state-select';
 import { createDealer } from '@/lib/actions/dealers';
-import { INDIAN_STATES } from '@/lib/admin/constants';
 import { panFromGSTIN } from '@/lib/format';
 import { DEALER_CATEGORIES, DEALER_RISK_LEVELS, DEALER_TYPES } from '@dealerlink/schemas';
 
@@ -148,11 +148,7 @@ export function NewDealerForm({ canSetCommercial }: { canSetCommercial: boolean 
           <Input value={form.city} onChange={(e) => set('city', e.target.value)} />
         </Lbl>
         <Lbl label="State">
-          <Sel
-            value={form.state}
-            onChange={(v) => set('state', v)}
-            options={['', ...INDIAN_STATES]}
-          />
+          <StateSelect value={form.state} onChange={(v) => set('state', v)} />
         </Lbl>
         <Lbl label="Pincode">
           <Input value={form.pincode} onChange={(e) => set('pincode', e.target.value)} />

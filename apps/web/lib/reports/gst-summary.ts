@@ -15,6 +15,7 @@
  * issue equals the place of supply, inter-state otherwise.
  */
 import { withTenant } from '@dealerlink/db';
+import { formatStateLabel } from '@dealerlink/schemas';
 import { sql } from 'drizzle-orm';
 
 import type { ReportColumn, ReportResult, ReportRow } from './types';
@@ -90,7 +91,8 @@ export async function gstSummaryReport(
   });
 
   const dataRows: ReportRow[] = rows.map((r) => ({
-    state: r.place_of_supply,
+    // place_of_supply is stored as an ISO 3166-2:IN code; show the full name.
+    state: formatStateLabel(r.place_of_supply),
     supplyType: r.is_inter ? 'Inter-state' : 'Intra-state',
     orders: Number(r.order_count),
     taxable: Number(r.taxable),

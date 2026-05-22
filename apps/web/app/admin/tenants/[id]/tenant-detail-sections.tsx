@@ -29,7 +29,7 @@ import {
   updateTenantDocPrefixes,
   updateTenantIdentity,
 } from '@/lib/actions/admin/update-tenant';
-import { INDIAN_STATES } from '@/lib/admin/constants';
+import { INDIAN_STATE_OPTIONS, formatStateLabel, type IndianStateCode } from '@dealerlink/schemas';
 
 interface TenantSummary {
   id: string;
@@ -335,7 +335,7 @@ function ComplianceSection({
             gstin: gstin.toUpperCase(),
             pan: pan.toUpperCase(),
             // state is constrained server-side; cast is checked at runtime by zod
-            state: state as (typeof INDIAN_STATES)[number],
+            state: state as IndianStateCode,
           });
           if (!result.ok) {
             setError(result.error.message);
@@ -368,9 +368,9 @@ function ComplianceSection({
           <Row label="State (tax)">
             <select value={state} onChange={(e) => setState(e.target.value)} className={inputClass}>
               <option value="">Select…</option>
-              {INDIAN_STATES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+              {INDIAN_STATE_OPTIONS.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -385,7 +385,7 @@ function ComplianceSection({
           <Row label="PAN">
             <span className="mono">{settings.pan ?? '—'}</span>
           </Row>
-          <Row label="State (tax)">{settings.state ?? '—'}</Row>
+          <Row label="State (tax)">{settings.state ? formatStateLabel(settings.state) : '—'}</Row>
         </dl>
       )}
     </SectionFrame>
@@ -437,7 +437,7 @@ function AddressSection({
             addressLine1: line1,
             addressLine2: line2,
             addressCity: city,
-            addressState: state as (typeof INDIAN_STATES)[number],
+            addressState: state as IndianStateCode,
             addressPincode: pincode,
           });
           if (!result.ok) {
@@ -480,9 +480,9 @@ function AddressSection({
           <Row label="State">
             <select value={state} onChange={(e) => setState(e.target.value)} className={inputClass}>
               <option value="">Select…</option>
-              {INDIAN_STATES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+              {INDIAN_STATE_OPTIONS.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -497,7 +497,9 @@ function AddressSection({
           <Row label="Pincode">
             <span className="mono">{settings.addressPincode ?? '—'}</span>
           </Row>
-          <Row label="State">{settings.addressState ?? '—'}</Row>
+          <Row label="State">
+            {settings.addressState ? formatStateLabel(settings.addressState) : '—'}
+          </Row>
         </dl>
       )}
     </SectionFrame>

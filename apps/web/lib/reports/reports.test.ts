@@ -169,4 +169,13 @@ describe('gstSummaryReport', () => {
       expect(['Intra-state', 'Inter-state']).toContain(row.supplyType);
     }
   });
+
+  it('displays place of supply as a full state name, not a 2-letter code', async () => {
+    // Stored as ISO 3166-2:IN codes (DEV.33); the report formats them for humans.
+    const r = await gstSummaryReport(tenantId, range);
+    expect(r.rows.length).toBeGreaterThan(0);
+    for (const row of r.rows) {
+      expect(String(row.state)).not.toMatch(/^[A-Z]{2}$/);
+    }
+  });
 });

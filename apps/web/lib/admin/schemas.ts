@@ -1,8 +1,7 @@
+import { indianStateCodeSchema } from '@dealerlink/schemas';
 import { z } from 'zod';
 
 import { isValidGSTIN, isValidIFSC, isValidPAN, isValidPincode } from '@/lib/format';
-
-import { INDIAN_STATES } from './constants';
 
 /**
  * Slug rule: 3..32 chars; starts/ends with alphanumeric; lowercase alpha-
@@ -20,9 +19,12 @@ export const slugSchema = z
     'Use lowercase letters, digits, and hyphens — not starting or ending with a hyphen',
   );
 
-export const stateSchema = z.enum(INDIAN_STATES, {
-  errorMap: () => ({ message: 'Pick a state from the list' }),
-});
+/**
+ * Tenant state (tax + registered address). The operator console's state
+ * dropdown submits an ISO 3166-2:IN code, so this is the strict code enum
+ * (DEV.33). Names are rejected — the boundary is canonical.
+ */
+export const stateSchema = indianStateCodeSchema;
 
 export const gstinSchema = z
   .string()

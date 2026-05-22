@@ -1,52 +1,16 @@
 /**
- * Indian states + UTs as a fixed list for the operator console.
- * Used for: tenant compliance state (drives CGST/SGST vs IGST), registered
- * address state, future dealer master.
- *
- * Source: GSTN state codes — order matches the state-code sequence so the
- * code can be derived from the GSTIN by humans reading the dropdown.
+ * Indian states are canonicalised as ISO 3166-2:IN codes — the single source
+ * of truth lives in `@dealerlink/schemas` (DEV.33). Re-exported here so the
+ * operator console keeps one import path; never hardcode state strings.
  */
-export const INDIAN_STATES = [
-  'Andhra Pradesh',
-  'Arunachal Pradesh',
-  'Assam',
-  'Bihar',
-  'Chhattisgarh',
-  'Goa',
-  'Gujarat',
-  'Haryana',
-  'Himachal Pradesh',
-  'Jharkhand',
-  'Karnataka',
-  'Kerala',
-  'Madhya Pradesh',
-  'Maharashtra',
-  'Manipur',
-  'Meghalaya',
-  'Mizoram',
-  'Nagaland',
-  'Odisha',
-  'Punjab',
-  'Rajasthan',
-  'Sikkim',
-  'Tamil Nadu',
-  'Telangana',
-  'Tripura',
-  'Uttar Pradesh',
-  'Uttarakhand',
-  'West Bengal',
-  // Union territories
-  'Andaman and Nicobar Islands',
-  'Chandigarh',
-  'Dadra and Nagar Haveli and Daman and Diu',
-  'Delhi',
-  'Jammu and Kashmir',
-  'Ladakh',
-  'Lakshadweep',
-  'Puducherry',
-] as const;
-
-export type IndianState = (typeof INDIAN_STATES)[number];
+export {
+  INDIAN_STATES,
+  INDIAN_STATE_CODES,
+  INDIAN_STATE_OPTIONS,
+  formatStateLabel,
+  getStateName,
+  type IndianStateCode,
+} from '@dealerlink/schemas';
 
 export const DEFAULT_DOC_PREFIXES = {
   quotation: 'QT',

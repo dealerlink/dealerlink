@@ -5,14 +5,19 @@ import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { INDIAN_STATES } from '@/lib/admin/constants';
+import { StateSelect } from '@/components/ui/state-select';
 import {
   deactivateDealer,
   reactivateDealer,
   updateDealer,
   updateDealerCommercial,
 } from '@/lib/actions/dealers';
-import { DEALER_CATEGORIES, DEALER_RISK_LEVELS, DEALER_TYPES } from '@dealerlink/schemas';
+import {
+  DEALER_CATEGORIES,
+  DEALER_RISK_LEVELS,
+  DEALER_TYPES,
+  formatStateLabel,
+} from '@dealerlink/schemas';
 
 interface DealerView {
   id: string;
@@ -290,12 +295,10 @@ export function DealerDetailSections({
               onChange={(v) => set('addressLine2', v)}
             />
             <LabeledInput label="City" value={form.city ?? ''} onChange={(v) => set('city', v)} />
-            <LabeledSelect
-              label="State"
-              value={form.state ?? ''}
-              onChange={(v) => set('state', v)}
-              options={['', ...INDIAN_STATES]}
-            />
+            <label className="block">
+              <div className="text-mute mb-1 text-[11px] uppercase tracking-[0.06em]">State</div>
+              <StateSelect value={form.state ?? ''} onChange={(v) => set('state', v)} />
+            </label>
             <LabeledInput
               label="Pincode"
               value={form.pincode ?? ''}
@@ -307,7 +310,7 @@ export function DealerDetailSections({
             <Field label="Line 1" value={dealer.addressLine1} />
             <Field label="Line 2" value={dealer.addressLine2} />
             <Field label="City" value={dealer.city} />
-            <Field label="State" value={dealer.state} />
+            <Field label="State" value={dealer.state ? formatStateLabel(dealer.state) : null} />
             <Field label="Pincode" value={dealer.pincode} mono />
             <Field label="Country" value={dealer.country} />
           </>
