@@ -1,5 +1,7 @@
 # CLAUDE.md — Dealerlink Implementation Guide
 
+> Last reviewed: 2026-05-23 — Stage C in progress
+
 > **For Claude Code:** This is your authoritative reference for building Dealerlink. Read this file end-to-end before writing any code. When the BRD and this file conflict, this file wins. When in doubt about a decision, the answer is in here — don't ask, look.
 
 ## Reading Order
@@ -146,16 +148,16 @@ These are **not up for debate** during Phase 1. If a library would be a better f
 
 ### External & Ops
 
-| Concern              | Pick                                     | Notes                                                                              |
-| -------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
-| Hosting              | **DigitalOcean App Platform**, Bangalore | Web app on App Platform; workers on a small Droplet OR same App Platform component |
-| File storage         | **DO Spaces**                            | S3-compatible, India region                                                        |
-| Email send + receive | **Resend**                               | Webhooks for inbound + delivery                                                    |
-| CI/CD                | **GitHub Actions**                       | Auto-deploy `main` to DO App Platform                                              |
-| Errors + APM         | **Sentry**                               | Frontend + both Node processes                                                     |
-| Uptime               | **Better Stack**                         | Pings `/health` every 30s                                                          |
-| Infra metrics        | **DO Monitoring**                        | Built-in, just enable alerts                                                       |
-| App logs             | **Axiom**                                | Structured JSON from stdout                                                        |
+| Concern              | Pick                                     | Notes                                                                                                                                          |
+| -------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hosting              | **DigitalOcean App Platform**, Bangalore | Web + workers both on DO App Platform components (BLR1 region). Web: basic-xs (buildpack). Workers: basic-xxs (custom Dockerfile per ADR-013). |
+| File storage         | **DO Spaces**                            | S3-compatible, India region                                                                                                                    |
+| Email send + receive | **Resend**                               | Webhooks for inbound + delivery                                                                                                                |
+| CI/CD                | **GitHub Actions**                       | Auto-deploy `main` to DO App Platform                                                                                                          |
+| Errors + APM         | **Sentry**                               | Frontend + both Node processes                                                                                                                 |
+| Uptime               | **Better Stack**                         | Pings `/health` every 30s                                                                                                                      |
+| Infra metrics        | **DO Monitoring**                        | Built-in, just enable alerts                                                                                                                   |
+| App logs             | **Axiom**                                | Structured JSON from stdout                                                                                                                    |
 
 ### Explicitly NOT used in Phase 1
 
@@ -333,7 +335,7 @@ A short list of mistakes that would meaningfully hurt the project:
 - ❌ Don't store email bodies as TEXT columns longer than 1MB — move to Spaces if needed.
 - ❌ Don't use Postgres sequences for document numbers — they aren't tenant-scoped.
 - ❌ Don't write to `audit_log` from application code — use Postgres triggers.
-- ❌ Don't render PDFs on the web process — always queue to the workers process.
+- ❌ Don't render PDFs on the web process — always queue to the workers process (see ADR-013 for the queue-isolation contract).
 - ❌ Don't use HTML `<form>` tags inside React components in a way that conflicts with Server Actions' expectations — follow Next.js patterns.
 - ❌ Don't add new external services without first checking if Postgres can do the job.
 
