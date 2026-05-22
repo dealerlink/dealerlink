@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { stateCodeInputSchema } from './states';
+
 export const QUOTATION_STATUSES = [
   'draft',
   'sent',
@@ -19,12 +21,11 @@ export type QuotationSentVia = (typeof QUOTATION_SENT_VIA)[number];
 const trimmed = z.string().trim();
 
 /**
- * State label (Indian). Seed data uses full state names ("Maharashtra"),
- * not 2-letter codes — the tax engine just needs an exact-match string.
- * Day 9 may introduce a normalized 2-letter code; until then, accept any
- * non-empty short label.
+ * Place-of-supply override (Indian state). Canonicalised to an ISO 3166-2:IN
+ * code (DEV.33) — accepts a code or a full name and normalises to the code, so
+ * the tax engine always compares like-for-like with the tenant state.
  */
-export const stateCodeSchema = trimmed.min(2, 'State is required').max(50);
+export const stateCodeSchema = stateCodeInputSchema;
 
 /**
  * Single line input. `gstRate` is captured from product.gst_rate at the

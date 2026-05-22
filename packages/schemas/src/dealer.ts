@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { optionalStateCodeInputSchema } from './states';
+
 export const DEALER_TYPES = ['retailer', 'wholesaler', 'installer', 'epc', 'other'] as const;
 export const DEALER_CATEGORIES = ['A', 'B', 'C'] as const;
 export const DEALER_RISK_LEVELS = ['low', 'medium', 'high'] as const;
@@ -31,7 +33,10 @@ export const dealerCoreSchema = z.object({
   addressLine1: trimmed.max(255).optional().or(z.literal('')),
   addressLine2: trimmed.max(255).optional().or(z.literal('')),
   city: trimmed.max(100).optional().or(z.literal('')),
-  state: trimmed.max(100).optional().or(z.literal('')),
+  // ISO 3166-2:IN code (DEV.33). Lenient: the dealer dropdown submits a code,
+  // but CSV import may carry a full name — both normalise to a canonical code;
+  // blank/absent → undefined (persisted as NULL).
+  state: optionalStateCodeInputSchema,
   pincode: trimmed
     .regex(pincodeRegex, 'Pincode must be 6 digits and not start with 0')
     .or(z.literal(''))
@@ -88,7 +93,8 @@ export const dealerListFilterSchema = z.object({
   type: z.enum(DEALER_TYPES).optional(),
   category: z.enum(DEALER_CATEGORIES).optional(),
   riskLevel: z.enum(DEALER_RISK_LEVELS).optional(),
-  state: trimmed.max(100).optional(),
+  // Accept a code or a name in the URL; normalise to a code to match storage.
+  state: optionalStateCodeInputSchema,
   tag: trimmed.max(40).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),

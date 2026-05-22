@@ -48,6 +48,36 @@ describe('createDealerSchema', () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it('normalises a state name to its ISO code (CSV import path)', () => {
+    const r = createDealerSchema.safeParse({
+      legalName: 'X Co',
+      displayName: 'X Co',
+      state: 'Maharashtra',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.state).toBe('MH');
+  });
+
+  it('accepts a state code as-is (dropdown path)', () => {
+    const r = createDealerSchema.safeParse({ legalName: 'X Co', displayName: 'X Co', state: 'KA' });
+    expect(r.success && r.data.state).toBe('KA');
+  });
+
+  it('treats a blank state as absent (→ NULL)', () => {
+    const r = createDealerSchema.safeParse({ legalName: 'X Co', displayName: 'X Co', state: '' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.state).toBeUndefined();
+  });
+
+  it('rejects an unknown state', () => {
+    const r = createDealerSchema.safeParse({
+      legalName: 'X Co',
+      displayName: 'X Co',
+      state: 'Atlantis',
+    });
+    expect(r.success).toBe(false);
+  });
 });
 
 describe('updateDealerCommercialSchema', () => {
