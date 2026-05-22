@@ -7,7 +7,7 @@
 > matters, **why** each decision was made.
 >
 > **Companion documents:** `PROJECT_PLAN.md` (the canonical tracker),
-> `DECISIONS.md` (13 ADRs), `DEVIATIONS.md` (67 build deviations),
+> `DECISIONS.md` (13 ADRs), `DEVIATIONS.md` (69 build deviations),
 > `CLAUDE.md` (implementation guide), `docs/RUNBOOKS.md` (operator
 > procedures), `docs/TESTING.md`, `docs/DEPLOYMENT.md`, `docs/PDF_PIPELINE.md`,
 > `docs/STAGING_ENV.md`.
@@ -23,8 +23,8 @@
 | Day | Task                                   | Status  | Date       |
 | --- | -------------------------------------- | ------- | ---------- |
 | C.0 | Staging deploy                         | ✅      | 2026-05-22 |
-| C.1 | Force-password-change (closes DEV.56)  | ⏳ next | —          |
-| C.2 | State normalization (closes DEV.33)    | ⏳      | —          |
+| C.1 | Force-password-change (closes DEV.56)  | ✅      | 2026-05-23 |
+| C.2 | State normalization (closes DEV.33)    | ⏳ next | —          |
 | C.3 | Pilot staging handoff + UX walkthrough | ⏳      | 2026-05-24 |
 | C.4 | Security audit                         | ⏳      | 2026-05-25 |
 | C.5 | Performance test + Stage D handoff     | ⏳      | 2026-05-26 |
@@ -60,6 +60,29 @@
 - **DEV.65–DEV.67** — cold-start mitigations: corepack → `npm install -g pnpm`
   in the Dockerfile (DEV.65), render timeout 60s → 120s + a safe non-blocking
   eager-warm (DEV.66), idle-recycle 10m → 45m (DEV.67).
+
+### C.1 — Force-password-change ✅ (2026-05-23) — closes DEV.56
+
+The force-password-change flow that CLAUDE.md §6 / ADR-010 described but never
+shipped is now live. Most of the state plumbing existed since Day 4 (the
+`must_change_password` column, the Lucia attribute, both provisioning flows
+setting the flag); C.1 added the missing rotation UI and the enforcement.
+
+- **Rotation screen** `app/(auth)/change-password/` + server action
+  `lib/auth/change-password.ts`: verifies the current (temporary) password,
+  enforces the §6 policy via a shared Zod schema (`lib/auth/password-policy.ts`),
+  then updates the hash and clears the flag in one atomic UPDATE. The `users`
+  audit trigger records the change with `password_hash` redacted; no app-code
+  audit writes. Emits `user.password_changed { forced }` to Axiom.
+- **Enforcement** is in `(app)/layout.tsx` + `admin/layout.tsx`, **not** Edge
+  middleware (which can't resolve a Lucia session — **DEV.68**). The login
+  action routes flagged users to `/change-password` on sign-in.
+- **Coverage:** `operator-onboarding.spec.ts` now asserts the real forced flow;
+  `verify-day-c1.spec.ts` proves the full trapdoor (forced redirect → rotate →
+  unlock; old temp password rejected). Seeded users (`must_change_password =
+false`) are unaffected and still log straight in.
+- **Deviations:** DEV.68 (layout vs Edge enforcement), DEV.69 (policy follows
+  §6, not the plan's looser wording).
 
 ---
 
@@ -126,14 +149,14 @@ none blocks Stage B closing — but each is a real follow-up.
 
 ### Should be addressed in Stage C
 
-| Item                                  | Source         | What's needed                                                                                                                                                                                                                           |
-| ------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **State-code normalization**          | DEV.30, DEV.33 | `tenant_settings.state`, `dealers.state`, `quotations.*` store full state names ("Maharashtra") not 2-letter codes. Add a lookup, migrate rows, tighten the CHECK constraint. Blocks Phase-2 GST Returns API. **🔄 In progress — C.2.** |
-| **Force-password-change route**       | DEV.56 (c)     | CLAUDE.md §6 describes a rotation screen gated by `users.must_change_password`. The flag is set + on the session, but **no route ships** — login always lands on `/dashboard`. Build the rotation screen. **🔄 In progress — C.1.**     |
-| **Dealer/product detail RSC warning** | DEV.56 (d)     | `/dealers/[id]` and `/catalog/[id]` pass a function prop (`formatINR`) into a Client Component → a non-fatal dev error. Pass strings or move the import.                                                                                |
-| **Day-13 seed pre-stamped inventory** | DEV.45         | The Day-13 seed sets ~81 items to `dispatched`/`delivered` without `dispatch_serials` rows. Backfill or scope invariant queries.                                                                                                        |
-| **DB-test residue in shared dev DB**  | DEV.31         | Integration tests leave non-seed rows in `dealerlink_dev`. Run DB tests in a rolled-back transaction, or use a disposable DB.                                                                                                           |
-| **CSV import per-row error report**   | DEV.20 / R.17  | Atomic imports surface only the first failing row. Add a row identifier.                                                                                                                                                                |
+| Item                                  | Source         | What's needed                                                                                                                                                                                                                                                                   |
+| ------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **State-code normalization**          | DEV.30, DEV.33 | `tenant_settings.state`, `dealers.state`, `quotations.*` store full state names ("Maharashtra") not 2-letter codes. Add a lookup, migrate rows, tighten the CHECK constraint. Blocks Phase-2 GST Returns API. **🔄 In progress — C.2.**                                         |
+| **Force-password-change route**       | DEV.56 (c)     | CLAUDE.md §6 describes a rotation screen gated by `users.must_change_password`. The flag is set + on the session, but **no route shipped** in Stage B — login always landed on `/dashboard`. Rotation screen built + enforced in the layouts. **✅ Closed — C.1 (2026-05-23).** |
+| **Dealer/product detail RSC warning** | DEV.56 (d)     | `/dealers/[id]` and `/catalog/[id]` pass a function prop (`formatINR`) into a Client Component → a non-fatal dev error. Pass strings or move the import.                                                                                                                        |
+| **Day-13 seed pre-stamped inventory** | DEV.45         | The Day-13 seed sets ~81 items to `dispatched`/`delivered` without `dispatch_serials` rows. Backfill or scope invariant queries.                                                                                                                                                |
+| **DB-test residue in shared dev DB**  | DEV.31         | Integration tests leave non-seed rows in `dealerlink_dev`. Run DB tests in a rolled-back transaction, or use a disposable DB.                                                                                                                                                   |
+| **CSV import per-row error report**   | DEV.20 / R.17  | Atomic imports surface only the first failing row. Add a row identifier.                                                                                                                                                                                                        |
 
 ### Deferred to Phase 2 (architecture already supports each)
 
@@ -335,4 +358,4 @@ the matching production risks.
 
 _Stage B closed 2026-05-16 · handoff prepared on Day 18 · frozen at the
 `stage-b-complete` git tag. · Stage C progress (§0) is maintained live —
-last updated 2026-05-23 (C.0 complete)._
+last updated 2026-05-23 (C.1 complete)._

@@ -699,16 +699,24 @@ the whole procure→stock→reserve→dispatch chain. Also latent since Day 6.
 **Fix:** rewritten with drizzle's`inArray(inventoryItems.serialNumber,
 trimmed)`, which renders a bound `IN (…)` list.
 
-### (c) CARRIED FORWARD — no force-password-change route
+### (c) ✅ CLOSED by Stage C Day C.1 (2026-05-23) — force-password-change route
 
 CLAUDE.md §6 and the Day-4 plan describe a force-password-change screen gated
 by `users.must_change_password`. The flag is set on operator-provisioned
 admins and on password resets, and it rides the Lucia session attributes —
-but **no rotation route ships in Phase 1**: the login action redirects every
+but **no rotation route shipped in Stage B**: the login action redirected every
 user to `/dashboard` (or `/admin` for operators) regardless. The
-operator-onboarding spec (R.12) therefore asserts the new admin reaches the
-dashboard, not a rotation screen. Building the rotation UI is a Stage C / Day
-4-debt item — see `docs/STAGE_C_HANDOFF.md` §3.
+operator-onboarding spec (R.12) therefore asserted the new admin reaches the
+dashboard, not a rotation screen.
+
+**Closure (Stage C Day C.1):** the force-password-change flow is now
+implemented per CLAUDE.md §6 + ADR-010. The rotation screen
+(`app/(auth)/change-password`) + server action (`lib/auth/change-password.ts`)
+ship; the `(app)`/`admin` layouts enforce the trapdoor (see DEV.68 for why
+enforcement is in the layouts, not Edge middleware); the login action routes
+flagged users there on sign-in. The operator-onboarding spec from Day 18 was
+updated to verify the new behaviour, and `verify-day-c1.spec.ts` covers the
+full trapdoor (forced redirect → rotate → unlock; old temp password rejected).
 
 ### (d) CARRIED FORWARD — dealer/product detail pages pass a function prop
 
@@ -721,8 +729,8 @@ frozen scope. Recorded for Stage C: pass formatted strings, or move the
 formatter import into the client component.
 
 **Permanent fix:** (a) + (b) are fixed and now exercised end-to-end by the
-critical-path E2E on every `pnpm verify` run; (c) + (d) are in the Stage C
-handoff backlog.
+critical-path E2E on every `pnpm verify` run; (c) is closed by Stage C Day C.1
+(see above); (d) remains in the Stage C handoff backlog.
 
 ## DEV.57 — Stage C Day 1 — `00-app-role.sql` failed on DO Managed Postgres
 
@@ -1116,3 +1124,67 @@ the inputs. A roomier instance would remove the deploy-window slowness and let
 the timeout return to a tighter value. Instance size is held this stage per the
 cost guardrail.
 **Resolution:** Permanent (mitigations); production sizing review = Stage D.
+
+## DEV.68 — Stage C Day C.1 — force-password-change enforced in layouts, not Edge middleware
+
+**Date:** 2026-05-23
+**Spec said:** Stage C Day C.1 A2.3 — "Update middleware to check
+`must_change_password`; redirect to `/change-password` unless the path is
+`/change-password` or `/logout`."
+**Deviation:** The redirect is enforced in `apps/web/app/(app)/layout.tsx` and
+`apps/web/app/admin/layout.tsx` — the Server-Component layouts — **not** in
+`apps/web/middleware.ts`.
+
+**Why:** Next.js middleware runs on the **Edge runtime**, which cannot touch
+Drizzle or the Lucia DB adapter (this is already documented at the top of
+`middleware.ts` and was established as a constraint on Day 3). The session
+cookie is an opaque id; resolving it to `users.must_change_password` requires a
+DB lookup, which only the Node runtime can do. Edge middleware therefore
+**cannot** read the flag. The layouts are the project's existing
+session-resolution + auth-routing boundary ("Actual tenant existence + role
+checks happen in (app)/layout.tsx and /admin/layout.tsx"), so the trapdoor
+belongs there.
+
+**How it satisfies the guardrails:**
+
+- Every authenticated surface routes through one of the two layouts, so a
+  flagged user is bounced to `/change-password` from any app/admin route — the
+  "force".
+- `/change-password` lives in the `(auth)` route group, which is **not** wrapped
+  by either guarded layout, so the forced redirect can never loop.
+- The sign-out escape is the `logout` Server Action invoked from the rotation
+  form (there is no standalone `/logout` route in this codebase; logout has
+  always been an action), so the "allow /logout" intent is preserved.
+- The login action additionally routes flagged users to `/change-password` on
+  sign-in, so the entry point is covered too.
+
+`middleware.ts` carries a comment pointing readers to the layouts. Mutations
+are funneled through the UI behind these guards; if a future requirement needs
+the gate to also block direct Server-Action calls, that would be added in the
+action wrappers (`tenantAction`/`operatorAction`), not the Edge layer.
+
+**Impact:** None functional — the trapdoor works as specified and is covered by
+`verify-day-c1.spec.ts` + the updated `operator-onboarding.spec.ts`. The only
+difference from the literal plan wording is the enforcement file.
+**Resolution:** Intentional, permanent — dictated by the Edge-runtime
+constraint.
+
+## DEV.69 — Stage C Day C.1 — password policy follows CLAUDE.md §6, not the plan's looser wording
+
+**Date:** 2026-05-23
+**Spec said:** Stage C Day C.1 A2.2 — new password "≥8 chars, must include at
+least 1 letter + 1 digit OR be ≥16 chars — flexible policy".
+**Deviation:** The implemented policy is **CLAUDE.md §6**: min 8 chars, ≥1
+uppercase, ≥1 number, ≥1 special character (`lib/auth/password-policy.ts`).
+
+**Why:** CLAUDE.md is the authoritative implementation reference and §6 already
+specifies the product password policy; A4.1 itself points at §6 as "the spec".
+The temporary-password generator (`lib/admin/credentials.ts`) already produces
+upper/lower/digit/symbol, so §6 keeps the whole auth surface internally
+consistent. The §6 rule is also strictly safer than the plan's looser
+"flexible" wording (which would have admitted, e.g., a 16-char all-lowercase
+string). The single Zod schema is shared by the client form and the server
+action so the two cannot drift.
+**Impact:** Slightly stricter than the plan text; matches the documented
+product policy and the temp-password shape.
+**Resolution:** Intentional — defer to CLAUDE.md §6.

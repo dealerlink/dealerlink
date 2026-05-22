@@ -81,6 +81,43 @@ Short, operator-facing procedures for actions that ship with the admin app. Each
 
 ---
 
+## R3a — A user forgot the password they set themselves
+
+**When to use:** A user already rotated their temporary password (so the welcome email's password no longer works) and has now forgotten the password they chose.
+
+**Time:** <1 minute.
+
+**Steps:**
+
+1. This is the **same operation as R3** — there is no separate "forgot password" self-service flow in Phase 1.
+2. Operator: Tenant detail → **Users** → key icon on the user's row → confirm. (A tenant admin requests this through their operator.)
+3. The user's sessions are invalidated, a fresh temporary password is generated, `users.must_change_password` is set, and a reset email is queued.
+4. The user signs in with the new temporary password and is forced through the rotation screen (see "First login experience" in `docs/WORKFLOWS.md`) to set a new password of their own.
+
+**Note:** Operators never see or store the user's chosen password — only the one-time temporary password they hand off. A self-service "forgot password" email link is a Phase 2 item (ADR-010 rejected magic-links for Phase 1).
+
+---
+
+## R3b — Disabling force-password-change for testing (dev only)
+
+**When to use:** A local/dev test needs a user that logs straight into the app without the rotation screen. **Never do this in production** — it defeats the single-use guarantee on temporary credentials.
+
+**Time:** <30 seconds.
+
+**Steps:**
+
+1. Confirm you are pointed at the **dev** database (`dealerlink_dev`), not staging/production.
+2. Clear the flag directly:
+   ```sql
+   UPDATE users SET must_change_password = false WHERE email = '<user-email>';
+   ```
+   (Seed users already have `must_change_password = false`; this is only for users created via the provisioning flow during a test.)
+3. The user's next login lands on `/dashboard` (or `/admin`) directly.
+
+**Why this is dev-only:** in production the flag is a one-way trapdoor — it starts `true` for provisioned/reset users and is cleared only by a successful password change. Manually clearing it would let a temporary password become a permanent one. Production operators have no direct DB access (ADR-002); the supported reset path is R3.
+
+---
+
 ## R4 — Rotating the inbound email token
 
 **When to use:** The tenant's inbound BCC address is compromised (e.g., leaked in a public document) or they request a fresh one.

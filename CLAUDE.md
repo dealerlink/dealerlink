@@ -1,6 +1,6 @@
 # CLAUDE.md — Dealerlink Implementation Guide
 
-> Last reviewed: 2026-05-23 — Stage C in progress
+> Last reviewed: 2026-05-23 — Stage C in progress (C.1 force-password-change closed)
 
 > **For Claude Code:** This is your authoritative reference for building Dealerlink. Read this file end-to-end before writing any code. When the BRD and this file conflict, this file wins. When in doubt about a decision, the answer is in here — don't ask, look.
 
@@ -276,6 +276,14 @@ The recalc happens in a **pure function** in `packages/tax/`. UI never duplicate
   of the app. Set by operator-driven provisioning + password resets
   (ADR-010). Cleared on successful rotation. Surfaced on the Lucia session
   attributes so client code can route appropriately.
+  - **Implementation:** the rotation screen is `apps/web/app/(auth)/change-password/`
+    and the server action is `apps/web/lib/auth/change-password.ts`. The
+    trapdoor is enforced in `apps/web/app/(app)/layout.tsx` and
+    `apps/web/app/admin/layout.tsx` — NOT in `middleware.ts`, because the Edge
+    runtime cannot resolve a Lucia session (DEV.68). The login action routes
+    flagged users to `/change-password` on sign-in. The §6 password policy
+    lives as a shared Zod schema in `apps/web/lib/auth/password-policy.ts`.
+    Closed by Stage C Day C.1 (DEV.56).
 
 ### Four fixed roles
 

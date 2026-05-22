@@ -73,6 +73,18 @@ Per ADR-002 operators provision tenants and occasionally need to look inside one
 
 Tenant users never see the banner and never run in read-only mode — the cookie is set only by `enterImpersonation()` which requires the `operator` role.
 
+## First login experience for new users (Stage C C.1)
+
+Every operator- or admin-provisioned user is created with a **temporary password** and `users.must_change_password = true` (ADR-010). On first sign-in they are forced through the rotation screen before they can reach any workspace. The flow:
+
+1. An **operator** provisions a tenant (`/admin/tenants/new`) — or a **tenant admin** adds a user (`/admin/tenants/[id]/users`, role-gated to operators in the admin app). The system generates a 12-char temporary password, stores only the argon2 hash, sets `must_change_password = true`, and queues a welcome email carrying the temporary password (the operator UI also shows it once).
+2. The user signs in with their email + the temporary password. The login action sees the flag and redirects to **`/change-password`** instead of `/dashboard`/`/admin`.
+3. The rotation screen (`app/(auth)/change-password`) asks for the **temporary password** (current) + a new password (twice). The new password must satisfy the §6 policy (min 8 · 1 uppercase · 1 number · 1 special), shown as a live strength meter + checklist, and must differ from the temporary one.
+4. On submit, `changePassword` verifies the temporary password, then updates the hash **and** clears `must_change_password` in one atomic UPDATE (the `users` audit trigger records it with the hash redacted). The user is redirected to their home surface (`/dashboard`, or `/admin` for operators) and continues in the same session.
+5. While the flag is set, the `(app)` and `admin` layouts bounce **any** route back to `/change-password` — the user cannot escape except by changing the password or signing out. (Enforcement is in the layouts, not Edge middleware, which cannot resolve a Lucia session — DEV.68.)
+
+The reset-password runbook (R3) reuses the same machinery: a new temporary password + `must_change_password = true` + invalidated sessions, so a reset user goes through this exact flow again.
+
 ## Quotation lifecycle (Day 8)
 
 A quotation moves through six statuses:
