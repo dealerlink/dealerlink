@@ -14,7 +14,9 @@
  *     generated temporary password.
  *  6. The new tenant appears in the /admin/tenants list.
  *  7. Sign out, then sign in as the freshly-created admin using the
- *     temporary password.
+ *     temporary password. The new admin is FORCED through the
+ *     password-rotation screen (must_change_password = true) before reaching
+ *     the app; after rotating, they land on the dashboard.
  *  8. The new admin reaches the dashboard — an empty workspace (no seeded
  *     pipeline data), confirming tenant isolation from `demo`/`sample`.
  *
@@ -23,13 +25,14 @@
  * "newtenant-<run>", so the spec is idempotent and never collides with a
  * previous run (slug, GSTIN, and admin email are all unique).
  *
- * ── Known gap (recorded for Stage C) ──────────────────────────────────────
- * CLAUDE.md §6 describes a force-password-change screen gated by
- * `users.must_change_password`. The flag is set on the new admin and is
- * carried on the Lucia session, but no rotation *route* ships in Phase 1 —
- * login always lands on /dashboard. This spec therefore asserts the new
- * admin reaches the dashboard; the rotation UI is a carried-forward item
- * (see DEVIATIONS.md DEV.56 and docs/STAGE_C_HANDOFF.md).
+ * ── Force-password-change (Stage C Day C.1, closes DEV.56) ─────────────────
+ * CLAUDE.md §6 / ADR-010 specify a force-password-change screen gated by
+ * `users.must_change_password`. As of Stage C Day C.1 the rotation route
+ * (app/(auth)/change-password) ships and the (app)/admin layouts enforce it.
+ * This spec now verifies the real behaviour: login with the temporary
+ * password lands on /change-password, and only after rotating does the new
+ * admin reach the dashboard. (Was a carried-forward gap; see DEVIATIONS.md
+ * DEV.56 and docs/STAGE_C_HANDOFF.md.)
  */
 import { expect, test } from '@playwright/test';
 
@@ -137,16 +140,25 @@ test.describe('Operator onboarding — provision a tenant from scratch (R.12)', 
       await expect(page.getByText(DISPLAY_NAME).first()).toBeVisible({ timeout: 15_000 });
     });
 
-    // ── 7. Sign in as the new admin ──────────────────────────────────────
+    // ── 7. Sign in as the new admin — forced through rotation ────────────
+    const NEW_PASSWORD = `Rotated9!${RUN}`;
     await test.step('7. the new admin signs in with the temporary password', async () => {
       await page.context().clearCookies();
       await page.goto(`/login?tenant=${SLUG}`);
       await page.fill('input[type="email"]', ADMIN_EMAIL);
       await page.fill('input[type="password"]', tempPassword);
       await page.click('button[type="submit"]');
-      // No force-password-change route ships in Phase 1 (see file header) —
-      // the new admin lands on the dashboard. The must_change_password flag
-      // is still set and rides the session for the future rotation screen.
+      // must_change_password is set on operator-provisioned admins, so login
+      // routes to the rotation screen — NOT the dashboard (DEV.56 closed).
+      await page.waitForURL(/change-password/, { timeout: 20_000 });
+    });
+
+    await test.step('7b. the admin rotates the temporary password', async () => {
+      await page.locator('#currentPassword').fill(tempPassword);
+      await page.locator('#newPassword').fill(NEW_PASSWORD);
+      await page.locator('#confirmPassword').fill(NEW_PASSWORD);
+      await page.getByRole('button', { name: /Update password/i }).click();
+      // Flag cleared → the admin finally reaches the dashboard.
       await page.waitForURL(/dashboard/, { timeout: 20_000 });
     });
 
