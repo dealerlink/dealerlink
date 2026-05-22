@@ -43,9 +43,12 @@ async function initBoss(): Promise<PgBoss> {
         .replace(/\?&/, '?')
         .replace(/\?$/, '')
     : url;
+  // Cap pg-boss's pool on small managed DB tiers (DEV.61).
+  const max = Number(process.env.PGBOSS_POOL_MAX) || undefined;
   const boss = new PgBoss({
     connectionString: cleanedUrl,
     supervise: false,
+    ...(max ? { max } : {}),
     ...(sslRequested ? { ssl: { rejectUnauthorized: false } } : {}),
   });
   boss.on('error', (err) => {

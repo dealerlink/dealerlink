@@ -57,9 +57,13 @@ export async function startBoss(): Promise<PgBoss> {
         .replace(/\?&/, '?')
         .replace(/\?$/, '')
     : url;
+  // Small managed DB tiers have a tight connection budget shared with the
+  // web process — cap pg-boss's pool. See DEV.61.
+  const maxParsed = Number(process.env.PGBOSS_POOL_MAX);
+  const maxOpt = Number.isFinite(maxParsed) && maxParsed > 0 ? { max: maxParsed } : {};
   const instance = sslRequested
-    ? new PgBoss({ connectionString: cleanedUrl, ssl: { rejectUnauthorized: false } })
-    : new PgBoss(url);
+    ? new PgBoss({ connectionString: cleanedUrl, ssl: { rejectUnauthorized: false }, ...maxOpt })
+    : new PgBoss({ connectionString: url, ...maxOpt });
   instance.on('error', (err) => {
     logger.error({ err }, 'pg-boss error');
   });

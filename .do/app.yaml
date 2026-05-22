@@ -105,6 +105,19 @@ services:
       - key: TZ
         scope: RUN_TIME
         value: Asia/Kolkata
+      # Connection-pool caps for the basic 1GB DB tier (max_connections=25,
+      # ~6-8 used by DO itself; 3 reserved for superuser). web + workers share
+      # the budget, so keep the sum well under ~16. web here: 2+2+1 = 5.
+      # See DEV.61.
+      - key: DB_POOL_MAX
+        scope: RUN_TIME
+        value: '2'
+      - key: DB_ADMIN_POOL_MAX
+        scope: RUN_TIME
+        value: '2'
+      - key: PGBOSS_POOL_MAX
+        scope: RUN_TIME
+        value: '1'
 
 workers:
   - name: workers
@@ -154,6 +167,17 @@ workers:
       - key: TZ
         scope: RUN_TIME
         value: Asia/Kolkata
+      # Connection-pool caps — see DEV.61. workers shares the 25-connection
+      # budget with web. workers here: 2+1+2 = 5.
+      - key: DB_POOL_MAX
+        scope: RUN_TIME
+        value: '2'
+      - key: DB_ADMIN_POOL_MAX
+        scope: RUN_TIME
+        value: '1'
+      - key: PGBOSS_POOL_MAX
+        scope: RUN_TIME
+        value: '2'
 
 databases:
   # production: true attaches an existing managed cluster (provisioned out-of-

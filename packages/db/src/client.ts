@@ -14,13 +14,26 @@ declare global {
   var __dealerlinkAdminDb: ReturnType<typeof makeAdminDb> | undefined;
 }
 
+/**
+ * Pool sizing. Defaults suit a roomy production DB, but small managed tiers
+ * (e.g. DO's basic 1GB Postgres caps at max_connections=25, ~16 of which DO
+ * itself consumes) need much smaller pools shared across the web + workers
+ * processes. DB_POOL_MAX / DB_ADMIN_POOL_MAX let an environment cap them
+ * without a code change. See DEV.61.
+ */
+function poolMax(envKey: 'DB_POOL_MAX' | 'DB_ADMIN_POOL_MAX', fallback: number): number {
+  const raw = process.env[envKey];
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 function makeClient(envKey: 'DATABASE_URL' | 'DATABASE_DIRECT_URL') {
   const url = process.env[envKey];
   if (!url) {
     throw new Error(`${envKey} is not set`);
   }
   return postgres(url, {
-    max: process.env.NODE_ENV === 'production' ? 20 : 10,
+    max: poolMax('DB_POOL_MAX', process.env.NODE_ENV === 'production' ? 20 : 10),
     idle_timeout: 30,
     connect_timeout: 10,
     prepare: false,
@@ -40,7 +53,7 @@ function makeAdminDb() {
   const client =
     globalThis.__dealerlinkAdminPg ??
     postgres(url!, {
-      max: process.env.NODE_ENV === 'production' ? 5 : 3,
+      max: poolMax('DB_ADMIN_POOL_MAX', process.env.NODE_ENV === 'production' ? 5 : 3),
       idle_timeout: 30,
       connect_timeout: 10,
       prepare: false,

@@ -18,6 +18,9 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const PORT = Number(process.env.PORT ?? 3000);
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
+// When BASE_URL is a remote https host (staging/prod smoke), Playwright must
+// NOT spin up a local dev server — it should drive the deployed app directly.
+const IS_REMOTE = /^https:\/\//.test(BASE_URL);
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -46,12 +49,20 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'pnpm dev',
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+  // Only manage a local dev server when targeting localhost. Against a remote
+  // https BASE_URL (staging/prod smoke) Playwright drives the deployed app
+  // directly. exactOptionalPropertyTypes forbids `webServer: undefined`, so
+  // the key is spread in conditionally.
+  ...(IS_REMOTE
+    ? {}
+    : {
+        webServer: {
+          command: 'pnpm dev',
+          url: BASE_URL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+          stdout: 'pipe' as const,
+          stderr: 'pipe' as const,
+        },
+      }),
 });

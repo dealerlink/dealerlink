@@ -808,3 +808,63 @@ one we're exposed to.
 production when Stage D ships (DO Managed Postgres in prod has the same
 cert chain shape). No effect on local Docker (the URL has no `sslmode=`).
 **Resolution:** Permanent.
+
+> A follow-up to DEV.59: passing `ssl` alongside a `connectionString` that
+> carried `sslmode=require` did not work — pg-connection-string parsed
+> `sslmode` into its own ssl config and overrode ours, so the chain error
+> persisted on the second deploy. Final fix strips `sslmode=`/`ssl=true`
+> from the URL when we supply explicit ssl config, so only our
+> `{ rejectUnauthorized: false }` governs TLS.
+
+## DEV.60 — Stage C Day 1 — apex domain hardcoded, breaks staging prefix
+
+**Date:** 2026-05-22
+**Spec said:** C1c — staging.dealerlink.in renders; tenant subdomains route.
+**Found:** `resolveRequestScope` (the Edge-middleware tenant resolver)
+hardcoded `APEX_DOMAIN = 'dealerlink.in'` and assumed the apex is exactly
+two labels (`parts.length === 2`) with the tenant slug at `parts[0]`. Under
+a `staging.` prefix this misbehaves: `staging.dealerlink.in` (3 labels) was
+read as tenant `staging` (parts[0]), so the apex staging host rendered a
+broken login/dashboard for a nonexistent tenant. Tenant subdomains worked
+only by luck — `parts[0]` still grabbed the right slug.
+**Built:** The apex is now read from `NEXT_PUBLIC_APP_DOMAIN` (default
+`dealerlink.in`, so prod + dev are unchanged) and the production-host branch
+resolves relative to it: `host === apex → operator`; `<slug>.<apex>` →
+tenant `<slug>` (leftmost label); reserved sub under apex → operator.
+Staging sets `NEXT_PUBLIC_APP_DOMAIN=staging.dealerlink.in`. It is a
+`NEXT_PUBLIC_*` var so it's inlined into the Edge bundle, and must be set at
+BUILD time. Added 4 resolve tests for the staging apex + subdomains.
+**Why an env var, not a tenant value?** CLAUDE.md §8 forbids tenant-specific
+values in code/env, but the apex domain is an _environment_-level constant
+(one per deployment), not tenant-specific — so an env var is appropriate.
+**Impact:** Apex staging host correctly serves the operator/login surface;
+tenant subdomains resolve correctly and intentionally. Production behaviour
+unchanged (default apex).
+**Resolution:** Permanent.
+
+## DEV.61 — Stage C Day 1 — connection-pool exhaustion on basic DB tier
+
+**Date:** 2026-05-22
+**Spec said:** C1c/C1d — app serves traffic; /health green on subdomains.
+**Found:** `/api/health` intermittently returned 503 and request handlers
+logged `FATAL: remaining connection slots are reserved for roles with the
+SUPERUSER attribute` (PG 53300) and `rate-limit: check failed, failing
+open`. The DO basic 1GB Postgres tier caps `max_connections=25` (3 reserved
+for superuser), and DO's own monitoring consumes a chunk. The app's prod
+pools — `packages/db` app pool `max:20` + admin pool `max:5`, instantiated
+in BOTH the web and workers processes, plus pg-boss's own pool in each —
+far exceed that, so new `dealerlink_app` connections were rejected.
+**Built:** Pool sizes are now env-configurable and capped low on staging:
+`DB_POOL_MAX` (app pool) and `DB_ADMIN_POOL_MAX` (admin pool) in
+`packages/db/src/client.ts`; `PGBOSS_POOL_MAX` for both pg-boss call sites.
+Staging sets web = 2/2/1 and workers = 2/1/2 (≈10 app connections total,
+well under the ~16 the tier leaves for the app). Defaults are unchanged
+(20/5 prod, 10/3 dev) so local + a roomier prod DB are unaffected. Added
+`packages/db/scripts/staging-db-conns.mjs` to inspect the live budget.
+**Why not a connection pooler?** DO Managed Postgres offers a PgBouncer
+pool, but transaction-mode pooling breaks pg-boss (LISTEN/NOTIFY, advisory
+locks). Splitting pooled web queries from a direct pg-boss/Lucia path is a
+Stage D refinement; capping pool sizes is the right staging-scoped fix.
+**Impact:** /health stable on every host; no more 53300 errors. Production
+should either run a bigger DB tier or revisit pooling — tracked for Stage D.
+**Resolution:** Permanent (env-configurable); pooling revisited in Stage D.
