@@ -11,8 +11,8 @@ Stage C runs from May 21 to May 27, 2026 (6 working days + 1 buffer absorbed by 
 | ------------- | ------------------ | --------------------------------------------------------------- | ----------- |
 | C.0           | Thu-Fri May 21-22  | DO staging deploy + DNS + SSL + DEV.63 architectural correction | ✅ Done     |
 | Doc hygiene   | Sat May 23 morning | STAGE_C_HANDOFF evolution, ADR-013, CLAUDE.md cleanup           | ✅ Done     |
-| **C.1**       | **Sat May 23**     | **Force-password-change build (closes DEV.56)**                 | **Current** |
-| C.2           | Sun May 24         | State code normalization (closes DEV.33)                        | ⏳          |
+| C.1           | Sat May 23         | Force-password-change build (closes DEV.56)                     | ✅ Done     |
+| **C.2**       | **Sun May 24**     | **State code normalization (closes DEV.33)**                    | **Current** |
 | C.3           | Mon May 25         | Pilot staging handoff + UX walkthrough                          | ⏳          |
 | C.4           | Tue May 26         | Security audit (RLS + roles + secrets)                          | ⏳          |
 | C.5           | Wed May 27         | Performance testing + Stage D handoff                           | ⏳          |
@@ -49,13 +49,6 @@ Retrospective: this day was originally scoped as a single day. It ran into rough
 - DEV.66: cold-start timeout adjusted to 120s
 - DEV.67: idle-recycle widened to 45 minutes; worker sizing flagged for Stage D
 
-**Key learnings carried forward:**
-
-- Staging environment surfaces bugs that local dev cannot
-- DO App Platform monorepo + pnpm requires deliberate buildpack handling
-- Spec drift (repo vs live) needs a sync workflow in Stage D
-- Worker instance sizing is a Stage D data-driven decision based on real PDF load
-
 ---
 
 ## Doc Hygiene Pass (✅ Complete — May 23, 2026)
@@ -73,287 +66,406 @@ Brief mid-stream pass after C.0 to align docs with reality.
 
 ---
 
-## Stage C Day C.1 — Force-Password-Change (Current — Saturday May 23)
+## Stage C Day C.1 — Force-Password-Change (✅ Complete — May 23, 2026)
 
-**Goal:** Build the force-password-change flow per CLAUDE.md §6 and ADR-010. New users (operator-created tenant admins, admin-created sales/accounts/dispatch users) must change their temporary password before accessing the app. Closes DEV.56.
+**Commits:** b3e36e7 → 56c19fd
 
-**Estimated time:** 3-4 hours
+**What shipped:**
 
-**Deliverable:** New users created with `must_change_password=true` are redirected to `/change-password` on every request until they set a new password. Existing seed users have the flag false (already changed). Operator-onboarding spec from Stage B Day 18 updated to verify the new flow.
+- `must_change_password` flag implemented (column was already present from Day 4; today wired the UX flow)
+- `/change-password` route + form with strength meter, rule checklist, sign-out escape
+- Layout-level enforcement (Lucia session requires DB lookup; not Edge-runtime friendly per DEV.68)
+- Operator-onboarding spec rewritten to assert real forced flow
+- New `verify-day-c1.spec.ts` covers full trapdoor (forced redirect from any route → rotate → unlock; old temp rejected)
+- Password policy: min 8, 1 upper, 1 number, 1 special (per CLAUDE.md §6, stricter than prompt suggested — DEV.69)
+
+**Closures:** DEV.56 ✅ closed.
+**New deviations:** DEV.68 (layout-level enforcement, not Edge middleware), DEV.69 (stricter password policy than prompt).
+**Tests:** verify 54/54 (53 prior + verify-day-c1). ~715 unit tests.
+
+---
+
+## Stage C Day C.2 — State Code Normalization (Current — Sunday May 24)
+
+**Goal:** Normalize state storage from full names (`"Maharashtra"`) to 2-letter ISO 3166-2:IN codes (`"MH"`) across all 6 tables that store state strings. Tax engine parity must hold: every order's CGST/SGST/IGST totals are byte-identical before and after migration. Closes DEV.33.
+
+**Estimated time:** 4-5 hours
+
+**Deliverable:** All state columns store 2-letter codes. UI dropdowns show "Maharashtra" but submit "MH". Tax engine continues to work (inter-state determination is now case-insensitive 2-letter compare). Migration is reversible. All Day 1-18 E2E specs still pass. Critical-path E2E on staging still passes.
 
 ### Prompt for Claude Code
 
 ````
-You are implementing Stage C Day C.1 of the Dealerlink build. Stage C Day C.0 (staging deploy + DEV.63 architectural correction) completed on 2026-05-22. Doc hygiene pass completed on 2026-05-23. Today closes DEV.56 (carried forward from Stage B Day 18): the force-password-change flow that CLAUDE.md §6 describes but no route ships for.
+You are implementing Stage C Day C.2 of the Dealerlink build. Stage C Day C.1 (force-password-change) completed yesterday (commits b3e36e7..56c19fd). Today closes DEV.33 (carried forward since Stage B Day 11): the state code normalization from full names to 2-letter ISO 3166-2:IN codes.
+
+CRITICAL CONTEXT — TAX ENGINE PARITY:
+The tax engine (packages/tax) reads tenantState and placeOfSupply as opaque strings. Inter-state determination is `tenantState !== placeOfSupply`. As long as both sides of the comparison use the same format, the math is correct. Today's migration must preserve this invariant. The Day 9 parity test (every seeded quotation's stored totals match recomputation) MUST still pass after migration.
 
 PRELIMINARY:
 P.1. `pnpm preflight` confirms 17 green checks.
-P.2. Read CLAUDE.md §6 (multi-party logic + auth) — focus on the force-password-change spec. Confirm the rule is documented even if not implemented.
-P.3. Read DECISIONS.md ADR-010 (temp-pwd flow) — establishes the contract.
-P.4. Read DEVIATIONS.md DEV.56 — the gap this day closes.
-P.5. Read apps/web/middleware.ts (or wherever route-level middleware lives) — today's flow plugs into this.
-P.6. Read apps/web/lib/auth/ (Lucia integration from Day 2) — password update API.
-P.7. Read apps/web/tests/e2e/operator-onboarding.spec.ts — Day 18's spec that documented the current behavior; today's flow makes that spec's assertion true.
-P.8. Read packages/db/src/schema/users.ts — confirm `must_change_password` boolean field exists. If not, today adds it via migration.
+P.2. Read CLAUDE.md §5 (place of supply) — confirm the rule still says "consistent format on both sides."
+P.3. Read DEVIATIONS.md DEV.33 — the gap this day closes.
+P.4. Read packages/tax/src/state.ts — the existing `isInterState` helper. Today does NOT change this function; it stays opaque-string-compare.
+P.5. Read packages/db/src/schema/ for every table that has a state column:
+   - tenant_settings.state
+   - dealers.state
+   - quotations.tenant_state_at_issue + quotations.place_of_supply
+   - performa_invoices.tenant_state_at_issue + performa_invoices.place_of_supply
+   - orders.tenant_state_at_issue + orders.place_of_supply
+   - dispatches: confirm whether it stores state (probably inherited via order)
+P.6. Read apps/web/lib/states.ts (if exists) — the state list used by UI dropdowns.
+P.7. Read the existing parity test in packages/db/tests/ for quotations — today's migration must not break it.
 
 PRIMARY REFERENCES:
-1. CLAUDE.md §6 (force-password-change spec)
-2. ADR-010 (temp-pwd flow contract)
-3. apps/web/middleware.ts (route-level guards)
-4. apps/web/app/(auth)/login/page.tsx (existing login flow — this is the pattern to follow)
-5. Day 4 operator-onboarding logic (sets initial temp passwords)
-6. Day 2 Lucia integration (session + password APIs)
+1. CLAUDE.md §5 (state format, tax engine contract)
+2. DEVIATIONS.md DEV.33 (the gap)
+3. ISO 3166-2:IN — canonical 2-letter codes for Indian states (28 states + 8 UTs)
+4. packages/tax/src/state.ts (the engine's contract — DON'T change it)
+5. Day 9 parity test (must still pass)
 
 ==========================================================
-TRACK A — FORCE-PASSWORD-CHANGE (CHUNKED — 4 chunks)
+TRACK A — STATE NORMALIZATION (CHUNKED — 5 chunks)
 ==========================================================
 
-CHUNK C1a — Schema + state setup
+CHUNK C2a — State lookup helper + canonical list
 ---------------------------------
 
-A1.1. Audit current users schema:
-   - Check if `must_change_password` column exists on users table
-   - If yes: skip migration; confirm default value
-   - If no: add via new migration:
-     ```
-     ALTER TABLE users
-       ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT false;
-     ```
-   - Index not needed (boolean, low cardinality, only checked at session middleware)
+A1.1. Create packages/schemas/src/states.ts (or update if exists) with canonical ISO 3166-2:IN state list:
 
-A1.2. Update seed scripts:
-   - Existing seeded users (admin@demo.test, sales@demo.test, etc.) have `must_change_password=false` (they've "already changed" their password)
-   - This preserves test backwards compatibility — no E2E specs need to adapt
+```typescript
+export const INDIAN_STATES = {
+  AN: 'Andaman and Nicobar Islands',
+  AP: 'Andhra Pradesh',
+  AR: 'Arunachal Pradesh',
+  AS: 'Assam',
+  BR: 'Bihar',
+  CH: 'Chandigarh',
+  CT: 'Chhattisgarh', // some sources use CG; ISO 3166-2:IN uses CT
+  DH: 'Dadra and Nagar Haveli and Daman and Diu', // merged UT
+  DL: 'Delhi',
+  GA: 'Goa',
+  GJ: 'Gujarat',
+  HR: 'Haryana',
+  HP: 'Himachal Pradesh',
+  JK: 'Jammu and Kashmir',
+  JH: 'Jharkhand',
+  KA: 'Karnataka',
+  KL: 'Kerala',
+  LA: 'Ladakh',
+  LD: 'Lakshadweep',
+  MP: 'Madhya Pradesh',
+  MH: 'Maharashtra',
+  MN: 'Manipur',
+  ML: 'Meghalaya',
+  MZ: 'Mizoram',
+  NL: 'Nagaland',
+  OD: 'Odisha',
+  PY: 'Puducherry',
+  PB: 'Punjab',
+  RJ: 'Rajasthan',
+  SK: 'Sikkim',
+  TN: 'Tamil Nadu',
+  TG: 'Telangana',
+  TR: 'Tripura',
+  UP: 'Uttar Pradesh',
+  UT: 'Uttarakhand',
+  WB: 'West Bengal',
+} as const;
 
-A1.3. Update Day 4 operator-onboarding action:
-   - When operator creates a new tenant's admin user, set `must_change_password=true` AND generate the temporary password
-   - Log the temp password to email_delivery_log (queued for Day 14's pg-boss handler to actually email)
-   - Audit log entry captures: tenant created, admin user created with temp password
+export type IndianStateCode = keyof typeof INDIAN_STATES;
+export type IndianStateName = typeof INDIAN_STATES[IndianStateCode];
+````
 
-A1.4. Update Day 3+ admin-user-creation actions:
-   - When tenant admin creates a sales/accounts/dispatch user, set `must_change_password=true` AND generate temp password
-   - Same email log pattern
-   - This applies to all tenant-admin-level user creation flows
+A1.2. Create helpers:
 
-A1.5. Update existing tenant admins manually:
-   - Add to packages/db/src/seeds/index.ts: existing seeded admins explicitly set `must_change_password=false`
-   - This is intentional — they're the test users that scripts depend on
+- `getStateName(code: IndianStateCode): IndianStateName` — for UI display
+- `getStateCodeFromName(name: string): IndianStateCode | null` — for migration script (handles edge cases: case-insensitive, trimmed, common misspellings if any)
+- `isValidStateCode(code: string): code is IndianStateCode` — for validation
+- `normalizeStateInput(input: string): IndianStateCode | null` — accepts code OR name, returns canonical code (for backwards-compat input handling)
 
-A1.6. Generate migration via Drizzle. Verify migration applies cleanly to local DB.
+A1.3. Add a normalization-coverage test:
 
-A1.7. Verify locally: pnpm preflight green, pnpm typecheck green.
+- For each seeded value currently in the DB (Maharashtra, Karnataka, Gujarat, Tamil Nadu, Rajasthan, Assam, Uttar Pradesh, etc.), verify `getStateCodeFromName(value)` returns a non-null code
+- This is the migration safety net — if any seeded value doesn't map cleanly, we surface it now, not mid-migration
 
-COMMIT C1a: `feat(auth): chunk a — must_change_password schema + seed updates`
+A1.4. Verify pnpm typecheck green.
 
-CHUNK C1b — Route + form + server action
----------------------------------
+COMMIT C2a: `feat(states): chunk a — canonical state codes + normalization helpers`
 
-A2.1. Create app/(auth)/change-password/page.tsx:
-   - Auth required (Lucia session must exist; user must be logged in)
-   - Display form: current password, new password, confirm new password
-   - Note: "current password" is the temporary one they were emailed
-   - Submit calls changePassword server action
+## CHUNK C2b — Migration script (data migration, not schema change)
 
-A2.2. Create apps/web/lib/auth/change-password.ts server action:
-   - Input validation via Zod: current password, new password (≥8 chars, must include at least 1 letter + 1 digit OR be ≥16 chars — flexible policy), confirm password matches
-   - Verify current password via Lucia
-   - On success: update Lucia password + set `must_change_password=false` atomically
-   - On failure (wrong current password OR new password too weak): return structured error
-   - After success: redirect to /dashboard (tenant) or /admin (operator) based on user role
-   - Audit log entry captures: user changed password (no password values)
-   - Trigger Axiom event: user.password_changed
+A2.1. Create packages/db/migrations/000X_normalize_state_codes.sql (Drizzle migration):
 
-A2.3. Update middleware to check `must_change_password`:
-   - In apps/web/middleware.ts (or wherever route-level middleware exists)
-   - After session resolution, if `user.must_change_password === true`:
-     - If request path is /change-password OR /logout: allow through
-     - If request path is anything else: redirect to /change-password
-   - This is the "force" mechanism — they can't escape until the flag clears
+The migration runs as a single transaction with three phases:
 
-A2.4. Update login flow to flag-clear redirect:
-   - On successful login, if `must_change_password=true`: redirect to /change-password instead of /dashboard
-   - This is the entry point for new users
+**Phase 1 — Update each state column from name to code:**
 
-A2.5. UI polish per the design system:
-   - Empty state should never appear (the page only renders when user has a valid session)
-   - Loading state on form submit
-   - Error state with clear validation messages
-   - Password strength indicator on the new password field (optional but nice)
-   - "What is this?" tooltip explaining why they're here
-   - "Logout" link visible at bottom (the only escape route besides changing password)
+```sql
+BEGIN;
 
-A2.6. Add tests:
-   - Unit: changePassword action validates inputs, updates password, clears flag
-   - Integration: middleware redirects when flag is true, allows through after flag clears
-   - Integration: login redirects to /change-password when flag is true
-   - All cases: wrong current password, weak new password, password mismatch
+-- Update tenant_settings.state
+UPDATE tenant_settings
+SET state = CASE state
+  WHEN 'Maharashtra' THEN 'MH'
+  WHEN 'Karnataka' THEN 'KA'
+  WHEN 'Gujarat' THEN 'GJ'
+  WHEN 'Tamil Nadu' THEN 'TN'
+  WHEN 'Rajasthan' THEN 'RJ'
+  WHEN 'Assam' THEN 'AS'
+  WHEN 'Uttar Pradesh' THEN 'UP'
+  -- (extend with ALL 36 states/UTs to handle any future seed data)
+  -- (use the full INDIAN_STATES mapping from C2a)
+  ELSE state -- leave unchanged if already a code or unknown
+END;
 
-COMMIT C1b: `feat(auth): chunk b — change-password route + middleware enforcement`
+-- Same UPDATE for dealers.state
+-- Same UPDATE for quotations.tenant_state_at_issue + place_of_supply
+-- Same UPDATE for performa_invoices.tenant_state_at_issue + place_of_supply
+-- Same UPDATE for orders.tenant_state_at_issue + place_of_supply
+-- (Check if dispatches has state columns; if so, same UPDATE)
 
-CHUNK C1c — Operator-onboarding spec update + manual flow check
----------------------------------
+-- Phase 2 — Tighten CHECK constraints to require 2-letter codes
+ALTER TABLE tenant_settings DROP CONSTRAINT IF EXISTS tenant_settings_state_check;
+ALTER TABLE tenant_settings ADD CONSTRAINT tenant_settings_state_check
+  CHECK (state ~ '^[A-Z]{2}$');
 
-A3.1. Update apps/web/tests/e2e/operator-onboarding.spec.ts (the Stage B Day 18 spec that documented the gap):
-   - Original spec asserted "force-password-change route doesn't exist; new users land on /dashboard"
-   - Update to assert the actual behavior:
-     - Login as new admin user with temp password
-     - Verify redirect to /change-password (not /dashboard)
-     - Fill the form with new password
-     - Submit
-     - Verify redirect to /dashboard (now successful)
-     - Verify subsequent login lands on /dashboard directly (flag is now false)
-   - This spec now passes with the real flow; the comment about "gap" is removed
+-- Same CHECK tightening for all other tables with state columns
 
-A3.2. Add a fresh verify-day-c1.spec.ts:
-   - Login as a fresh user with must_change_password=true (seeded via a setup step)
-   - Verify forced redirect to /change-password from any route
-   - Submit password change form successfully
-   - Verify access to /dashboard
-   - Logout, login with new password (not the temp one) — should work
-   - Logout, login with OLD temp password — should fail
+-- Phase 3 — Verify all rows now match the constraint (will throw if any don't)
+-- The ALTER TABLE ADD CONSTRAINT enforces this automatically
 
-A3.3. Manual check (run against local dev DB):
-   - Run a setup script that creates a test user with must_change_password=true
-   - Login as that user → should land on /change-password
-   - Try to navigate to /dashboard manually → should redirect back to /change-password
-   - Fill form, submit → should land on /dashboard
-   - Logout, login again with new password → should succeed and land on /dashboard
+COMMIT;
+```
 
-A3.4. Verify staging-compatible:
-   - Push to main triggers staging redeploy
-   - On staging: create a fresh user via the operator-onboarding flow
-   - Verify the full force-password-change flow works on staging.dealerlink.in
+A2.2. CRITICAL — Generate the migration via a programmatic script, not by hand:
 
-COMMIT C1c: `feat(auth): chunk c — operator-onboarding spec + verify-day-c1 spec`
+- Create scripts/generate-state-migration.ts (TypeScript script using @dealerlink/db + @dealerlink/schemas/states)
+- Script generates the SQL by iterating over INDIAN_STATES (so all 36 entries are covered)
+- This eliminates "we forgot Telangana" risk
+- Output is captured into the migration file
+- Document the script's purpose in a header comment
 
-CHUNK C1d — Documentation + DEV.56 closure + closeout
----------------------------------
+A2.3. Test the migration locally:
 
-A4.1. Update CLAUDE.md §6:
-   - The force-password-change spec was already documented; now reference the actual implementation:
-     - Add to §6: "**Implementation:** see `apps/web/app/(auth)/change-password/`. Middleware at `apps/web/middleware.ts` enforces the redirect. Closed by Stage C Day C.1 (DEV.56)."
-   - Update the "Last reviewed" stamp at the top of CLAUDE.md to 2026-05-23
+- Take a snapshot of current state values: `pg_dump --table=tenant_settings --table=dealers ... > pre-migration-snapshot.sql`
+- Apply migration: `pnpm --filter @dealerlink/db db:migrate`
+- Verify: every state column matches `^[A-Z]{2}$` regex
+- Verify: row counts unchanged (no data loss)
 
-A4.2. Update DEVIATIONS.md:
-   - Mark DEV.56 as ✅ Closed by Stage C Day C.1 (2026-05-23)
-   - Add closure note: "Force-password-change flow implemented per CLAUDE.md §6 + ADR-010. Operator-onboarding spec from Day 18 updated to verify the new behavior."
+A2.4. CRITICAL — Run the Day 9 tax parity test BEFORE and AFTER migration:
 
-A4.3. Update docs/STAGE_C_HANDOFF.md:
-   - Mark C.1 as ✅ in the "Stage C Progress (Living)" section
-   - Update DEV.56 status in the Carried-Forward section from "in progress — C.1" to "✅ Closed — C.1"
+- The parity test (packages/db/tests/quotation-engine-parity.test.ts) re-derives every seeded quotation's totals and asserts they match the stored values
+- Pre-migration: parity passes (well-established)
+- Post-migration: parity MUST still pass
+- If parity fails after migration, the tax engine's inter-state determination changed for at least one row — STOP and investigate
+- Tax engine itself doesn't change today; only the data feeding it does
 
-A4.4. Update docs/WORKFLOWS.md:
-   - Add a section: "First Login Experience for New Users"
-   - Step-by-step: operator creates tenant → tenant admin receives email with temp password → first login forces password change → access dashboard
-   - Same flow for tenant-admin-created users
+A2.5. Reversibility:
 
-A4.5. Update docs/RUNBOOKS.md:
-   - Add runbook entry: "User Forgot Their New Password"
-     - Operator (or tenant admin for their tenant) can reset by setting must_change_password=true + generating a new temp password
-   - Add runbook entry: "Disabling Force-Password-Change for Testing"
-     - Set must_change_password=false directly in DB for the user (dev only; never in production)
+- Create a corresponding rollback migration (in case staging deploy needs to revert)
+- Rollback maps codes back to names — same CASE statement, inverted
+- Document in the migration's header how to roll back
 
-A4.6. Closeout per template:
-   - pnpm preflight green
-   - pnpm typecheck, pnpm lint, pnpm test (new tests pass), pnpm verify (53/53 or 54/54 with the new verify-day-c1 spec)
-   - PROJECT_PLAN.md mark C.1 ✅ with today's date + brief notes
-   - PROJECT_PLAN.md changelog entry for 2026-05-23
-   - Final commit: `feat(auth): Stage C Day C.1 complete — force-password-change closes DEV.56`
-   - Push to main (auto-deploys to staging)
+A2.6. Verify pnpm typecheck + pnpm test green.
 
-A4.7. Post-deploy verification:
-   - Verify staging build succeeds
-   - Verify staging.dealerlink.in still works
-   - Manual smoke: login on staging with existing seeded user (must_change_password=false) → lands on /dashboard normally
+COMMIT C2b: `feat(states): chunk b — migration normalizes state names to ISO 3166-2:IN codes`
 
-COMMIT C1d: as above
+## CHUNK C2c — UI layer updates (dropdowns, filters, displays)
+
+A3.1. State input dropdowns — every form that captures state:
+
+- Dealer creation/edit form (apps/web/app/(app)/dealers/...)
+- Tenant settings form (operator app: apps/web/app/(admin)/tenants/...)
+- Quotation builder (when user selects Ship-To dealer, state is derived; no manual state input here typically)
+- PI creation form (Ship-To dealer selection; state is derived)
+- Order/Dispatch forms (inherit from PI/Order; no manual state input)
+
+For dropdowns: show full name to user, submit code. Use `<option value="MH">Maharashtra</option>` pattern.
+
+A3.2. State display formatters — every place state is shown to user:
+
+- Dealer detail page: show "Maharashtra (MH)" or just "Maharashtra" depending on context
+- Quotation/PI/Order detail pages: same
+- PDF templates (Day 10 templates): show full name (more professional on invoices)
+- Dashboard widgets: where state appears as a column, show code (compact)
+
+Use the `getStateName()` helper consistently. Don't hardcode display strings.
+
+A3.3. Filter dropdowns:
+
+- Reports module (Day 15 GST summary report filters by place_of_supply): dropdown shows names, filters by code
+- Dealer list filters: same pattern
+
+A3.4. Search:
+
+- If any search inputs accept state names as free-text, they need to normalize input via `normalizeStateInput()` (accepts either name or code)
+- This is a backwards-compat measure — operator typing "Maharashtra" or "MH" both find the right rows
+
+A3.5. Tests:
+
+- Snapshot test for one form that shows state dropdown — verify options render with name labels + code values
+- Integration: submit dealer form with state value "MH" — verify stored value is "MH"
+- Integration: GST summary report filter by "Maharashtra" — verify it filters to rows where state='MH'
+
+COMMIT C2c: `feat(states): chunk c — UI dropdowns + displays + filters use canonical codes`
+
+## CHUNK C2d — Validation layer + Zod schema updates
+
+A4.1. Zod schemas — every input schema that accepts a state:
+
+- packages/schemas/src/dealer.ts: state field changes from `z.string()` to `z.enum([Object.keys(INDIAN_STATES) as IndianStateCode[]])`
+- packages/schemas/src/tenant.ts: same
+- packages/schemas/src/quotation.ts, performa-invoice.ts, etc.: same for tenant_state_at_issue and place_of_supply fields
+
+This gives Zod-level validation: any state input must be a valid code.
+
+A4.2. Backwards-compat input handler (for any code that might receive a name instead of a code):
+
+- In input boundaries (server actions, API routes), pre-process state values through `normalizeStateInput()` before Zod validation
+- This handles old browser sessions that might submit names from cached HTML
+
+A4.3. Tax engine — DOES NOT CHANGE:
+
+- packages/tax/src/state.ts stays opaque-string-compare
+- The engine receives `"MH"` vs `"KA"` instead of `"Maharashtra"` vs `"Karnataka"`
+- Either way, `tenantState !== placeOfSupply` returns the same result
+- Verify the parity test passes (this is A2.4 from C2b; verify again here as a regression check)
+
+A4.4. Tests:
+
+- Zod schema rejects unknown state codes
+- Zod schema rejects state names (forces canonical format at boundary)
+- Backwards-compat handler accepts both codes and names, normalizes to codes
+- Tax engine still produces identical output for all seeded quotations
+
+COMMIT C2d: `feat(states): chunk d — Zod validation enforces canonical codes`
+
+## CHUNK C2e — Documentation + DEV.33 closure + closeout
+
+A5.1. Update CLAUDE.md §5:
+
+- Replace any references to "full state names" with "2-letter ISO 3166-2:IN codes"
+- Add example: "Tenant in MH selling to dealer with place_of_supply=KA → inter-state, IGST applies"
+- Update "Last reviewed" stamp to 2026-05-24
+
+A5.2. Update DEVIATIONS.md:
+
+- Mark DEV.33 as ✅ Closed by Stage C Day C.2 (2026-05-24)
+- Add closure note with migration approach + parity confirmation
+
+A5.3. Update docs/STAGE_C_HANDOFF.md:
+
+- Mark C.2 as ✅ in the "Stage C Progress (Living)" section
+- Update DEV.33 status from "in progress — C.2" to "✅ Closed — C.2"
+
+A5.4. Update docs/STRUCTURE.md or similar:
+
+- Document the INDIAN_STATES constant location and usage pattern
+- Note: all state input/output goes through helpers; never hardcode
+
+A5.5. Update PDF templates if any hardcode state names:
+
+- Check apps/workers/src/templates/ for hardcoded state names
+- If any exist, replace with `getStateName(record.state)` calls
+
+A5.6. Run full validation suite (this is the gate):
+
+- pnpm preflight green
+- pnpm typecheck, pnpm lint, pnpm test (all green, especially the parity test)
+- pnpm verify (54/54 + new verify-day-c2 if added; or stays at 54/54 if no new spec)
+- Critical-path E2E against staging (deferred per C.0 plan, but run it now since this migration is high-stakes)
+
+A5.7. Verify staging readiness:
+
+- PROJECT_PLAN.md mark C.2 ✅ with date
+- Final commit: `feat(states): Stage C Day C.2 complete — state codes normalized (closes DEV.33)`
+- Push to main
+- Verify staging redeploys cleanly + migration applies to staging DB
+- Run smoke check on staging: load a quotation detail page, verify state shows as full name in UI
+
+COMMIT C2e: as above
 
 ==========================================================
-GUARDRAILS (STAGE C DAY C.1)
+GUARDRAILS (STAGE C DAY C.2)
 ==========================================================
 
-- The `must_change_password` flag is a one-way trapdoor: starts true for new users, becomes false on successful password change. Never re-set to true except via explicit admin/operator action (the "reset password" flow in RUNBOOKS).
+- Tax engine parity test MUST pass post-migration. This is the single most important verification of the day. If parity fails, STOP and investigate — do not proceed with closeout.
 
-- The middleware redirect logic must ALLOW /change-password and /logout. Otherwise users with the flag set can never reach the change-password form (infinite redirect).
+- The migration is REVERSIBLE. Generate the rollback migration alongside the forward migration.
 
-- The middleware redirect logic must check AFTER session resolution. If session is null, fall through to the normal login redirect — don't redirect to /change-password before login.
+- packages/tax/src/state.ts stays opaque-string-compare. We don't tighten the engine to be code-only — it works with any consistent format. The tightening is at the application boundary (Zod schemas, UI dropdowns).
 
-- Password change requires the user to provide the CURRENT password (the temp one). This prevents an attacker with session hijacking from setting a new password without knowing the temp.
+- ALL six tables with state columns must migrate atomically in a single transaction. No mixed-format state.
 
-- All password operations go through Lucia's password API. Do NOT hash passwords manually. Do NOT store passwords in any state other than Lucia's argon2-hashed form.
+- CHECK constraints tighten after migration. This prevents future writes from inserting non-code values.
 
-- Audit log entry on password change does NOT include any password value. Just "user X changed password at time T."
+- UI dropdowns show full names to users (UX), submit codes to backend (data integrity). Use the helpers consistently.
 
-- Existing seeded users have must_change_password=false. Their behavior is unchanged. All Day 1-18 E2E specs should continue to pass without modification.
+- Don't hardcode state name strings anywhere. Always go through `getStateName()`.
 
-- Trigger Axiom event user.password_changed on success (per Day 17 taxonomy).
+- The migration script must be programmatically generated (TypeScript → SQL) to ensure all 36 states are covered. Don't write the CASE statement by hand.
 
-- The change-password page is the ONLY page accessible (besides /logout) when the flag is true. This is the "force" in force-password-change.
+- Backwards-compat input handlers accept both names and codes — for cached browser sessions, integration partners, manual data entry. Internal storage is always codes.
 
 WHEN DONE:
-- Print summary, 4 chunk commits
-- Confirm: DEV.56 ✅ closed
-- Confirm: operator-onboarding spec from Day 18 now passes the assertion (instead of documenting the gap)
-- Confirm: verify-day-c1 spec passes
-- Confirm: pnpm verify 54/54 (53 prior + 1 new)
-- Confirm: existing seed users still login normally to /dashboard
-- Confirm: staging redeploy succeeded after push
-- Tell me Stage C Day C.1 is complete and Day C.2 (state normalization, DEV.33 closure) is next
+
+- Print summary, 5 chunk commits
+- Confirm: DEV.33 ✅ closed
+- Confirm: Day 9 parity test passes post-migration (every seeded quotation's totals match)
+- Confirm: pnpm verify 54/54 (or 55/55 with verify-day-c2 if added)
+- Confirm: critical-path E2E passes on staging post-deploy
+- Confirm: all 36 states covered in mapping (run a coverage assertion)
+- Confirm: UI dropdowns show names + submit codes
+- Tell me Stage C Day C.2 is complete and Day C.3 (pilot staging handoff + UX walkthrough) is next
+
 ````
 
 ### Verification checklist (for the human operator after Claude Code completes)
 
-#### Schema + flag
+#### Tax engine parity (MOST IMPORTANT)
+- [ ] Day 9 parity test passes — every seeded quotation's stored totals match recomputation
+- [ ] Spot-check: pick 3 seeded orders (one intra-state, one inter-state, one with discount) — totals unchanged
 
-- [ ] `must_change_password` column exists on users table with proper default
-- [ ] Existing seeded users have flag=false
-- [ ] New users created via operator-onboarding or admin-user-creation have flag=true
+#### Migration correctness
+- [ ] Every state column matches `^[A-Z]{2}$` regex post-migration
+- [ ] Row counts in all 6 affected tables unchanged
+- [ ] CHECK constraints applied
+- [ ] Rollback migration exists and is documented
 
-#### Flow
+```powershell
+# Run these to verify
+docker compose exec postgres psql -U dealerlink -d dealerlink_dev -c "SELECT 'tenant_settings' AS tbl, state FROM tenant_settings UNION ALL SELECT 'dealers', state FROM dealers UNION ALL SELECT 'quotations.tenant_state', tenant_state_at_issue FROM quotations UNION ALL SELECT 'quotations.place_of_supply', place_of_supply FROM quotations UNION ALL SELECT 'orders.place_of_supply', place_of_supply FROM orders;"
+# Every state should be exactly 2 chars, uppercase
+````
 
-- [ ] Login as user with flag=true → forced to /change-password
-- [ ] Try to navigate to /dashboard while flag=true → redirected back to /change-password
-- [ ] Submit password change → flag clears, redirects to /dashboard
-- [ ] Logout and login with new password → succeeds, lands on /dashboard
-- [ ] Logout and login with old temp password → fails (password no longer valid)
+#### UI verification
 
-#### Audit + observability
-
-- [ ] Audit log shows password change events (no password values)
-- [ ] Axiom event `user.password_changed` fires on success
+- [ ] Open `/dealers/new` → state dropdown shows "Maharashtra" labels with "MH" values (View source if needed)
+- [ ] Submit a new dealer with state "MH" → stored as "MH" in DB
+- [ ] Open existing dealer detail → state displays as "Maharashtra" (not "MH")
+- [ ] PDF generation works → state shows as full name on invoice
 
 #### Backwards compatibility
 
-- [ ] Existing seed users still login normally to /dashboard
-- [ ] All Day 1-18 E2E specs continue to pass without modification
-
-#### Staging verification
-
-- [ ] After push, staging redeploy succeeds
-- [ ] Existing user (admin@demo.test) can still login to staging normally
-- [ ] (Manual) Create a fresh user via operator-onboarding on staging → verify force-password-change works
+- [ ] All Day 1-18 E2E specs continue to pass
+- [ ] Critical-path E2E passes on staging
+- [ ] Existing seed users can still login and use the app normally
 
 #### Documentation
 
-- [ ] CLAUDE.md §6 references the implementation
-- [ ] CLAUDE.md "Last reviewed" stamp updated
-- [ ] DEVIATIONS.md DEV.56 marked ✅ closed
-- [ ] STAGE_C_HANDOFF.md C.1 marked ✅
-- [ ] WORKFLOWS.md adds "First Login Experience for New Users"
-- [ ] RUNBOOKS.md adds password reset runbook
+- [ ] CLAUDE.md §5 updated (codes, not names)
+- [ ] DEVIATIONS.md DEV.33 marked ✅ closed
+- [ ] STAGE_C_HANDOFF.md C.2 marked ✅
+- [ ] STRUCTURE.md or equivalent documents the state code pattern
 
 #### Quality gates
 
-- [ ] `pnpm preflight` 11/11 green
-- [ ] `pnpm verify` 54/54
-- [ ] All other gates green
-- [ ] PROJECT_PLAN.md C.1 ✅
+- [ ] `pnpm preflight` green
+- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm verify` all green
+- [ ] Staging redeploy successful + migration applied to staging DB
+- [ ] PROJECT_PLAN.md C.2 ✅
 
 ---
-
-## Stage C Day C.2 — State Code Normalization (Sunday May 24)
-
-_Will be added when C.1 is complete. Closes DEV.33; normalizes state storage from full names ("Maharashtra") to 2-letter codes ("MH") per CLAUDE.md §5. Tax engine validation: every order recomputes to the same totals under new format. Migration touches tenant_settings, dealers, quotations, performa_invoices, orders, dispatches._
 
 ## Stage C Day C.3 — Pilot Staging Handoff + UX Walkthrough (Monday May 25)
 
