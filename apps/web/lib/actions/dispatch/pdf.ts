@@ -8,7 +8,7 @@ import { tenantAction } from '@/lib/actions/wrap';
 import { queueEmail } from '@/lib/email/send';
 import { renderDocumentEmail } from '@/lib/email/templates/document-delivery';
 import { AppError } from '@/lib/errors';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 import {
   getGeneratedDocumentPayload,
   getLatestGeneratedDocument,
@@ -41,7 +41,7 @@ export const generateDispatchPdf = tenantAction(
     const dispatch = await loadDispatchHeader(tx, input.id);
     if (!dispatch) throw new AppError('NOT_FOUND', 'Dispatch not found');
     try {
-      const result = await spawnPdfRender({
+      const result = await requestPdfRender(tx, {
         documentType: 'dispatch',
         documentId: input.id,
         tenantId: dispatch.tenantId,
@@ -79,7 +79,7 @@ export const downloadDispatchPdf = tenantAction(
     )?.id;
     if (!generatedId) {
       try {
-        const rendered = await spawnPdfRender({
+        const rendered = await requestPdfRender(tx, {
           documentType: 'dispatch',
           documentId: input.id,
           tenantId: dispatch.tenantId,
@@ -139,7 +139,7 @@ export const emailDispatchPdf = tenantAction(
     // Render best-effort so the document is ready when the email worker sends.
     let dispatchDocId: string | null = null;
     try {
-      const rendered = await spawnPdfRender({
+      const rendered = await requestPdfRender(tx, {
         documentType: 'dispatch',
         documentId: input.id,
         tenantId: dispatch.tenantId,

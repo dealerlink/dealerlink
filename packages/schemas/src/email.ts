@@ -41,6 +41,27 @@ export const emailJobPayloadSchema = z.object({
 });
 export type EmailJobPayload = z.infer<typeof emailJobPayloadSchema>;
 
+// ---------------------------------------------------------------------------
+// Outbound: the `render-pdf` job payload.
+// ---------------------------------------------------------------------------
+/**
+ * The render job carries only identifiers — the worker re-loads the source
+ * document by id (never trusts a stale snapshot) and writes a new
+ * `generated_documents` row. Mirrors the email job's "re-load by id" rule.
+ *
+ * The web process enqueues this and then polls `generated_documents` for the
+ * resulting row (DEV.63); the workers process consumes it via
+ * `handleRenderPdfJob`.
+ */
+export const renderPdfJobPayloadSchema = z.object({
+  documentType: z.enum(['quotation', 'performa_invoice', 'invoice', 'dispatch', 'payment_receipt']),
+  documentId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  /** Acting user id — written to generated_documents.generatedBy + audit. */
+  userId: z.string().uuid().nullable(),
+});
+export type RenderPdfJobPayload = z.infer<typeof renderPdfJobPayloadSchema>;
+
 /**
  * Shape of `email_delivery_log.meta` for a queued outbound email. `queueEmail`
  * writes this; the worker reads it to build the Resend request.

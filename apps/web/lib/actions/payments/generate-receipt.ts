@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 import {
   getGeneratedDocumentPayload,
   getLatestGeneratedDocument,
@@ -34,7 +34,7 @@ export const generatePaymentReceipt = tenantAction(
     const payment = await loadPaymentHeader(tx, input.id);
     if (!payment) throw new AppError('NOT_FOUND', 'Payment not found');
     try {
-      const result = await spawnPdfRender({
+      const result = await requestPdfRender(tx, {
         documentType: 'payment_receipt',
         documentId: input.id,
         tenantId: payment.tenantId,
@@ -72,7 +72,7 @@ export const downloadPaymentReceipt = tenantAction(
     )?.id;
     if (!generatedId) {
       try {
-        const rendered = await spawnPdfRender({
+        const rendered = await requestPdfRender(tx, {
           documentType: 'payment_receipt',
           documentId: input.id,
           tenantId: payment.tenantId,

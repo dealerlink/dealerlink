@@ -12,6 +12,11 @@ import { defineConfig, devices } from '@playwright/test';
  *   - Postgres seeded (pnpm db:migrate && pnpm db:seed)
  *   - dev server running on PORT (default 3000) OR set START_DEV_SERVER=1
  *     to let Playwright start it.
+ *   - the WORKERS process running too — PDF generation enqueues a pg-boss
+ *     `render-pdf` job that the workers process consumes (DEV.63). The
+ *     managed webServer below boots both web + workers; if you bring your own
+ *     dev server (reuseExistingServer), run `pnpm dev:workers` alongside it or
+ *     PDF specs (day 10–13, critical-path) will time out.
  *
  * Chromium binary install is a one-time:
  *   pnpm exec playwright install chromium
@@ -57,7 +62,10 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: 'pnpm dev',
+          // Boot web + workers together: PDF specs need the workers process to
+          // consume the `render-pdf` queue (DEV.63). Playwright still gates
+          // readiness on the web `url`; workers has no HTTP port.
+          command: 'pnpm --parallel --filter web --filter workers dev',
           url: BASE_URL,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,

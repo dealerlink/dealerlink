@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 import {
   getGeneratedDocumentPayload,
   getLatestGeneratedDocument,
@@ -23,7 +23,7 @@ export const generatePerformaInvoicePdf = tenantAction(
     const pi = await loadPiForGuard(tx, input.id);
     if (!pi) throw new AppError('NOT_FOUND', 'Performa invoice not found');
     try {
-      const result = await spawnPdfRender({
+      const result = await requestPdfRender(tx, {
         documentType: 'performa_invoice',
         documentId: input.id,
         tenantId: pi.tenantId,
@@ -61,7 +61,7 @@ export const downloadPerformaInvoicePdf = tenantAction(
     )?.id;
     if (!generatedId) {
       try {
-        const rendered = await spawnPdfRender({
+        const rendered = await requestPdfRender(tx, {
           documentType: 'performa_invoice',
           documentId: input.id,
           tenantId: pi.tenantId,

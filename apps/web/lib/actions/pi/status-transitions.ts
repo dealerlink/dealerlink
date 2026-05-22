@@ -20,7 +20,7 @@ import { tenantAction } from '@/lib/actions/wrap';
 import { queueEmail } from '@/lib/email/send';
 import { renderDocumentEmail } from '@/lib/email/templates/document-delivery';
 import { AppError } from '@/lib/errors';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 
 import { tryAutoConfirmOrder } from '../payments/helpers';
 
@@ -57,7 +57,7 @@ export const sendPi = tenantAction(
     // (successful) status change; the user can re-generate from the PI page.
     let piPdfDocId: string | null = null;
     try {
-      const rendered = await spawnPdfRender({
+      const rendered = await requestPdfRender(tx, {
         documentType: 'performa_invoice',
         documentId: input.id,
         tenantId: pi.tenantId,

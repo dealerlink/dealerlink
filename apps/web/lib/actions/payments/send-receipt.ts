@@ -8,7 +8,7 @@ import { tenantAction } from '@/lib/actions/wrap';
 import { queueEmail } from '@/lib/email/send';
 import { renderDocumentEmail } from '@/lib/email/templates/document-delivery';
 import { AppError } from '@/lib/errors';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 
 /**
  * Email a payment receipt to the paying dealer (admin + accounts).
@@ -49,7 +49,7 @@ export const sendPaymentReceipt = tenantAction(
     // the email; the worker simply sends without the attachment.
     let receiptDocId: string | null = null;
     try {
-      const rendered = await spawnPdfRender({
+      const rendered = await requestPdfRender(tx, {
         documentType: 'payment_receipt',
         documentId: input.id,
         tenantId: payment.tenantId,

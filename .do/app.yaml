@@ -118,6 +118,13 @@ services:
       - key: PGBOSS_POOL_MAX
         scope: RUN_TIME
         value: '1'
+      # How long a PDF Server Action waits for the workers process to render +
+      # persist the document before returning a friendly "try again" error.
+      # Code default is 15s; staging uses 30s to absorb cold @sparticuz/chromium
+      # launches on the basic-xxs worker plus pg-boss pickup latency. See DEV.63.
+      - key: PDF_RENDER_TIMEOUT_MS
+        scope: RUN_TIME
+        value: '30000'
 
 workers:
   - name: workers
@@ -126,8 +133,11 @@ workers:
       branch: main
       deploy_on_push: true
     source_dir: /
-    build_command: corepack enable && pnpm install --frozen-lockfile
-    run_command: pnpm --filter workers start
+    # Custom Dockerfile instead of the Node buildpack: the buildpack base image
+    # lacks the Chromium runtime libs (libnss3 et al) the PDF pipeline needs.
+    # See apps/workers/Dockerfile and DEV.63. Build context is the repo root
+    # (source_dir: /); dockerfile_path is relative to it.
+    dockerfile_path: apps/workers/Dockerfile
     instance_size_slug: basic-xxs
     instance_count: 1
     envs:

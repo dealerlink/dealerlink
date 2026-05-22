@@ -355,9 +355,11 @@ exact same `runRenderPdf` core — it is dormant until Day 14.
   volumes. The child re-loads the document by id inside its own
   `withTenant` transaction, so the persisted `generated_documents` row is
   RLS- and audit-correct.
-  **Resolution:** Day 14 swaps `spawnPdfRender()` for a pg-boss
-  `boss.send('render-pdf', …)` against the already-written `handleRenderPdfJob`.
-  No template, storage, or schema change required.
+  **Resolution:** The Day 14 swap was never actually done — `spawnPdfRender()`
+  shipped to staging and broke there. **DEV.63** (Stage C) performs the swap:
+  `requestPdfRender()` enqueues `render-pdf` against the already-written
+  `handleRenderPdfJob` and the workers component gains a Chromium Dockerfile.
+  No template, storage, or schema change was required.
 
 ## DEV.37 — Day 10 — page footer via Chromium footerTemplate (A1.4 said displayHeaderFooter=false)
 
@@ -895,3 +897,77 @@ reused for the process lifetime. Combined with DEV.61's caps, staging holds
 ~10 steady connections. This was the real fix; DEV.61's caps are the
 secondary bound.
 **Resolution:** Permanent.
+
+## DEV.63 — Stage C — PDF rendering moved to the workers queue + Chromium Dockerfile
+
+**Date:** 2026-05-22
+**Spec said:** Fix PDF generation on staging — the workers logged
+`/tmp/chromium: error while loading shared libraries: libnss3.so: cannot
+open shared object file`. The brief assumed only the workers component
+needed a Chromium-capable image.
+**Found:** Two coupled problems.
+
+1. **The render never ran in the workers process.** Despite DEV.36 promising
+   "Day 14 swaps `spawnPdfRender()` for a pg-boss enqueue," that swap was
+   never done. Every web PDF action still called `spawnPdfRender()`
+   (`apps/web/lib/pdf/spawn-render.ts`), which spawned the workers
+   `render-cli` as a child of the **web** process — so Chromium launched
+   inside the **web** container, not workers. The pg-boss `render-pdf`
+   handler was registered in workers but **nothing enqueued to it**. This
+   also violated CLAUDE.md §7 ("never render PDFs on the web process"). So a
+   workers-only Dockerfile would not have fixed the bug — the `libnss3`
+   error was coming from the web container.
+2. **DO App Platform's Node buildpack lacks Chromium's runtime libs.**
+   `@sparticuz/chromium` ships the browser binary but dynamically links
+   `libnss3` et al at launch; the buildpack base image does not provide them.
+   Buildpacks cannot `apt-get install`, so a Dockerfile is required on
+   whichever component runs Chromium.
+
+**Built:**
+
+- **Workers → custom Dockerfile** (`apps/workers/Dockerfile`, glibc
+  `node:20.18.0-bookworm-slim`) that apt-installs the Chromium runtime libs +
+  fonts, installs pnpm via corepack, `pnpm install --frozen-lockfile`,
+  compile-checks workers, and runs `pnpm --filter workers start`.
+  `.do/app.yaml` switches the workers component from buildpack
+  `build_command`/`run_command` to `dockerfile_path`. The **web** component
+  stays on the buildpack — it no longer launches Chromium.
+- **Rendering routed through pg-boss** (CLAUDE.md §7). `spawnPdfRender()` is
+  replaced by `requestPdfRender(tx, …)` (`apps/web/lib/pdf/render-request.ts`):
+  it enqueues a `render-pdf` job (`enqueueRenderPdfJob`) and then **blocks and
+  polls `generated_documents`** for the row the worker writes, returning the
+  same `{ generatedDocumentId, filename, sizeBytes }` shape — so all 13 call
+  sites across 9 actions (quotation, PI, dispatch, payment-receipt) are
+  unchanged apart from passing their transaction. A shared
+  `renderPdfJobPayloadSchema` lives in `@dealerlink/schemas`.
+- The poll reuses the caller's transaction. `withTenant` runs at the Postgres
+  default READ COMMITTED, so each SELECT sees the worker's committed insert,
+  and reusing the held connection keeps PDF generation at one app-pool
+  connection — better than the old subprocess, which opened its own pools
+  (DEV.61/62). Correlation: capture the latest row id before enqueue, return
+  once a row with a different id appears.
+- Timeout is `PDF_RENDER_TIMEOUT_MS` (code default 15 s); staging sets 30 s to
+  absorb cold `@sparticuz/chromium` launches + pg-boss pickup on the
+  basic-xxs worker.
+- `apps/workers/.dockerignore` keeps host `node_modules`/build output out of
+  the image (Linux reinstalls native deps like `@node-rs/argon2`).
+- `playwright.config.ts` now boots **web + workers** for the managed dev
+  server — PDF e2e specs need the workers process to consume the queue.
+
+**Note on `libgconf-2-4`:** the generic Puppeteer-on-Linux library list names
+it, but it does not exist on Debian bookworm (GConf was removed years ago) and
+modern Chromium does not use it — installing it would fail `apt-get` and break
+the build. Intentionally omitted.
+
+**Failure-mode tradeoff:** if a render genuinely fails in the worker, no row
+is written, so the web action waits out the full timeout and returns the
+friendly "try again" message rather than the specific error the old
+synchronous spawn surfaced. Acceptable for Phase 1; a Stage D refinement could
+read the pg-boss job state to fail fast.
+
+**Verified:** typecheck + lint clean across the workspace; workers unit suite
+40/40; the day-10 PDF verify spec passed locally end-to-end with web + workers
+running (first cold render ~22 s incl. Next compile, well within the 45 s test
+budget). Staging deploy + critical-path E2E is the live confirmation.
+**Resolution:** Permanent. Supersedes DEV.36 (the spawn-subprocess bridge is
+removed).

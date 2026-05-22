@@ -1,0 +1,18 @@
+# Build context is the repo root (.do/app.yaml source_dir: /), so these
+# globs are matched against the whole monorepo. Keep host-built artifacts and
+# secrets out of the image: node_modules is reinstalled fresh for Linux inside
+# the build, and committing the host's (Windows) native binaries would break it.
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/playwright-report
+**/test-results
+**/.env
+**/.env.*
+**/*.log
+.git
+.github
+.vscode
+.idea

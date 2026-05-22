@@ -9,7 +9,7 @@ import {
   getGeneratedDocumentPayload,
   getLatestGeneratedDocument,
 } from '@/lib/queries/generated-documents';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 
 import { loadQuotationForGuard } from './helpers';
 
@@ -45,7 +45,7 @@ export const downloadQuotationPdf = tenantAction(
 
     if (!generatedId) {
       try {
-        const rendered = await spawnPdfRender({
+        const rendered = await requestPdfRender(tx, {
           documentType: 'quotation',
           documentId: input.id,
           tenantId: existing.tenantId,

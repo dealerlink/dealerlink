@@ -15,11 +15,31 @@ pnpm dev:workers      # in another terminal
 
 ## Production (DO App Platform)
 
-- `apps/web` → DO App Platform service (1 GB / 1 vCPU initially)
-- `apps/workers` → second component on same App Platform OR separate $6 Droplet with pm2
+- `apps/web` → DO App Platform service (1 GB / 1 vCPU initially), Node buildpack
+- `apps/workers` → second component on same App Platform, **built from a
+  Dockerfile** (not the Node buildpack)
 - Postgres → DO Managed Postgres ($15 tier)
 - Migrations run automatically on deploy via `predeploy` hook
 - Environment variables managed in DO dashboard; never commit `.env` files
+
+### The workers component requires a Dockerfile (DEV.63)
+
+PDF generation runs in the workers process via Puppeteer +
+`@sparticuz/chromium`. That Chromium binary dynamically links system libraries
+(`libnss3`, `libgbm1`, fonts, …) that the App Platform **Node buildpack base
+image does not provide** — Chromium fails to launch with
+`libnss3.so: cannot open shared object file`. Buildpacks cannot
+`apt-get install`, so the workers component is built from
+`apps/workers/Dockerfile` (glibc `node:20-bookworm-slim` + the Chromium
+runtime libs). In `.do/app.yaml` the workers component sets
+`dockerfile_path: apps/workers/Dockerfile` instead of `build_command` /
+`run_command`. The web component stays on the buildpack — it enqueues a
+`render-pdf` pg-boss job and never launches Chromium.
+
+`PDF_RENDER_TIMEOUT_MS` (web component, default 15000) bounds how long a PDF
+Server Action waits for the worker to render before returning a retryable
+error; staging uses `30000` for cold-Chromium headroom on the basic-xxs
+worker.
 
 ## Required env vars
 

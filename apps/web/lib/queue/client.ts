@@ -1,6 +1,12 @@
 import 'server-only';
 
-import { ALL_QUEUES, EMAIL_QUEUE, type EmailJobPayload } from '@dealerlink/schemas';
+import {
+  ALL_QUEUES,
+  EMAIL_QUEUE,
+  RENDER_PDF_QUEUE,
+  type EmailJobPayload,
+  type RenderPdfJobPayload,
+} from '@dealerlink/schemas';
 import PgBoss from 'pg-boss';
 
 import { logger } from '@/lib/observability/logger';
@@ -77,4 +83,15 @@ function getBoss(): Promise<PgBoss> {
 export async function enqueueEmailJob(payload: EmailJobPayload): Promise<string | null> {
   const boss = await getBoss();
   return boss.send(EMAIL_QUEUE, payload, EMAIL_RETRY);
+}
+
+/**
+ * Enqueue a PDF render job for the workers process. Returns the pg-boss job id
+ * (or null). No retry: the web caller blocks on a bounded poll, so a failed
+ * render should surface fast as a timeout rather than re-attempt in the
+ * background (DEV.63).
+ */
+export async function enqueueRenderPdfJob(payload: RenderPdfJobPayload): Promise<string | null> {
+  const boss = await getBoss();
+  return boss.send(RENDER_PDF_QUEUE, payload);
 }

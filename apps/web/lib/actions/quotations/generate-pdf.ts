@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 
 import { loadQuotationForGuard } from './helpers';
 
@@ -29,7 +29,7 @@ export const generateQuotationPdf = tenantAction(
     if (!existing) throw new AppError('NOT_FOUND', 'Quotation not found');
 
     try {
-      const result = await spawnPdfRender({
+      const result = await requestPdfRender(tx, {
         documentType: 'quotation',
         documentId: input.id,
         tenantId: existing.tenantId,

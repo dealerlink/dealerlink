@@ -13,7 +13,7 @@ import { and, eq, lte } from 'drizzle-orm';
 import { tenantAction } from '@/lib/actions/wrap';
 import { AppError } from '@/lib/errors';
 import { trackEvent } from '@/lib/observability/events';
-import { spawnPdfRender } from '@/lib/pdf/spawn-render';
+import { requestPdfRender } from '@/lib/pdf/render-request';
 
 import { loadQuotationForGuard, writeStatusHistory } from './helpers';
 
@@ -58,7 +58,7 @@ export const sendQuotation = tenantAction(
     // failure must not roll back the (successful) status change — the user
     // can re-generate from the quotation page.
     try {
-      await spawnPdfRender({
+      await requestPdfRender(tx, {
         documentType: 'quotation',
         documentId: input.id,
         tenantId: existing.tenantId,

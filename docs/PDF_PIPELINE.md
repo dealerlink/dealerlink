@@ -27,29 +27,38 @@ apps/workers/src/
     format.ts            Indian money/date formatting
 
 apps/web/lib/
-  pdf/spawn-render.ts        web → workers subprocess bridge
+  pdf/render-request.ts      web → workers queue bridge (enqueue + poll, DEV.63)
+  queue/client.ts            enqueueRenderPdfJob()
   actions/quotations/        generate-pdf, download-pdf, email-pdf
   queries/generated-documents.ts
 ```
 
-## Render flow (Phase 1 — Day 10)
+## Render flow (Stage C onwards — DEV.63)
 
 ```
 Server Action (generate / download / email)
-  → spawnPdfRender()  — spawns the workers render-cli subprocess (DEV.36)
-      → render-cli  → runRenderPdf({ documentType, documentId, tenantId })
-          → withTenant(tenantId) transaction (RLS + audit context)
-          → buildQuotationHtml(): load quotation + lines + dealer + tenant,
-            recompute tax via @dealerlink/tax, render React → HTML string
-          → renderPdfFromHtml(): Puppeteer setContent + page.pdf({A4})
-          → storeRenderedPdf(): insert generated_documents row
+  → requestPdfRender(tx, { documentType, documentId, tenantId, userId })
+      → enqueueRenderPdfJob() — boss.send('render-pdf', …)
+      → poll generated_documents (on tx) until the new row appears
+  ··· (workers process, separate container) ···
+  workers: boss.work('render-pdf') → handleRenderPdfJob → runRenderPdf(…)
+      → withTenant(tenantId) transaction (RLS + audit context)
+      → buildQuotationHtml(): load quotation + lines + dealer + tenant,
+        recompute tax via @dealerlink/tax, render React → HTML string
+      → renderPdfFromHtml(): Puppeteer setContent + page.pdf({A4})
+      → storeRenderedPdf(): insert generated_documents row (COMMIT)
   ← { generatedDocumentId, filename, sizeBytes }
 ```
 
 Puppeteer never runs in the web process — the web build must not import
-`puppeteer-core` (200 MB Chromium guardrail). The render-cli subprocess is
-the Phase-1 bridge; **Day 14** swaps it for a pg-boss `render-pdf` enqueue
-against the already-written `handleRenderPdfJob` (see DEV.36).
+`puppeteer-core` (200 MB Chromium guardrail) and CLAUDE.md §7 forbids
+rendering on the web process. Rendering happens entirely in the workers
+process, which runs a Chromium-capable Dockerfile (`apps/workers/Dockerfile`).
+
+Until DEV.63 the bridge was instead a synchronous `render-cli` **subprocess**
+spawned by the web process (DEV.36) — that launched Chromium inside the web
+container and broke on DO App Platform (`libnss3` missing). The workers
+`render-cli` is retained as a standalone manual-render CLI.
 
 ## Single React component, typed inputs
 
