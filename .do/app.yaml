@@ -92,6 +92,13 @@ services:
       - key: NEXT_PUBLIC_APP_URL
         scope: RUN_AND_BUILD_TIME
         value: https://staging.dealerlink.in
+      # Apex domain this environment serves tenants under. Tenant routing
+      # resolves <slug>.<APP_DOMAIN> → tenant <slug> and the apex itself →
+      # operator. Must be BUILD-time too — it's inlined into the Edge
+      # middleware bundle. Production sets this to dealerlink.in (or omits it).
+      - key: NEXT_PUBLIC_APP_DOMAIN
+        scope: RUN_AND_BUILD_TIME
+        value: staging.dealerlink.in
       - key: NODE_ENV
         scope: RUN_AND_BUILD_TIME
         value: production
@@ -159,3 +166,18 @@ databases:
     cluster_name: dealerlink-staging-db
     db_name: dealerlink_staging
     db_user: doadmin
+
+domains:
+  # Apex staging host. DO provisions a Let's Encrypt cert via HTTP-01 — works
+  # with external (Cloudflare) DNS because the CNAME points at the app.
+  - domain: staging.dealerlink.in
+    type: PRIMARY
+  # Per-tenant subdomains. A true wildcard cert needs DNS-01, which DO can
+  # only do when it manages the domain's DNS — ours is on Cloudflare. So we
+  # enumerate the seeded tenants explicitly; each gets its own HTTP-01 cert.
+  # New tenants need their subdomain added here until Stage D moves wildcard
+  # SSL to a Cloudflare origin cert (proxied) or DO-managed DNS.
+  - domain: demo.staging.dealerlink.in
+    type: ALIAS
+  - domain: sample.staging.dealerlink.in
+    type: ALIAS

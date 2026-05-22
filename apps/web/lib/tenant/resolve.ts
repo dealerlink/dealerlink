@@ -17,7 +17,20 @@ export type TenantBrief = {
 export type RequestScope = { kind: 'tenant'; slug: string } | { kind: 'operator' };
 
 const RESERVED_SUBDOMAINS = new Set(['admin', 'app', 'www']);
-const APEX_DOMAIN = 'dealerlink.in';
+
+/**
+ * The apex domain the deployment serves tenants under. Defaults to the
+ * production apex. Non-production environments set NEXT_PUBLIC_APP_DOMAIN to
+ * their own apex (e.g. `staging.dealerlink.in`) so that:
+ *   - the apex host itself           → operator
+ *   - `<slug>.<apex>`                → tenant <slug>
+ * Without this, a `staging.` prefix makes the apex (`staging.dealerlink.in`)
+ * look like tenant `staging`, and tenant subdomains gain an extra label.
+ * It is a NEXT_PUBLIC_* var so it is inlined into the Edge middleware bundle.
+ */
+function apexDomain(): string {
+  return (process.env.NEXT_PUBLIC_APP_DOMAIN ?? 'dealerlink.in').toLowerCase();
+}
 
 /**
  * String-only resolution from host + query param. Suitable for Next.js
@@ -56,13 +69,12 @@ export function resolveRequestScope(
     return { kind: 'operator' };
   }
 
-  // Production hostnames
-  if (noPort.endsWith(APEX_DOMAIN)) {
-    const parts = noPort.split('.');
-    // `dealerlink.in` (apex)
-    if (parts.length === 2) return { kind: 'operator' };
-    // `<sub>.dealerlink.in`
-    const sub = parts[0]!;
+  // Production hostnames — resolved relative to the configured apex domain.
+  const apex = apexDomain();
+  if (noPort === apex) return { kind: 'operator' }; // apex itself
+  if (noPort.endsWith('.' + apex)) {
+    const prefix = noPort.slice(0, noPort.length - apex.length - 1);
+    const sub = prefix.split('.')[0]!; // leftmost label is the tenant slug
     if (RESERVED_SUBDOMAINS.has(sub)) return { kind: 'operator' };
     if (isValidSlug(sub)) return { kind: 'tenant', slug: sub };
   }

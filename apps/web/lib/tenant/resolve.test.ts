@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { isValidSlug, resolveRequestScope } from './resolve';
 
@@ -51,6 +51,39 @@ describe('resolveRequestScope', () => {
 
   it('unknown host → operator', () => {
     expect(resolveRequestScope('weird.example.com', null)).toEqual({ kind: 'operator' });
+  });
+
+  describe('with a non-production apex (NEXT_PUBLIC_APP_DOMAIN=staging.dealerlink.in)', () => {
+    const PREV = process.env.NEXT_PUBLIC_APP_DOMAIN;
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_APP_DOMAIN = 'staging.dealerlink.in';
+    });
+    afterEach(() => {
+      if (PREV === undefined) delete process.env.NEXT_PUBLIC_APP_DOMAIN;
+      else process.env.NEXT_PUBLIC_APP_DOMAIN = PREV;
+    });
+
+    it('apex staging host → operator (not tenant "staging")', () => {
+      expect(resolveRequestScope('staging.dealerlink.in', null)).toEqual({ kind: 'operator' });
+    });
+
+    it('<slug>.staging.dealerlink.in → tenant', () => {
+      expect(resolveRequestScope('demo.staging.dealerlink.in', null)).toEqual({
+        kind: 'tenant',
+        slug: 'demo',
+      });
+      expect(resolveRequestScope('sample.staging.dealerlink.in:443', null)).toEqual({
+        kind: 'tenant',
+        slug: 'sample',
+      });
+    });
+
+    it('reserved subdomains under the staging apex → operator', () => {
+      expect(resolveRequestScope('admin.staging.dealerlink.in', null)).toEqual({
+        kind: 'operator',
+      });
+      expect(resolveRequestScope('app.staging.dealerlink.in', null)).toEqual({ kind: 'operator' });
+    });
   });
 });
 
