@@ -12,6 +12,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getAuthContext();
   if (!ctx) redirect('/login');
 
+  // Force-password-change trapdoor (CLAUDE.md §6, ADR-010, DEV.56). A user
+  // with the flag set cannot reach any (app) route until they rotate. The
+  // check lives here — not in Edge middleware, which cannot resolve a Lucia
+  // session (see middleware.ts / DEV.68). /change-password is in the (auth)
+  // group, outside this layout, so the redirect never loops.
+  if (ctx.user.mustChangePassword) redirect('/change-password');
+
   const impersonatingId = impersonationTenantId();
 
   // Operators are only allowed in the tenant shell if they hold an

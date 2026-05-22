@@ -124,7 +124,14 @@ export async function login(input: z.input<typeof loginSchema>): Promise<LoginRe
     () => trackEvent('user.logged_in', { method: 'password' }),
   );
 
-  const redirectTo = user.role === 'operator' ? '/admin' : '/dashboard';
+  // Users carrying the must-change flag are routed straight to the rotation
+  // screen (CLAUDE.md §6, ADR-010, DEV.56); the layout guards keep them there
+  // until the flag clears. Everyone else goes to their home surface.
+  const redirectTo = user.mustChangePassword
+    ? '/change-password'
+    : user.role === 'operator'
+      ? '/admin'
+      : '/dashboard';
   return { ok: true, redirectTo };
 }
 

@@ -9,6 +9,10 @@ export const dynamic = 'force-dynamic';
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const ctx = await getAuthContext();
   if (!ctx) redirect('/login');
+  // Force-password-change trapdoor (CLAUDE.md §6, ADR-010, DEV.56) — checked
+  // before the role gate so a flagged operator rotates first. /change-password
+  // is in the (auth) group, outside this layout, so there is no redirect loop.
+  if (ctx.user.mustChangePassword) redirect('/change-password');
   if (ctx.user.role !== 'operator') redirect('/dashboard');
 
   return (

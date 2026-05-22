@@ -14,6 +14,12 @@ import { resolveRequestScope } from '@/lib/tenant/resolve';
 //
 // Actual tenant existence + role checks happen in (app)/layout.tsx and
 // /admin/layout.tsx via getTenantContext() / getCurrentUser().
+//
+// Force-password-change (CLAUDE.md §6, ADR-010, DEV.56/DEV.68): the
+// `must_change_password` trapdoor is ALSO enforced in those layouts, NOT
+// here. Resolving the flag requires a Lucia session lookup (Drizzle), which
+// the Edge runtime cannot do. The login action additionally routes flagged
+// users to /change-password on sign-in.
 // ============================================================================
 
 const PROTECTED_APP_PREFIXES = [
