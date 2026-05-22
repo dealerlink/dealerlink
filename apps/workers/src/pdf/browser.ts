@@ -176,17 +176,22 @@ export function notePageOpened(): void {
 }
 
 /**
- * Pre-warm Chromium at worker boot (DEV.66). The first launch triggers
+ * Pre-warm Chromium at worker boot (DEV.66) by triggering
  * @sparticuz/chromium's one-time binary extraction to /tmp — the dominant
- * cold-start cost on the small `basic-xxs` worker. Launching once and closing
- * caches that extraction for the container lifetime, so the first user-facing
- * render (and renders after an idle-recycle) pay only a fast spawn, not the
- * slow cold extraction. The instance is closed immediately rather than left
- * holding Chromium's RAM idle on the 512 MB worker.
+ * cold-start cost on the small `basic-xxs` worker — WITHOUT spawning a Chromium
+ * process. A full launch at boot stalled the 512 MB worker, so this warms only
+ * the extraction: it's light (no RAM spike, can't hang on a DevTools
+ * handshake), and the first real render then pays only a fast spawn against the
+ * already-extracted binary. The extraction is cached for the container
+ * lifetime, so renders after the idle-recycle stay fast too.
+ *
+ * No-op off Linux: dev uses a system Chrome that needs no extraction, and
+ * @sparticuz/chromium's binary pack is Linux-only.
  */
 export async function warmChromium(): Promise<void> {
-  await getBrowser();
-  await shutdownBrowser();
+  if (process.platform !== 'linux') return;
+  const mod = await import('@sparticuz/chromium');
+  await mod.default.executablePath();
 }
 
 /** Close the shared browser (graceful worker shutdown / tests). */

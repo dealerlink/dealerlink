@@ -41,20 +41,6 @@ async function main(): Promise<void> {
 
   const boss = await startBoss();
 
-  // Eager-warm Chromium so the first PDF render isn't a slow cold start on the
-  // small worker (DEV.66). Done before registering job consumers so the warm's
-  // launch/close can't race a real render's use of the shared browser. Disable
-  // with PDF_EAGER_WARM=false if it ever causes boot trouble.
-  if (process.env.PDF_EAGER_WARM !== 'false') {
-    const startedAt = Date.now();
-    try {
-      await warmChromium();
-      logger.info(`PDF: eager-warmed Chromium in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
-    } catch (err) {
-      logger.warn({ err }, 'PDF: eager-warm Chromium failed; first render will be a cold start');
-    }
-  }
-
   // --- Outbound email ------------------------------------------------------
   await boss.work(EMAIL_QUEUE, instrumentJobHandler(EMAIL_QUEUE, handleSendEmailJob));
 
@@ -84,6 +70,23 @@ async function main(): Promise<void> {
   await boss.schedule(PDF_CLEANUP_QUEUE, '0 3 * * *', undefined, { tz: 'Asia/Kolkata' });
 
   logger.info('Workers process started — pg-boss queues + daily crons registered.');
+
+  // Eager-warm Chromium's binary extraction in the BACKGROUND (DEV.66) so the
+  // first PDF render isn't a slow cold start. Runs AFTER consumers are
+  // registered and is fire-and-forget, so a slow/failed warm can never block
+  // the worker from processing jobs. Disable with PDF_EAGER_WARM=false.
+  if (process.env.PDF_EAGER_WARM !== 'false') {
+    const startedAt = Date.now();
+    void warmChromium()
+      .then(() =>
+        logger.info(
+          `PDF: eager-warmed Chromium in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`,
+        ),
+      )
+      .catch((err: unknown) =>
+        logger.warn({ err }, 'PDF: eager-warm Chromium failed; first render may be a cold start'),
+      );
+  }
 }
 
 async function shutdown(): Promise<void> {
