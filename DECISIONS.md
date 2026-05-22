@@ -486,4 +486,95 @@ Misclassifying inter/intra-state misstates the tax on the invoice — a complian
 
 ---
 
+## ADR-013 — Puppeteer rendering is queue-isolated to workers component
+
+**Date:** 2026-05-22
+**Status:** Accepted
+**Closes:** DEV.63
+
+### Context
+
+Stage B Day 10 (DEV.36) introduced PDF generation with the intent of running
+Chromium in the workers component per CLAUDE.md §7 line 336
+("Don't render PDFs on the web process — always queue to the workers process").
+However, the actual implementation used a subprocess-spawn pattern (spawnPdfRender)
+that kept Chromium running inside the web process. This drift was latent through
+Stage B because local development shares the host machine — both processes had
+access to all system libraries.
+
+Stage C Day C.0 staging deployment surfaced this as a `libnss3.so: cannot open
+shared object file` error when the web process tried to launch Chromium on DO
+App Platform's Node buildpack image (which lacks Chromium runtime libraries).
+
+### Decision
+
+All PDF generation routes through pg-boss `render-pdf` queue. Architecture:
+
+- Web action enqueues a `render-pdf` job with documentType, documentId, tenantId
+- Workers component processes the job via Puppeteer + @sparticuz/chromium
+- Workers component runs from a custom Dockerfile (`apps/workers/Dockerfile`)
+  that installs Chromium runtime dependencies (libnss3, libatk-bridge2.0-0,
+  libdrm2, libgbm1, libxkbcommon0, libpango-1.0-0, libgtk-3-0, libasound2,
+  libxcomposite1, libxdamage1, libxrandr2, libxshmfence1, libxss1, libxtst6,
+  fonts-liberation, fonts-noto-color-emoji)
+- Workers writes the generated PDF to the `generated_documents` table
+- Web action polls `generated_documents` row (default 120s timeout, configurable
+  via PDF_RENDER_TIMEOUT_MS)
+- User-perceived experience remains synchronous: click → spinner → PDF download
+
+Implementation guards:
+
+- The web process MUST NOT import `puppeteer-core` or `@sparticuz/chromium`
+- The workers process is the sole owner of Chromium lifecycle
+- Eager-warm at worker boot extracts Chromium binary (~3-4s) without blocking
+  consumer registration (PDF_EAGER_WARM env var, default true)
+- Idle-recycle window: 45 minutes (was 10 minutes; widened in DEV.67)
+- Per-100-pages recycle remains as a backstop against Puppeteer memory drift
+
+### Consequences
+
+Positive:
+
+- Web bundle stays slim (~50MB, no Chromium binary)
+- Workers can scale independently for PDF-heavy workloads
+- Failures in PDF rendering cannot crash the web app
+- Web component runs on standard Node buildpack (cheap, simple)
+- Memory profile per component matches its actual workload
+
+Tradeoffs:
+
+- PDF generation has ~1-3s additional latency vs in-process synchronous (acceptable
+  for distributor UX; warm renders measure 3-5s steady state on basic-xxs)
+- Transient ~1-2 min post-deploy window where Chromium launch contends for 512MB
+  with the outgoing container during rolling deploys
+- Worker boot time includes the eager-warm extraction (~3-4s)
+- Additional database I/O (polling generated_documents) — measured at <5% of total
+  PDF generation time
+
+### Rejected Alternatives
+
+1. **Dockerize the web component with Chromium**: Rejected. Violates CLAUDE.md §7
+   line 336. Adds 170MB to web bundle. Doubles memory footprint. Slows web
+   cold-starts. Would lock in technical debt permanently.
+
+2. **Browserless.io (managed PDF service)**: Deferred to Phase 2. The cost
+   ($25-50/month) and external dependency are real considerations, but current
+   volume doesn't justify the trade-off. Re-evaluate in Phase 2 if operational
+   overhead grows.
+
+3. **@sparticuz/chromium-min with manual dependency layer**: Rejected. Fragile
+   approach (DO base images can change), maintenance burden, no architectural
+   benefit over the Dockerfile approach.
+
+### Related Deviations
+
+- DEV.36 (superseded): Original Day 10 subprocess-spawn pattern
+- DEV.63 (resolved): Architectural correction that closed the gap
+- DEV.64 (resolved): .do/app.yaml ↔ deployed-spec sync workflow
+- DEV.65 (resolved): corepack signature check failure → switched to npm install -g pnpm
+- DEV.66 (resolved): Cold-start timeout adjustment (60s → 120s)
+- DEV.67 (resolved): Idle-recycle widened to 45m; worker sizing flagged for Stage D
+
+---
+
 _This log is append-only. Locked decisions are not edited; if a decision changes, write a new ADR that supersedes the old one._
