@@ -967,7 +967,62 @@ read the pg-boss job state to fail fast.
 
 **Verified:** typecheck + lint clean across the workspace; workers unit suite
 40/40; the day-10 PDF verify spec passed locally end-to-end with web + workers
-running (first cold render ~22 s incl. Next compile, well within the 45 s test
-budget). Staging deploy + critical-path E2E is the live confirmation.
+running. On staging (after DEV.64/65 got the Dockerfile actually deployed), all
+four PDF paths smoke-tested green against `demo.staging.dealerlink.in` —
+quotation (verify-day-10), PI, payment receipt, dispatch note — each a genuine
+fresh render (staging had no cached PDFs, since rendering was broken until this
+fix). Workers logs were clean of any `libnss3`/Chromium error throughout.
+**Cold-start caveat:** the very first render on a freshly-deployed (or
+10-min-idle-recycled) `basic-xxs` worker exceeds the 30 s timeout — cold
+`@sparticuz/chromium` launch on 512 MB is slow — so the first attempt returns
+the "try again" message and the retry (warm Chromium) succeeds in seconds.
+Functional and self-healing, but a rough first impression; mitigations (higher
+timeout, eager warm-up at boot, or a longer idle-recycle window) are a Stage D
+tuning item — instance size is held per the cost guardrail.
 **Resolution:** Permanent. Supersedes DEV.36 (the spawn-subprocess bridge is
 removed).
+
+## DEV.64 — Stage C — repo `.do/app.yaml` is documentation, not the deployed spec
+
+**Date:** 2026-05-22
+**Spec said:** DEV.63 — switch the workers component to a Dockerfile via
+`.do/app.yaml` and push.
+**Found:** Editing `.do/app.yaml` in the repo and pushing did **not** change how
+the workers component builds. DO App Platform stores its **own** copy of the app
+spec; `deploy_on_push` rebuilds from the latest commit but against the spec
+already stored in DO. After pushing the `dockerfile_path` change the workers
+component still built from the Node buildpack (runtime path `/workspace`,
+corepack downloading pnpm) and the `libnss3` failure persisted — the repo edit
+was illusory. The `.do/app.yaml` header already notes secrets are applied "via
+the UI or `doctl apps spec update`"; the same is true of the whole spec.
+**Built:** Applied the spec with `doctl apps update <app-id> --spec`. To avoid
+clobbering the 16 encrypted secrets (the committed `.do/app.yaml` ships blank
+`SECRET` values), the change was **merged into the live spec** — fetched with
+`doctl apps spec get`, which returns the encrypted `EV[...]` values verbatim;
+only the workers build method and the web `PDF_RENDER_TIMEOUT_MS` env were
+edited — then applied. (`doctl apps spec validate` cannot pre-check a
+round-tripped spec: it uses the new-app `/propose` endpoint, which rejects
+already-encrypted secrets with "secret env value must not be encrypted before
+app is created" — a false alarm; `apps update` accepts them on an existing app.)
+**Rule (now in docs/DEPLOYMENT.md):** every `.do/app.yaml` edit MUST be followed
+by `doctl apps update --spec` (merged into the live spec to preserve secrets),
+or the change is illusory. Repo spec and live spec can silently drift.
+**Stage D:** script the spec sync as a post-push CI step (or DO's GitHub Action
+that applies the spec on push) so the two cannot diverge.
+**Resolution:** Permanent (process rule); automation deferred to Stage D.
+
+## DEV.65 — Stage C — corepack in the workers image fails pnpm signature check
+
+**Date:** 2026-05-22
+**Spec said:** DEV.63 — Dockerfile installs pnpm via
+`corepack enable && corepack prepare pnpm@9.15.9 --activate`.
+**Found:** The first Dockerfile build failed at `corepack prepare` with
+"Internal Error: Cannot find matching keyid" — the corepack bundled in
+`node:20.18.0-bookworm-slim` ships stale npm-registry signing keys and rejects
+the pnpm package signature. The Chromium `apt` layer built fine (and confirmed
+the `libgconf-2-4` omission was correct — no apt error).
+**Built:** Replaced corepack with `RUN npm install -g pnpm@9.15.9` — npm's own
+integrity check is unaffected. Version stays pinned to package.json's
+`packageManager` field.
+**Resolution:** Permanent. Stage D could instead set `COREPACK_INTEGRITY_KEYS`
+or bump corepack, but the direct npm install is simplest and deterministic.

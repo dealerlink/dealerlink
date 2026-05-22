@@ -41,6 +41,38 @@ Server Action waits for the worker to render before returning a retryable
 error; staging uses `30000` for cold-Chromium headroom on the basic-xxs
 worker.
 
+### `.do/app.yaml` is documentation — apply it with `doctl` (DEV.64)
+
+**Editing `.do/app.yaml` in the repo and pushing does NOT update the running
+app.** DO App Platform stores its own copy of the spec; `deploy_on_push`
+rebuilds the latest commit against the _already-stored_ spec. **Every
+`.do/app.yaml` change MUST be followed by a spec apply, or the change is
+illusory** (this is how the DEV.63 Dockerfile switch silently no-op'd at first).
+
+Because the committed `.do/app.yaml` ships **blank `SECRET` values** (real
+values live only in DO), do not apply it directly — that risks wiping live
+secrets. Instead merge your change into the live spec, which round-trips the
+encrypted secrets:
+
+```bash
+APP=<app-id>                          # doctl apps list
+doctl apps spec get $APP > live.yaml  # contains encrypted EV[...] secrets
+# edit live.yaml: apply ONLY your intended change (e.g. workers build method,
+# a new env) — leave every EV[...] value untouched
+doctl apps update $APP --spec live.yaml
+```
+
+Notes:
+
+- `doctl apps spec validate` will reject a round-tripped spec ("secret env value
+  must not be encrypted before app is created") — it validates against the
+  new-app `/propose` path. This is expected; `apps update` accepts encrypted
+  secrets on an existing app.
+- Keep `.do/app.yaml` updated too — it's the human-readable source of truth and
+  the diff reviewers read. Repo file and live spec drift silently otherwise.
+- Stage D: automate the apply (post-push CI step or DO's spec-sync GitHub
+  Action) so repo and live spec cannot diverge.
+
 ## Required env vars
 
 ```
