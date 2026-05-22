@@ -172,6 +172,11 @@ async function main() {
           role: u.role,
           fullName: u.name,
           status: 'active',
+          // Seed users have "already rotated" — they log straight into the
+          // app, no force-password-change screen. The column default is
+          // false; we set it explicitly so the intent is unmistakable and the
+          // Day-1..18 E2E specs keep passing unchanged (DEV.56 / Stage C C.1).
+          mustChangePassword: false,
         });
         credentials.push({ email, tenant: seed.displayName, role: u.role });
       }
@@ -189,6 +194,8 @@ async function main() {
       role: 'operator',
       fullName: 'Platform Operator',
       status: 'active',
+      // Seeded operator logs straight into /admin — see note above.
+      mustChangePassword: false,
     });
   });
   credentials.push({
