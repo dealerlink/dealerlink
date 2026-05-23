@@ -123,13 +123,21 @@ test.describe('Day 11 — PI + order lifecycle', () => {
     await loginAs(page, 'demo', 'admin');
     await skipIfPasswordRotation(page);
 
-    await page.goto('/pi');
-    // Seeded three-party PIs label the dealer cell with "ship → …".
-    const threePartyRow = page.locator('table tbody tr', { hasText: /ship →/ });
-    expect(await threePartyRow.count()).toBeGreaterThan(0);
-    await threePartyRow.first().locator('a[href^="/pi/"]').click();
+    // PI-2026-0003 is a seeded three-party PI (Ship-To is a distinct dealer).
+    // Filter the list to it by number rather than relying on first-page
+    // ordering: day12/day13 seed newer two-party PIs that bury the three-party
+    // ones past page 1 of the /pi list (DEV.70). The search filter (ilike on
+    // PI #) narrows the result set to this one row regardless of ordering.
+    await page.goto('/pi?search=PI-2026-0003');
+    const threePartyRow = page.locator('table tbody tr', { hasText: 'PI-2026-0003' });
+    await expect(threePartyRow).toHaveCount(1);
+    // The list cell carries the three-party "ship → …" indicator.
+    await expect(threePartyRow).toContainText(/ship →/);
+    await threePartyRow.locator('a[href^="/pi/"]').click();
 
-    await expect(page.locator('h1').first()).toContainText(/PI-/);
+    // The detail page renders distinct "Bill to" / "Ship to" party blocks for
+    // a three-party PI (a two-party PI renders a single "Bill to & Ship to").
+    await expect(page.locator('h1').first()).toContainText('PI-2026-0003');
     await expect(page.getByText('Bill to', { exact: true })).toBeVisible();
     await expect(page.getByText('Ship to', { exact: true })).toBeVisible();
   });
