@@ -100,6 +100,13 @@ export const dealerListFilterSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 export type DealerListFilter = z.infer<typeof dealerListFilterSchema>;
+/**
+ * Pre-parse INPUT shape of the filter — `state` accepts a raw code-or-name
+ * string here (the schema transforms it to a canonical code on parse), unlike
+ * the post-parse {@link DealerListFilter} where `state` is already a code.
+ * Callers that forward untrusted query params should accept this type.
+ */
+export type DealerListFilterInput = z.input<typeof dealerListFilterSchema>;
 
 /** Row shape for bulk-import CSV — every value comes in as a string. */
 export const dealerImportRowSchema = createDealerSchema.extend({

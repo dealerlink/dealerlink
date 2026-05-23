@@ -20,14 +20,14 @@
 > the living counterpart to the Stage-B-closeout content below (§1 onward),
 > which is frozen at the `stage-b-complete` tag.
 
-| Day | Task                                   | Status  | Date       |
-| --- | -------------------------------------- | ------- | ---------- |
-| C.0 | Staging deploy                         | ✅      | 2026-05-22 |
-| C.1 | Force-password-change (closes DEV.56)  | ✅      | 2026-05-23 |
-| C.2 | State normalization (closes DEV.33)    | ⏳ next | —          |
-| C.3 | Pilot staging handoff + UX walkthrough | ⏳      | 2026-05-24 |
-| C.4 | Security audit                         | ⏳      | 2026-05-25 |
-| C.5 | Performance test + Stage D handoff     | ⏳      | 2026-05-26 |
+| Day | Task                                   | Status | Date       |
+| --- | -------------------------------------- | ------ | ---------- |
+| C.0 | Staging deploy                         | ✅     | 2026-05-22 |
+| C.1 | Force-password-change (closes DEV.56)  | ✅     | 2026-05-23 |
+| C.2 | State normalization (closes DEV.33)    | ✅     | 2026-05-24 |
+| C.3 | Pilot staging handoff + UX walkthrough | ⏳     | 2026-05-24 |
+| C.4 | Security audit                         | ⏳     | 2026-05-25 |
+| C.5 | Performance test + Stage D handoff     | ⏳     | 2026-05-26 |
 
 ### C.0 — Staging deploy ✅ (2026-05-22)
 
@@ -149,14 +149,14 @@ none blocks Stage B closing — but each is a real follow-up.
 
 ### Should be addressed in Stage C
 
-| Item                                  | Source         | What's needed                                                                                                                                                                                                                                                                   |
-| ------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **State-code normalization**          | DEV.30, DEV.33 | `tenant_settings.state`, `dealers.state`, `quotations.*` store full state names ("Maharashtra") not 2-letter codes. Add a lookup, migrate rows, tighten the CHECK constraint. Blocks Phase-2 GST Returns API. **🔄 In progress — C.2.**                                         |
-| **Force-password-change route**       | DEV.56 (c)     | CLAUDE.md §6 describes a rotation screen gated by `users.must_change_password`. The flag is set + on the session, but **no route shipped** in Stage B — login always landed on `/dashboard`. Rotation screen built + enforced in the layouts. **✅ Closed — C.1 (2026-05-23).** |
-| **Dealer/product detail RSC warning** | DEV.56 (d)     | `/dealers/[id]` and `/catalog/[id]` pass a function prop (`formatINR`) into a Client Component → a non-fatal dev error. Pass strings or move the import.                                                                                                                        |
-| **Day-13 seed pre-stamped inventory** | DEV.45         | The Day-13 seed sets ~81 items to `dispatched`/`delivered` without `dispatch_serials` rows. Backfill or scope invariant queries.                                                                                                                                                |
-| **DB-test residue in shared dev DB**  | DEV.31         | Integration tests leave non-seed rows in `dealerlink_dev`. Run DB tests in a rolled-back transaction, or use a disposable DB.                                                                                                                                                   |
-| **CSV import per-row error report**   | DEV.20 / R.17  | Atomic imports surface only the first failing row. Add a row identifier.                                                                                                                                                                                                        |
+| Item                                  | Source         | What's needed                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **State-code normalization**          | DEV.30, DEV.33 | All state columns now hold ISO 3166-2:IN 2-letter codes: canonical map + helpers in `@dealerlink/schemas/states`, migration `0015` normalizes rows + tightens CHECKs, dropdowns submit codes / displays show names. Day 9 parity green pre+post. The re-seed also surfaced (and fixed) a latent fragility in verify-day-11's three-party test — DEV.71, test-only. **✅ Closed — C.2 (2026-05-24, DEV.70 + DEV.71).** |
+| **Force-password-change route**       | DEV.56 (c)     | CLAUDE.md §6 describes a rotation screen gated by `users.must_change_password`. The flag is set + on the session, but **no route shipped** in Stage B — login always landed on `/dashboard`. Rotation screen built + enforced in the layouts. **✅ Closed — C.1 (2026-05-23).**                                                                                                                                       |
+| **Dealer/product detail RSC warning** | DEV.56 (d)     | `/dealers/[id]` and `/catalog/[id]` passed a function prop (`formatINR`) into a Client Component. In Next.js 14 this is fatal, not a warning — both detail pages fell to their error boundary. Fixed by importing `formatINRExact` directly in the client components. Surfaced by `verify-day-c2`. **✅ Closed — C.2 (2026-05-24, DEV.72).**                                                                          |
+| **Day-13 seed pre-stamped inventory** | DEV.45         | The Day-13 seed sets ~81 items to `dispatched`/`delivered` without `dispatch_serials` rows. Backfill or scope invariant queries.                                                                                                                                                                                                                                                                                      |
+| **DB-test residue in shared dev DB**  | DEV.31         | Integration tests leave non-seed rows in `dealerlink_dev`. Run DB tests in a rolled-back transaction, or use a disposable DB.                                                                                                                                                                                                                                                                                         |
+| **CSV import per-row error report**   | DEV.20 / R.17  | Atomic imports surface only the first failing row. Add a row identifier.                                                                                                                                                                                                                                                                                                                                              |
 
 ### Deferred to Phase 2 (architecture already supports each)
 
@@ -236,7 +236,7 @@ rows 1–9 and can be read as a script.
 - Provision real tenants via the operator admin app (R1).
 - Import real dealers/products via bulk CSV import (R7).
 - Record opening inventory via procurements.
-- Normalize state codes (DEV.33) **before** real GST documents are issued.
+- ~~Normalize state codes (DEV.33) before real GST documents are issued.~~ ✅ Done — C.2 (DEV.70).
 
 ---
 
@@ -249,7 +249,7 @@ rows 1–9 and can be read as a script.
 | **DNS + SSL**                | `dealerlink.in` plus wildcard `*.dealerlink.in` for per-tenant subdomains needs wildcard DNS + wildcard SSL. DNS propagation can take 24h+ — start early (D.1–D.2). |
 | **Postgres backups**         | DO Managed Postgres backup schedule + a tested restore procedure must be set up before real tenant data lands.                                                      |
 | **Resend domain**            | `mail.dealerlink.in` needs domain verification + SPF/DKIM/DMARC, and the inbound webhook endpoint + signing secret wired (R10).                                     |
-| **State-code debt (DEV.33)** | Must be resolved before GST-return integration; see §3.                                                                                                             |
+| **State-code debt (DEV.33)** | ✅ Resolved — C.2 (DEV.70): all state columns are ISO 3166-2:IN codes, CHECK-enforced. GST-return export can rely on canonical codes.                               |
 
 ---
 
@@ -358,4 +358,4 @@ the matching production risks.
 
 _Stage B closed 2026-05-16 · handoff prepared on Day 18 · frozen at the
 `stage-b-complete` git tag. · Stage C progress (§0) is maintained live —
-last updated 2026-05-23 (C.1 complete)._
+last updated 2026-05-24 (C.2 complete)._

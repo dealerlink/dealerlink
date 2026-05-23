@@ -20,6 +20,7 @@ import {
   tenants,
   type DrizzleTx,
 } from '@dealerlink/db';
+import { formatStateLabel } from '@dealerlink/schemas';
 import { computeTax, serializeOutput, type GstRate, type TaxDiscount } from '@dealerlink/tax';
 import { asc, eq } from 'drizzle-orm';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -259,8 +260,10 @@ export async function loadQuotationPdfData(
     validUntil: quote.validUntil,
     status: quote.status,
     currency: quote.currency,
-    tenantStateAtIssue: quote.tenantStateAtIssue,
-    placeOfSupply: quote.placeOfSupply,
+    // Display the full state name (stored as an ISO 3166-2:IN code — DEV.33).
+    // isInterState comes from the tax engine, computed on the raw codes above.
+    tenantStateAtIssue: formatStateLabel(quote.tenantStateAtIssue),
+    placeOfSupply: formatStateLabel(quote.placeOfSupply),
     isInterState: tax.isInterState,
     billFrom: {
       name: tenant.displayName,
@@ -268,7 +271,7 @@ export async function loadQuotationPdfData(
       addressLines: addressLines([
         settings?.addressLine1,
         settings?.addressLine2,
-        [settings?.addressCity, settings?.addressState, settings?.addressPincode]
+        [settings?.addressCity, formatStateLabel(settings?.addressState), settings?.addressPincode]
           .filter((p) => p && p.trim())
           .join(', '),
       ]),
@@ -282,7 +285,9 @@ export async function loadQuotationPdfData(
       addressLines: addressLines([
         dealer.addressLine1,
         dealer.addressLine2,
-        [dealer.city, dealer.state, dealer.pincode].filter((p) => p && p.trim()).join(', '),
+        [dealer.city, formatStateLabel(dealer.state), dealer.pincode]
+          .filter((p) => p && p.trim())
+          .join(', '),
       ]),
       gstin: dealer.gstin ?? null,
       contact: dealer.contactPerson ?? null,

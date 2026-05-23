@@ -4,7 +4,6 @@ import { notFound, redirect } from 'next/navigation';
 
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
-import { formatINRExact } from '@/lib/format';
 import { getAuditTrail } from '@/lib/queries/audit';
 import { getProductById } from '@/lib/queries/products';
 import { impersonationTenantId } from '@/lib/tenant/context';
@@ -82,7 +81,6 @@ export default async function ProductDetailPage({ params }: PageProps) {
           status: product.status,
         }}
         canEdit={canEdit}
-        formatINR={formatINRExact}
       />
 
       <section className="border-line mt-6 rounded-[6px] border bg-white p-4">

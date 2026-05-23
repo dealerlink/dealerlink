@@ -302,13 +302,14 @@ CLAUDE.md retains only the day-to-day-critical sections (Brand Naming, Project a
 **Resolution:** No code or data change — the seed, the Server Action, and the seeded data are all correct. Added a regression test (`packages/db/tests/quotation.test.ts` -> `describe('seed integrity — quotation line drift')`) that asserts, per tenant, `SUM(quotation_lines.line_total) === quotations.subtotal` for every seeded `QT-` quotation. This would catch a genuine double-insert or dropped-line bug if one is ever introduced.
 **Permanent fix:** The regression test above. Future "duplicate row" verification queries against multi-tenant tables must either filter by `tenant_id` or display the tenant, so per-tenant document numbering is not misread as duplication.
 
-## DEV.33 — Day 9 pre-flight — state stored as full names, not 2-letter codes (tracked)
+## DEV.33 — Day 9 pre-flight — state stored as full names, not 2-letter codes — ✅ CLOSED
 
 **Date:** 2026-05-15
+**Closed:** 2026-05-24 (Stage C Day C.2) — see DEV.70 for the shipped normalization.
 **Issue:** `tenant_settings.state`, `dealers.state`, `quotations.tenant_state_at_issue`, and `quotations.place_of_supply` all store full state names ("Maharashtra", "Karnataka", "Tamil Nadu") rather than the 2-letter codes ("MH", "KA", "TN") implied by CLAUDE.md section 6. This is the data-shape consequence of the CHECK relaxation already recorded in DEV.30.
 **Impact:** Functional today and **not blocking Day 9** — the tax engine only needs an exact-match string, and all four locations are consistent (inter-state vs intra-state is decided by string equality of tenant state vs place-of-supply). It will break when: (a) integrating with the GST Returns API in Phase 2 (mandates 2-letter codes), (b) Day 11 PDF generation if any letterhead/place-of-supply logic depends on canonical codes, (c) any GSTIN <-> state cross-validation (GSTIN bytes 1-2 encode the numeric state code).
-**Status:** TRACKED, not blocking. Day 9 tax engine works with whatever string format as long as all sides stay consistent.
-**Resolution plan:** Normalize before Stage C (Validation). Add a state-code lookup helper (full name -> 2-letter), migrate existing `tenant_settings`/`dealers`/`quotations` rows, tighten the CHECK constraint to exactly 2 chars, and re-seed. This supersedes the "store and compare verbatim" interim stance of DEV.30.
+**Status:** ✅ CLOSED 2026-05-24 (Stage C Day C.2). The resolution plan below shipped in full via migration `0015_normalize_state_codes` + the canonical map/helpers in `@dealerlink/schemas/states` — see DEV.70 for the complete writeup and the Day 9 parity gate (green pre-migration, post-migration, and on a fresh code-seed).
+**Resolution plan (delivered):** Normalize before Stage C (Validation). Add a state-code lookup helper (full name -> 2-letter), migrate existing `tenant_settings`/`dealers`/`quotations` rows, tighten the CHECK constraint to exactly 2 chars, and re-seed. This supersedes the "store and compare verbatim" interim stance of DEV.30.
 
 ## DEV.34 — Day 9 — tax engine state comparison is case-SENSITIVE; preview adapter stays case-insensitive
 
@@ -1188,3 +1189,98 @@ action so the two cannot drift.
 **Impact:** Slightly stricter than the plan text; matches the documented
 product policy and the temp-password shape.
 **Resolution:** Intentional — defer to CLAUDE.md §6.
+
+## DEV.70 — Stage C Day C.2 — ✅ closes DEV.33: state names normalized to ISO 3166-2:IN codes
+
+**Date:** 2026-05-24
+**Closes:** DEV.33 (state stored as full names, tracked since Day 9) — and
+supersedes the interim "store and compare verbatim" stance of DEV.30.
+
+**What shipped:** All state columns now hold a 2-letter ISO 3166-2:IN code
+(`MH`, `KA`, …) or NULL, never a full name:
+
+- **Canonical source** — `packages/schemas/src/states.ts`: the code→name map
+  (28 states + 8 UTs), `getStateName` / `getStateCodeFromName` /
+  `isValidStateCode` / `normalizeStateInput` (code-or-name → code, with
+  former-name + alt-code aliases) / `formatStateLabel`, plus strict
+  (`indianStateCodeSchema`) and lenient (`stateCodeInputSchema`) Zod schemas.
+- **Migration** — `0015_normalize_state_codes`: one transaction that first
+  normalizes every existing row (full name, any case → code; blank → NULL)
+  then tightens the CHECK constraints to `^[A-Z]{2}$` on
+  quotations/PIs/orders place-of-supply columns and NULL-tolerant code checks
+  on `dealers.state` + `tenant_settings.state`/`address_state`. The data block
+  is generated programmatically (`scripts/generate-state-migration.ts`,
+  iterating the canonical map so all 36 are covered) and a reversible rollback
+  is generated alongside under `migrations/rollback/`.
+- **Boundary** — operator + dealer dropdowns submit codes
+  (`components/ui/state-select.tsx`); admin schemas use the strict enum, the
+  dealer schema the lenient transform (CSV import names → codes); UI/PDF/report
+  displays render full names via `formatStateLabel`/`getStateName`. Seeds write
+  codes.
+
+**Tax-engine parity (the gate):** `packages/tax/src/state.ts` is UNCHANGED —
+still an opaque case-sensitive string compare. The Day 9 parity test
+(`quotation-engine-parity.test.ts`) passed BEFORE the migration, AFTER the
+migration on the migrated data, and AGAIN on a fresh code-seed — every seeded
+quotation's stored totals still match recomputation. Codes just guarantee both
+sides of `tenantState !== placeOfSupply` share one format (CLAUDE.md §5).
+
+**Why a programmatic generator + case-insensitive CASE:** seeded data was
+mixed-case (`Maharashtra` from Day 8, `MAHARASHTRA` from Day 11–13); the CASE
+matches on `upper(btrim(col))` so both map. Generating from `INDIAN_STATES`
+removes the "we forgot Telangana" risk.
+
+**Resolution:** Permanent.
+
+---
+
+## DEV.71 — Stage C Day C.2 — verify-day-11 three-party test made robust to seed ordering
+
+**Date:** 2026-05-24
+
+> Note: the test-fix deviation the C.2 prompt called "DEV.70" is logged here as
+> DEV.71 — DEV.70 was already taken by the state-normalization closure (above),
+> committed earlier in C.2.
+
+**Issue:** Verify-day-11's three-party test was fragile to seed ordering.
+`day11.ts` creates three-party PIs (PI-2026-0003, 0007, 0009) but `day12.ts`
+and `day13.ts` add later two-party PIs that, sorted by `piDate DESC,
+createdAt DESC`, pushed the three-party PIs past page 1 (PAGE_SIZE 50) of the
+`/pi` list. The test scanned only the first page for a row labelled `ship → …`,
+so it was passing incidentally during Stage B because the newer seeds hadn't
+accumulated yet. The C.2 re-seed surfaced the latent gap.
+
+**Fix:** Test-only. The test now filters the list with `?search=PI-2026-0003`
+(ilike on PI #, which narrows to the single seeded three-party PI regardless of
+ordering), asserts the row carries the `ship → …` indicator, then opens the
+detail page and asserts distinct "Bill to" / "Ship to" party blocks. No
+production code change — the underlying data shape (three-party PIs exist with
+`bill_to ≠ ship_to`) is correct; only the test's reliance on first-page ordering
+was wrong.
+
+**Resolution:** Permanent (test hardening).
+
+---
+
+## DEV.72 — Stage C Day C.2 — ✅ closes DEV.56(d): server→client function-prop crashed the detail pages
+
+**Date:** 2026-05-24
+
+C.1's force-password-change refactor introduced a server→client function-prop
+pattern in `/dealers/[id]` and `/catalog/[id]` that violates Next.js 14 RSC
+serialization. Crashed both detail pages. Fixed by importing `formatINRExact`
+directly in the client components. Surfaced by C.2's `verify-day-c2` spec. Both
+detail pages now render correctly.
+
+**Detail:** the Server Component pages passed `formatINR={formatINRExact}` (a
+function) into the `'use client'` components `DealerDetailSections` /
+`ProductDetailSections`. Next.js 14 cannot serialize a function across the RSC
+boundary, so the render threw ("Functions cannot be passed directly to Client
+Components …") and the page fell through to its error boundary ("Something went
+wrong while loading this page"). `verify-day-c2`'s "dealer detail renders state
+as a full name" assertion failed not on the state label but because the whole
+page was an error boundary. Fix: drop the prop, `import { formatINRExact } from
+'@/lib/format'` directly in each client component (a pure Intl util, safe
+client-side). This subsumes the DEV.56(d) carry-forward.
+
+**Resolution:** Permanent.

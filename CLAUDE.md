@@ -1,6 +1,6 @@
 # CLAUDE.md — Dealerlink Implementation Guide
 
-> Last reviewed: 2026-05-23 — Stage C in progress (C.1 force-password-change closed)
+> Last reviewed: 2026-05-24 — Stage C in progress (C.1 force-password-change + C.2 state-code normalization closed)
 
 > **For Claude Code:** This is your authoritative reference for building Dealerlink. Read this file end-to-end before writing any code. When the BRD and this file conflict, this file wins. When in doubt about a decision, the answer is in here — don't ask, look.
 
@@ -228,6 +228,12 @@ Every document tracks three distinct parties:
 1. **Bill From** — the tenant (Distributor). Pulled from tenant settings.
 2. **Bill To** — the Dealer who pays. Selected on the deal.
 3. **Ship To** — consignee (may equal Bill To, or be a different end customer).
+
+### State format — 2-letter ISO 3166-2:IN codes
+
+Every state value — `tenant_settings.state` / `address_state`, `dealers.state`, and the `tenant_state_at_issue` / `place_of_supply` columns on quotations / PIs / orders — is stored as a **2-letter ISO 3166-2:IN code** (`MH`, `KA`, `TN`, …), never a full name. The canonical map + helpers (`getStateName`, `normalizeStateInput`, `formatStateLabel`, `indianStateCodeSchema`) live in `@dealerlink/schemas/states`; UI dropdowns show the full name and submit the code; PDFs/displays render the full name via `getStateName`/`formatStateLabel`. DB CHECK constraints enforce `^[A-Z]{2}$`. Never hardcode a state string. (DEV.33, closed Stage C Day C.2.)
+
+The tax engine still treats state as an **opaque string** — it only needs `tenantState !== placeOfSupply` with a consistent format on both sides; codes simply guarantee that. Example: tenant in `MH` selling to a Ship-To dealer in `KA` → `MH !== KA` → inter-state → **IGST**; same `MH`/`MH` → intra-state → **CGST + SGST**.
 
 ### Tax calculation rules — `packages/tax/`
 

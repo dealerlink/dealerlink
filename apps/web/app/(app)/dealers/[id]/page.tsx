@@ -5,7 +5,6 @@ import { notFound, redirect } from 'next/navigation';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { recordAccess } from '@/lib/audit/access-log';
 import { getAuthContext } from '@/lib/auth/session';
-import { formatINRExact } from '@/lib/format';
 import { getAuditTrail } from '@/lib/queries/audit';
 import { getDealerById } from '@/lib/queries/dealers';
 import { impersonationTenantId } from '@/lib/tenant/context';
@@ -108,7 +107,6 @@ export default async function DealerDetailPage({ params }: PageProps) {
         }}
         canEdit={canEdit}
         canEditCommercial={canEditCommercial}
-        formatINR={formatINRExact}
       />
 
       <DealerActivity entries={activity} />

@@ -20,6 +20,7 @@ import {
   tenants,
   type DrizzleTx,
 } from '@dealerlink/db';
+import { formatStateLabel } from '@dealerlink/schemas';
 import { asc, eq } from 'drizzle-orm';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -259,7 +260,7 @@ export async function loadPaymentReceiptPdfData(
       addressLines: addressLines([
         settings?.addressLine1,
         settings?.addressLine2,
-        [settings?.addressCity, settings?.addressState, settings?.addressPincode]
+        [settings?.addressCity, formatStateLabel(settings?.addressState), settings?.addressPincode]
           .filter((p) => p && p.trim())
           .join(', '),
       ]),
@@ -277,7 +278,9 @@ export async function loadPaymentReceiptPdfData(
       addressLines: addressLines([
         dealer.addressLine1,
         dealer.addressLine2,
-        [dealer.city, dealer.state, dealer.pincode].filter((p) => p && p.trim()).join(', '),
+        [dealer.city, formatStateLabel(dealer.state), dealer.pincode]
+          .filter((p) => p && p.trim())
+          .join(', '),
       ]),
       gstin: dealer.gstin ?? null,
       contact: dealer.contactPerson ?? null,

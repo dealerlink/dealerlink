@@ -66,11 +66,12 @@ test.describe('Stage C Day C.1 — force-password-change (DEV.56)', () => {
       await page.locator('input[name="displayName"]').fill(DISPLAY_NAME);
       await page.locator('input[name="gstin"]').fill(GSTIN);
       await page.locator('input[name="pan"]').fill(PAN);
-      await page.locator('select[name="state"]').selectOption('Maharashtra');
+      // State dropdowns submit the ISO 3166-2:IN code; select by visible name.
+      await page.locator('select[name="state"]').selectOption({ label: 'Maharashtra' });
       await page.locator('input[name="addressLine1"]').fill('2 Rotation Lane');
       await page.locator('input[name="addressCity"]').fill('Pune');
       await page.locator('input[name="addressPincode"]').fill('411002');
-      await page.locator('select[name="addressState"]').selectOption('Maharashtra');
+      await page.locator('select[name="addressState"]').selectOption({ label: 'Maharashtra' });
       await page.locator('input[name="bankAccountName"]').fill(LEGAL_NAME);
       await page.locator('input[name="bankAccountNumber"]').fill('50200011223344');
       await page.locator('input[name="bankIfsc"]').fill('HDFC0004321');

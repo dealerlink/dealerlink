@@ -16,6 +16,7 @@ import {
   tenants,
   type DrizzleTx,
 } from '@dealerlink/db';
+import { formatStateLabel } from '@dealerlink/schemas';
 import { computeTax, serializeOutput, type GstRate, type TaxDiscount } from '@dealerlink/tax';
 import { asc, eq } from 'drizzle-orm';
 
@@ -53,7 +54,7 @@ function dealerToParty(d: typeof dealers.$inferSelect): PdfParty {
     addressLines: addressLines([
       d.addressLine1,
       d.addressLine2,
-      [d.city, d.state, d.pincode].filter((p) => p && p.trim()).join(', '),
+      [d.city, formatStateLabel(d.state), d.pincode].filter((p) => p && p.trim()).join(', '),
     ]),
     gstin: d.gstin ?? null,
     contact: d.contactPerson ?? null,
@@ -191,8 +192,8 @@ export async function loadPerformaInvoicePdfData(
     validUntil: pi.validUntil,
     status: pi.status,
     currency: pi.currency,
-    tenantStateAtIssue: pi.tenantStateAtIssue,
-    placeOfSupply: pi.placeOfSupply,
+    tenantStateAtIssue: formatStateLabel(pi.tenantStateAtIssue),
+    placeOfSupply: formatStateLabel(pi.placeOfSupply),
     isInterState: tax.isInterState,
     billFrom: {
       name: tenant.displayName,
@@ -200,7 +201,7 @@ export async function loadPerformaInvoicePdfData(
       addressLines: addressLines([
         settings?.addressLine1,
         settings?.addressLine2,
-        [settings?.addressCity, settings?.addressState, settings?.addressPincode]
+        [settings?.addressCity, formatStateLabel(settings?.addressState), settings?.addressPincode]
           .filter((p) => p && p.trim())
           .join(', '),
       ]),

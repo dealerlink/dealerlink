@@ -11,6 +11,7 @@ import {
   reactivateProduct,
   updateProduct,
 } from '@/lib/actions/products';
+import { formatINRExact } from '@/lib/format';
 
 interface ProductView {
   id: string;
@@ -113,11 +114,9 @@ function Field({
 export function ProductDetailSections({
   product,
   canEdit,
-  formatINR,
 }: {
   product: ProductView;
   canEdit: boolean;
-  formatINR: (n: number) => string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -284,12 +283,16 @@ export function ProductDetailSections({
           <>
             <Field label="HSN" value={product.hsnCode} mono />
             <Field label="GST rate" value={`${product.gstRate}%`} mono />
-            <Field label="MRP" value={product.mrp ? formatINR(Number(product.mrp)) : null} mono />
+            <Field
+              label="MRP"
+              value={product.mrp ? formatINRExact(Number(product.mrp)) : null}
+              mono
+            />
             <Field
               label="Default purchase price"
               value={
                 product.defaultPurchasePrice
-                  ? formatINR(Number(product.defaultPurchasePrice))
+                  ? formatINRExact(Number(product.defaultPurchasePrice))
                   : null
               }
               mono
@@ -297,7 +300,9 @@ export function ProductDetailSections({
             <Field
               label="Default selling price"
               value={
-                product.defaultSellingPrice ? formatINR(Number(product.defaultSellingPrice)) : null
+                product.defaultSellingPrice
+                  ? formatINRExact(Number(product.defaultSellingPrice))
+                  : null
               }
               mono
             />

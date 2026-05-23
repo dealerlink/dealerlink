@@ -99,11 +99,12 @@ test.describe('Operator onboarding — provision a tenant from scratch (R.12)', 
       await page.locator('input[name="displayName"]').fill(DISPLAY_NAME);
       await page.locator('input[name="gstin"]').fill(GSTIN);
       await page.locator('input[name="pan"]').fill(PAN);
-      await page.locator('select[name="state"]').selectOption('Maharashtra');
+      // State dropdowns submit the ISO 3166-2:IN code; select by visible name.
+      await page.locator('select[name="state"]').selectOption({ label: 'Maharashtra' });
       await page.locator('input[name="addressLine1"]').fill('1 Solar Park Road');
       await page.locator('input[name="addressCity"]').fill('Pune');
       await page.locator('input[name="addressPincode"]').fill('411001');
-      await page.locator('select[name="addressState"]').selectOption('Maharashtra');
+      await page.locator('select[name="addressState"]').selectOption({ label: 'Maharashtra' });
       await page.locator('input[name="bankAccountName"]').fill(LEGAL_NAME);
       await page.locator('input[name="bankAccountNumber"]').fill('50200099887766');
       await page.locator('input[name="bankIfsc"]').fill('HDFC0001234');

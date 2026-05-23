@@ -93,6 +93,9 @@ dealerlink/
 │   │   ├── seeds/                  ← per BRD §7
 │   │   └── rls/                    ← RLS policy SQL
 │   ├── schemas/                    ← Zod schemas, shared client + server
+│   │                                 (incl. states.ts — canonical ISO 3166-2:IN
+│   │                                  state codes + helpers; never hardcode a
+│   │                                  state string. DEV.33 / DEV.70)
 │   ├── tax/                        ← GST calculation (CGST/SGST/IGST)
 │   └── design-tokens/              ← CSS vars + Tailwind config
 └── scripts/

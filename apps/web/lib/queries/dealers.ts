@@ -1,5 +1,5 @@
 import { dealers, withTenant } from '@dealerlink/db';
-import { type DealerListFilter, dealerListFilterSchema } from '@dealerlink/schemas';
+import { type DealerListFilterInput, dealerListFilterSchema } from '@dealerlink/schemas';
 import { and, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 
 export interface DealerListRow {
@@ -32,7 +32,7 @@ export interface DealerListResult {
  */
 export async function listDealers(
   tenantId: string,
-  raw: Partial<DealerListFilter>,
+  raw: Partial<DealerListFilterInput>,
 ): Promise<DealerListResult> {
   const filter = dealerListFilterSchema.parse(raw);
   return withTenant(tenantId, async (tx) => {

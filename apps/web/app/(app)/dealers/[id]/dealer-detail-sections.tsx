@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StateSelect } from '@/components/ui/state-select';
+import { formatINRExact } from '@/lib/format';
 import {
   deactivateDealer,
   reactivateDealer,
@@ -113,12 +114,10 @@ export function DealerDetailSections({
   dealer,
   canEdit,
   canEditCommercial,
-  formatINR,
 }: {
   dealer: DealerView;
   canEdit: boolean;
   canEditCommercial: boolean;
-  formatINR: (n: number) => string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -413,7 +412,7 @@ export function DealerDetailSections({
           <>
             <Field
               label="Credit limit"
-              value={dealer.creditLimit ? formatINR(Number(dealer.creditLimit)) : null}
+              value={dealer.creditLimit ? formatINRExact(Number(dealer.creditLimit)) : null}
               mono
             />
             <Field
