@@ -1,490 +1,481 @@
 # Stage C — Validation Prompts
 
-Stage C runs from May 21 to May 27, 2026 (6 working days + 1 buffer absorbed by C.0 sprawl). Goal: validate the Stage B build is production-ready, deploy staging environment, close the two known feature gaps (force-password-change, state normalization), security + performance audit, and prepare for Stage D production deploy.
+Stage C runs from May 21 to May 27, 2026. Goal: validate the Stage B build is production-ready, deploy staging environment, close the two known feature gaps, security + performance audit, and prepare for Stage D production deploy.
 
 **Pilot target:** Production live Wednesday, June 3, 2026.
-**Staging available to pilot customer:** Monday, May 25, 2026 (after C.2 wraps).
+**Staging available to pilot:** Monday, May 25, 2026 (after C.2 wraps — DONE).
 
 ## Schedule
 
-| Stage C Day   | Date               | Focus                                                           | Status      |
-| ------------- | ------------------ | --------------------------------------------------------------- | ----------- |
-| C.0           | Thu-Fri May 21-22  | DO staging deploy + DNS + SSL + DEV.63 architectural correction | ✅ Done     |
-| Doc hygiene   | Sat May 23 morning | STAGE_C_HANDOFF evolution, ADR-013, CLAUDE.md cleanup           | ✅ Done     |
-| C.1           | Sat May 23         | Force-password-change build (closes DEV.56)                     | ✅ Done     |
-| **C.2**       | **Sun May 24**     | **State code normalization (closes DEV.33)**                    | **Current** |
-| C.3           | Mon May 25         | Pilot staging handoff + UX walkthrough                          | ⏳          |
-| C.4           | Tue May 26         | Security audit (RLS + roles + secrets)                          | ⏳          |
-| C.5           | Wed May 27         | Performance testing + Stage D handoff                           | ⏳          |
-| Stage D start | Thu May 28         | Production environment provisioning                             | —           |
+| Day           | Date       | Focus                                                        | Status      |
+| ------------- | ---------- | ------------------------------------------------------------ | ----------- |
+| C.0           | May 21-22  | Staging deploy + DNS + SSL + DEV.63 architectural correction | ✅ Done     |
+| Doc hygiene   | May 23     | STAGE_C_HANDOFF, ADR-013, CLAUDE.md cleanup                  | ✅ Done     |
+| C.1           | May 23     | Force-password-change (closes DEV.56)                        | ✅ Done     |
+| C.2           | May 24     | State code normalization (closes DEV.33)                     | ✅ Done     |
+| **C.3**       | **May 25** | **Pilot staging handoff + UX walkthrough**                   | **Current** |
+| C.4           | May 26     | Security audit                                               | ⏳          |
+| C.5           | May 27     | Performance test + Stage D handoff                           | ⏳          |
+| Stage D start | May 28     | Production environment provisioning                          | —           |
 
 ---
 
-## Stage C Day C.0 — Staging Deploy (✅ Complete — May 21-22, 2026)
+## Stage C Day C.0 — Staging Deploy (✅ Complete — May 21-22)
 
-Retrospective: this day was originally scoped as a single day. It ran into roughly 1.5 calendar days due to surfacing latent bugs that local Docker development could not have caught.
+**Commits:** 10189ab → 55350fb (+ follow-up fixes)
 
-**Commits:** 10189ab → 55350fb (and follow-up fixes)
+DO Managed Postgres BLR1 + DO App Platform (web basic-xs + workers basic-xxs custom Dockerfile) + Cloudflare DNS + SSL on apex/demo/sample. ~$30/month. All 4 PDF paths functional. Critical-path E2E passing.
 
-**What shipped:**
+11 deviations: DEV.57-67. Key correction: DEV.63 (PDF rendering moved from web→workers via pg-boss queue per CLAUDE.md §7, promoted to ADR-013).
 
-- DO Managed Postgres provisioned in BLR1 (PG 16, ~$15/month)
-- DO App Platform with web (basic-xs) + workers (basic-xxs, custom Dockerfile) — total ~$30/month
-- Cloudflare DNS (gray-cloud, DNS-only)
-- Let's Encrypt SSL on apex + demo.staging + sample.staging subdomains
-- staging.dealerlink.in fully reachable with all routes working
-- All 4 PDF paths functional (quotation, PI, payment receipt, dispatch note)
-- Critical-path E2E (27 steps) passes against staging in 48.6s
-
-**Deviations logged (DEV.57-67):**
-
-- DEV.57: managed-PG role ALTER
-- DEV.58-59: pg-boss TLS chain
-- DEV.60: apex-domain hardcoding
-- DEV.61: connection-pool caps
-- DEV.62: db client created a new pool on every access in production
-- DEV.63: PDF rendering architectural correction — moved from web subprocess to pg-boss queue per CLAUDE.md §7 line 336 (now promoted to ADR-013)
-- DEV.64: .do/app.yaml ↔ deployed-spec sync workflow gap
-- DEV.65: corepack signature check failure → switched to npm install -g pnpm
-- DEV.66: cold-start timeout adjusted to 120s
-- DEV.67: idle-recycle widened to 45 minutes; worker sizing flagged for Stage D
-
----
-
-## Doc Hygiene Pass (✅ Complete — May 23, 2026)
-
-Brief mid-stream pass after C.0 to align docs with reality.
+## Doc Hygiene Pass (✅ Complete — May 23)
 
 **Commits:** ad21d3a → 1078826
 
-**What shipped:**
+STAGE_C_HANDOFF evolved; ADR-013 added; CLAUDE.md hosting clarified; PROJECT_PLAN changelog updated.
 
-- `docs/STAGE_C_HANDOFF.md` evolved with "Stage C Progress (Living)" + "Carried-Forward To Stage D" sections
-- `CLAUDE.md` line 151 (hosting) clarified + "Last reviewed" stamp added
-- `DECISIONS.md` ADR-013 added (Puppeteer queue isolation as permanent structural constraint, promotes DEV.63)
-- `PROJECT_PLAN.md` changelog entry for 2026-05-23
-
----
-
-## Stage C Day C.1 — Force-Password-Change (✅ Complete — May 23, 2026)
+## Stage C Day C.1 — Force-Password-Change (✅ Complete — May 23)
 
 **Commits:** b3e36e7 → 56c19fd
 
-**What shipped:**
+DEV.56 closed. /change-password route + form + layout enforcement + login redirect. Password policy stricter than prompt suggested (DEV.69). Verify 54/54.
 
-- `must_change_password` flag implemented (column was already present from Day 4; today wired the UX flow)
-- `/change-password` route + form with strength meter, rule checklist, sign-out escape
-- Layout-level enforcement (Lucia session requires DB lookup; not Edge-runtime friendly per DEV.68)
-- Operator-onboarding spec rewritten to assert real forced flow
-- New `verify-day-c1.spec.ts` covers full trapdoor (forced redirect from any route → rotate → unlock; old temp rejected)
-- Password policy: min 8, 1 upper, 1 number, 1 special (per CLAUDE.md §6, stricter than prompt suggested — DEV.69)
+## Stage C Day C.2 — State Code Normalization (✅ Complete — May 24)
 
-**Closures:** DEV.56 ✅ closed.
-**New deviations:** DEV.68 (layout-level enforcement, not Edge middleware), DEV.69 (stricter password policy than prompt).
-**Tests:** verify 54/54 (53 prior + verify-day-c1). ~715 unit tests.
+**Commits:** e886a37 → f98d3d1
+
+DEV.33 closed. All 6 state columns normalized to ISO 3166-2:IN codes. UI shows names + submits codes. Tax engine parity preserved. Migration 15→16 on staging. 56 verify passing + 1 flaky-retry-passed. Critical-path passes on staging.
+
+Three real bugs surfaced and fixed: DEV.70 (state normalization), DEV.71 (fragile three-party test), DEV.72 (server→client function prop crash, subsumes DEV.56(d)).
 
 ---
 
-## Stage C Day C.2 — State Code Normalization (Current — Sunday May 24)
+## Stage C Day C.3 — Pilot Staging Handoff + UX Walkthrough (Current — Monday May 25)
 
-**Goal:** Normalize state storage from full names (`"Maharashtra"`) to 2-letter ISO 3166-2:IN codes (`"MH"`) across all 6 tables that store state strings. Tax engine parity must hold: every order's CGST/SGST/IGST totals are byte-identical before and after migration. Closes DEV.33.
+**Goal:** Prepare and execute pilot handoff. Generate pilot-facing onboarding artifacts. Operator (you) does 2-hour walkthrough. Pilot evaluates staging over the day. Findings captured for C.4-C.5 prioritization.
 
-**Estimated time:** 4-5 hours
+**This is a different kind of day.** Most of the work is yours, not Claude Code's. Claude Code's role is generating the handoff artifacts upfront.
 
-**Deliverable:** All state columns store 2-letter codes. UI dropdowns show "Maharashtra" but submit "MH". Tax engine continues to work (inter-state determination is now case-insensitive 2-letter compare). Migration is reversible. All Day 1-18 E2E specs still pass. Critical-path E2E on staging still passes.
+**Estimated time:** ~30 min Claude Code + ~2 hours your walkthrough + pilot's own time + ~30 min evening triage.
+
+**Deliverable:** Pilot has staging access with credentials, onboarding guide, evaluation checklist. UX findings doc populated. Day-end triage classifies findings into pilot-blocker vs nice-to-have vs post-pilot.
 
 ### Prompt for Claude Code
 
 ````
-You are implementing Stage C Day C.2 of the Dealerlink build. Stage C Day C.1 (force-password-change) completed yesterday (commits b3e36e7..56c19fd). Today closes DEV.33 (carried forward since Stage B Day 11): the state code normalization from full names to 2-letter ISO 3166-2:IN codes.
-
-CRITICAL CONTEXT — TAX ENGINE PARITY:
-The tax engine (packages/tax) reads tenantState and placeOfSupply as opaque strings. Inter-state determination is `tenantState !== placeOfSupply`. As long as both sides of the comparison use the same format, the math is correct. Today's migration must preserve this invariant. The Day 9 parity test (every seeded quotation's stored totals match recomputation) MUST still pass after migration.
+You are preparing the pilot handoff artifacts for Stage C Day C.3 of the Dealerlink build. Stage C Day C.2 (state normalization) completed yesterday (commits e886a37..f98d3d1). Today's work is mostly the operator's (UX walkthrough, pilot communication). Your job is generating the handoff documents upfront so the operator can execute the day cleanly.
 
 PRELIMINARY:
-P.1. `pnpm preflight` confirms 17 green checks.
-P.2. Read CLAUDE.md §5 (place of supply) — confirm the rule still says "consistent format on both sides."
-P.3. Read DEVIATIONS.md DEV.33 — the gap this day closes.
-P.4. Read packages/tax/src/state.ts — the existing `isInterState` helper. Today does NOT change this function; it stays opaque-string-compare.
-P.5. Read packages/db/src/schema/ for every table that has a state column:
-   - tenant_settings.state
-   - dealers.state
-   - quotations.tenant_state_at_issue + quotations.place_of_supply
-   - performa_invoices.tenant_state_at_issue + performa_invoices.place_of_supply
-   - orders.tenant_state_at_issue + orders.place_of_supply
-   - dispatches: confirm whether it stores state (probably inherited via order)
-P.6. Read apps/web/lib/states.ts (if exists) — the state list used by UI dropdowns.
-P.7. Read the existing parity test in packages/db/tests/ for quotations — today's migration must not break it.
+P.1. `pnpm preflight` confirms green.
+P.2. Read docs/STAGING_ENV.md — current staging environment documentation
+P.3. Read apps/web/tests/e2e/helpers.ts — SEEDED_USERS constant for credentials reference
+P.4. Read docs/USER_MANUAL.md — sections 1-2 from Stage B Day 18 stub
+P.5. Read docs/WORKFLOWS.md — the workflow reference operators need
+P.6. Read DEVIATIONS.md — note any "known limitation" deviations that pilot should be told about upfront (DEV.15 inline base64 logo, DEV.45 dispatch seed pre-stamps if surfaced, etc.)
 
 PRIMARY REFERENCES:
-1. CLAUDE.md §5 (state format, tax engine contract)
-2. DEVIATIONS.md DEV.33 (the gap)
-3. ISO 3166-2:IN — canonical 2-letter codes for Indian states (28 states + 8 UTs)
-4. packages/tax/src/state.ts (the engine's contract — DON'T change it)
-5. Day 9 parity test (must still pass)
+1. docs/STAGING_ENV.md (staging env state)
+2. docs/USER_MANUAL.md (operator-facing manual stub)
+3. docs/WORKFLOWS.md (the canonical workflow doc)
+4. apps/web/tests/e2e/helpers.ts (SEEDED_USERS — credentials source of truth)
+5. STAGE_C_HANDOFF.md (Stage C progress + carried-forward items)
 
 ==========================================================
-TRACK A — STATE NORMALIZATION (CHUNKED — 5 chunks)
+TRACK A — PILOT HANDOFF ARTIFACTS (CHUNKED — 3 chunks)
 ==========================================================
 
-CHUNK C2a — State lookup helper + canonical list
+CHUNK C3a — Pilot onboarding guide
 ---------------------------------
 
-A1.1. Create packages/schemas/src/states.ts (or update if exists) with canonical ISO 3166-2:IN state list:
+A1.1. Create docs/PILOT_ONBOARDING.md — the document the pilot customer reads first.
 
-```typescript
-export const INDIAN_STATES = {
-  AN: 'Andaman and Nicobar Islands',
-  AP: 'Andhra Pradesh',
-  AR: 'Arunachal Pradesh',
-  AS: 'Assam',
-  BR: 'Bihar',
-  CH: 'Chandigarh',
-  CT: 'Chhattisgarh', // some sources use CG; ISO 3166-2:IN uses CT
-  DH: 'Dadra and Nagar Haveli and Daman and Diu', // merged UT
-  DL: 'Delhi',
-  GA: 'Goa',
-  GJ: 'Gujarat',
-  HR: 'Haryana',
-  HP: 'Himachal Pradesh',
-  JK: 'Jammu and Kashmir',
-  JH: 'Jharkhand',
-  KA: 'Karnataka',
-  KL: 'Kerala',
-  LA: 'Ladakh',
-  LD: 'Lakshadweep',
-  MP: 'Madhya Pradesh',
-  MH: 'Maharashtra',
-  MN: 'Manipur',
-  ML: 'Meghalaya',
-  MZ: 'Mizoram',
-  NL: 'Nagaland',
-  OD: 'Odisha',
-  PY: 'Puducherry',
-  PB: 'Punjab',
-  RJ: 'Rajasthan',
-  SK: 'Sikkim',
-  TN: 'Tamil Nadu',
-  TG: 'Telangana',
-  TR: 'Tripura',
-  UP: 'Uttar Pradesh',
-  UT: 'Uttarakhand',
-  WB: 'West Bengal',
-} as const;
+Structure:
 
-export type IndianStateCode = keyof typeof INDIAN_STATES;
-export type IndianStateName = typeof INDIAN_STATES[IndianStateCode];
+```markdown
+# Welcome to Dealerlink Staging
+
+## What This Is
+
+Dealerlink is a multi-tenant distributor CRM built for B2B sales operations.
+You're evaluating Phase 1 in our staging environment before production launch
+on June 3, 2026.
+
+## How to Access
+
+URL: https://demo.staging.dealerlink.in
+Or alternative: https://staging.dealerlink.in/?tenant=demo
+
+(If you have trouble with the subdomain, the ?tenant=demo URL is a backup.)
+
+## Your Login Credentials
+
+| Role | Email | Initial Password | What You'll See |
+|---|---|---|---|
+| Admin | admin@demo.test | password123 | Full access — every workflow |
+| Sales | sales@demo.test | password123 | Pipeline + quotations + dealers |
+| Accounts | accounts@demo.test | password123 | Payments + receipts + reports |
+| Dispatch | dispatch@demo.test | password123 | Inventory + dispatch + delivery |
+
+Log in with any of these to see the system from that role's perspective.
+We recommend starting with the Admin role to see everything, then trying
+the role-specific views.
+
+## What's Loaded for You
+
+The demo tenant comes pre-loaded with realistic distributor data:
+- ~24 sample dealers across 7 Indian states
+- ~30 products (solar panels, inverters, accessories)
+- ~30 deals across the 9-stage pipeline
+- ~15 quotations in various states
+- ~12 confirmed orders with inventory reservations
+- ~15 recorded payments with allocations
+- ~8 dispatches with serial-number tracking
+- ~30 days of activity across all modules
+
+You can create your own data on top of this — anything you create stays
+in the demo tenant and won't interfere with anyone else's evaluation.
+
+## Suggested Evaluation Path (45-60 minutes)
+
+Step 1 — Dashboard tour (5 min)
+- Log in as admin@demo.test
+- Note the dashboard widgets: pipeline value, overdue payments, recent
+  activity, low-stock alerts
+- Click around the sidebar: Pipeline, Dealers, Catalog, Inventory,
+  Quotations, PIs, Orders, Payments, Dispatch, Reports
+
+Step 2 — A complete quotation flow (15 min)
+- Go to Pipeline, find a deal in 'qualification' or 'needs_analysis'
+- Open it, create a quotation against it
+- Add 2-3 line items from the product catalog
+- Notice the live tax preview (CGST/SGST for intra-state, IGST for inter-state)
+- Apply a discount, watch the totals update
+- Save as draft
+- Open the draft, send it (the email gets queued — see "About Email" below)
+- Download the PDF — verify it looks professional, numbers are correct
+
+Step 3 — Convert quotation to PI to order (10 min)
+- Mark a 'sent' quotation as 'accepted'
+- Convert it to a Performa Invoice
+- Notice the Ship-To option (try changing it to a dealer in a different
+  state — watch the tax recompute)
+- Send the PI, then confirm it
+- Verify an Order was auto-created and inventory items moved to 'reserved'
+
+Step 4 — Record a payment (10 min)
+- Switch to accounts@demo.test
+- Go to Payments, record a new payment for the order you just confirmed
+- Verify it, mark as cleared
+- Allocate the full amount to the order
+- Confirm the order's payment status flipped to 'paid'
+
+Step 5 — Dispatch (10 min)
+- Switch to dispatch@demo.test
+- Go to Dispatch, create a new dispatch from a confirmed paid order
+- Pick the reserved serial numbers
+- Fill in vehicle + transporter info
+- Mark as delivered later
+- Verify the order's fulfillment status updated
+
+Step 6 — Reports (5 min)
+- Switch back to admin@demo.test
+- Open each report: Sales Summary, Outstanding, Inventory Valuation, GST Summary
+- Try CSV download on one of them
+
+## Known Limitations (Phase 1)
+
+These are by design — they're either Phase 2 features or production-only:
+
+- **Email send is queued, not delivered**: On staging, emails get queued in
+  the system but don't actually send. You'll see "Queued" status on every
+  send action. Production will deliver real emails via Resend.
+
+- **PDF first render of the day is slow**: First PDF after the server has
+  been idle for ~45 minutes can take 30-60 seconds. After that, PDFs render
+  in 3-5 seconds. We're sizing the production infrastructure to eliminate
+  this delay.
+
+- **State display**: We show full state names (e.g., "Maharashtra") on
+  screens and stored 2-letter codes (e.g., "MH") in the database. This is
+  standard for Indian GST compliance.
+
+- **Mobile responsive**: The current UI is desktop-optimized. Mobile-friendly
+  views are Phase 2.
+
+- **GST Returns export**: We capture all the data needed for GSTR-1 filing,
+  but the direct export to the GST portal is Phase 2.
+
+- **E-way bill integration**: We capture e-way bill numbers manually today.
+  Auto-generation against the GSTN API is Phase 2.
+
+## What We're Asking You to Evaluate
+
+We want your reaction on:
+1. **Does the data make sense?** Do the numbers add up the way you'd expect?
+2. **Is the workflow natural?** Can you complete a full quotation→order→payment
+   →dispatch cycle without getting lost?
+3. **Does anything feel wrong?** Wrong terminology, confusing flows, missing
+   information you'd need.
+4. **What's missing?** Anything you'd absolutely need for your daily operations
+   that you don't see.
+
+## How to Send Feedback
+
+Reply to the onboarding email with your findings. Don't worry about format —
+"Step 3 felt slow" and "I couldn't find where to do X" are both useful.
+
+For anything urgent (the system is broken, you can't log in), email directly
+or call.
+
+## What Happens Next
+
+- Today (May 25): You evaluate; we triage findings end-of-day
+- May 26-27: We act on critical findings + complete security/performance audits
+- May 28-31: We move to production environment
+- June 1-2: Final dry run + your training session
+- June 3: Production go-live with your real data
+
+Looking forward to your feedback.
 ````
 
-A1.2. Create helpers:
+A1.2. Update docs/STAGING_ENV.md with the C.2 changes:
 
-- `getStateName(code: IndianStateCode): IndianStateName` — for UI display
-- `getStateCodeFromName(name: string): IndianStateCode | null` — for migration script (handles edge cases: case-insensitive, trimmed, common misspellings if any)
-- `isValidStateCode(code: string): code is IndianStateCode` — for validation
-- `normalizeStateInput(input: string): IndianStateCode | null` — accepts code OR name, returns canonical code (for backwards-compat input handling)
+- Reflect migration 16 applied
+- Reflect three-party PI accessibility
+- Reflect /dealers/[id] and /catalog/[id] crash fixes (DEV.72)
 
-A1.3. Add a normalization-coverage test:
+COMMIT C3a: `docs(pilot): onboarding guide for staging handoff`
 
-- For each seeded value currently in the DB (Maharashtra, Karnataka, Gujarat, Tamil Nadu, Rajasthan, Assam, Uttar Pradesh, etc.), verify `getStateCodeFromName(value)` returns a non-null code
-- This is the migration safety net — if any seeded value doesn't map cleanly, we surface it now, not mid-migration
+## CHUNK C3b — UX findings template + pilot communication
 
-A1.4. Verify pnpm typecheck green.
+A2.1. Create docs/UX_FINDINGS.md — the document YOU (operator) populate during your 2-hour walkthrough:
 
-COMMIT C2a: `feat(states): chunk a — canonical state codes + normalization helpers`
+```markdown
+# UX Findings — Pre-Pilot Walkthrough
 
-## CHUNK C2b — Migration script (data migration, not schema change)
+> Operator: [Your name]
+> Date: 2026-05-25
+> Staging URL: https://demo.staging.dealerlink.in
+> Time spent: 2 hours
 
-A2.1. Create packages/db/migrations/000X_normalize_state_codes.sql (Drizzle migration):
+## Walkthrough Approach
 
-The migration runs as a single transaction with three phases:
+Use the suggested evaluation path from docs/PILOT_ONBOARDING.md as a
+baseline. Spend 2 hours doing a real workflow as a distributor would.
 
-**Phase 1 — Update each state column from name to code:**
+## Critical Findings (Pilot-Blocker)
 
-```sql
-BEGIN;
+Anything that would make the pilot's evaluation impossible or misleading.
 
--- Update tenant_settings.state
-UPDATE tenant_settings
-SET state = CASE state
-  WHEN 'Maharashtra' THEN 'MH'
-  WHEN 'Karnataka' THEN 'KA'
-  WHEN 'Gujarat' THEN 'GJ'
-  WHEN 'Tamil Nadu' THEN 'TN'
-  WHEN 'Rajasthan' THEN 'RJ'
-  WHEN 'Assam' THEN 'AS'
-  WHEN 'Uttar Pradesh' THEN 'UP'
-  -- (extend with ALL 36 states/UTs to handle any future seed data)
-  -- (use the full INDIAN_STATES mapping from C2a)
-  ELSE state -- leave unchanged if already a code or unknown
-END;
+### Finding 1: [Title]
 
--- Same UPDATE for dealers.state
--- Same UPDATE for quotations.tenant_state_at_issue + place_of_supply
--- Same UPDATE for performa_invoices.tenant_state_at_issue + place_of_supply
--- Same UPDATE for orders.tenant_state_at_issue + place_of_supply
--- (Check if dispatches has state columns; if so, same UPDATE)
+**Page/Flow**:
+**What happened**:
+**Expected**:
+**Actual**:
+**Severity**: Critical
+**Effort to fix**:
 
--- Phase 2 — Tighten CHECK constraints to require 2-letter codes
-ALTER TABLE tenant_settings DROP CONSTRAINT IF EXISTS tenant_settings_state_check;
-ALTER TABLE tenant_settings ADD CONSTRAINT tenant_settings_state_check
-  CHECK (state ~ '^[A-Z]{2}$');
+(Add as discovered)
 
--- Same CHECK tightening for all other tables with state columns
+## Important Findings (Should Fix Before Pilot)
 
--- Phase 3 — Verify all rows now match the constraint (will throw if any don't)
--- The ALTER TABLE ADD CONSTRAINT enforces this automatically
+UX issues that would create a bad first impression but don't block evaluation.
 
-COMMIT;
+### Finding 1: [Title]
+
+(Same template)
+
+## Polish (Nice to Have)
+
+Tone, copy, micro-interactions, visual consistency.
+
+### Finding 1: [Title]
+
+(Same template)
+
+## Pilot Notes Channel
+
+Findings from the pilot customer (May 25, evening triage):
+
+(Update after pilot replies)
+
+## Triage Decision
+
+End-of-day classification:
+
+- [ ] Pilot-blocker count:
+- [ ] Important count:
+- [ ] Polish count:
+- [ ] Items to fix in C.4-C.5:
+- [ ] Items deferred to post-pilot:
+- [ ] Items deferred to Phase 2:
+
+## Outcome
+
+(Fill in at end of day)
 ```
 
-A2.2. CRITICAL — Generate the migration via a programmatic script, not by hand:
+A2.2. Create a draft email to the pilot customer — save as docs/pilot/welcome-email.md:
 
-- Create scripts/generate-state-migration.ts (TypeScript script using @dealerlink/db + @dealerlink/schemas/states)
-- Script generates the SQL by iterating over INDIAN_STATES (so all 36 entries are covered)
-- This eliminates "we forgot Telangana" risk
-- Output is captured into the migration file
-- Document the script's purpose in a header comment
+```markdown
+# Pilot Welcome Email Draft
 
-A2.3. Test the migration locally:
+Subject: Dealerlink staging is ready for your evaluation
 
-- Take a snapshot of current state values: `pg_dump --table=tenant_settings --table=dealers ... > pre-migration-snapshot.sql`
-- Apply migration: `pnpm --filter @dealerlink/db db:migrate`
-- Verify: every state column matches `^[A-Z]{2}$` regex
-- Verify: row counts unchanged (no data loss)
+Hi [Pilot Name],
 
-A2.4. CRITICAL — Run the Day 9 tax parity test BEFORE and AFTER migration:
+As promised, Dealerlink staging is up and ready for you to evaluate.
 
-- The parity test (packages/db/tests/quotation-engine-parity.test.ts) re-derives every seeded quotation's totals and asserts they match the stored values
-- Pre-migration: parity passes (well-established)
-- Post-migration: parity MUST still pass
-- If parity fails after migration, the tax engine's inter-state determination changed for at least one row — STOP and investigate
-- Tax engine itself doesn't change today; only the data feeding it does
+**Access**: https://demo.staging.dealerlink.in
+(If the subdomain doesn't load, try https://staging.dealerlink.in/?tenant=demo)
 
-A2.5. Reversibility:
+**Login as admin**:
 
-- Create a corresponding rollback migration (in case staging deploy needs to revert)
-- Rollback maps codes back to names — same CASE statement, inverted
-- Document in the migration's header how to roll back
+- Email: admin@demo.test
+- Password: password123
 
-A2.6. Verify pnpm typecheck + pnpm test green.
+You can also log in as sales, accounts, or dispatch using the same
+password — see the attached onboarding guide for details and a suggested
+evaluation path.
 
-COMMIT C2b: `feat(states): chunk b — migration normalizes state names to ISO 3166-2:IN codes`
+The system comes pre-loaded with realistic distributor data so you can
+see a full picture. Try creating a quotation, converting it through PI
+to an order, recording a payment, and dispatching — about 45 minutes
+end-to-end.
 
-## CHUNK C2c — UI layer updates (dropdowns, filters, displays)
+A few things to know:
 
-A3.1. State input dropdowns — every form that captures state:
+- Emails get queued on staging but don't actually send (production will)
+- First PDF of the day takes ~30-60s; subsequent renders are fast
+- Mobile views aren't optimized yet; please use a desktop browser
 
-- Dealer creation/edit form (apps/web/app/(app)/dealers/...)
-- Tenant settings form (operator app: apps/web/app/(admin)/tenants/...)
-- Quotation builder (when user selects Ship-To dealer, state is derived; no manual state input here typically)
-- PI creation form (Ship-To dealer selection; state is derived)
-- Order/Dispatch forms (inherit from PI/Order; no manual state input)
+I've attached docs/PILOT_ONBOARDING.md with the full walkthrough.
 
-For dropdowns: show full name to user, submit code. Use `<option value="MH">Maharashtra</option>` pattern.
+Send me your findings whenever — even brief notes are helpful. I'll
+review and we'll talk through priorities for production launch on June 3.
 
-A3.2. State display formatters — every place state is shown to user:
+Thanks for taking the time on this.
 
-- Dealer detail page: show "Maharashtra (MH)" or just "Maharashtra" depending on context
-- Quotation/PI/Order detail pages: same
-- PDF templates (Day 10 templates): show full name (more professional on invoices)
-- Dashboard widgets: where state appears as a column, show code (compact)
+[Your name]
+```
 
-Use the `getStateName()` helper consistently. Don't hardcode display strings.
+A2.3. Create a credentials cheat sheet — docs/pilot/credentials-cheatsheet.md (pilot-facing, mirror of what's in PILOT_ONBOARDING.md but standalone):
 
-A3.3. Filter dropdowns:
+```markdown
+# Dealerlink Staging Access
 
-- Reports module (Day 15 GST summary report filters by place_of_supply): dropdown shows names, filters by code
-- Dealer list filters: same pattern
+**URL**: https://demo.staging.dealerlink.in
+**Alternative**: https://staging.dealerlink.in/?tenant=demo
 
-A3.4. Search:
+| Role     | Email              | Password    |
+| -------- | ------------------ | ----------- |
+| Admin    | admin@demo.test    | password123 |
+| Sales    | sales@demo.test    | password123 |
+| Accounts | accounts@demo.test | password123 |
+| Dispatch | dispatch@demo.test | password123 |
 
-- If any search inputs accept state names as free-text, they need to normalize input via `normalizeStateInput()` (accepts either name or code)
-- This is a backwards-compat measure — operator typing "Maharashtra" or "MH" both find the right rows
+For evaluation use only. Don't enter real customer data.
+```
 
-A3.5. Tests:
+COMMIT C3b: `docs(pilot): UX findings template + pilot communication drafts`
 
-- Snapshot test for one form that shows state dropdown — verify options render with name labels + code values
-- Integration: submit dealer form with state value "MH" — verify stored value is "MH"
-- Integration: GST summary report filter by "Maharashtra" — verify it filters to rows where state='MH'
+## CHUNK C3c — Day closeout
 
-COMMIT C2c: `feat(states): chunk c — UI dropdowns + displays + filters use canonical codes`
+A3.1. Update docs/STAGE_C_HANDOFF.md:
 
-## CHUNK C2d — Validation layer + Zod schema updates
+- Mark C.3 prep ✅ in "Stage C Progress (Living)"
+- Note: C.3 execution is operator-led; this commit is the prep, not the day's actual work
+- Add subsection for "Pilot Findings" that will be populated end-of-day
 
-A4.1. Zod schemas — every input schema that accepts a state:
+A3.2. Update PROJECT_PLAN.md:
 
-- packages/schemas/src/dealer.ts: state field changes from `z.string()` to `z.enum([Object.keys(INDIAN_STATES) as IndianStateCode[]])`
-- packages/schemas/src/tenant.ts: same
-- packages/schemas/src/quotation.ts, performa-invoice.ts, etc.: same for tenant_state_at_issue and place_of_supply fields
+- Add C.3 prep ✅ entry for 2026-05-25
+- Note: C.3 marked complete only after end-of-day triage in UX_FINDINGS.md
 
-This gives Zod-level validation: any state input must be a valid code.
+A3.3. Quality gates (doc-only, all should pass):
 
-A4.2. Backwards-compat input handler (for any code that might receive a name instead of a code):
+- pnpm preflight
+- pnpm typecheck, lint
+- Skip test/verify (doc changes don't affect code)
 
-- In input boundaries (server actions, API routes), pre-process state values through `normalizeStateInput()` before Zod validation
-- This handles old browser sessions that might submit names from cached HTML
+A3.4. Commit + push:
 
-A4.3. Tax engine — DOES NOT CHANGE:
+- `docs(pilot): Stage C Day C.3 prep — onboarding guide, UX template, credentials sheet`
+- Push to main (auto-deploys to staging — no functional change)
 
-- packages/tax/src/state.ts stays opaque-string-compare
-- The engine receives `"MH"` vs `"KA"` instead of `"Maharashtra"` vs `"Karnataka"`
-- Either way, `tenantState !== placeOfSupply` returns the same result
-- Verify the parity test passes (this is A2.4 from C2b; verify again here as a regression check)
+COMMIT C3c: as above
 
-A4.4. Tests:
+GUARDRAILS (C.3 PREP):
 
-- Zod schema rejects unknown state codes
-- Zod schema rejects state names (forces canonical format at boundary)
-- Backwards-compat handler accepts both codes and names, normalizes to codes
-- Tax engine still produces identical output for all seeded quotations
-
-COMMIT C2d: `feat(states): chunk d — Zod validation enforces canonical codes`
-
-## CHUNK C2e — Documentation + DEV.33 closure + closeout
-
-A5.1. Update CLAUDE.md §5:
-
-- Replace any references to "full state names" with "2-letter ISO 3166-2:IN codes"
-- Add example: "Tenant in MH selling to dealer with place_of_supply=KA → inter-state, IGST applies"
-- Update "Last reviewed" stamp to 2026-05-24
-
-A5.2. Update DEVIATIONS.md:
-
-- Mark DEV.33 as ✅ Closed by Stage C Day C.2 (2026-05-24)
-- Add closure note with migration approach + parity confirmation
-
-A5.3. Update docs/STAGE_C_HANDOFF.md:
-
-- Mark C.2 as ✅ in the "Stage C Progress (Living)" section
-- Update DEV.33 status from "in progress — C.2" to "✅ Closed — C.2"
-
-A5.4. Update docs/STRUCTURE.md or similar:
-
-- Document the INDIAN_STATES constant location and usage pattern
-- Note: all state input/output goes through helpers; never hardcode
-
-A5.5. Update PDF templates if any hardcode state names:
-
-- Check apps/workers/src/templates/ for hardcoded state names
-- If any exist, replace with `getStateName(record.state)` calls
-
-A5.6. Run full validation suite (this is the gate):
-
-- pnpm preflight green
-- pnpm typecheck, pnpm lint, pnpm test (all green, especially the parity test)
-- pnpm verify (54/54 + new verify-day-c2 if added; or stays at 54/54 if no new spec)
-- Critical-path E2E against staging (deferred per C.0 plan, but run it now since this migration is high-stakes)
-
-A5.7. Verify staging readiness:
-
-- PROJECT_PLAN.md mark C.2 ✅ with date
-- Final commit: `feat(states): Stage C Day C.2 complete — state codes normalized (closes DEV.33)`
-- Push to main
-- Verify staging redeploys cleanly + migration applies to staging DB
-- Run smoke check on staging: load a quotation detail page, verify state shows as full name in UI
-
-COMMIT C2e: as above
-
-==========================================================
-GUARDRAILS (STAGE C DAY C.2)
-==========================================================
-
-- Tax engine parity test MUST pass post-migration. This is the single most important verification of the day. If parity fails, STOP and investigate — do not proceed with closeout.
-
-- The migration is REVERSIBLE. Generate the rollback migration alongside the forward migration.
-
-- packages/tax/src/state.ts stays opaque-string-compare. We don't tighten the engine to be code-only — it works with any consistent format. The tightening is at the application boundary (Zod schemas, UI dropdowns).
-
-- ALL six tables with state columns must migrate atomically in a single transaction. No mixed-format state.
-
-- CHECK constraints tighten after migration. This prevents future writes from inserting non-code values.
-
-- UI dropdowns show full names to users (UX), submit codes to backend (data integrity). Use the helpers consistently.
-
-- Don't hardcode state name strings anywhere. Always go through `getStateName()`.
-
-- The migration script must be programmatically generated (TypeScript → SQL) to ensure all 36 states are covered. Don't write the CASE statement by hand.
-
-- Backwards-compat input handlers accept both names and codes — for cached browser sessions, integration partners, manual data entry. Internal storage is always codes.
+- These are doc-only changes. No code modifications.
+- The pilot credentials in PILOT_ONBOARDING.md and credentials-cheatsheet.md use the SEEDED test credentials. Do NOT generate new user accounts or invent passwords.
+- The email draft uses placeholder [Pilot Name] and [Your name]. Don't fill these in — operator does that when sending.
+- Don't push the onboarding guide as a permanent product doc; it's pilot-specific. Mark it clearly in the file header.
+- Don't include any production-only information (real API keys, real customer data, etc.) since this is pre-pilot.
 
 WHEN DONE:
 
-- Print summary, 5 chunk commits
-- Confirm: DEV.33 ✅ closed
-- Confirm: Day 9 parity test passes post-migration (every seeded quotation's totals match)
-- Confirm: pnpm verify 54/54 (or 55/55 with verify-day-c2 if added)
-- Confirm: critical-path E2E passes on staging post-deploy
-- Confirm: all 36 states covered in mapping (run a coverage assertion)
-- Confirm: UI dropdowns show names + submit codes
-- Tell me Stage C Day C.2 is complete and Day C.3 (pilot staging handoff + UX walkthrough) is next
+- Print summary, 3 chunk commits
+- Confirm: PILOT_ONBOARDING.md exists with evaluation path
+- Confirm: UX_FINDINGS.md template created
+- Confirm: Email draft + credentials cheat sheet created
+- Confirm: STAGE_C_HANDOFF.md and PROJECT_PLAN.md updated
+- Tell me the prep is done and the operator can now do the walkthrough + send the email
 
-````
+```
 
-### Verification checklist (for the human operator after Claude Code completes)
+### What the operator (you) does AFTER Claude Code finishes
 
-#### Tax engine parity (MOST IMPORTANT)
-- [ ] Day 9 parity test passes — every seeded quotation's stored totals match recomputation
-- [ ] Spot-check: pick 3 seeded orders (one intra-state, one inter-state, one with discount) — totals unchanged
+1. **Read docs/PILOT_ONBOARDING.md** as if you were the pilot customer. Edit anything that feels off.
 
-#### Migration correctness
-- [ ] Every state column matches `^[A-Z]{2}$` regex post-migration
-- [ ] Row counts in all 6 affected tables unchanged
-- [ ] CHECK constraints applied
-- [ ] Rollback migration exists and is documented
+2. **Send the welcome email** (fill in pilot name + your name, copy onboarding guide content as attachment OR paste URL to the rendered doc).
 
-```powershell
-# Run these to verify
-docker compose exec postgres psql -U dealerlink -d dealerlink_dev -c "SELECT 'tenant_settings' AS tbl, state FROM tenant_settings UNION ALL SELECT 'dealers', state FROM dealers UNION ALL SELECT 'quotations.tenant_state', tenant_state_at_issue FROM quotations UNION ALL SELECT 'quotations.place_of_supply', place_of_supply FROM quotations UNION ALL SELECT 'orders.place_of_supply', place_of_supply FROM orders;"
-# Every state should be exactly 2 chars, uppercase
-````
+3. **Do your 2-hour walkthrough**:
+   - Open https://demo.staging.dealerlink.in fresh
+   - Follow the evaluation path you wrote for the pilot
+   - Capture every wart, awkward flow, confusing label
+   - Don't try to fix as you go — just note it in docs/UX_FINDINGS.md
 
-#### UI verification
+4. **Throughout the day**: monitor pilot feedback. Add their findings to UX_FINDINGS.md.
 
-- [ ] Open `/dealers/new` → state dropdown shows "Maharashtra" labels with "MH" values (View source if needed)
-- [ ] Submit a new dealer with state "MH" → stored as "MH" in DB
-- [ ] Open existing dealer detail → state displays as "Maharashtra" (not "MH")
-- [ ] PDF generation works → state shows as full name on invoice
+5. **End of day triage** (~30 min):
+   - Classify each finding: Critical / Important / Polish
+   - Decide what fits in C.4-C.5 vs deferred
+   - Update UX_FINDINGS.md "Outcome" section
+   - Commit: `docs(pilot): C.3 walkthrough findings + triage`
+   - This commit marks C.3 truly complete
 
-#### Backwards compatibility
+### Verification checklist
 
-- [ ] All Day 1-18 E2E specs continue to pass
-- [ ] Critical-path E2E passes on staging
-- [ ] Existing seed users can still login and use the app normally
-
-#### Documentation
-
-- [ ] CLAUDE.md §5 updated (codes, not names)
-- [ ] DEVIATIONS.md DEV.33 marked ✅ closed
-- [ ] STAGE_C_HANDOFF.md C.2 marked ✅
-- [ ] STRUCTURE.md or equivalent documents the state code pattern
-
-#### Quality gates
-
-- [ ] `pnpm preflight` green
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm verify` all green
-- [ ] Staging redeploy successful + migration applied to staging DB
-- [ ] PROJECT_PLAN.md C.2 ✅
+- [ ] PILOT_ONBOARDING.md exists with evaluation path
+- [ ] UX_FINDINGS.md template exists
+- [ ] Welcome email draft exists
+- [ ] Credentials cheat sheet exists
+- [ ] STAGING_ENV.md reflects C.2 state
+- [ ] Email sent to pilot customer
+- [ ] Your 2-hour walkthrough done; findings captured
+- [ ] Pilot's findings captured (if received same day)
+- [ ] End-of-day triage classifies findings
+- [ ] Final C.3 commit pushed
 
 ---
 
-## Stage C Day C.3 — Pilot Staging Handoff + UX Walkthrough (Monday May 25)
-
-_Will be added when C.2 is complete. Provide staging credentials to pilot customer with onboarding guide. Operator (you) does 2-hour walkthrough first, captures findings to docs/UX_FINDINGS.md. Pilot evaluates over the day, captures their findings. Both feed into C.4-C.5._
-
 ## Stage C Day C.4 — Security Audit (Tuesday May 26)
 
-_Will be added when C.3 is complete. RLS verification across all tenant-scoped tables, role enforcement audit, secrets inventory, OWASP top-10 checklist for public-facing routes, Sentry PII scrubbing verification, audit log completeness verification._
+*Will be added when C.3 closes. RLS verification across tenant-scoped tables, role enforcement audit, secrets inventory, OWASP top-10 for public routes, Sentry PII scrubbing verification, audit log completeness.*
 
 ## Stage C Day C.5 — Performance Testing + Stage D Handoff (Wednesday May 27)
 
-_Will be added when C.4 is complete. Load test against staging (PDF generation, concurrent dispatches, payment allocations, pg-boss queue depth), worker instance sizing decision per DEV.67, final docs/STAGE_D_HANDOFF.md generated._
+*Will be added when C.4 closes. Load test against staging (PDF generation, concurrent dispatches, payment allocations), pg-boss queue depth under load, worker sizing decision per DEV.67, final docs/STAGE_D_HANDOFF.md.*
 
 ---
 
 ## Stage D — Production Deployment (May 28 - May 31)
 
-_Detailed prompts added at the close of Stage C. Stage D provisions production environment (separate DO project, larger instance sizes, real Resend domain + DKIM, production observability DSNs, backup configuration)._
+*Detailed prompts added at close of Stage C. Provisions production environment, larger instance sizes, real Resend domain + DKIM, production observability DSNs, backup configuration.*
 
 ## Stage E — Pilot Launch (June 1 - June 3)
 
-_Detailed prompts added at the close of Stage D. Provision pilot tenant in production, training session prep, final dry run, go-live Wednesday June 3._
+*Detailed prompts added at close of Stage D. Provisions pilot tenant in production, training session, final dry run, go-live June 3.*
+```
