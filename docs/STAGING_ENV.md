@@ -1,8 +1,34 @@
 # Staging environment
 
 > The Dealerlink staging deployment on DigitalOcean App Platform (Bangalore).
-> Stood up in Stage C Day 1. This is an internal-validation + pilot-preview
-> environment — **not** production.
+> Stood up in Stage C Day 1 (C.0). This is an internal-validation + pilot-preview
+> environment — **not** production. Kept current through C.2 — see
+> "Updates since stand-up" below.
+
+## Updates since stand-up (Stage C C.1–C.2)
+
+The deploy is GitOps (every push to `main` auto-deploys), so the following
+shipped to staging after the C.0 stand-up:
+
+- **C.1 — force-password-change.** The rotation trapdoor is live. Seeded users
+  carry `must_change_password = false`, so the pilot credentials below still log
+  straight in; only newly provisioned / reset users hit the rotation screen.
+- **C.2 — state-code normalization (migration `0015_normalize_state_codes`).**
+  Applied on staging — **16 migrations applied / 16 on disk**. Every state
+  column (`tenant_settings.state`/`address_state`, `dealers.state`, and the
+  `place_of_supply` / `tenant_state_at_issue` columns on quotations / PIs /
+  orders) now holds a 2-letter ISO 3166-2:IN code (`MH`, `KA`, …), CHECK-enforced.
+  UI dropdowns submit codes; screens, PDFs and reports render the full name. Tax
+  classification (intra- vs inter-state) is unchanged — codes just guarantee a
+  consistent format on both sides (DEV.70).
+- **Three-party PIs reachable.** The seeded three-party Performa Invoices
+  (Bill-To ≠ Ship-To, e.g. `PI-2026-0003`) are present and viewable on the
+  staging `/pi` list — search the list by PI number to open one and see the
+  distinct Bill-To / Ship-To party blocks (DEV.71).
+- **Dealer / catalog detail pages fixed.** `/dealers/[id]` and `/catalog/[id]`
+  previously fell to their error boundary on staging (a server→client
+  function-prop serialization crash). Both detail pages now render correctly
+  (DEV.72, closes DEV.56(d)).
 
 ## URLs
 
