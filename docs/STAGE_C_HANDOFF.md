@@ -25,9 +25,9 @@
 | C.0 | Staging deploy                         | ✅     | 2026-05-22 |
 | C.1 | Force-password-change (closes DEV.56)  | ✅     | 2026-05-23 |
 | C.2 | State normalization (closes DEV.33)    | ✅     | 2026-05-24 |
-| C.3 | Pilot staging handoff + UX walkthrough | ⏳     | 2026-05-24 |
-| C.4 | Security audit                         | ⏳     | 2026-05-25 |
-| C.5 | Performance test + Stage D handoff     | ⏳     | 2026-05-26 |
+| C.3 | Pilot staging handoff + UX walkthrough | 🔄     | 2026-05-25 |
+| C.4 | Security audit                         | ⏳     | 2026-05-26 |
+| C.5 | Performance test + Stage D handoff     | ⏳     | 2026-05-27 |
 
 ### C.0 — Staging deploy ✅ (2026-05-22)
 
@@ -83,6 +83,46 @@ setting the flag); C.1 added the missing rotation UI and the enforcement.
 false`) are unaffected and still log straight in.
 - **Deviations:** DEV.68 (layout vs Edge enforcement), DEV.69 (policy follows
   §6, not the plan's looser wording).
+
+### C.3 — Pilot staging handoff + UX walkthrough 🔄 (prep ✅ 2026-05-25)
+
+> **C.3 is operator-led.** This entry records the **prep artifacts** — the
+> documents the operator needs to execute the day. The day's actual work (the
+> 2-hour UX walkthrough, sending the welcome email, the pilot's evaluation, and
+> the end-of-day triage) is done by the operator and is **not** captured by the
+> prep commit. C.3 stays 🔄 until the triage in `docs/UX_FINDINGS.md` is filled
+> in — see "Pilot Findings" below.
+
+**Prep artifacts shipped (this commit):**
+
+- `docs/PILOT_ONBOARDING.md` — the pilot customer's first-read guide: access
+  URLs, seeded credentials, what's loaded, a 45–60 min suggested evaluation
+  path, known Phase-1 limitations, and the launch schedule. Marked
+  pilot-specific / time-bound (not permanent product doc).
+- `docs/UX_FINDINGS.md` — the operator-populated template for the walkthrough
+  (critical / important / polish findings + an end-of-day triage block).
+- `docs/pilot/welcome-email.md` — the pilot welcome email draft (`[Pilot Name]`
+  / `[Your name]` placeholders left for the operator to fill).
+- `docs/pilot/credentials-cheatsheet.md` — standalone pilot-facing access sheet.
+- `docs/STAGING_ENV.md` — updated with the C.1–C.2 deltas the pilot will see
+  (state-code normalization / migration `0015`, three-party PI access, detail-
+  page fixes).
+
+**Operator runbook for the day:**
+
+1. Do the 2-hour walkthrough against `https://demo.staging.dealerlink.in`,
+   logging findings into `docs/UX_FINDINGS.md` as you go.
+2. Fill the `[Pilot Name]` / `[Your name]` placeholders in
+   `docs/pilot/welcome-email.md` and send it with `docs/PILOT_ONBOARDING.md`
+   attached.
+3. Triage the pilot's reply end-of-day into the `docs/UX_FINDINGS.md` triage
+   block, then mark C.3 ✅ here and in `PROJECT_PLAN.md`.
+
+#### Pilot Findings (populated end-of-day 2026-05-25)
+
+_Pending — filled in once the walkthrough + pilot reply are triaged in
+`docs/UX_FINDINGS.md`. Summarize here: pilot-blocker / important / polish
+counts, what gets fixed in C.4–C.5, and what defers to post-pilot / Phase 2._
 
 ---
 
@@ -358,4 +398,4 @@ the matching production risks.
 
 _Stage B closed 2026-05-16 · handoff prepared on Day 18 · frozen at the
 `stage-b-complete` git tag. · Stage C progress (§0) is maintained live —
-last updated 2026-05-24 (C.2 complete)._
+last updated 2026-05-25 (C.3 prep complete; walkthrough + triage operator-led)._
