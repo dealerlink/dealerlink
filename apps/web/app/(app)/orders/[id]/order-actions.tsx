@@ -155,8 +155,11 @@ export function OrderActions({
           </ul>
           {!canConfirmNow && (
             <div className="rounded-[4px] bg-rose-50 px-2 py-1.5 text-[12px] text-rose-700">
-              Cannot confirm — {previewShort.length} product(s) short of stock. Procure more
-              inventory, then retry.
+              Cannot confirm —{' '}
+              {previewShort
+                .map((l) => `${l.productName}: need ${l.requested}, have ${l.available}`)
+                .join('; ')}
+              . Procure more inventory, then retry.
             </div>
           )}
           <div className="flex justify-end gap-2">

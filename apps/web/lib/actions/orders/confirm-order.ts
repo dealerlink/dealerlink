@@ -50,7 +50,14 @@ export const confirmOrder = tenantAction(
       reservedCount = result.reservedItemIds.length;
     } catch (err) {
       if (err instanceof InsufficientInventoryError) {
-        throw new AppError('CONFLICT', err.message, { meta: { shortages: err.shortages } });
+        // Name every short product with its required vs available quantity so
+        // the user knows exactly what to procure (UX finding I-4).
+        const detail = err.shortages
+          .map((s) => `${s.productName}: need ${s.requested}, have ${s.available}`)
+          .join('; ');
+        throw new AppError('CONFLICT', `Cannot confirm — ${detail}`, {
+          meta: { shortages: err.shortages },
+        });
       }
       throw err;
     }
