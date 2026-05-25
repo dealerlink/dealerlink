@@ -1,0 +1,75 @@
+{
+  "test": "workflow-load",
+  "capturedAt": "2026-05-25T13:39:02.990Z",
+  "target": "staging.dealerlink.in",
+  "profile": {
+    "demoWorkers": 3,
+    "sampleWorkers": 1,
+    "perWorker": 2,
+    "write": "draft-quotation (no PDF)"
+  },
+  "wallMs": 9311,
+  "created": {
+    "demo": 6,
+    "sample": 2,
+    "failures": 0
+  },
+  "perWorkerLatencyMs": [
+    {
+      "label": "demo/admin",
+      "samples": [6227, 2117]
+    },
+    {
+      "label": "demo/sales",
+      "samples": [5405, 2001]
+    },
+    {
+      "label": "demo/admin2",
+      "samples": [6050, 2019]
+    },
+    {
+      "label": "sample/admin",
+      "samples": [6159, 2259]
+    }
+  ],
+  "demoCreateLatencyMs": {
+    "n": 6,
+    "min": 2001,
+    "mean": 3969.8,
+    "stddev": 2125.9,
+    "p50": 2117,
+    "p95": 6227,
+    "p99": 6227,
+    "max": 6227
+  },
+  "assertions": {
+    "noErrors": true,
+    "demoQtNumbersUnique": true,
+    "demoQtNumbers": [
+      "QT-2026-0026",
+      "QT-2026-0029",
+      "QT-2026-0024",
+      "QT-2026-0027",
+      "QT-2026-0025",
+      "QT-2026-0028"
+    ],
+    "rlsHoldsUnderConcurrentWrites": true,
+    "rlsChecks": [
+      {
+        "from": "demo",
+        "target": "sample-quotation",
+        "status": 200,
+        "renders": false,
+        "leaked": false
+      },
+      {
+        "from": "sample",
+        "target": "demo-quotation",
+        "status": 200,
+        "renders": false,
+        "leaked": false
+      }
+    ]
+  },
+  "failureSample": []
+}

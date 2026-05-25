@@ -64,4 +64,73 @@ realistic first-week load (≤5 concurrent users) is well within budget.
 
 ---
 
-<!-- C5c (DB + workflow) results appended below after that chunk runs. -->
+## C5b — PDF generation (summary; full analysis in `findings-pdf.md`)
+
+- Cold render **5.5 s**, warm **2.4–3.5 s** — confirms DEV.67 (not 60–90 s).
+  Single/sequential renders are excellent; the pilot's ≤10-PDFs/hour load is
+  served fast.
+- **10-concurrent burst ×3 reps failed 4/10, 1/10, 7/10** (120 s timeouts).
+  The 512 MB worker **OOM-restarted ≥2× mid-test** (10:08:38Z, 10:25:41Z; no
+  deploy, no crash log = OOM-kill fingerprint). Web `DB_POOL_MAX=2` also
+  serializes renders 2-in-flight, compounding the timeouts.
+- **Sizing call:** bump workers to `basic-xs` (1 GB, ~+\$7/mo) for production +
+  raise `DB_POOL_MAX` on a roomier prod DB tier. `basic-xxs` not recommended.
+
+---
+
+## C5c — DB connection-pool load (10 concurrent dashboard users, 60 s)
+
+| Metric         | Value                                                 |
+| -------------- | ----------------------------------------------------- |
+| Total requests | 469                                                   |
+| Errors         | **0 (0.0%)** — no `53300`, no auth failures           |
+| Throughput     | 7.7 req/s                                             |
+| Latency        | p50 1228 ms · p95 1665 ms · p99 2045 ms · max 2164 ms |
+
+The dashboard is the heaviest read; under 10 concurrent users its p50 rises from
+the 258 ms single-user baseline to ~1.2 s (≈5×), p99 to ~2 s. This is the
+`DB_POOL_MAX=2` cap (DEV.61) serializing 10 streams through 2 connections — but
+it is **graceful: zero errors, no connection-slot (`53300`) failures, no pool
+leak.** This validates the DEV.62 global-pool fix under real concurrency (a
+per-access pool leak would have blown the 25-connection budget in seconds). The
+binding constraint is pool size, not DB CPU (`db.latencyMs` stayed 1–5 ms).
+
+**Stage D:** 10 concurrent users on the basic tier = no failures, ~1.2 s p50.
+Raising `DB_POOL_MAX` on a roomier production DB tier flattens this back toward
+the single-user baseline.
+
+## C5c — Multi-user concurrent-write isolation (3 demo + 1 sample writers)
+
+Concurrent draft-quotation creation (deliberately **not** "Save & send" — that
+renders a PDF; this isolates the write/transaction path). Each create atomically
+bumps the per-tenant `document_counters` QT row inside a `withTenant` transaction
+— the app's sharpest isolation/deadlock contention point. 8 creates across 4
+concurrent workers (3 demo roles + 1 sample tenant), wall 9.3 s.
+
+| Assertion                                      | Result                                                                            |
+| ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| No errors / deadlocks (8/8 creates ok)         | **PASS**                                                                          |
+| Demo QT numbers all unique (no counter race)   | **PASS** (QT-2026-0024…0029)                                                      |
+| Cross-tenant RLS holds under concurrent writes | **PASS** (a sample quotation does not render from a demo session, and vice-versa) |
+
+- **Transaction isolation is correct under concurrency.** Six concurrent demo
+  creates produced six gapless, unique QT numbers — the document counter's
+  atomic increment serializes correctly with no collision or lost write. The
+  sample tenant got its own independent sequence (QT-2026-0018/0019), confirming
+  per-tenant counter isolation.
+- **RLS holds while both tenants write concurrently.** A cross-tenant
+  quotation-by-id read renders the not-found page (no QT number, no detail
+  chrome) — never the other tenant's data. (Note: the first run's status-only
+  check false-positived because Next's `notFound()` returns HTTP 200; the check
+  now inspects the rendered body. The detail query is also tenant-scoped in code:
+  `getQuotationById(tenantId, id)` → `notFound()`.)
+- **Cross-user interference is mild + graceful.** The first concurrent wave of 4
+  writes took ~5–6 s each (pool=2 + counter-lock contention); the second wave
+  ~2 s. No failures.
+
+### Side note — web component restart at 09:38 (not load-induced)
+
+The web component started fresh at 09:38:29Z — this matches the 09:33 deployment
+(commit `0216cb3`) completing, not a load event. Web uptime then climbed steadily
+through every test (no further web restarts). Only the **workers** component
+restarted under load (C5b, OOM).

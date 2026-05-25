@@ -1,0 +1,27 @@
+{
+  "test": "db-load",
+  "capturedAt": "2026-05-25T10:46:12.592Z",
+  "target": "staging.dealerlink.in",
+  "profile": {
+    "concurrentUsers": 10,
+    "durationS": 60,
+    "endpoint": "/dashboard"
+  },
+  "elapsedS": 60.9,
+  "totalRequests": 469,
+  "okRequests": 469,
+  "errorCount": 0,
+  "errorRatePct": 0,
+  "throughputReqPerSec": 7.7,
+  "latencyMs": {
+    "n": 469,
+    "min": 794,
+    "mean": 1223.6,
+    "stddev": 262.6,
+    "p50": 1228,
+    "p95": 1665,
+    "p99": 2045,
+    "max": 2164
+  },
+  "errorSample": []
+}
