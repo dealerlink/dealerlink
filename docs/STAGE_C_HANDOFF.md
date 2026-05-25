@@ -25,8 +25,8 @@
 | C.0 | Staging deploy                         | ✅     | 2026-05-22 |
 | C.1 | Force-password-change (closes DEV.56)  | ✅     | 2026-05-23 |
 | C.2 | State normalization (closes DEV.33)    | ✅     | 2026-05-24 |
-| C.3 | Pilot staging handoff + UX walkthrough | 🔄     | 2026-05-25 |
-| C.4 | Security audit                         | ⏳     | 2026-05-26 |
+| C.3 | Pilot staging handoff + UX walkthrough | ✅     | 2026-05-25 |
+| C.4 | Security audit + UX fixes              | ✅     | 2026-05-26 |
 | C.5 | Performance test + Stage D handoff     | ⏳     | 2026-05-27 |
 
 ### C.0 — Staging deploy ✅ (2026-05-22)
@@ -84,7 +84,7 @@ false`) are unaffected and still log straight in.
 - **Deviations:** DEV.68 (layout vs Edge enforcement), DEV.69 (policy follows
   §6, not the plan's looser wording).
 
-### C.3 — Pilot staging handoff + UX walkthrough 🔄 (prep ✅ 2026-05-25)
+### C.3 — Pilot staging handoff + UX walkthrough ✅ (2026-05-25)
 
 > **C.3 is operator-led.** This entry records the **prep artifacts** — the
 > documents the operator needs to execute the day. The day's actual work (the
@@ -118,11 +118,37 @@ false`) are unaffected and still log straight in.
 3. Triage the pilot's reply end-of-day into the `docs/UX_FINDINGS.md` triage
    block, then mark C.3 ✅ here and in `PROJECT_PLAN.md`.
 
-#### Pilot Findings (populated end-of-day 2026-05-25)
+#### Pilot Findings (triaged 2026-05-25 — `docs/UX_FINDINGS.md`)
 
-_Pending — filled in once the walkthrough + pilot reply are triaged in
-`docs/UX_FINDINGS.md`. Summarize here: pilot-blocker / important / polish
-counts, what gets fixed in C.4–C.5, and what defers to post-pilot / Phase 2._
+**0 pilot-blockers**, 5 important (I-1…I-5), 12 polish (P-1…P-12). C-1 (PDF
+downloads 503) was downgraded to an infra cold-start issue, not a product bug.
+Verdict: **substantially ready for pilot**. The 5 important findings + the
+trivial P-9 were scoped to C.4; the rest defer to post-pilot / Phase 2.
+
+### C.4 — Security audit + UX fixes ✅ (2026-05-26)
+
+**Part 1 — read-only security audit → `docs/SECURITY_AUDIT.md`.** 9 findings
+(0 critical / 1 high / 2 medium / 3 low / 3 info), **none pilot-blocking**.
+Multi-tenant isolation verified end-to-end: RLS enabled + forced on all 35
+tables (4 RLS-exempt by design), cross-tenant isolation test 19/19, `adminDb`
+bypass surface clean. Auth (argon2id, 30-day refresh sessions, force-rotation
+trapdoor un-bypassable), role enforcement (every action server-side guarded),
+audit logging (trigger-only + redaction + read-only enforcement), and secrets
+hygiene (nothing in repo or git history) all sound.
+
+**Part 2 — fixes shipped after operator review:**
+
+- **F-2 (HTTP security headers) — ✅ FIXED** (`8c205ad`): CSP, X-Frame-Options
+  DENY, nosniff, HSTS, Referrer-Policy, Permissions-Policy in `next.config.mjs`.
+- **5 UX fixes**: I-1 Create-Quotation CTA (`9fc9a61`), I-2 deactivate confirm
+  dialog (`3f39b88`), I-4 named inventory-shortage error (`45a3935`), I-5
+  outstanding-receivables redirect (`3a09711`), P-9 formatINR space (`dcdb194`).
+- **C-1 cold-start**: PDF warm-up message after >5s (`1477777`) — product-side
+  mitigation; worker sizing remains a Stage D decision (DEV.67).
+
+**Deferred to Stage D** (carried in §9): **F-1** (upgrade Next.js ≥14.2.35 —
+clears CVE-2025-29927, architecturally mitigated by layout-based auth) and
+**F-3** (login rate-limit + account lockout).
 
 ---
 
@@ -359,6 +385,16 @@ Bringing it up surfaced the concrete decisions and provisioning that
 `docs/DEPLOYMENT.md` is the source of truth as it is updated, and §5 above lists
 the matching production risks.
 
+- **Security-audit pre-production items (C.4 → `docs/SECURITY_AUDIT.md`)** — two
+  findings were deferred here by operator decision: **F-1** upgrade Next.js to
+  **≥14.2.35** (clears CVE-2025-29927 + the Server-Component DoS/SSRF advisories;
+  do it in its own PR with a full `pnpm verify` regression pass — exposure is
+  mitigated today because auth is in the layouts, not middleware, DEV.68); and
+  **F-3** wire `checkRateLimit` into `login()` + a soft account lockout. Also
+  carry F-4 (drizzle-orm ≥0.45.2, hygiene) and F-9 (logo content-type/SVG
+  validation, before DO Spaces). F-2 (HTTP security headers) was fixed in C.4.
+- **Post-pilot UX backlog (`docs/UX_FINDINGS.md`)** — I-3 (product images) and
+  polish P-1…P-12 (minus the fixed P-9) remain deferred to post-pilot / Phase 2.
 - **Production secrets provisioning** — Sentry DSN, Better Stack source token,
   Axiom token, and the Resend domain + API key are all **placeholders** on
   staging today (each service degrades to a no-op without them). Production
@@ -398,4 +434,4 @@ the matching production risks.
 
 _Stage B closed 2026-05-16 · handoff prepared on Day 18 · frozen at the
 `stage-b-complete` git tag. · Stage C progress (§0) is maintained live —
-last updated 2026-05-25 (C.3 prep complete; walkthrough + triage operator-led)._
+last updated 2026-05-26 (C.3 walkthrough/triage ✅ + C.4 security audit + UX fixes ✅; C.5 next)._

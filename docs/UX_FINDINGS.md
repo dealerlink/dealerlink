@@ -48,7 +48,7 @@ These areas passed evaluation cleanly — no action needed.
 
 ## Important Findings (Should Fix Before Pilot)
 
-### Finding I-1: No "Create Quotation" Button on Deal Detail Page
+### Finding I-1: No "Create Quotation" Button on Deal Detail Page — ✅ FIXED (`9fc9a61`)
 
 **Page/Flow:** Pipeline → Deal detail (e.g. DEAL-2026-0001 — Factory floor expansion · Verma Sun · MH)
 **What happened:** Opened a deal in "qualification" stage. No CTA to create a quotation from deal context. Had to navigate away to Quotations → New and manually re-link the deal.
@@ -59,7 +59,7 @@ These areas passed evaluation cleanly — no action needed.
 
 ---
 
-### Finding I-2: Deactivate Button Has No Confirmation Dialog
+### Finding I-2: Deactivate Button Has No Confirmation Dialog — ✅ FIXED (`3f39b88`)
 
 **Page/Flow:** Dealers → Dealer detail (e.g. CP Dealer MPI0UY19)
 **What happened:** "Deactivate" button is styled in bright red and executes immediately on click with no confirmation step.
@@ -81,7 +81,7 @@ These areas passed evaluation cleanly — no action needed.
 
 ---
 
-### Finding I-4: Inventory Shortage Error Doesn't Name the Product
+### Finding I-4: Inventory Shortage Error Doesn't Name the Product — ✅ FIXED (`45a3935`)
 
 **Page/Flow:** Orders → Confirm Order dialog (ORD-2026-0023)
 **What happened:** Dialog read "Cannot confirm — 1 product(s) short of stock" with no further detail.
@@ -92,7 +92,7 @@ These areas passed evaluation cleanly — no action needed.
 
 ---
 
-### Finding I-5: Direct URL for Outstanding Receivables Returns 404
+### Finding I-5: Direct URL for Outstanding Receivables Returns 404 — ✅ FIXED (`3a09711`)
 
 **Page/Flow:** Direct navigation to `/reports/outstanding-receivables`
 **What happened:** Hard 404. Correct URL is `/reports/outstanding`.
@@ -169,7 +169,7 @@ These areas passed evaluation cleanly — no action needed.
 
 ---
 
-### P-9: Number formatting space in payment allocation panel
+### P-9: Number formatting space in payment allocation panel — ✅ FIXED (`dcdb194`)
 
 **Page/Flow:** Payments → Allocation panel
 **What I observed:** Amount displays as "₹41, 418" — a space after the thousands comma.
@@ -217,13 +217,19 @@ End-of-day classification:
 - [x] Important count: 5 (I-1 through I-5)
 - [x] Polish count: 12 (P-1 through P-12)
 
-**Items to fix in C.4–C.5:**
+**Items to fix in C.4–C.5 — all ✅ FIXED (Stage C Day C.4, 2026-05-26):**
 
-- I-1 — Add "Create Quotation" CTA to deal detail page
-- I-2 — Add confirmation dialog to Deactivate button
-- I-4 — Include product name + qty in inventory shortage error
-- I-5 — Redirect `/reports/outstanding-receivables` → `/reports/outstanding`
-- P-9 — Fix `formatINR` space after thousands comma (trivial)
+- I-1 — Add "Create Quotation" CTA to deal detail page — ✅ FIXED (commit `9fc9a61`)
+- I-2 — Add confirmation dialog to Deactivate button — ✅ FIXED (commit `3f39b88`)
+- I-4 — Include product name + qty in inventory shortage error — ✅ FIXED (commit `45a3935`)
+- I-5 — Redirect `/reports/outstanding-receivables` → `/reports/outstanding` — ✅ FIXED (commit `3a09711`)
+- P-9 — Fix `formatINR` space after thousands comma — ✅ FIXED (commit `dcdb194`)
+
+> C-1 (PDF cold-start) was addressed product-side with a warm-up message after
+>
+> > 5s in flight (commit `1477777`) — infra-level worker sizing stays a Stage D
+> > decision (DEV.67). The remaining important/polish items (I-3, P-1…P-12 minus
+> > P-9) stay deferred to post-pilot / Phase 2 per the lists below.
 
 **Items deferred to post-pilot:**
 
