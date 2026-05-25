@@ -204,15 +204,205 @@ blocked exactly as specified. ✅
 
 ## 2. Authentication + Session Management
 
-_(populated in chunk C4b)_
+Auth is **Lucia v3**, session-based, sessions stored in Postgres
+(`apps/web/lib/auth/*`). Email + password only in Phase 1 (no SSO), per CLAUDE.md §6.
+
+### 2.1 Session cookie security (`lib/auth/lucia.ts`)
+
+| Attribute    | Value                                                                | Assessment                                                                |
+| ------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Name         | `dealerlink_session`                                                 | —                                                                         |
+| **HttpOnly** | Lucia default (not overridden) → **on**                              | ✅ JS cannot read the cookie                                              |
+| **Secure**   | `process.env.NODE_ENV === 'production'`                              | ✅ on in prod/staging; off on localhost (expected)                        |
+| **SameSite** | `lax`                                                                | ✅ appropriate — blocks cross-site POST CSRF while allowing top-level nav |
+| **Domain**   | `.dealerlink.in` in production (cross-subdomain session per ADR-001) | ✅ scoped to the brand apex; required for operator subdomain hop          |
+| Path         | `/`                                                                  | —                                                                         |
+
+`expires: false` makes the cookie persistent; **session validity is the
+server-side source of truth** (the DB row). Lucia's default session lifetime
+(**30 days**) applies and is **refreshed on activity** — `getAuthContext` rotates
+the cookie when `result.session.fresh` is true (CLAUDE.md §6: "30 days, refresh
+on activity"). On an invalid/expired session the cookie is blanked.
+
+> **Minor note (informational):** `loginSchema` accepts a `rememberMe` flag but
+> it is not consumed (the cookie is persistent regardless). Cosmetic; no security
+> impact. Not a finding.
+
+### 2.2 Password storage (`lib/auth/password.ts`)
+
+Argon2**id** (`algorithm: 2`) with OWASP-recommended minimums: `memoryCost
+19_456` KiB, `timeCost 2`, `parallelism 1`. `verifyPassword` swallows verifier
+errors and returns `false` (no oracle via exception). ✅ Hash + salt are managed
+by argon2; no plaintext is ever stored. ✅
+
+### 2.3 Password policy (`lib/auth/password-policy.ts`, DEV.69)
+
+Implements CLAUDE.md §6 exactly: **min 8 chars, ≥1 uppercase, ≥1 number, ≥1
+special**. A _single_ Zod schema (`newPasswordSchema`) is imported by both the
+client form and the `changePassword` server action, so client and server cannot
+drift. The temp-password generator (`lib/admin/credentials.ts`) produces a value
+that satisfies this policy. ✅ Matches spec.
+
+### 2.4 Force-password-change trapdoor (C.1 / DEV.56 / DEV.68) — verified un-bypassable
+
+- **Enforced in both guarded layouts**, before any other routing:
+  `app/(app)/layout.tsx:20` and `app/admin/layout.tsx:15` both
+  `redirect('/change-password')` when `ctx.user.mustChangePassword` is true (the
+  admin layout checks it _before_ the operator role gate).
+- **No redirect loop:** `/change-password` lives in the `(auth)` route group,
+  which is **not** wrapped by either guarded layout.
+- **Entry point covered:** `login()` routes a flagged user to `/change-password`
+  on sign-in (`actions.ts:130`).
+- **Single-use temp credential:** `changePassword` re-verifies the _current_
+  password before accepting a new one, and clears `must_change_password` in the
+  **same** `UPDATE` that sets the new hash — the trapdoor can never be left
+  half-open. Enforcement is why a hijacked session can't silently re-key.
+- Covered by `verify-day-c1.spec.ts` + `operator-onboarding.spec.ts`.
+
+> **F-8 context / informational:** the trapdoor gates _UI navigation_ (layouts),
+> not direct Server-Action invocation — `tenantAction`/`operatorAction` check
+> role + tenant but not `must_change_password`. The threat model is "force
+> rotation of a known temp credential by a cooperative new user," not "stop a
+> malicious authenticated user," so this is low-risk and explicitly acknowledged
+> in DEV.68. If the threat model tightens, add the flag check to the wrappers.
+> Not counted as a distinct finding.
+
+### 2.5 Login rate limiting + account lockout → **F-3 (Medium)**
+
+The `login()` action (`lib/auth/actions.ts`) has **no rate limiting and no
+account lockout**. A Postgres-backed limiter (`lib/rate-limit.ts`,
+`checkRateLimit`) exists and _is_ wired to `/api/health` (60/min/IP) but is **not
+called on login**. There is no lock-after-N-failures mechanism.
+
+- **Mitigating factors:** failed logins are recorded to `auth_events`
+  (`login_failed` with reason); the error message is generic
+  (`"Invalid email or password."`) for both unknown-user and bad-password, so
+  there is **no user-enumeration oracle** ✅; argon2id makes each guess
+  expensive; the pilot user set is tiny and trusted.
+- **Risk:** online brute-force / credential-stuffing against a known email.
+  Acceptable for a guided pilot; **must-fix before production.**
+- **Recommendation:** wire `checkRateLimit({ scope: 'login', key: ip+email,
+limit ~5–10/15min })` into `login()` and add a soft account-lockout
+  (e.g. lock after 10 failures in 15 min, surfaced via `auth_events`). Low
+  effort — the limiter primitive already exists.
 
 ## 3. Role + Permission Enforcement
 
-_(populated in chunk C4b)_
+Five roles: **operator** (platform), **admin / sales / accounts / dispatch**
+(tenant), per CLAUDE.md §6. Enforcement is **server-side and structural**: every
+mutation goes through `tenantAction(allowedRoles, schema, fn)` or
+`operatorAction(schema, fn)` (`lib/actions/wrap.ts`), which call
+`requireRole(...)` **before** opening the `withTenant`/`withOperator`
+transaction. Hiding a UI button is never the control.
+
+### 3.1 Guard placement
+
+`requireRole` (`lib/auth/require-role.ts`) throws `UNAUTHORIZED` if unauthenticated,
+`FORBIDDEN` if the account is not `active`, and `FORBIDDEN` if the role is not in
+the allow-list — all _before_ any DB work. `tenantAction` additionally allows an
+**operator** caller **iff** an impersonation cookie is present, and then forces
+`readOnly: true` (so impersonating operators can never mutate — enforced again by
+the audit trigger, §1.3). ✅
+
+### 3.2 Role matrix (representative; every action verified to declare an allow-list)
+
+All 50+ `export const … = tenantAction(...)` declarations were grepped; **every
+one declares an `allowedRoles` array** as its first argument (the type signature
+makes omitting it a compile error). Representative mapping, cross-checked against
+the BRD matrix in CLAUDE.md §6:
+
+| Capability                                      | Allowed roles              | Example action(s)                                                                                        |
+| ----------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Create / edit dealers                           | admin, sales               | `createDealer`, `updateDealer`                                                                           |
+| Dealer commercial terms / (de)activate / import | admin                      | `updateDealerCommercial`, `deactivateDealer`, `bulkImportDealers`                                        |
+| Catalog (products) create/edit/import           | admin                      | `bulkImportProducts` (+ create/update)                                                                   |
+| Deals / pipeline manage + transition            | admin, sales               | `transitionDealStage`, `addDealProduct`                                                                  |
+| Deal reassign                                   | admin                      | `reassignDeal`                                                                                           |
+| Quotations create / PDF / email                 | admin, sales               | `createQuotation`, `generateQuotationPdf`                                                                |
+| Quotation delete                                | admin                      | `deleteQuotation`                                                                                        |
+| PI convert / send / confirm                     | admin, sales               | `convertQuotationToPi`, `sendPi`, `confirmPi`                                                            |
+| PI cancel                                       | admin                      | `cancelPi`                                                                                               |
+| Order confirm                                   | admin, sales               | `confirmOrder`                                                                                           |
+| Order expected-dispatch / cancel                | admin (+ dispatch for ETA) | `updateOrderExpectedDispatch`, `cancelOrder`                                                             |
+| Payments record / verify / clear / allocate     | admin, accounts            | `recordPayment`, `allocatePayment`                                                                       |
+| Payment refund                                  | admin                      | `refundPayment`                                                                                          |
+| Payment receipts (gen/download/send)            | admin, accounts            | `generatePaymentReceipt`, `sendPaymentReceipt`                                                           |
+| Procurement create/confirm/finalize/serials     | admin, dispatch            | `createProcurement`, `submitSerials`                                                                     |
+| Dispatch create / deliver                       | admin, dispatch            | `createDispatch`, `markDispatchDelivered`                                                                |
+| Dispatch return                                 | admin                      | `returnDispatch`                                                                                         |
+| Dispatch note PDF (gen/download)                | admin, dispatch, accounts  | `generateDispatchPdf`                                                                                    |
+| Tenant provisioning + settings + users          | **operator only**          | `createTenant`, `updateTenant*`, `createTenantUser`, `resetTenantUserPassword`, `regenerateInboundToken` |
+| Operator impersonation start/stop               | **operator only**          | `lib/impersonation/actions.ts` (`requireRole(['operator'])`)                                             |
+
+This matches the BRD: **sales** never touches payments/dispatch-ops/user-admin;
+**accounts** never edits dealers/pipeline/dispatch ops (read-only on PI/dispatch
+PDFs); **dispatch** never touches pricing/payments/dealer master; **admin** has
+full tenant scope; **operator** is a separate authentication boundary.
+
+### 3.3 Operator-only actions cannot be called by tenant admins — verified
+
+`operatorAction` calls `requireRole(['operator'])` unconditionally. A tenant
+`admin`'s role is `admin`, not `operator`, so every operator action throws
+`FORBIDDEN` server-side regardless of UI. Tenant provisioning, tenant-user
+management, settings edits, token rotation, and impersonation are all
+operator-gated. ✅
+
+### 3.4 Un-wrapped server actions (reviewed — appropriate)
+
+The only `'use server'` functions **not** wrapped are the auth primitives:
+`login` (must run pre-auth), `logout` (self-scoped to the caller's session), and
+`changePassword` (self-scoped: resolves `getAuthContext` and re-verifies the
+current password). Each is correctly self-guarding. ✅ **No finding** — no
+mutating tenant action lacks a role guard.
 
 ## 4. Secrets Management
 
-_(populated in chunk C4b)_
+### 4.1 Expected secrets (from `.env.example` + `.do/app.yaml`)
+
+| Secret                          | Purpose                                  | Staging status                                    | Prod-ready?  |
+| ------------------------------- | ---------------------------------------- | ------------------------------------------------- | ------------ |
+| `DATABASE_URL`                  | app role (RLS-enforced) runtime conn     | `type: SECRET`, real value injected               | ✅           |
+| `DATABASE_DIRECT_URL`           | superuser — Lucia + pg-boss + migrations | `type: SECRET`, real value injected               | ✅           |
+| `SESSION_SECRET`                | session signing                          | `type: SECRET`, real value injected               | ✅           |
+| `RESEND_INBOUND_WEBHOOK_SECRET` | Svix verification of inbound webhooks    | `type: SECRET` (web)                              | ✅           |
+| `RESEND_API_KEY`                | outbound email                           | **blank** — outbound is a no-op (DEV/STAGING_ENV) | ❌ F-7       |
+| `SENTRY_DSN` / `NEXT_PUBLIC_*`  | error reporting                          | **blank** — SDK no-ops (Day 17)                   | ❌ F-7       |
+| `BETTERSTACK_SOURCE_TOKEN`      | log shipping                             | **blank** — pino → stdout                         | ❌ F-7       |
+| `AXIOM_TOKEN`                   | event analytics                          | **blank** — `trackEvent` → pino                   | ❌ F-7       |
+| `DO_SPACES_*`                   | file storage                             | deferred to Stage D (DEV.16, base64 logos)        | ❌ (planned) |
+
+### 4.2 Secrets hygiene — verified
+
+- **No secret values in the repo.** `.do/app.yaml` ships `type: SECRET` envs with
+  **no `value:`** (committed blank); real values live in
+  `C:\Users\rohit\.dealerlink\staging-secrets.txt` (outside the repo) and are
+  injected via `doctl apps update --spec` (DEV.64). ✅
+- **`.gitignore`** excludes `.env`, `.env.local`, `.env.*.local` (keeps
+  `.env.example`), `secrets/`, `/staging-secrets.txt`, and the rendered spec
+  (`.do/app.rendered.yaml`). ✅
+- **Git-history scan** (`git log -p --all -S "re_"`, plus regex sweeps for live
+  `whsec_…`, `Bearer …`, hex `SESSION_SECRET=`, and non-dev Postgres creds)
+  returned **nothing** — only the documented dev placeholders
+  (`*_change_me`, `replace_with_…`, `re_xxxx`, `whsec_xxxx`). ✅
+- **Server-only discipline:** `RESEND_INBOUND_WEBHOOK_SECRET` carries an explicit
+  "NEVER expose via NEXT*PUBLIC*_" note and is never inlined. The only
+  `NEXT*PUBLIC*_` vars are the Sentry DSN (public by design), app URL, app domain,
+  and Sentry environment/release — none secret. ✅
+- **No secret leaks into `audit_log`:** `audit_redact()` redacts `password_hash`,
+  `inbound_email_token`, `token`, `%_secret`, `%_token`. The one place a plaintext
+  temp password transiently lives (`email_delivery_log.meta`, ADR-010) has **no**
+  audit trigger (DEV.47), so it never reaches `audit_log`. ✅
+
+### 4.3 Findings
+
+- **F-7 (Informational):** Sentry / Better Stack / Axiom / outbound-Resend secrets
+  are intentionally **blank on staging** and degrade to no-ops (Day 17 contract).
+  This is a **production-readiness gap**, not a leak: these must be populated with
+  real values before production (Stage D). Tracked.
+- **F-8 (Informational):** `docs/pilot/credentials-cheatsheet.md` commits the
+  seeded **test** credentials (`password123`). These are public throwaway dev
+  credentials, acceptable to commit. **Constraint for Stage E:** the real pilot
+  tenant's credentials must **never** be committed.
 
 ## 5. Input Validation + Output Encoding
 
