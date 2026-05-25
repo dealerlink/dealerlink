@@ -1,7 +1,8 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
+import { Button } from '@/components/ui/button';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { recordAccess } from '@/lib/audit/access-log';
 import { getAuthContext } from '@/lib/auth/session';
@@ -40,6 +41,11 @@ export default async function DealDetailPage({ params }: PageProps) {
 
   const deal = await getDealById(tenantId, params.id);
   if (!deal) notFound();
+
+  // Quoting is an admin/sales capability (matches the /quotations/new gate).
+  // Surfaced only on open deals — the natural pipeline entry point for a quote.
+  const canQuote =
+    (ctx.user.role === 'admin' || ctx.user.role === 'sales') && deal.status === 'open';
 
   // Deal detail is a sensitive read (dealer-tied financial detail).
   void recordAccess('deal', params.id, 'view').catch(() => null);
@@ -84,6 +90,15 @@ export default async function DealDetailPage({ params }: PageProps) {
           {deal.estimatedValue != null && (
             <div className="mono text-mute mt-0.5 text-[11px]">
               {formatINRExact(deal.estimatedValue)}
+            </div>
+          )}
+          {canQuote && (
+            <div className="mt-3">
+              <Button asChild variant="accent">
+                <Link href={`/quotations/new?dealId=${deal.id}&dealerId=${deal.dealer.id}`}>
+                  <FileText size={13} /> Create Quotation
+                </Link>
+              </Button>
             </div>
           )}
         </div>
