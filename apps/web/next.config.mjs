@@ -61,6 +61,18 @@ const nextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
+  async redirects() {
+    // The report's intuitive URL is /reports/outstanding-receivables, but the
+    // page lives at /reports/outstanding. Redirect so bookmarked/shared links
+    // don't 404 (UX finding I-5). `permanent: true` emits a 308 (permanent).
+    return [
+      {
+        source: '/reports/outstanding-receivables',
+        destination: '/reports/outstanding',
+        permanent: true,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
