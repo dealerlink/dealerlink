@@ -125,6 +125,9 @@ export function DealerDetailSections({
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(dealer);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState('');
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
 
   const set = <K extends keyof DealerView>(k: K, v: DealerView[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -164,15 +167,25 @@ export function DealerDetailSections({
     }
   }
 
-  async function onDeactivate() {
-    const reason = window.prompt('Reason for deactivation?');
-    if (!reason) return;
-    const result = await deactivateDealer({ id: dealer.id, reason });
-    if (!result.ok) {
-      alert(result.error.message);
+  async function doDeactivate() {
+    if (deactivateReason.trim().length < 2) {
+      setDeactivateError('A reason is required (at least 2 characters).');
       return;
     }
-    startTransition(() => router.refresh());
+    setSaving(true);
+    setDeactivateError(null);
+    try {
+      const result = await deactivateDealer({ id: dealer.id, reason: deactivateReason.trim() });
+      if (!result.ok) {
+        setDeactivateError(result.error.message);
+        return;
+      }
+      setDeactivateOpen(false);
+      setDeactivateReason('');
+      startTransition(() => router.refresh());
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function onReactivate() {
@@ -439,10 +452,51 @@ export function DealerDetailSections({
                 Reactivate
               </Button>
             ) : (
-              <Button size="sm" variant="destructive" onClick={onDeactivate}>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  setDeactivateError(null);
+                  setDeactivateOpen((o) => !o);
+                }}
+              >
                 Deactivate
               </Button>
             )}
+          </div>
+        )}
+
+        {canEditCommercial && !isInactive && deactivateOpen && (
+          <div className="border-line mt-3 space-y-2 rounded-[6px] border p-3">
+            <div className="text-ink text-[13px] font-semibold">Deactivate {dealer.legalName}?</div>
+            <p className="text-mute text-[12px]">
+              This will prevent new quotations for this dealer. Existing quotations and orders are
+              unaffected.
+            </p>
+            <label className="text-ink block text-[12px] font-medium">Reason</label>
+            <textarea
+              value={deactivateReason}
+              onChange={(e) => setDeactivateReason(e.target.value)}
+              rows={2}
+              className="border-line bg-paper focus:ring-accent w-full rounded-[4px] border px-2 py-1.5 text-[13px] focus:outline-none focus:ring-1"
+              placeholder="e.g., dealer no longer trading"
+            />
+            {deactivateError && <p className="text-[11.5px] text-rose-700">{deactivateError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => {
+                  setDeactivateOpen(false);
+                  setDeactivateError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" variant="destructive" onClick={doDeactivate} disabled={saving}>
+                {saving ? 'Deactivating…' : 'Deactivate'}
+              </Button>
+            </div>
           </div>
         )}
       </section>
