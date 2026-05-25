@@ -1,0 +1,27 @@
+{
+  "test": "light-load",
+  "capturedAt": "2026-05-25T09:51:52.583Z",
+  "target": "staging.dealerlink.in",
+  "profile": {
+    "concurrentUsers": 5,
+    "durationS": 120,
+    "thinkMs": [250, 750]
+  },
+  "elapsedS": 120.8,
+  "totalRequests": 867,
+  "okRequests": 867,
+  "errorCount": 0,
+  "errorRatePct": 0,
+  "throughputReqPerSec": 7.2,
+  "latencyMs": {
+    "n": 867,
+    "min": 68,
+    "mean": 181.6,
+    "stddev": 118.2,
+    "p50": 133,
+    "p95": 403,
+    "p99": 627,
+    "max": 1029
+  },
+  "errorSample": []
+}

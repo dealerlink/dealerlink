@@ -44,3 +44,5 @@ secrets/
 .do/app.rendered.yaml
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
+# Load-test captured session cookies (live session tokens — never commit)
+scripts/load-test/.sessions.json

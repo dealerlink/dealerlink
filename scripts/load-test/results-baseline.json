@@ -1,0 +1,68 @@
+{
+  "test": "baseline",
+  "capturedAt": "2026-05-25T09:48:39.500Z",
+  "target": "staging.dealerlink.in",
+  "profile": {
+    "concurrency": 1,
+    "iterations": 5,
+    "warmup": 1
+  },
+  "quotationId": "bafbeb23-cf6b-41ef-868f-abe5da299da0",
+  "endpoints": {
+    "dashboard": {
+      "n": 5,
+      "min": 215,
+      "mean": 257,
+      "stddev": 37.1,
+      "p50": 258,
+      "p95": 305,
+      "p99": 305,
+      "max": 305,
+      "failures": 0
+    },
+    "quotations-list": {
+      "n": 5,
+      "min": 106,
+      "mean": 111.2,
+      "stddev": 5.2,
+      "p50": 111,
+      "p95": 119,
+      "p99": 119,
+      "max": 119,
+      "failures": 0
+    },
+    "quotation-detail": {
+      "n": 5,
+      "min": 107,
+      "mean": 117.6,
+      "stddev": 12.5,
+      "p50": 114,
+      "p95": 138,
+      "p99": 138,
+      "max": 138,
+      "failures": 0
+    },
+    "report-gst-summary": {
+      "n": 5,
+      "min": 79,
+      "mean": 87,
+      "stddev": 6.7,
+      "p50": 88,
+      "p95": 97,
+      "p99": 97,
+      "max": 97,
+      "failures": 0
+    },
+    "api-health": {
+      "n": 5,
+      "min": 42,
+      "mean": 45.6,
+      "stddev": 2.5,
+      "p50": 46,
+      "p95": 49,
+      "p99": 49,
+      "max": 49,
+      "failures": 0
+    }
+  }
+}
