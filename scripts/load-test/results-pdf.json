@@ -1,0 +1,105 @@
+{
+  "test": "pdf-load",
+  "capturedAt": "2026-05-25T09:58:21.061Z",
+  "target": "staging.dealerlink.in",
+  "profile": {
+    "concurrency": 10,
+    "reps": 3,
+    "renderTimeoutMs": 170000
+  },
+  "cold": {
+    "ms": 5548,
+    "mode": "regenerate",
+    "ok": true,
+    "error": null
+  },
+  "warmSingle": {
+    "n": 2,
+    "min": 2408,
+    "mean": 2946.5,
+    "stddev": 761.6,
+    "p50": 2408,
+    "p95": 3485,
+    "p99": 3485,
+    "max": 3485
+  },
+  "concurrent": [
+    {
+      "rep": 0,
+      "ok": 6,
+      "failures": 4,
+      "makespanMs": 847833,
+      "throughputPerMin": 0.4,
+      "latencyMs": {
+        "n": 6,
+        "min": 2126,
+        "mean": 54943.3,
+        "stddev": 39676.3,
+        "p50": 49580,
+        "p95": 125488,
+        "p99": 125488,
+        "max": 125488
+      },
+      "failureSample": [
+        "Could not generate the PDF — the document is taking longer than expected to generate — please try again",
+        "error",
+        "error",
+        "error"
+      ]
+    },
+    {
+      "rep": 1,
+      "ok": 9,
+      "failures": 1,
+      "makespanMs": 135272,
+      "throughputPerMin": 4,
+      "latencyMs": {
+        "n": 9,
+        "min": 2579,
+        "mean": 12698,
+        "stddev": 10011.8,
+        "p50": 10553,
+        "p95": 36331,
+        "p99": 36331,
+        "max": 36331
+      },
+      "failureSample": [
+        "Could not generate the PDF — the document is taking longer than expected to generate — please try again"
+      ]
+    },
+    {
+      "rep": 2,
+      "ok": 3,
+      "failures": 7,
+      "makespanMs": 622251,
+      "throughputPerMin": 0.3,
+      "latencyMs": {
+        "n": 3,
+        "min": 2066,
+        "mean": 84076.7,
+        "stddev": 71025.3,
+        "p50": 124554,
+        "p95": 125610,
+        "p99": 125610,
+        "max": 125610
+      },
+      "failureSample": [
+        "Could not generate the PDF — the document is taking longer than expected to generate — please try again",
+        "Could not generate the PDF — the document is taking longer than expected to generate — please try again",
+        "error",
+        "error",
+        "error"
+      ]
+    }
+  ],
+  "concurrentAggregate": {
+    "n": 18,
+    "min": 2066,
+    "mean": 38676.2,
+    "stddev": 43795.8,
+    "p50": 15317,
+    "p95": 125610,
+    "p99": 125610,
+    "max": 125610
+  }
+}
