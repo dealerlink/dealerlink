@@ -3,6 +3,26 @@
 const LAKH = 100_000;
 const CRORE = 10_000_000;
 
+/**
+ * Indian-grouped number string with NO whitespace inside the grouping.
+ *
+ * `Intl.NumberFormat('en-IN')` groups with a plain comma on full-ICU Node, but
+ * some ICU builds / browser locale data emit a no-break (U+00A0) or thin
+ * (U+202F / U+2009) space as — or beside — the grouping separator, which
+ * rendered as "₹41, 418" in the payment allocation panel (UX finding P-9).
+ * Stripping all whitespace guarantees "₹41,418" on every runtime. The " L" /
+ * " Cr" scale suffixes are appended by callers, outside this helper, so they
+ * are unaffected.
+ */
+function groupedINR(value: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
+    .format(value)
+    .replace(/\s+/g, '');
+}
+
 type FormatINROptions = {
   /**
    * When true, auto-scales large numbers:
@@ -49,12 +69,7 @@ export function formatINR(
   }
 
   // For values < 1 lakh (or autoScale=false), use full Indian grouping
-  const formatted = new Intl.NumberFormat('en-IN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
-
-  return `${prefix}${formatted}`;
+  return `${prefix}${groupedINR(value)}`;
 }
 
 /**
@@ -68,10 +83,7 @@ export function formatINRExact(
   { symbol = true }: Pick<FormatINROptions, 'symbol'> = {},
 ): string {
   const prefix = symbol ? '₹' : '';
-  return `${prefix}${new Intl.NumberFormat('en-IN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value)}`;
+  return `${prefix}${groupedINR(value)}`;
 }
 
 /** Format a percentage for display (e.g., 68 → "68%") */
