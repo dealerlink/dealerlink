@@ -1,6 +1,6 @@
 # Stage C — Validation Prompts
 
-Stage C runs from May 21 to May 27, 2026. Goal: validate the Stage B build is production-ready, deploy staging environment, close the two known feature gaps, security + performance audit, and prepare for Stage D production deploy.
+Stage C runs from May 21 to May 27, 2026. Final day of validation before Stage D production deployment.
 
 **Pilot target:** Production live Wednesday, June 3, 2026.
 
@@ -13,8 +13,8 @@ Stage C runs from May 21 to May 27, 2026. Goal: validate the Stage B build is pr
 | C.1           | May 23     | Force-password-change (closes DEV.56)                        | ✅ Done     |
 | C.2           | May 24     | State code normalization (closes DEV.33)                     | ✅ Done     |
 | C.3           | May 25     | Pilot staging handoff + UX walkthrough                       | ✅ Done     |
-| **C.4**       | **May 26** | **Security audit + UX fixes from C.3 triage**                | **Current** |
-| C.5           | May 27     | Performance test + Stage D handoff                           | ⏳          |
+| C.4           | May 26     | Security audit + UX fixes from C.3 triage                    | ✅ Done     |
+| **C.5**       | **May 27** | **Performance test + Stage D handoff**                       | **Current** |
 | Stage D start | May 28     | Production environment provisioning                          | —           |
 
 ---
@@ -63,345 +63,391 @@ Triage:
 - **Post-pilot:** I-3, P-1, P-2, P-6, P-7, P-8, P-10
 - **Phase 2:** P-3, P-11, P-12
 
+## Stage C Day C.4 — Security Audit + UX Fixes (✅ Complete — May 26)
+
+**Outcome:** 0 Critical / 1 High / 2 Medium / 3 Low / 3 Informational. No pilot-blockers.
+
+**Shipped:**
+
+- F-2 HTTP security headers (CSP, X-Frame-Options DENY, HSTS, etc.) — verified live on staging
+- I-1: Create-Quotation CTA on deal detail page
+- I-2: Confirmation dialog on Deactivate dealer button
+- I-4: Inventory shortage error names the product + qty
+- I-5: /reports/outstanding-receivables → /reports/outstanding redirect
+- P-9: formatINR whitespace fix
+- C-1: PDF cold-start warm-up copy
+
+**Deferred to Stage D:**
+
+- F-1 (Next.js ≥14.2.35 upgrade) — CVE-2025-29927, architecturally mitigated, needs framework regression window
+- F-3 (login rate-limit + account lockout) — bounded for pilot, must-fix for production
+
+Verify 57/57. Staging deployment ACTIVE.
+
 ---
 
-## Stage C Day C.4 — Security Audit + UX Fixes (Current — Tuesday May 26)
+## Stage C Day C.5 — Performance Test + Stage D Handoff (Current — Wednesday May 27)
 
-**Goal:** Read-only security audit produces actionable report. Apply 5 UX fixes from C.3 triage that are pre-pilot must-haves. Address C-1 (PDF cold-start UX) with a small mitigation.
+**Goal:** Generate real performance data from staging to drive Stage D production sizing decisions. Produce comprehensive Stage D handoff document so Thursday morning starts with a clear plan.
 
-**Estimated time:** 5-6 hours total. Morning security audit (~3 hours). Afternoon UX fixes (~2-3 hours).
+**Estimated time:** 5-6 hours total. Morning load testing (~3 hours). Afternoon Stage D handoff doc (~2-3 hours).
 
-**Sequence matters:** Security audit FIRST, read-only. Only after audit findings are reviewed do we touch code. This separates auditor and implementer mindset.
+**Critical principle:** Today's data-driven decisions need to be specific. Vague handoffs ("scale up workers as needed") produce poor production deployments. The output is concrete: "workers basic-xs sufficient up to X PDFs/minute," "DB connection pool of Y handles Z concurrent users," etc.
 
 ### Prompt for Claude Code
 
 ```
-You are implementing Stage C Day C.4 of the Dealerlink build. C.3 closed yesterday with the outcome: "Substantially ready for pilot. No true pilot-blockers." Today does two things in sequence:
+You are implementing Stage C Day C.5 — the final day of Stage C. C.4 closed yesterday with security audit + 5 UX fixes shipped. Today does two things in sequence:
 
-PART 1 (morning, ~3 hours): Read-only security audit. NO code changes. Generate findings report.
-PART 2 (afternoon, ~2-3 hours): Apply 5 UX fixes from C.3 triage + address C-1 cold-start UX.
-
-The break between parts is intentional. Stop after PART 1 completes the audit report. Wait for me to review findings before proceeding to PART 2.
+PART 1 (morning, ~3 hours): Performance + load testing against staging. Produce real data.
+PART 2 (afternoon, ~2-3 hours): Generate comprehensive docs/STAGE_D_HANDOFF.md.
 
 PRELIMINARY:
 P.1. `pnpm preflight` confirms green.
-P.2. Read DEVIATIONS.md DEV.57-72 — Stage C deviations
-P.3. Read DECISIONS.md ADR-001 through ADR-013 — all locked decisions
-P.4. Read CLAUDE.md §6 (auth + multi-party logic), §7 (architecture)
-P.5. Read docs/STAGING_ENV.md — what's deployed
-P.6. Read docs/UX_FINDINGS.md — yesterday's triage (I-1 through I-5, P-9 in scope for today)
-P.7. Read apps/web/middleware.ts + apps/web/lib/auth/* (Lucia integration)
-P.8. Read packages/db/src/rls/* (RLS policies)
+P.2. Read DEVIATIONS.md focus on DEV.67 — worker sizing flagged for Stage D, decision is today's data-driven call.
+P.3. Read DECISIONS.md — particularly ADR-013 (Puppeteer queue isolation).
+P.4. Read docs/SECURITY_AUDIT.md — F-1, F-3, and any other findings to carry forward.
+P.5. Read docs/STAGE_C_HANDOFF.md — current Carried-Forward section is the seed for Stage D handoff.
+P.6. Read CLAUDE.md §3 (stack) + §7 (architecture).
+P.7. Read .do/app.yaml — current staging spec.
+P.8. Read docs/DEPLOYMENT.md — current runbook.
 
 PRIMARY REFERENCES:
-1. CLAUDE.md §6 + §7
-2. DEVIATIONS.md
-3. UX_FINDINGS.md triage decisions
-4. apps/web/lib/auth/ (auth surface)
-5. packages/db/src/schema/* (tables) + packages/db/src/rls/* (policies)
+1. DEVIATIONS.md (full list of resolved + deferred)
+2. SECURITY_AUDIT.md (F-1, F-3 deferred)
+3. STAGE_C_HANDOFF.md (carried-forward seed)
+4. .do/app.yaml (staging spec)
+5. CLAUDE.md §3 + §7
 
 ==========================================================
-PART 1 — SECURITY AUDIT (READ-ONLY, ~3 HOURS)
+PART 1 — PERFORMANCE + LOAD TESTING (~3 HOURS)
 ==========================================================
 
-DO NOT modify any application code in Part 1. Only generate the audit report. If you find issues that need code fixes, log them in the report; we'll address them in Part 2 or a follow-up.
+The point of load testing is to surface real production-shape issues BEFORE production. We need concrete numbers, not vague "looks fine" assertions.
 
-CHUNK C4a — Security audit report scaffold + RLS verification
+Three load profiles to test, in increasing intensity. Each captures specific metrics. STOP if any test shows unrecoverable degradation; report findings before continuing.
+
+CHUNK C5a — Baseline + light load test
 ---------------------------------
 
-A1.1. Create docs/SECURITY_AUDIT.md with sections:
-   - Executive summary (counts: critical / high / medium / low / informational)
-   - Methodology + scope
-   - 1. Multi-tenant Isolation (RLS)
-   - 2. Authentication + Session Management
-   - 3. Role + Permission Enforcement
-   - 4. Secrets Management
-   - 5. Input Validation + Output Encoding
-   - 6. Audit Logging + Observability
-   - 7. Dependency Security
-   - 8. Infrastructure Security (DO + Cloudflare)
-   - 9. OWASP Top 10 Quick Check
-   - 10. Findings Summary + Recommendations
+A1.1. Set up load testing tool. Options (pick whichever Claude Code has cleanest path for):
+   - k6 (recommended — easy scripting, JSON output)
+   - autocannon (simpler if k6 install is friction)
+   - Playwright with parallel workers (use what we have)
 
-A1.2. Section 1 — RLS verification:
-   - List every table in the schema (use packages/db/src/schema/*)
-   - For each table, check:
-     - Does it have a tenant_id column?
-     - Is RLS enabled (ALTER TABLE ... ENABLE ROW LEVEL SECURITY)?
-     - Does it have a policy that restricts to tenant_id = current_setting('app.tenant_id')?
-     - Are policies in packages/db/src/rls/ comprehensive?
-   - Cross-check: any table with tenant_id MUST have RLS enabled and a policy
-   - Document each table's status in a table
-   - Flag any gap as a finding (severity: critical if user-facing data, high if internal)
+A1.2. Create scripts/load-test/baseline.js (or .ts) — captures baseline latency at single-user load:
+   - Login as admin@demo.test
+   - Navigate dashboard → quotations list → quotation detail → reports
+   - Measure p50, p95, p99 latency for each page
+   - 5 iterations, capture mean + stddev
 
-A1.3. RLS bypass surface audit:
-   - Search for any use of `BYPASS_RLS` or admin-mode DB clients
-   - Verify they only run from server-only contexts (server actions, workers)
-   - Verify they always re-establish tenant context before tenant queries
-   - Flag any use of bypass that doesn't immediately re-set tenant_id as a finding
+A1.3. Capture baseline metrics — record in scripts/load-test/results-baseline.json:
+   - Dashboard load: p50, p95, p99 ms
+   - Quotations list load: p50, p95, p99 ms
+   - Quotation detail load: p50, p95, p99 ms
+   - GST summary report load: p50, p95, p99 ms
+   - /api/health: p50, p95, p99 ms
 
-A1.4. Cross-tenant query test:
-   - Write a sample query that, given a session for tenant A, attempts to read tenant B's data
-   - Document expected behavior (RLS rejects) and confirm via local test
-   - Do NOT actually mutate data; just confirm the read is blocked
-   - Document the test result in the audit report
+A1.4. Create scripts/load-test/light-load.js — 5 concurrent users for 2 minutes:
+   - Each user follows the baseline path randomly
+   - Captures: total requests, error rate, p95/p99 latency, requests/sec
+   - 5 users × 2 min should mimic pilot's first-week realistic load
 
-COMMIT C4a: `docs(security): chunk a — audit scaffold + RLS verification`
+A1.5. Run light-load against staging:
+   - Capture results to scripts/load-test/results-light.json
+   - Monitor staging metrics during test:
+     - DO App Platform CPU/memory on both web + workers
+     - DO Postgres connection count, CPU, queries/sec
+     - Sentry: any error spike during test?
+     - Axiom: event ingest rate
 
-CHUNK C4b — Auth + roles + secrets audit
+A1.6. Document findings:
+   - Did anything degrade vs baseline?
+   - What's the constraint (CPU, memory, DB connections, network)?
+   - Are 5 concurrent users comfortable on basic-xs / basic-xxs? Quantify the headroom.
+
+COMMIT C5a: `test(perf): chunk a — baseline + light-load (5 concurrent users)`
+
+CHUNK C5b — PDF generation load test
 ---------------------------------
 
-A2.1. Section 2 — Authentication + Session Management:
-   - Lucia session security: HttpOnly cookie? Secure flag in production? SameSite=Lax/Strict?
-   - Session expiration: what's the timeout? Idle vs absolute?
-   - Password storage: argon2 hash + salt (verify)
-   - Password policy: documented in CLAUDE.md §6; verify implementation matches (min 8, 1 upper, 1 number, 1 special per DEV.69)
-   - Force-password-change flow (C.1): verify the trapdoor cannot be bypassed
-   - Login rate limiting: is there any? If not, log as a finding (low severity for pilot, must address for production)
-   - Account lockout: is there any? Same as above
+The critical question for Stage D worker sizing: how many PDFs/minute can basic-xxs handle?
 
-A2.2. Section 3 — Role + Permission Enforcement:
-   - Roles defined: operator, admin, sales, accounts, dispatch (per CLAUDE.md §6)
-   - For each server action in apps/web/lib/actions/* or app routes:
-     - Does it call requireRole() / hasPermission() / equivalent guard?
-     - Is the guard before any DB mutation?
-     - What role(s) can call this action?
-   - Document the role matrix: which roles can do what actions
-   - Flag any server action without a role guard as a finding (severity: high)
-   - Verify operator-only actions (tenant create, etc.) cannot be called by tenant admins
+A2.1. Create scripts/load-test/pdf-load.js — concurrent PDF generation:
+   - Login as admin@demo.test
+   - Request 10 quotation PDFs in parallel (different quotation IDs)
+   - Wait for all to complete
+   - Capture: queue depth peak, latency p50/p95/p99 per render, any failures, timeout count
+   - Repeat 3 times to test sustained load
 
-A2.3. Section 4 — Secrets Management:
-   - List every secret expected by the app (cross-ref .env.example + .do/app.yaml)
-   - For each: is it actually set on staging? Production-ready or placeholder?
-   - Audit log + audit_log for any secret values accidentally written (search for known patterns: API keys, passwords, tokens)
-   - Verify nothing in git history contains real secrets (git log + secrets scanner)
-   - Verify .gitignore correctly excludes /staging-secrets and similar local files
-   - Flag any production-readiness gap as a finding (severity: high, blocks Stage D)
+A2.2. Run pdf-load against staging:
+   - Monitor workers component CPU + memory during test
+   - Monitor pg-boss queue (depth, throughput, error rate)
+   - Capture all results to scripts/load-test/results-pdf.json
 
-COMMIT C4b: `docs(security): chunk b — auth, roles, secrets audit`
+A2.3. Test cold-start scenario explicitly:
+   - Wait 50 minutes for workers idle-recycle (or trigger it manually via redeploy)
+   - First PDF request after idle: measure latency
+   - Second PDF request: measure latency (should be warm)
+   - Repeat 3 times for confidence
+   - Document the cold-start curve
 
-CHUNK C4c — Input validation, audit log, dependencies, OWASP
+A2.4. Stress test — find the breaking point:
+   - 20 concurrent PDF requests
+   - 40 concurrent PDF requests
+   - At what concurrency level do requests start timing out (120s timeout)?
+   - At what level do we see worker OOM (memory pressure)?
+   - Document the upper bound clearly
+
+A2.5. Findings document — scripts/load-test/findings-pdf.md:
+   - Steady-state throughput: X PDFs/minute on basic-xxs
+   - Cold-start penalty: Y seconds on first render after Z minutes idle
+   - Breaking point: W concurrent requests
+   - Recommended Stage D sizing: justification based on these numbers
+   - Specific recommendation: keep basic-xxs OR upgrade to basic-xs (with cost delta noted)
+
+COMMIT C5b: `test(perf): chunk b — PDF load + cold-start curve + stress test`
+
+CHUNK C5c — Database load + workflow load test
 ---------------------------------
 
-A3.1. Section 5 — Input Validation + Output Encoding:
-   - Zod schemas on every server action: spot-check 5 random actions
-   - SQL injection: Drizzle uses parameterized queries — verify; flag any raw SQL with string concat
-   - XSS: React escapes by default; flag any dangerouslySetInnerHTML usage
-   - CSRF: Next.js Server Actions have built-in CSRF; verify no custom POST endpoints bypass
-   - File upload validation: if any upload endpoints exist, verify file type + size limits
-   - HTTP headers: verify CSP, X-Frame-Options, X-Content-Type-Options, etc. in next.config
+A3.1. Create scripts/load-test/db-load.js — exercise the connection pool:
+   - 10 concurrent users each doing dashboard queries
+   - Measure: pool exhaustion threshold, query latency under load, lock contention
+   - This tests whether DEV.62 (global pool fix) holds under real concurrency
 
-A3.2. Section 6 — Audit Logging + Observability:
-   - audit_log table: is it written via triggers (per CLAUDE.md) or application code?
-   - Verify triggers exist for tables that need audit trail (orders, payments, dispatches, user changes)
-   - Sentry PII scrubbing: verify beforeSend or scrubbers exclude password fields, email contents, audit_log details
-   - Axiom event taxonomy: spot-check that user.password_changed (per C.1) and other security events fire correctly
-   - Health endpoint exposure: /api/health should not leak internal info (DB connection details, etc.) — verify
+A3.2. Create scripts/load-test/workflow-load.js — multiple users running through critical-path simultaneously:
+   - 3 users, each running a full quotation→PI→order→payment→dispatch flow
+   - Stagger by ~5 seconds (mimics real pilot users not perfectly synchronized)
+   - Measure: end-to-end flow latency, any cross-user interference, any RLS leaks
+   - This tests transaction isolation under concurrent writes
 
-A3.3. Section 7 — Dependency Security:
-   - Run `pnpm audit` and capture output
-   - Document any high/critical CVEs in dependencies
-   - For each: is it exploitable in our usage? (e.g., a dev-only package CVE is lower priority)
-   - Recommend update path for production
+A3.3. Run db-load and workflow-load:
+   - Capture results to scripts/load-test/results-db.json + results-workflow.json
+   - Monitor DO Postgres: connection count, query queue depth, deadlocks (should be zero)
+   - Monitor app logs for RLS errors (should be zero)
 
-A3.4. Section 8 — Infrastructure:
-   - DO Managed Postgres: TLS enforced? Trusted-sources lockdown active (per C.0)? Backups configured (or noted for Stage D)?
-   - DO App Platform: HTTPS-only? Health check timeout reasonable? Logs accessible only to authorized accounts?
-   - Cloudflare: gray-cloud DNS-only on staging (per C.0); SSL/TLS mode "Full (strict)"; Always Use HTTPS enabled
-   - Resend / observability secrets: verify staging placeholders are clearly marked NOT for production use
+A3.4. Findings:
+   - Connection pool sufficient for X concurrent users?
+   - Query latency degradation under load (acceptable or not)?
+   - Any deadlocks or lock contention surfaced?
+   - Stage D recommendation: keep basic Postgres OR upgrade
 
-A3.5. Section 9 — OWASP Top 10 quick check:
-   - A01 Broken Access Control: covered by RLS + role audit above
-   - A02 Cryptographic Failures: covered by secrets + auth audit
-   - A03 Injection: covered by input validation audit
-   - A04 Insecure Design: high-level — does the architecture have known weaknesses?
-   - A05 Security Misconfiguration: covered by infrastructure audit
-   - A06 Vulnerable Components: covered by dependency audit
-   - A07 ID + Auth Failures: covered by auth audit
-   - A08 Software/Data Integrity: integrity of migrations + audit log + RLS policies
-   - A09 Logging Failures: covered by audit log section
-   - A10 SSRF: any server-side fetch calls? (Resend webhook handler, maybe). Verify URL allow-list.
-   - One-line summary per item; expand only if a real finding
-
-A3.6. Section 10 — Findings Summary:
-   - Aggregate all findings from sections 1-9
-   - Sort by severity: critical → high → medium → low → informational
-   - For each: title, severity, location, recommendation
-   - Highlight which findings block pilot vs which can wait for Stage D
-   - Recommend a prioritized fix order
-
-COMMIT C4c: `docs(security): chunk c — validation, audit, dependencies, OWASP`
+COMMIT C5c: `test(perf): chunk c — DB load + multi-user workflow load`
 
 ==========================================================
-PART 1 GATE — STOP HERE
+PART 1 GATE
 ==========================================================
 
-After committing C4a-C4c, STOP. Print:
-- Path to docs/SECURITY_AUDIT.md
-- Executive summary: total findings by severity
-- Top 3 findings that need fixing before pilot (if any)
-- Any findings that should escalate to ADR-level decisions
+After committing C5a-C5c, STOP. Print summary:
+- Light load: pass/fail with specific numbers
+- PDF load: PDFs/min throughput, breaking point, cold-start curve
+- DB + workflow: any concerns, recommended sizing
 
-Wait for the operator to review the audit report before proceeding to PART 2.
+Wait for operator to review before proceeding to Part 2. If results show concerning issues, those become Stage D priorities even ahead of pilot.
 
 ==========================================================
-PART 2 — UX FIXES + COLD-START MITIGATION (~2-3 HOURS)
+PART 2 — STAGE D HANDOFF DOC (~2-3 HOURS)
 ==========================================================
 
-Resume here after operator reviews the security audit. Critical security findings (if any) get fixed first, before the planned UX work.
+Resume after operator reviews performance findings. Stage D handoff doc must be self-contained — Thursday morning Claude Code (or human) should be able to start production deploy without re-discovering anything Stage C learned.
 
-CHUNK C4d — Critical security fixes (if any)
+CHUNK C5d — STAGE_D_HANDOFF.md generation
 ---------------------------------
 
-If the security audit surfaced any critical findings:
-- Each fix is its own commit
-- Use the audit report's recommendations as the brief
-- After fixes, mark each in SECURITY_AUDIT.md as "FIXED — see commit <SHA>"
+A4.1. Create docs/STAGE_D_HANDOFF.md — structured as a complete runbook for Stage D production deployment.
 
-If no critical findings, skip C4d entirely and proceed to C4e.
+Required sections:
 
-CHUNK C4e — UX fixes from C.3 triage
+1. **Production Deployment Overview**
+   - Goal: production environment ready for pilot June 3
+   - Scope: separate DO project, production-sized infrastructure, real third-party services
+   - Out of scope: features (this is infrastructure + observability + hardening)
+
+2. **Production Environment Spec**
+   - DO project: dedicated (not shared with staging)
+   - Region: BLR1
+   - Components (with data-driven sizing from C.5 morning):
+     - Web: instance size + count justification
+     - Workers: instance size + count justification (the DEV.67 decision)
+     - DB: instance size + backup configuration
+   - Domain: app.dealerlink.in (recommend) OR alternative — operator to confirm
+   - DNS: Cloudflare migration pattern same as staging
+   - SSL: Let's Encrypt via DO + Cloudflare gray-cloud
+
+3. **Production Secrets Provisioning Checklist**
+   - For each secret: source, format, where stored, rotation policy
+   - SENTRY_DSN — create production Sentry project, get DSN
+   - BETTERSTACK_SOURCE_TOKEN — create production source, get token
+   - AXIOM_TOKEN + AXIOM_DATASET — create production dataset, get token
+   - RESEND_API_KEY — verify dealerlink.in domain in Resend, set up DKIM + SPF, get production key
+   - LUCIA_SESSION_SECRET — generate fresh 32-byte base64
+   - RESEND_INBOUND_WEBHOOK_SECRET — generate fresh
+   - DATABASE_URL — from DO Managed Postgres production
+   - NEXT_PUBLIC_APP_URL — https://app.dealerlink.in (or chosen domain)
+   - All stored in C:\Users\rohit\.dealerlink\production-secrets.txt (gitignored)
+
+4. **Resolved Stage C Findings to Address in Stage D**
+   - F-1: Upgrade Next.js to ≥14.2.35 (CVE-2025-29927)
+     - Approach: dedicated PR, full regression pass, ship as first commit in Stage D
+     - Effort: ~3-4 hours including testing
+   - F-3: Login rate-limit + account lockout
+     - Approach: extend existing checkRateLimit primitive to login() action
+     - Recommended thresholds: 5 attempts / 15 min window, then 30-min lockout
+     - Effort: ~2 hours
+   - DEV.64: app.yaml ↔ deployed-spec sync workflow
+     - Option A: DO's GitHub Action for spec sync
+     - Option B: Custom post-push hook
+     - Decision needed before first production deploy
+   - DEV.67: Worker sizing decision
+     - Resolved by today's C.5 data (recorded in section 2 above)
+
+5. **Production Deployment Day-by-Day Plan**
+   - Day D.0 (Thursday May 28): DO production environment provisioning + DB + initial deploy
+   - Day D.1 (Friday May 29): Production secrets + Resend domain verification + observability stack
+   - Day D.2 (Saturday May 30): F-1 (Next.js upgrade) + F-3 (rate limit) + DEV.64 sync workflow
+   - Day D.3 (Sunday May 31): Production smoke test + pilot dry run + final validation
+   - Buffer: full Stage D has 4 days for ~3 days of work — built-in slack
+
+6. **Production Domain + DNS Plan**
+   - Recommend: app.dealerlink.in for the app, api.dealerlink.in NOT needed (no separate API)
+   - Pilot tenant subdomain: <pilot-slug>.app.dealerlink.in (decide pilot slug with customer)
+   - Operator subdomain: app.dealerlink.in serves operator login
+   - Tenant subdomain pattern: <tenant>.app.dealerlink.in
+   - Wildcard SSL covers all tenant subdomains
+
+7. **Backup + Recovery Strategy**
+   - DO Managed Postgres: enable daily automated backups (7-day retention default)
+   - Point-in-time recovery: enabled for production
+   - Manual backup before each Stage D migration: pg_dump to local
+   - Test recovery: at least once in Stage D, restore to a fresh DB and verify
+   - Document RTO + RPO targets (recovery time / recovery point objectives)
+
+8. **Observability Production Configuration**
+   - Sentry: production project, performance monitoring at 10% sample rate, errors at 100%
+   - BetterStack: production source, alerts on error rate spike + uptime drop
+   - Axiom: production dataset, structured logs, 30-day retention
+   - DO Monitoring: built-in alerts for CPU > 80%, memory > 80%, disk > 80%
+   - PII scrubbing: same beforeSend filters from staging (already verified clean per C.4 audit)
+
+9. **Pilot Tenant Provisioning (Stage E preview)**
+   - Operator runs onboarding flow for the actual pilot company
+   - Real legal name, GSTIN, address, bank details, T&C
+   - First admin user with pilot's real email (force-password-change flow per C.1)
+   - Pilot tenant gets <pilot-slug>.app.dealerlink.in subdomain
+   - Pre-load: empty (pilot enters their own real data)
+   - This happens Day E.1 (June 1), not Stage D
+
+10. **Risk Register**
+    - Highest risk: Production-shape bug not surfaced by staging
+      - Mitigation: 4 days Stage D + 3 days Stage E buffer
+    - Medium risk: Resend domain verification delay (DKIM + SPF can take 24-72 hours)
+      - Mitigation: start Resend setup Day D.1 morning, well before pilot launch
+    - Medium risk: Cold-start UX on production (DEV.67)
+      - Mitigation: today's data drives sizing decision; if basic-xxs insufficient, upgrade now
+    - Low risk: Next.js upgrade (F-1) introduces regression
+      - Mitigation: dedicated PR, full pnpm verify + critical-path E2E before merging
+
+11. **What NOT to Do in Stage D**
+    - Don't add features (Phase 2 work)
+    - Don't refactor (no improvements to existing code)
+    - Don't change staging environment (keep it as the reference)
+    - Don't skip the F-1 upgrade — it's deferred from C.4 specifically for Stage D
+    - Don't deploy to production without testing the deploy pipeline first (Day D.0)
+
+COMMIT C5d: `docs(stage-d): handoff document with sizing decisions + deployment plan`
+
+CHUNK C5e — Day closeout
 ---------------------------------
 
-Apply the 5 fixes per UX_FINDINGS.md triage. Each finding gets its own commit.
+A5.1. Update PROJECT_PLAN.md:
+   - Mark C.5 ✅ with date 2026-05-27
+   - Mark Stage C ✅ COMPLETE — all 6 days shipped
+   - Add Stage D section header (placeholder for Stage D day entries)
 
-A4.1. Finding I-1: Add "Create Quotation" CTA to deal detail page
-   - On apps/web/app/(app)/pipeline/[id]/page.tsx (or wherever deal detail lives)
-   - Add button "Create Quotation" that navigates to /quotations/new?deal=<dealId>&dealer=<dealerId>
-   - Pre-populate dealer + deal link on the destination form
-   - Test: open a seeded deal, click button, verify pre-populated form
-   COMMIT: `feat(pipeline): add Create Quotation CTA to deal detail (I-1)`
+A5.2. Update STAGE_C_HANDOFF.md:
+   - Mark C.5 ✅ in Stage C Progress
+   - Note: Stage C closes with this commit
+   - The "Carried-Forward To Stage D" section now points to STAGE_D_HANDOFF.md as authoritative
 
-A4.2. Finding I-2: Confirmation dialog on Deactivate dealer button
-   - On the dealer detail page
-   - Wrap the deactivate action in an AlertDialog component (shadcn/ui pattern, used elsewhere)
-   - Dialog text: "Deactivate <dealer.legal_name>? This will prevent new quotations for this dealer. Existing quotations and orders are unaffected."
-   - Confirm button is destructive style; Cancel is the safe default
-   - Test: try to deactivate, verify dialog appears, cancel doesn't deactivate, confirm does
-   COMMIT: `feat(dealers): confirmation dialog before deactivation (I-2)`
+A5.3. Update CLAUDE.md "Last reviewed" stamp to 2026-05-27.
 
-A4.3. Finding I-4: Inventory shortage error names the product
-   - In the confirm-order action, when shortage detected, include product name + required + available
-   - Error message format: "Cannot confirm — <product_name>: need <qty_needed>, have <qty_available>"
-   - If multiple products short, list all in the error
-   - Test: try to confirm an order with insufficient stock; verify message names the product
-   COMMIT: `feat(orders): name product in inventory shortage error (I-4)`
+A5.4. Tag Stage C close:
+```
 
-A4.4. Finding I-5: Redirect /reports/outstanding-receivables → /reports/outstanding
-   - In next.config.mjs add redirects() entry
-   - 301 permanent redirect
-   - Test: navigate to /reports/outstanding-receivables, verify lands on /reports/outstanding
-   COMMIT: `feat(reports): redirect outstanding-receivables to outstanding (I-5)`
+git tag -a stage-c-complete -m "Stage C complete — staging deployed + validated + Stage D handoff ready"
+git push --tags
 
-A4.5. Finding P-9: formatINR space-after-thousands-comma fix
-   - In packages/schemas/src/format.ts (or wherever formatINR lives)
-   - Fix the space character introduced after thousands comma
-   - Add unit test: formatINR(1234567) === "₹12,34,567" (no spaces)
-   - Test: load a quotation detail page, verify totals render without space
-   COMMIT: `fix(format): remove space after thousands comma in formatINR (P-9)`
+```
 
-CHUNK C4f — Cold-start UX mitigation (addresses C-1 downgrade)
----------------------------------
+A5.5. Final commit summary message:
+```
 
-The PDF 503 issue from C.3 was downgraded as "infra cold-start" rather than a product bug. But the pilot will hit this same scenario their first PDF download. Small product-side mitigation:
+feat(stage-c): Stage C complete — 6/6 days shipped
 
-A5.1. Add a friendly loading state for the first PDF render after a worker cold start:
-   - In the PDF download action (PdfProgress component, wherever it's wired)
-   - On first render attempt: if it takes >5 seconds, show: "First PDF takes a moment to prepare while we warm up our document service. Subsequent renders will be instant."
-   - On retry: don't show the warm-up message
-   - This is a copy change, not a behavior change
+- C.0: Staging deploy (DO + DNS + SSL)
+- C.1: Force-password-change (DEV.56 closed)
+- C.2: State normalization (DEV.33 closed)
+- C.3: Pilot staging handoff + UX walkthrough
+- C.4: Security audit + 5 UX fixes + HTTP security headers
+- C.5: Performance test + Stage D handoff
 
-A5.2. Verify the 120s timeout from DEV.66 still applies. If somehow it was reduced, restore to 120s.
+Pilot live target: Wednesday June 3, 2026.
 
-A5.3. Test: trigger a PDF render after worker idle (cannot easily simulate locally, but verify the message renders correctly when delay is artificially induced).
+```
 
-COMMIT: `feat(pdf): warm-up message on first cold render (mitigates C-1)`
+A5.6. Push to main + push tags.
 
-CHUNK C4g — Day closeout
----------------------------------
+A5.7. Final verification:
+- Tag stage-c-complete exists locally and on origin
+- STAGE_D_HANDOFF.md exists and is comprehensive
+- All gates green: preflight, typecheck, lint, test, verify
 
-A6.1. Verify all gates green:
-   - pnpm preflight
-   - pnpm typecheck, lint, test
-   - pnpm verify (56/56 or 57/57 depending on if new spec added)
-   - Local smoke: each of the 5 UX fixes manually verified
+COMMIT C5e: `chore: Stage C close — tag stage-c-complete`
 
-A6.2. Update PROJECT_PLAN.md:
-   - Mark C.4 ✅ with date 2026-05-26
-   - Note: security audit complete + 5 UX fixes + cold-start mitigation
+GUARDRAILS (C.5):
 
-A6.3. Update STAGE_C_HANDOFF.md:
-   - Mark C.4 ✅ in Stage C Progress section
-   - Reference SECURITY_AUDIT.md
-   - Update Carried-Forward section: which UX findings remain for post-pilot
-
-A6.4. Update UX_FINDINGS.md:
-   - Mark I-1, I-2, I-4, I-5, P-9 as ✅ FIXED with commit SHAs
-
-A6.5. Push to main (auto-deploys to staging).
-
-A6.6. Post-deploy verification:
-   - Staging redeploy ACTIVE
-   - /api/health green
-   - Manual smoke: trigger each of the 5 UX fixes on staging
-   - Confirm: PDF download from staging shows warm-up message (or completes fast if worker warm)
-
-COMMIT C4g: `feat(stage-c): Day C.4 complete — security audit + UX fixes + cold-start UX`
-
-GUARDRAILS (C.4):
-
-- Part 1 is read-only. Do not modify application code during Part 1. If you find code-level issues, log them in the audit report; don't fix until Part 2.
-- The Part 1 gate is real. Do not proceed to Part 2 until the operator reviews the audit and approves.
-- Security findings have priority over UX fixes. If audit surfaces a critical, that ships before any UX fix.
-- The 5 UX fixes are scoped narrowly. Don't expand scope to adjacent issues; those go to post-pilot or Phase 2 per yesterday's triage.
-- The cold-start UX mitigation is COPY ONLY. No infrastructure changes (no worker resize, no minimum instance count) — those are Stage D decisions per DEV.67.
-- Each finding/fix is its own commit. Don't batch.
+- Part 1 is empirical. Numbers come from real measurements, not assumptions. If a result surprises you, run it again before recording.
+- Part 1 includes intentional STOP at the gate. Don't write Stage D handoff until performance findings reviewed.
+- Don't make Stage D decisions today that should be made during Stage D (e.g., specific Sentry alert thresholds — those land in Stage D as deployment proceeds).
+- The STAGE_D_HANDOFF.md should be readable Thursday morning by someone who hasn't been in this conversation. Self-contained.
+- Don't tag stage-c-complete until all gates green AND STAGE_D_HANDOFF.md committed.
 
 WHEN DONE (final):
-- Print summary: security audit report committed; 5 UX fixes shipped; cold-start UX mitigation shipped
-- Confirm: pnpm verify all green
-- Confirm: staging redeploy succeeded
-- Confirm: I-1, I-2, I-4, I-5, P-9 marked FIXED in UX_FINDINGS.md
-- Tell me C.4 is complete and Day C.5 (performance test + Stage D handoff) is next
+- Print summary
+- Confirm: stage-c-complete tag pushed
+- Confirm: STAGE_D_HANDOFF.md committed
+- Confirm: Stage C marked ✅ in PROJECT_PLAN.md
+- Tell me Stage C is officially closed and Stage D is cleared to start tomorrow morning
 ```
 
 ### Verification checklist (operator)
 
-#### Part 1 (after C4a-C4c)
+#### Part 1 (after C5a-C5c)
 
-- [ ] `docs/SECURITY_AUDIT.md` exists with all 10 sections
-- [ ] Executive summary shows finding counts by severity
-- [ ] RLS verification table covers every tenant-scoped table
-- [ ] Role enforcement matrix covers every server action
+- [ ] Baseline latency captured for 4 page types
+- [ ] Light-load test results documented (5 concurrent users, 2 min)
+- [ ] PDF load test: throughput, cold-start curve, breaking point all measured
+- [ ] DB + workflow load tests show no deadlocks, no RLS leaks
+- [ ] Stage D worker sizing recommendation is data-driven, not guess
 - [ ] Operator reviews findings before approving Part 2
 
-#### Part 2 (after C4d-C4g)
+#### Part 2 (after C5d-C5e)
 
-- [ ] All critical security findings (if any) fixed before UX work
-- [ ] I-1 fix: deal detail page shows "Create Quotation" CTA
-- [ ] I-2 fix: Deactivate dealer shows confirmation dialog
-- [ ] I-4 fix: Order shortage error names product + qty
-- [ ] I-5 fix: /reports/outstanding-receivables redirects
-- [ ] P-9 fix: formatINR has no space after comma
-- [ ] Cold-start UX: warm-up message shows on first slow render
-
-#### Closeout
-
-- [ ] All gates green (preflight, typecheck, lint, test, verify)
-- [ ] Staging redeploy successful + smoke verified
-- [ ] PROJECT_PLAN.md + STAGE_C_HANDOFF.md + UX_FINDINGS.md updated
-
----
-
-## Stage C Day C.5 — Performance Testing + Stage D Handoff (Wednesday May 27)
-
-_Will be added when C.4 closes. Load test against staging (PDF generation, concurrent dispatches, payment allocations), pg-boss queue depth under load, worker sizing decision per DEV.67, final docs/STAGE_D_HANDOFF.md._
+- [ ] STAGE_D_HANDOFF.md has all 11 sections
+- [ ] Production sizing decision concretely justified
+- [ ] F-1 + F-3 explicit work items with effort estimates
+- [ ] Stage D day-by-day plan (D.0 through D.3)
+- [ ] Risk register acknowledges real risks with mitigations
+- [ ] PROJECT_PLAN.md marks Stage C ✅ COMPLETE
+- [ ] Tag stage-c-complete pushed to origin
+- [ ] All gates green
 
 ---
 
 ## Stage D — Production Deployment (May 28 - May 31)
 
-_Detailed prompts added at close of Stage C._
+_Detailed prompts added at close of Stage C. STAGE_D_HANDOFF.md is the authoritative scope document._
 
 ## Stage E — Pilot Launch (June 1 - June 3)
 
