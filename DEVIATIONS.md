@@ -1284,3 +1284,31 @@ page was an error boundary. Fix: drop the prop, `import { formatINRExact } from
 client-side). This subsumes the DEV.56(d) carry-forward.
 
 **Resolution:** Permanent.
+
+---
+
+## DEV.73 — Stage D Day D.0 — tenant creation does not reject reserved subdomains
+
+**Date:** 2026-05-26
+
+The routing layer reserves `app`, `www`, and `admin` as operator subdomains
+(`apps/web/lib/tenant/resolve.ts` `RESERVED_SUBDOMAINS`), but tenant creation
+does **not** reject them: `slugSchema` / `createTenant()`
+(`apps/web/lib/admin/schemas.ts`, `lib/actions/admin/create-tenant.ts`) only
+validate slug _format_ (3–32 chars, lowercase alnum + hyphens) and DB
+uniqueness. So an operator could create a tenant with slug `app`/`www`/`admin`;
+the row would persist but be **unreachable** — `<reserved>.dealerlink.in`
+resolves to the operator console, never to the tenant.
+
+Surfaced by the D.0 production-env smoke (A3.6). Not exploitable and not
+reachable by the pilot (only the operator provisions tenants, Stage E), so it
+is **not** a launch blocker — but it is a footgun for operator onboarding.
+
+**Fix (deferred — out of D.0 scope; Stage D is infra + F-1/F-3 only per
+STAGE_D_HANDOFF §11):** add a `.refine()` to `slugSchema` (or a check in
+`createTenant`) that rejects the `RESERVED_SUBDOMAINS` set, with a friendly
+"that subdomain is reserved" error, plus a `check-slug` parity check. Small,
+self-contained. Slot into **D.2** alongside F-1/F-3, or accept for the pilot
+and close in Stage E onboarding hardening.
+
+**Resolution:** Open — logged, fix deferred to D.2 (or Stage E).
