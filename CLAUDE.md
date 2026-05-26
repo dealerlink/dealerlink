@@ -1,6 +1,6 @@
 # CLAUDE.md — Dealerlink Implementation Guide
 
-> Last reviewed: 2026-05-24 — Stage C in progress (C.1 force-password-change + C.2 state-code normalization closed)
+> Last reviewed: 2026-05-27 — Stage C COMPLETE (6/6, tagged `stage-c-complete`); staging live + validated + load-tested. Next: Stage D (production infra) — see `docs/STAGE_D_HANDOFF.md`.
 
 > **For Claude Code:** This is your authoritative reference for building Dealerlink. Read this file end-to-end before writing any code. When the BRD and this file conflict, this file wins. When in doubt about a decision, the answer is in here — don't ask, look.
 

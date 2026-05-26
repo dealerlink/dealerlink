@@ -27,7 +27,7 @@
 | C.2 | State normalization (closes DEV.33)    | ✅     | 2026-05-24 |
 | C.3 | Pilot staging handoff + UX walkthrough | ✅     | 2026-05-25 |
 | C.4 | Security audit + UX fixes              | ✅     | 2026-05-26 |
-| C.5 | Performance test + Stage D handoff     | ⏳     | 2026-05-27 |
+| C.5 | Performance test + Stage D handoff     | ✅     | 2026-05-27 |
 
 ### C.0 — Staging deploy ✅ (2026-05-22)
 
@@ -149,6 +149,30 @@ hygiene (nothing in repo or git history) all sound.
 **Deferred to Stage D** (carried in §9): **F-1** (upgrade Next.js ≥14.2.35 —
 clears CVE-2025-29927, architecturally mitigated by layout-based auth) and
 **F-3** (login rate-limit + account lockout).
+
+### C.5 — Performance test + Stage D handoff ✅ (2026-05-27) — **Stage C closes here**
+
+**Part 1 — empirical load test vs live staging** (pilot-realistic,
+non-destructive profile, operator-approved). Harness + raw data in
+`scripts/load-test/` (`FINDINGS.md`, `findings-pdf.md`, `results-*.json`):
+
+- **Light load** (5 concurrent users, 120 s): 867 req, **0 errors**, p50 133 ms /
+  p95 403 ms / p99 627 ms. Graceful — the `DB_POOL_MAX=2` cap queues, never fails.
+- **DB load** (10 concurrent dashboard users): 469 req, **0 errors, no `53300`** —
+  validates the DEV.61 pool cap + the DEV.62 global-pool fix under real concurrency.
+- **Write isolation** (3 demo + 1 sample concurrent writers): **0 deadlocks**, 6
+  unique gapless QT numbers (document counter is race-free), **RLS holds** under
+  concurrent cross-tenant writes.
+- **PDF (the headline):** single/sequential renders excellent (cold 5.5 s, warm
+  2.4–3.5 s — confirms DEV.67), but a **10-concurrent burst failed 4/10, 1/10,
+  7/10** and the **512 MB `basic-xxs` workers OOM-restarted ≥2× mid-test**. The
+  pilot's ≤10-PDFs/hour sequential load is fine; the burst ceiling is the
+  production concern.
+
+**Part 2 — `docs/STAGE_D_HANDOFF.md`** (the authoritative Stage D runbook). Its §2
+carries the **coupled sizing package**: workers `basic-xxs → basic-xs`, web
+`DB_POOL_MAX 2 → 10`, DB Basic 1 GB → 2 GB (~+$22/mo, ~$52/mo total). It resolves
+DEV.67 (worker size) + DEV.61 (pool) and carries F-1/F-3/DEV.64 forward.
 
 ---
 
@@ -377,13 +401,19 @@ integration tests. See `docs/STRUCTURE.md` for the monorepo layout and
 
 ---
 
-## 9. Carried-Forward To Stage D (learned from C.0)
+## 9. Carried-Forward To Stage D
+
+> **Authoritative now: `docs/STAGE_D_HANDOFF.md`** (shipped C.5). It supersedes
+> this section as the Stage D starting point — it carries the data-driven sizing
+> package, secrets checklist, F-1/F-3 security carry-forwards, the D.0–D.3 plan,
+> DNS/SSL, backups, and the risk register. The list below is the original C.0
+> seed that fed it; read the handoff doc first.
 
 C.0 stood up staging early — the staging slice of the Stage D deployment doc.
 Bringing it up surfaced the concrete decisions and provisioning that
 **production** will need. These are **previews for Stage D**, not Stage C work;
-`docs/DEPLOYMENT.md` is the source of truth as it is updated, and §5 above lists
-the matching production risks.
+`docs/STAGE_D_HANDOFF.md` is now the source of truth, and §5 above lists the
+matching production risks.
 
 - **Security-audit pre-production items (C.4 → `docs/SECURITY_AUDIT.md`)** — two
   findings were deferred here by operator decision: **F-1** upgrade Next.js to
@@ -433,5 +463,6 @@ the matching production risks.
 ---
 
 _Stage B closed 2026-05-16 · handoff prepared on Day 18 · frozen at the
-`stage-b-complete` git tag. · Stage C progress (§0) is maintained live —
-last updated 2026-05-26 (C.3 walkthrough/triage ✅ + C.4 security audit + UX fixes ✅; C.5 next)._
+`stage-b-complete` git tag. · **Stage C closed 2026-05-27 (6/6) — tagged
+`stage-c-complete`.** §0 maintained live; C.5 performance test + Stage D handoff
+shipped. `docs/STAGE_D_HANDOFF.md` is the authoritative Stage D starting point._
