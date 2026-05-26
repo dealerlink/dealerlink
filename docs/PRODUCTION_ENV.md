@@ -1,7 +1,8 @@
 # Production environment
 
 > The Dealerlink **production** deployment on DigitalOcean App Platform
-> (Bangalore). Stood up in Stage D Day D.0 (2026-05-28). This is the real
+> (Bangalore). Stood up in Stage D Day D.0 (2026-05-26, 2 days ahead of the
+> May 28 plan). This is the real
 > pilot-facing environment — a **dedicated** DO project, separate from staging.
 > Staging stays the validated reference / pilot preview and is unchanged.
 
