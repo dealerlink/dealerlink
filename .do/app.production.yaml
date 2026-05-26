@@ -1,0 +1,219 @@
+# Dealerlink PRODUCTION environment — DO App Platform spec
+#
+# Human-readable source of truth for the production deploy. This file does NOT
+# auto-deploy: DO stores its own copy of the spec. Every change here MUST be
+# applied with `doctl apps update <prod-app-id> --spec` merged into the live
+# spec to preserve encrypted secrets (DEV.64 — see docs/DEPLOYMENT.md).
+# Spec-sync automation is a Stage D Day D.2 item.
+#
+# Conventions (same as .do/app.yaml staging):
+#   - `type: SECRET` env vars have NO `value:` here — committed intentionally
+#     blank. Real values live in C:\Users\rohit\.dealerlink\production-secrets.txt
+#     and are injected at `apps create` time via a LOCAL (uncommitted) copy of
+#     this spec, then round-tripped on subsequent `apps update`.
+#   - `scope: RUN_AND_BUILD_TIME` for anything Next.js needs at build
+#     (NEXT_PUBLIC_*, NODE_ENV, Sentry build config). Server-only secrets are
+#     RUN_TIME so they don't bake into the client bundle.
+#
+# The cluster is provisioned out-of-band (doctl databases create); this spec
+# ATTACHES it (production: true), it does not create one.
+#
+# Sizing (STAGE_D_HANDOFF §2 — data-driven from C.5; the three changes are a
+# coupled package):
+#   - web:     basic-xs (1 GB), DB_POOL_MAX 10 (up from staging 2)  [DEV.61]
+#   - workers: basic-xs (1 GB), up from staging basic-xxs           [DEV.67]
+#   - DB:      Basic 2 GB (~50 conns), up from staging Basic 1 GB   [DEV.61]
+
+name: dealerlink-production
+region: blr
+
+services:
+  - name: web
+    github:
+      repo: dealerlink/dealerlink
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    build_command: corepack enable && pnpm install --frozen-lockfile && pnpm --filter web build
+    run_command: pnpm --filter web start
+    http_port: 3000
+    instance_size_slug: basic-xs
+    instance_count: 1
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 30
+      period_seconds: 30
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    envs:
+      # --- DB (app role for runtime queries — RLS enforced) ---
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      # --- DB (doadmin for Lucia session validation + pg-boss enqueue) ---
+      - key: DATABASE_DIRECT_URL
+        scope: RUN_TIME
+        type: SECRET
+      # --- Auth ---
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      # --- Email (Resend) ---
+      - key: RESEND_INBOUND_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: RESEND_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      # D.1 moves this to a verified @dealerlink.in address.
+      - key: RESEND_FROM_EMAIL
+        scope: RUN_TIME
+        value: onboarding@resend.dev
+      # --- Sentry (populated D.1) ---
+      - key: SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: SENTRY_ENVIRONMENT
+        scope: RUN_AND_BUILD_TIME
+        value: production
+      - key: NEXT_PUBLIC_SENTRY_ENVIRONMENT
+        scope: RUN_AND_BUILD_TIME
+        value: production
+      # --- Observability (populated D.1) ---
+      - key: BETTERSTACK_SOURCE_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_DATASET
+        scope: RUN_TIME
+        value: dealerlink-prod-events
+      # --- App ---
+      - key: NEXT_PUBLIC_APP_URL
+        scope: RUN_AND_BUILD_TIME
+        value: https://app.dealerlink.in
+      # Apex domain for tenant subdomain routing. dealerlink.in / app / www /
+      # admin → operator (reserved); <slug>.dealerlink.in → tenant. BUILD-time:
+      # inlined into the Edge middleware bundle (resolve.ts). DEV.60.
+      - key: NEXT_PUBLIC_APP_DOMAIN
+        scope: RUN_AND_BUILD_TIME
+        value: dealerlink.in
+      - key: NODE_ENV
+        scope: RUN_AND_BUILD_TIME
+        value: production
+      - key: TZ
+        scope: RUN_TIME
+        value: Asia/Kolkata
+      # Connection-pool caps — Basic 2 GB tier (~50 conns). web: 10+5+2=17.
+      # workers (below): 5+2+3=10. Total 27, headroom to the >40 Pro trigger.
+      # STAGE_D_HANDOFF §2.2 / DEV.61.
+      - key: DB_POOL_MAX
+        scope: RUN_TIME
+        value: '10'
+      - key: DB_ADMIN_POOL_MAX
+        scope: RUN_TIME
+        value: '5'
+      - key: PGBOSS_POOL_MAX
+        scope: RUN_TIME
+        value: '2'
+      # PDF Server Action wait. Same as staging for D.0; consider lowering
+      # toward ~60s once a prod smoke confirms cold launches are fast on the
+      # roomier basic-xs worker (handoff §2.2).
+      - key: PDF_RENDER_TIMEOUT_MS
+        scope: RUN_TIME
+        value: '120000'
+
+workers:
+  - name: workers
+    github:
+      repo: dealerlink/dealerlink
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    # Custom Dockerfile (Chromium runtime libs the Node buildpack lacks).
+    # ADR-013 / DEV.63. Unchanged from staging.
+    dockerfile_path: apps/workers/Dockerfile
+    # UP from staging basic-xxs (512 MB): C5b showed 512 MB OOM-restarted >=2x
+    # under PDF rendering. basic-xs (1 GB) doubles the headroom. DEV.67.
+    instance_size_slug: basic-xs
+    instance_count: 1
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DATABASE_DIRECT_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: RESEND_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: RESEND_FROM_EMAIL
+        scope: RUN_TIME
+        value: onboarding@resend.dev
+      - key: SENTRY_DSN
+        scope: RUN_TIME
+        type: SECRET
+      - key: SENTRY_ENVIRONMENT
+        scope: RUN_TIME
+        value: production
+      - key: BETTERSTACK_SOURCE_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: AXIOM_DATASET
+        scope: RUN_TIME
+        value: dealerlink-prod-events
+      - key: NODE_ENV
+        scope: RUN_TIME
+        value: production
+      - key: TZ
+        scope: RUN_TIME
+        value: Asia/Kolkata
+      # workers pool caps — bumped from staging 2/1/2 → 5/2/3 (total 10).
+      - key: DB_POOL_MAX
+        scope: RUN_TIME
+        value: '5'
+      - key: DB_ADMIN_POOL_MAX
+        scope: RUN_TIME
+        value: '2'
+      - key: PGBOSS_POOL_MAX
+        scope: RUN_TIME
+        value: '3'
+      # Eager-warm Chromium at boot so the first render isn't a cold start
+      # (DEV.66). ON by default in code; set explicitly here for clarity.
+      - key: PDF_EAGER_WARM
+        scope: RUN_TIME
+        value: 'true'
+
+databases:
+  # production: true attaches the existing managed cluster provisioned via
+  # `doctl databases create` (id 6e0f1d36-d651-44d0-a062-ddf82e844812).
+  - name: dealerlink-production-db
+    engine: PG
+    version: '16'
+    production: true
+    cluster_name: dealerlink-production-db
+    db_name: dealerlink_production
+    db_user: doadmin
+
+domains:
+  # Operator + app host. DO provisions a Let's Encrypt cert via HTTP-01 — works
+  # with external (Cloudflare) gray-cloud DNS because the CNAME points at the
+  # app. (app is a RESERVED_SUBDOMAIN → resolves to operator, resolve.ts.)
+  - domain: app.dealerlink.in
+    type: PRIMARY
+  # Tenant subdomains (<slug>.dealerlink.in) need a TRUE WILDCARD cert, which
+  # DO can only issue via DNS-01 — not possible with Cloudflare gray-cloud DNS.
+  # Per STAGE_D_HANDOFF §6 the wildcard SSL strategy (Cloudflare proxied origin
+  # cert vs DO-managed DNS) is a Day D.3 decision. No real tenants exist until
+  # Stage E, so no tenant subdomain is enumerated here yet.
