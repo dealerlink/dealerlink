@@ -1312,3 +1312,34 @@ self-contained. Slot into **D.2** alongside F-1/F-3, or accept for the pilot
 and close in Stage E onboarding hardening.
 
 **Resolution:** Open — logged, fix deferred to D.2 (or Stage E).
+
+---
+
+## DEV.74 — Stage D Day D.1 — `/health` resend check accepts a least-privilege (sending-only) key
+
+**Date:** 2026-05-27
+
+The production `RESEND_API_KEY` is a **sending-only** key (Resend "Sending
+access" scope) — correct least-privilege, since the app only ever POSTs
+`/emails` and never manages domains or API keys. But the Day-17 `/health` resend
+check (`apps/web/app/api/health/route.ts` `resendCheck`) pings `GET
+/api/resend.com/domains` as a liveness probe, and a sending-only key is **not
+scoped to read `/domains`** — Resend answers `401 {"name":
+"restricted_api_key"}`. The original check treated any non-200 as `degraded`, so
+production `/health` reported `resend: degraded` (and overall `degraded`) even
+though email sending was fully functional. Surfaced by the D.1 post-deploy smoke
+(it never appeared on staging, where the key was blank → `skipped`).
+
+**Fix (this commit):** `resendCheck` now treats `401` **with the exact error
+name `restricted_api_key`** as `ok` (that response is positive proof the key
+authenticated and is valid — only the scope is narrowed). The match is precise,
+not "any 401 = ok": a genuinely invalid/revoked key (different error name) still
+reports `degraded`, and network/timeout/5xx still report `degraded`. Per the
+existing design (documented in the same function) a failed Resend ping stays
+`degraded`, never `down` — outbound email is queued + retried by pg-boss, so
+Resend must never alone 503 the pod. Keeps the safer sending-only key; no key
+re-scoping needed. Typecheck + lint green; verified `/health` `resend: ok` on
+production post-deploy.
+
+**Resolution:** ✅ Closed — health check enhanced to support least-privilege
+production keys while preserving real invalid-key detection.

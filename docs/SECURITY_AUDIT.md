@@ -632,7 +632,7 @@ Sorted by severity. **Pilot-blocking: none.**
 | F-4 | Low    | drizzle-orm 0.38.4 — SQLi-via-identifiers advisory (not reachable)                                          | `drizzle-orm` dep                               | Upgrade to ≥0.45.2 as hygiene; verify migrations/queries.                                                                                | Stage D                |
 | F-5 | Low    | Permissive INSERT/UPDATE on log tables (`audit_log`, `auth_events`, `access_log`, `email_delivery_log`)     | `rls/*.sql`                                     | Intentional (DEV.07) for trigger/login/worker writes; reads stay tenant-isolated. Tighten `email_delivery_log` UPDATE scope if feasible. | Accept / Stage D       |
 | F-6 | Info   | 4 RLS-exempt tables (`tenants`, `sessions`, `webhook_events`, `rate_limit`)                                 | schema / `rls/*.sql`                            | By design + verified (§1.2). No action.                                                                                                  | Accept                 |
-| F-7 | Info   | Production observability + outbound-email secrets blank on staging                                          | `.do/app.yaml`                                  | Populate Sentry/Better Stack/Axiom/Resend with real values in Stage D.                                                                   | Stage D                |
+| F-7 | Info   | Production observability + outbound-email secrets blank on staging                                          | `.do/app.yaml`                                  | Populate Sentry/Better Stack/Axiom/Resend with real values in Stage D.                                                                   | **✅ prod wired D.1**  |
 | F-8 | Info   | Committed test-credentials doc (`password123`)                                                              | `docs/pilot/credentials-cheatsheet.md`          | Acceptable (throwaway seed creds). Never commit the real pilot tenant's creds (Stage E).                                                 | Accept                 |
 | F-9 | Low    | Logo input not content-validated; SVG unsanitized                                                           | `lib/admin/schemas.ts` (`updateBrandingSchema`) | Mitigated (img-context render + operator-only). Add content-type/scheme check + DOMPurify before Stage D / DO Spaces.                    | Stage D                |
 
@@ -681,3 +681,24 @@ The operator reviewed this audit at the Part 1 gate and decided:
 F-4/F-5/F-9 and the informational items (F-6/F-7/F-8) remain as recorded —
 Stage D / accept. No critical-exploitable finding existed, so no fix preceded
 the planned UX work (C4e).
+
+### D.1 disposition (Stage D Day D.1, 2026-05-27)
+
+- **F-7 — ✅ closed for production.** The production environment now has real,
+  **fresh** (never reused from staging) Sentry, Better Stack, Axiom and Resend
+  credentials, injected via `doctl apps update --spec` (DEV.64 pattern) and live
+  on the `dealerlink-production` app. `/api/health` reports `resend: ok`.
+  _Staging stays intentionally blank (services no-op there) — F-7 was always
+  scoped to "blank on staging"; production is the environment that must be
+  populated._
+- **Least-privilege note (DEV.74).** The production Resend key is **sending-only**
+  scope (the app only sends mail; it never manages domains/keys) — a deliberate
+  least-privilege choice. `/health`'s resend probe was hardened to read a
+  `restricted_api_key` 401 as a healthy signal without weakening detection of a
+  genuinely invalid key.
+- **PII scrubbing in production.** The `beforeSend` scrubber (§6.4 — verified
+  clean in this audit: email→hash, phone/GSTIN/PAN/card runs redacted) is the
+  **same code path** in production; `tracesSampleRate` is 0.1 (10% perf traces,
+  errors 100%, `sendDefaultPii: false`). Live-event PII confirmation is part of
+  the operator's post-deploy Sentry dashboard smoke (operator-gated
+  `/api/internal/sentry-test`), pending operator sign-off.

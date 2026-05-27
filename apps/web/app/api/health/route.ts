@@ -128,11 +128,29 @@ async function resendCheck(): Promise<ComponentCheck> {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(3000),
     });
-    return {
-      status: res.ok ? 'ok' : 'degraded',
-      latencyMs: Date.now() - start,
-      httpStatus: res.status,
-    };
+    if (res.ok) {
+      return { status: 'ok', latencyMs: Date.now() - start, httpStatus: res.status };
+    }
+    // The production key is a least-privilege *sending-only* key: it can POST
+    // /emails but is NOT scoped to read /domains, so Resend answers this liveness
+    // ping with 401 + name 'restricted_api_key'. That exact response is itself
+    // proof the key is valid and accepted — authentication succeeded; only the
+    // scope is narrowed — so it counts as `ok`. We match the precise error name
+    // (never "any 401") so a genuinely invalid or revoked key still surfaces as
+    // `degraded`. A failed Resend ping stays `degraded`, never `down`: outbound
+    // email is queued + retried by pg-boss, so Resend must never alone 503 us.
+    if (res.status === 401) {
+      const body = (await res.json().catch(() => null)) as { name?: string } | null;
+      if (body?.name === 'restricted_api_key') {
+        return {
+          status: 'ok',
+          latencyMs: Date.now() - start,
+          httpStatus: res.status,
+          keyScope: 'sending-only',
+        };
+      }
+    }
+    return { status: 'degraded', latencyMs: Date.now() - start, httpStatus: res.status };
   } catch (err) {
     return { status: 'degraded', latencyMs: Date.now() - start, error: (err as Error).message };
   }
