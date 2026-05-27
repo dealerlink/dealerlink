@@ -6,29 +6,39 @@
 > pilot-facing environment — a **dedicated** DO project, separate from staging.
 > Staging stays the validated reference / pilot preview and is unchanged.
 
-## Status at D.0 close
+## Status (updated D.1, 2026-05-27)
 
-Production is **functionally up**: app deployed, `/api/health` green, RLS
-enforced, operator account seeded. It is **not yet fully observable** and has
-**no real tenants** — those come later:
+Production is **functionally up and observable**: app deployed, `/api/health`
+green (incl. `resend: ok`), RLS enforced, operator account seeded, SSL live,
+and all third-party observability + outbound email wired with **fresh**
+production credentials. It has **no real tenants** — those come in Stage E.
 
-| Area                                            | State at D.0            | Lands in |
-| ----------------------------------------------- | ----------------------- | -------- |
-| App + DB + RLS + operator login                 | ✅ live                 | D.0      |
-| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ⏳ pending operator DNS | D.0/D.1  |
-| Resend (outbound + inbound) + verified domain   | ⏳ blank (no-op)        | D.1      |
-| Sentry / Better Stack / Axiom                   | ⏳ blank (no-op)        | D.1      |
-| DO Spaces (`dealerlink-prod`)                   | ⏳ not provisioned      | D.1      |
-| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ deferred             | D.2      |
-| Wildcard `*.dealerlink.in` SSL strategy         | ⏳ deferred             | D.3      |
-| Backup/restore rehearsal + prod smoke           | ⏳ deferred             | D.3      |
-| Real pilot tenant                               | ⛔ not seeded           | Stage E  |
+| Area                                            | State                        | Lands in |
+| ----------------------------------------------- | ---------------------------- | -------- |
+| App + DB + RLS + operator login                 | ✅ live                      | D.0      |
+| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ✅ live (HTTPS 200)          | D.0/D.1  |
+| Resend outbound (verified domain + sending key) | ✅ live (`resend: ok`)       | D.1      |
+| Resend inbound webhook + MX                     | ⏳ deferred (needs MX setup) | D.3      |
+| Sentry / Better Stack / Axiom                   | ✅ wired (fresh prod creds)  | D.1      |
+| DO Spaces (`dealerlink-prod`)                   | ⏭️ skipped (see below)       | (future) |
+| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ deferred                  | D.2      |
+| Wildcard `*.dealerlink.in` SSL strategy         | ⏳ deferred                  | D.3      |
+| Backup/restore rehearsal + prod smoke           | ⏳ deferred                  | D.3      |
+| Real pilot tenant                               | ⛔ not seeded                | Stage E  |
+
+> **DO Spaces skipped at D.1 (operator decision).** Not provisioned.
+> `apps/workers/src/pdf/store.ts` flips to the Spaces path the instant
+> `DO_SPACES_KEY`+`_SECRET`+`_BUCKET` are all set, but `uploadToSpaces()` is an
+> unimplemented stub that throws (DEV.16) — wiring it would break **every**
+> production PDF render. PDFs stay on the working inline (base64-in-row) path.
+> Activation waits until `uploadToSpaces()` is implemented (gated on F-9 logo
+> validation). Do not set the Spaces env vars until that code lands.
 
 ## URLs
 
 | Surface              | URL                                                    |
 | -------------------- | ------------------------------------------------------ |
-| App / operator login | https://app.dealerlink.in (SSL pending CNAME)          |
+| App / operator login | https://app.dealerlink.in (✅ live, HTTPS 200)         |
 | Health check         | https://app.dealerlink.in/api/health                   |
 | DO-provided origin   | https://dealerlink-production-8treh.ondigitalocean.app |
 
@@ -37,31 +47,32 @@ Tenant routing is by subdomain (`NEXT_PUBLIC_APP_DOMAIN=dealerlink.in`):
 operator/login (reserved subdomains, `apps/web/lib/tenant/resolve.ts`). No real
 tenant subdomains exist yet (Stage E).
 
-## DNS + SSL — OPERATOR ACTION REQUIRED
+## DNS + SSL — ✅ LIVE (resolved by D.1, 2026-05-27)
 
-The DO app already has `app.dealerlink.in` configured (phase `CONFIGURING`,
-`verify-cname: RUNNING`). It is waiting for **one** Cloudflare DNS record. The
-operator owns the Cloudflare zone and applies DNS by hand (Claude does not use
-`wrangler`). Add, in the `dealerlink.in` zone:
+`app.dealerlink.in` serves HTTPS 200 — the operator added the Cloudflare CNAME
+and DO issued the cert. `curl -sI https://app.dealerlink.in/api/health` → 200
+with a valid certificate. The record added (operator-owned Cloudflare zone):
 
-| Type  | Name  | Target (content)                                 | Proxy           | TTL  |
-| ----- | ----- | ------------------------------------------------ | --------------- | ---- |
-| CNAME | `app` | `dealerlink-production-8treh.ondigitalocean.app` | **DNS only** 🔘 | Auto |
+| Type  | Name  | Target (content)                                 | TTL  |
+| ----- | ----- | ------------------------------------------------ | ---- |
+| CNAME | `app` | `dealerlink-production-8treh.ondigitalocean.app` | Auto |
 
-- **Gray-cloud (DNS only)** per the locked decision — do NOT orange-cloud/proxy.
+> ⚠️ **Observation (flag for the D.3 wildcard-SSL decision):** the `app` record
+> is currently **orange-cloud (Cloudflare-proxied)**, not the gray-cloud (DNS
+> only) the D.0 docs specified — `app.dealerlink.in` resolves to a Cloudflare
+> edge IP and responses carry `__cf_bm`. It is **working fine** (HTTPS 200, app
+> CSP headers intact), so this is **not changed today**. But proxying interacts
+> with the D.3 wildcard-SSL choice (STAGE_D_HANDOFF §6 option A is "Cloudflare
+> proxied origin cert") and with the Edge host-resolution + Resend inbound
+> webhook path — validate both when the wildcard strategy is finalised in D.3.
+
 - **Leave the existing `staging` and `*.staging` records untouched.**
-- Do **NOT** add the `*` (wildcard) record yet — the wildcard SSL strategy is a
-  D.3 decision (DO can't issue a true wildcard via HTTP-01 with Cloudflare
-  gray-cloud DNS; STAGE_D_HANDOFF §6). There are no tenants to serve until
-  Stage E anyway.
-
-After the CNAME resolves, DO auto-provisions a Let's Encrypt cert via HTTP-01
-(~5–15 min). Verify:
-
-```
-doctl apps get d8a25cb8-e4cb-4035-8413-6baab72398cd -o json | <inspect domains[].phase → ACTIVE>
-curl -sI https://app.dealerlink.in/api/health     # expect 200 + valid cert
-```
+- The `*` (wildcard) record is still **not** added — wildcard SSL is the D.3
+  decision (STAGE_D_HANDOFF §6); no tenant subdomains until Stage E.
+- DMARC added at D.1: `_dmarc.dealerlink.in` TXT
+  `v=DMARC1; p=quarantine; rua=mailto:dmarc@dealerlink.in; pct=100`
+  (`dmarc@` has no mailbox yet → reports not collected; harmless, the policy
+  still applies; add a report mailbox post-pilot).
 
 ## Operator login smoke — OPERATOR ACTION (after SSL active)
 
@@ -133,10 +144,51 @@ Automating this (so repo + live spec can't diverge) is a **D.2** item.
 Not in the repo. Local source of truth:
 `C:\Users\rohit\.dealerlink\production-secrets.txt` (outside the repo tree).
 The running app reads them from DO App Platform encrypted env vars. All are
-**fresh** for production (none reused from staging). At D.0 the real values are:
-`DATABASE_URL` (app role, RLS-enforced), `DATABASE_DIRECT_URL` (doadmin),
-`SESSION_SECRET`, `RESEND_INBOUND_WEBHOOK_SECRET` (placeholder until D.1).
-Sentry / Better Stack / Axiom / `RESEND_API_KEY` are blank (no-op) until D.1.
+**fresh** for production (none reused from staging). As of **D.1** all secrets
+are populated (injected via `doctl apps update --spec`, replacing the D.0
+empty-string placeholders, leaving `DATABASE_URL`/`DATABASE_DIRECT_URL`/
+`SESSION_SECRET`/`RESEND_INBOUND_WEBHOOK_SECRET` untouched):
+
+- `DATABASE_URL` (app role, RLS-enforced) · `DATABASE_DIRECT_URL` (doadmin) ·
+  `SESSION_SECRET` — set at D.0.
+- `RESEND_API_KEY` — **sending-only** prod key (least-privilege; not staging's).
+  `RESEND_FROM_EMAIL=noreply@dealerlink.in` (verified domain).
+- `SENTRY_DSN` — **two distinct projects**: web=`dealerlink-web-production`,
+  workers=`dealerlink-workers-production` (same env var name, different value
+  per component). `NEXT_PUBLIC_SENTRY_DSN` (web) = the web DSN.
+- `BETTERSTACK_SOURCE_TOKEN` — prod source `dealerlink-production`.
+- `AXIOM_TOKEN` + `AXIOM_DATASET=dealerlink-production` (renamed from
+  `dealerlink-prod-events` at D.1 for naming consistency; spec + docs updated).
+- `RESEND_INBOUND_WEBHOOK_SECRET` — D.0 placeholder retained; the real Svix
+  secret is set when the inbound webhook is configured (deferred to D.3 — needs
+  MX on the inbound domain).
+
+## Observability + Email (D.1, 2026-05-27)
+
+All three SDKs degrade to no-ops without credentials (Day 17 contract); D.1
+populated them with **fresh** production values. None reused from staging.
+
+| Service          | Production resource                                              | Notes                                                                           |
+| ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Sentry (web)** | project `dealerlink-web-production` (Next.js)                    | errors 100%, `tracesSampleRate` 0.1 (10% perf), `beforeSend` PII scrub, no PII  |
+| **Sentry (wk)**  | project `dealerlink-workers-production` (Node.js)                | per-job capture; same scrubber                                                  |
+| **Better Stack** | source `dealerlink-production` + uptime monitor on `/api/health` | 30s interval, expect 200, alert on 2 failures → operator email                  |
+| **Axiom**        | dataset `dealerlink-production`, 30-day retention                | structured business events                                                      |
+| **Resend**       | domain `dealerlink.in` **verified** (send-subdomain scheme)      | sending-only key; from `noreply@dealerlink.in`; DKIM/SPF live, DMARC quarantine |
+
+**Resend domain** was already verified on Resend's current `send.`-subdomain
+scheme (DKIM `resend._domainkey`, `send.dealerlink.in` MX → AWS SES feedback +
+SPF) — verified once per Resend account, shared from staging. Do **not** add a
+root `include:_spf.resend.com` SPF (old scheme; would conflict).
+
+**`/health` resend check** reports `ok`: the sending-only key can't read
+`/domains` (Resend returns `401 restricted_api_key`), and the check now treats
+that exact signal as healthy (DEV.74) — least-privilege preserved.
+
+**Verification status:** `/api/health` `resend: ok` confirmed post-deploy
+(by Claude). Sentry/Better Stack/Axiom **event delivery** is confirmed via the
+operator's dashboards + the operator-gated `/api/internal/sentry-test` (operator
+sign-off pending — Claude cannot see those dashboards).
 
 ## Database bootstrap (how D.0 built it)
 
@@ -179,11 +231,18 @@ DO cloud UI) — they cannot be scoped per project or set via `doctl`. Set email
 alerts at **$50 / $100 / $200** to the operator. (The `dealerlink-production`
 project gives per-project cost _visibility_, but not separate billing _alerts_.)
 
-## Known limitations at D.0 close
+## Known limitations (after D.1)
 
-- SSL on `app.dealerlink.in` pending the operator's Cloudflare CNAME.
-- Outbound email no-op (no Resend key); observability dashboards not wired (D.1).
+- ~~SSL pending CNAME~~ — ✅ resolved D.1 (HTTPS 200). Note: `app` is currently
+  orange-cloud proxied (see DNS+SSL above) — flagged for the D.3 decision.
+- ~~Outbound email no-op; observability not wired~~ — ✅ resolved D.1 (all
+  populated; `resend: ok`). Inbound email webhook still deferred (needs MX → D.3).
+- `version` in `/api/health` still reports `dev` — `SENTRY_RELEASE` is **not**
+  set. A static spec value would go stale on every push-triggered rebuild;
+  proper build-time git-SHA injection belongs with the DEV.64 spec-sync
+  automation (D.2). Deferred (low value; errors are still grouped by Sentry).
+- DO Spaces not provisioned — deferred until `uploadToSpaces()` is implemented
+  (would break PDF rendering today; see Status note above + DEV.16).
 - No wildcard SSL — tenant subdomains deferred to D.3 (none needed until Stage E).
-- `version` in `/api/health` reports `dev` (no git SHA injected — D.1 sets SENTRY_RELEASE).
 - F-1 (Next.js upgrade) + F-3 (login rate-limit) not yet applied (D.2).
 - Reserved-slug rejection not enforced on tenant creation (DEV.73 — D.2).
