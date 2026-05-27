@@ -22,7 +22,8 @@ export function initWorkerSentry(): void {
     enabled: Boolean(dsn),
     environment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV ?? 'development',
     release: process.env.SENTRY_RELEASE,
-    tracesSampleRate: 0,
+    // 10% performance-trace sampling in prod (STAGE_D_HANDOFF §8); errors are 100%.
+    tracesSampleRate: 0.1,
     sendDefaultPii: false,
     beforeSend: scrubEvent,
   });
