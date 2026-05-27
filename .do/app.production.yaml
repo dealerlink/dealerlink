@@ -92,7 +92,7 @@ services:
         type: SECRET
       - key: AXIOM_DATASET
         scope: RUN_TIME
-        value: dealerlink-prod-events
+        value: dealerlink-production
       # --- App ---
       - key: NEXT_PUBLIC_APP_URL
         scope: RUN_AND_BUILD_TIME
@@ -172,7 +172,7 @@ workers:
         type: SECRET
       - key: AXIOM_DATASET
         scope: RUN_TIME
-        value: dealerlink-prod-events
+        value: dealerlink-production
       - key: NODE_ENV
         scope: RUN_TIME
         value: production
