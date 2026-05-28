@@ -173,7 +173,7 @@ populated them with **fresh** production values. None reused from staging.
 | **Sentry (web)** | project `dealerlink-web-production` (Next.js)                    | errors 100%, `tracesSampleRate` 0.1 (10% perf), `beforeSend` PII scrub, no PII       |
 | **Sentry (wk)**  | project `dealerlink-workers-production` (Node.js)                | per-job capture; same scrubber                                                       |
 | **Better Stack** | source `dealerlink-production` + uptime monitor on `/api/health` | **3 min interval (free-tier max)**, expect 200, alert on 2 failures → operator email |
-| **Axiom**        | dataset `dealerlink-production`, 30-day retention                | structured business events                                                           |
+| **Axiom**        | dataset `dealerlink-production` (**US** org), 30-day retention   | structured business events; region fixed in D.1 follow-up (DEV.75)                   |
 | **Resend**       | domain `dealerlink.in` **verified** (send-subdomain scheme)      | sending-only key; from `noreply@dealerlink.in`; DKIM/SPF live, DMARC quarantine      |
 
 **Resend domain** was already verified on Resend's current `send.`-subdomain
@@ -186,9 +186,28 @@ root `include:_spf.resend.com` SPF (old scheme; would conflict).
 that exact signal as healthy (DEV.74) — least-privilege preserved.
 
 **Verification status:** `/api/health` `resend: ok` confirmed post-deploy
-(by Claude). Sentry/Better Stack/Axiom **event delivery** is confirmed via the
-operator's dashboards + the operator-gated `/api/internal/sentry-test` (operator
-sign-off pending — Claude cannot see those dashboards).
+(by Claude). Web Sentry via the operator-gated `/api/internal/sentry-test`.
+
+### D.1 smoke tests — RESOLVED (D.1 follow-up, 2026-05-28)
+
+The D.1 post-deploy smoke surfaced four items; all are now resolved (see
+DEV.75 / DEV.76 / DEV.77):
+
+- **Axiom was receiving zero events** — root cause: the dataset was created in
+  Axiom's **EU** data region while the ingest token was a **US** token, so every
+  SDK ingest 400'd and was silently swallowed. **Fixed:** dataset recreated in
+  the **US** org + fresh token (old one revoked); new token verified ingesting
+  (`200 {"ingested":1}`). Client hardened with a loud `onError` + optional
+  `AXIOM_URL` (DEV.75). **Operator follow-through:** the new `AXIOM_TOKEN` must
+  be mirrored into the DO App Platform env on both components.
+- **Better Stack frequency** documented as 30s/60s but the free tier caps at
+  **3 min** — docs corrected (DEV.76).
+- **Better Stack response-time spikes** (~1.2 s) — benign measurement latency
+  from `/api/health`'s own Resend ping; cold-start ruled out. Monitor location
+  switched to **Asia/Singapore** (DEV.76).
+- **Sentry workers project untested** — verified with a temporary
+  throw-on-purpose job; error captured + PII-clean; diagnostic endpoint removed
+  (DEV.77).
 
 ### Better Stack response-time spikes (D.1 smoke finding)
 

@@ -53,6 +53,18 @@
 > MX on the inbound domain); **DO Spaces** → future (operator-skipped — wiring it
 > would break PDF rendering until `uploadToSpaces()` is implemented, DEV.16);
 > `SENTRY_RELEASE`/`version` → with DEV.64 build-time SHA injection (D.2).
+>
+> **D.1 follow-up ✅ (2026-05-28) — smoke tests resolved.** Dashboard
+> verification of D.1 surfaced four items, all now closed: **Axiom** received
+> zero events because the dataset was EU-region while the token was US — dataset
+> recreated in the **US** org + fresh token (verified ingesting), client
+> hardened with a loud `onError` + `AXIOM_URL` support (DEV.75; operator must
+> mirror the new `AXIOM_TOKEN` into the DO env); **Better Stack** frequency
+> corrected 30s/60s → **3 min (free-tier max)** and the response-time spikes
+> diagnosed as benign `/api/health` Resend-ping latency, monitor moved to
+> Asia/Singapore (DEV.76); **Sentry workers** project verified via a temporary
+> throw-on-purpose job (captured + PII-clean) then the diagnostic endpoint
+> removed (DEV.77).
 
 ---
 

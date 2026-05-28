@@ -1387,9 +1387,17 @@ dataset; the regions were mismatched at dataset-provisioning time.
      stays the SDK US endpoint, matching the recreate-in-US resolution.
    - Fixed a stale comment that named the old dataset `dealerlink-events`.
 
-**Resolution:** ✅ Code-side closed (loud failures + region-flexible). Final
-green (events flowing) gated on the operator recreating the dataset in the US
-region; the diagnostic curl above is the repeatable check.
+**Resolution:** ✅ **Closed (2026-05-28).** Operator recreated
+`dealerlink-production` in the **US** org and issued a fresh ingest token; the
+old EU-mismatched token (`xaat-72ffdd50-…`) is now **revoked (403)**. The new
+token was verified ingesting end to end:
+`POST https://api.axiom.co/v1/datasets/dealerlink-production/ingest` →
+`200 {"ingested":1,"failed":0}`. The new token is recorded in the local
+production-secrets source of truth and **must be mirrored into the DO App
+Platform `AXIOM_TOKEN` env on both `web` and `workers`** (old token there would
+now 403) — that env update is the last step for live app ingest. No `AXIOM_URL`
+needed (US default). Code-side hardening (loud `onError` + region-flexible)
+shipped in the same follow-up.
 
 ## DEV.76 — Stage D Day D.1 follow-up — Better Stack monitor frequency is 3 min (free tier), not 30s/60s; response-time spikes diagnosed
 
@@ -1426,3 +1434,33 @@ periodic ~1.2 s spikes. Diagnosis:
 **Resolution:** ✅ Closed — docs corrected; spikes explained (benign,
 measurement-side). Monitor-location change is a one-click operator action in the
 Better Stack UI.
+
+## DEV.77 — Stage D Day D.1 follow-up — workers Sentry project verified via a temporary smoke-test endpoint (added + removed)
+
+**Date:** 2026-05-28
+
+The web Sentry project had an on-demand trigger (`/api/internal/sentry-test`,
+Day 17) but the **workers** project (`dealerlink-workers-production`) had none —
+so D.1 could not positively confirm worker-side error capture. Rather than wait
+for an organic failure, a temporary operator-gated endpoint
+(`POST /api/internal/workers-error-test`) was deployed that enqueues a
+`render-pdf` pg-boss job carrying a `THROW_ON_PURPOSE` sentinel `documentType`;
+`handleRenderPdfJob` threw on that sentinel, exercising the real
+`pg-boss → instrumentJobHandler → captureJobError → Sentry` path in the
+long-running workers process (not the web process, not the synchronous render
+CLI).
+
+**Verified (operator):** the error `Sentry workers smoke test — D.1 diagnostic`
+appeared in `dealerlink-workers-production` with `job.type: render-pdf` +
+`job.id` tags and a `job` context block; the payload was **PII-clean** (the
+`beforeSend` scrubber from the C.4 audit applies, and the test error carries no
+PII anyway).
+
+**Cleanup:** the endpoint and the sentinel check were removed in the immediately
+following commit (deploy-verify-cleanup pattern). Production carries **no
+throw-on-purpose path** past D.1; a post-removal `POST` of the path returns the
+non-operator `404`. The sentinel was isolated to `handleRenderPdfJob` and never
+touched the real render flow.
+
+**Resolution:** ✅ Closed — workers Sentry capture confirmed working end to end;
+diagnostic code fully removed.
