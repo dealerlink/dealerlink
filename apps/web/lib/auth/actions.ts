@@ -8,7 +8,16 @@ import { z } from 'zod';
 
 import { runWithLogContext } from '@/lib/observability/als';
 import { trackEvent } from '@/lib/observability/events';
+import { checkRateLimit, peekRateLimit, resetRateLimit } from '@/lib/rate-limit';
 
+import {
+  clearedState,
+  GENERIC_LOGIN_ERROR,
+  isLockedOut,
+  LOGIN_RATE_LIMIT_MAX,
+  LOGIN_RATE_LIMIT_WINDOW_SEC,
+  nextFailureState,
+} from './lockout';
 import { lucia } from './lucia';
 import { verifyPassword } from './password';
 import { getAuthContext } from './session';
@@ -29,6 +38,20 @@ function clientMeta() {
   return { ip, userAgent };
 }
 
+/**
+ * F-3 (Stage D D.2): the rate-limit + lockout state shared between
+ * `peekRateLimit`/`checkRateLimit` (windowed throttle on the `rate_limit`
+ * table) and the per-user counter (`users.failed_login_attempts` +
+ * `users.lockout_until`). See `lockout.ts` for the design rationale and
+ * the guardrail that ALL failure paths return the same generic message.
+ */
+const rateLimitOpts = (email: string) => ({
+  scope: 'login',
+  key: email,
+  limit: LOGIN_RATE_LIMIT_MAX,
+  windowSec: LOGIN_RATE_LIMIT_WINDOW_SEC,
+});
+
 export async function login(input: z.input<typeof loginSchema>): Promise<LoginResult> {
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
@@ -36,6 +59,25 @@ export async function login(input: z.input<typeof loginSchema>): Promise<LoginRe
   }
   const { email, password, tenantSlug } = parsed.data;
   const { ip, userAgent } = clientMeta();
+
+  // F-3 step 1: short-window rate limit. Peek (no increment) so a
+  // soon-to-succeed login doesn't penalise the counter — only failed
+  // verifies record a hit. After 5 failures in 15 min the 6th attempt
+  // gets rejected here, **before** any user lookup or argon2 work.
+  // Key is the parsed (normalized) email so unknown-email probing is
+  // throttled identically to known-email brute-force — no enumeration
+  // signal leaks through differential rate limits.
+  const peek = await peekRateLimit(rateLimitOpts(email));
+  if (!peek.allowed) {
+    await db.insert(authEvents).values({
+      eventType: 'login_failed',
+      success: false,
+      ip,
+      userAgent,
+      metadata: `rate_limited:${email}`,
+    });
+    return { ok: false, error: GENERIC_LOGIN_ERROR };
+  }
 
   // Resolve tenant if slug supplied. Operators have no tenant.
   let resolvedTenantId: string | null | undefined = undefined;
@@ -53,7 +95,7 @@ export async function login(input: z.input<typeof loginSchema>): Promise<LoginRe
         userAgent,
         metadata: `unknown_tenant:${tenantSlug}`,
       });
-      return { ok: false, error: 'Invalid email or password.' };
+      return { ok: false, error: GENERIC_LOGIN_ERROR };
     }
     resolvedTenantId = t.id;
   }
@@ -78,6 +120,9 @@ export async function login(input: z.input<typeof loginSchema>): Promise<LoginRe
 
   const user = candidateRows[0];
   if (!user || user.status !== 'active') {
+    // Record the failure against the rate-limit window so an attacker
+    // probing unknown emails still hits the 5/15-min cap.
+    await checkRateLimit(rateLimitOpts(email));
     await db.insert(authEvents).values({
       tenantId: resolvedTenantId ?? null,
       userId: user?.id ?? null,
@@ -87,11 +132,14 @@ export async function login(input: z.input<typeof loginSchema>): Promise<LoginRe
       userAgent,
       metadata: 'no_user_or_inactive',
     });
-    return { ok: false, error: 'Invalid email or password.' };
+    return { ok: false, error: GENERIC_LOGIN_ERROR };
   }
 
-  const valid = await verifyPassword(user.passwordHash, password);
-  if (!valid) {
+  // F-3 step 2: cumulative lockout. A known user with an active lockout
+  // is rejected **before** verify (no argon2 work, no counter touch),
+  // with the same generic message. The auth_events row records the
+  // lockout for forensics + the operator's manual-clear runbook.
+  if (isLockedOut(user.lockoutUntil, new Date())) {
     await db.insert(authEvents).values({
       tenantId: user.tenantId,
       userId: user.id,
@@ -99,9 +147,61 @@ export async function login(input: z.input<typeof loginSchema>): Promise<LoginRe
       success: false,
       ip,
       userAgent,
-      metadata: 'bad_password',
+      metadata: 'locked_out',
     });
-    return { ok: false, error: 'Invalid email or password.' };
+    return { ok: false, error: GENERIC_LOGIN_ERROR };
+  }
+
+  const valid = await verifyPassword(user.passwordHash, password);
+  if (!valid) {
+    // Record the failure on the windowed limiter AND on the per-user
+    // counter. If the counter crosses LOCKOUT_THRESHOLD, the lockout
+    // fires (handled by `nextFailureState`). Both writes are best-effort
+    // — a transient DB error must not change the user-facing outcome.
+    await checkRateLimit(rateLimitOpts(email));
+    const failureState = nextFailureState(user.failedLoginAttempts, new Date());
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${user.tenantId ?? ''}, true)`);
+      await tx
+        .update(users)
+        .set({
+          failedLoginAttempts: failureState.failedLoginAttempts,
+          lockoutUntil: failureState.lockoutUntil,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+    });
+    await db.insert(authEvents).values({
+      tenantId: user.tenantId,
+      userId: user.id,
+      eventType: 'login_failed',
+      success: false,
+      ip,
+      userAgent,
+      metadata: failureState.lockoutUntil ? 'bad_password:locked' : 'bad_password',
+    });
+    return { ok: false, error: GENERIC_LOGIN_ERROR };
+  }
+
+  // Success path. Clear the windowed limiter so the next 5 attempts get
+  // the full window again, and zero the per-user counter / lockout iff
+  // they aren't already clean — a conditional UPDATE keeps the audit log
+  // quiet for routine logins (every UPDATE on `users` writes an audit
+  // row via the trigger; we don't want a per-login audit hit).
+  await resetRateLimit('login', email);
+  if (user.failedLoginAttempts > 0 || user.lockoutUntil != null) {
+    const cleared = clearedState();
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${user.tenantId ?? ''}, true)`);
+      await tx
+        .update(users)
+        .set({
+          failedLoginAttempts: cleared.failedLoginAttempts,
+          lockoutUntil: cleared.lockoutUntil,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+    });
   }
 
   const session = await lucia.createSession(user.id, {});

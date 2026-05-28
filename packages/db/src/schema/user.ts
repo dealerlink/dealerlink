@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -30,6 +31,15 @@ export const users = pgTable(
     // an operator provisions or resets a tenant user; cleared on successful
     // password change.
     mustChangePassword: boolean().notNull().default(false),
+    // F-3 (Stage D D.2): cumulative failed-login counter + soft-lockout window.
+    // The counter increments on every failed verify and is cleared on success
+    // or when the lockout threshold (10) fires; `lockoutUntil` carries a
+    // 30-minute lockout from that moment. Independent of the short-window
+    // login rate-limit (5/15 min) which lives in `rate_limit` and catches
+    // unknown emails too. Lucia attributes do NOT expose these — they exist
+    // only for the login action + operator's manual-clear runbook.
+    failedLoginAttempts: integer().notNull().default(0),
+    lockoutUntil: timestamp({ withTimezone: true }),
     lastAuthEventAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

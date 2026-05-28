@@ -118,6 +118,39 @@ Short, operator-facing procedures for actions that ship with the admin app. Each
 
 ---
 
+## R3c — Clearing a login lockout (F-3 — Stage D D.2)
+
+**When to use:** A legitimate user has been locked out by the F-3 cumulative-failure threshold — typically after a string of typo'd password attempts hits 10 failures inside the 30-minute window. The 30-min lock will auto-expire on its own; this runbook is the manual override for "the user is staring at the login screen now and needs back in."
+
+**Time:** <30 seconds.
+
+**How to confirm it's actually a lockout** (vs a wrong password / a forgotten password):
+
+1. Tail `auth_events` for the user's email and look at the most-recent `login_failed` row's `metadata`:
+   - `locked_out` — every attempt this window is being rejected before password verify because `users.lockout_until > now`.
+   - `bad_password:locked` — the failure that **fired** the lockout (10th cumulative failure). Subsequent rows will be `locked_out`.
+   - `rate_limited:<email>` — the short 5/15-min window cap, not the long lockout. **Auto-clears** when the window rolls (≤15 min); usually waiting is the right answer.
+   - `bad_password` — they just have the wrong password. Use R3 (password reset), not R3c.
+
+**Steps (production):** operators do not have direct DB access (ADR-002). To clear a real lockout in production, **use R3 (password reset)** — it invalidates the user's sessions, mints a fresh temporary password, and clears the lockout state implicitly via the `users.failed_login_attempts` / `users.lockout_until` columns being reset alongside the password hash on the audit-trigger UPDATE. Two birds, one runbook.
+
+**Steps (dev / direct DB only — never production):**
+
+1. Confirm you are pointed at the **dev** database.
+2. Clear the lockout state directly:
+   ```sql
+   UPDATE users
+   SET failed_login_attempts = 0, lockout_until = NULL
+   WHERE email = '<user-email>';
+   ```
+3. The user's next attempt skips the lockout gate and goes straight to password verify.
+
+**Why the short-window rate limit has no runbook:** it is a 15-minute fixed window in `rate_limit`; an operator-driven `DELETE FROM rate_limit WHERE key = 'login:<email>'` works but is rarely worth it (window rolls naturally in ≤15 min, and any failed attempt while waiting just re-arms the gate). R3 reset is the universal "get them back in now" path.
+
+**Audit trail:** the lockout fire, every rejected attempt under it, and the clear are all in `auth_events`. The `users` UPDATE that fires the lockout (and the UPDATE that clears it on success or via R3) is in `audit_log` via the trigger on `users`.
+
+---
+
 ## R4 — Rotating the inbound email token
 
 **When to use:** The tenant's inbound BCC address is compromised (e.g., leaked in a public document) or they request a fresh one.
