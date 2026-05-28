@@ -17,11 +17,27 @@ interface EventContext {
   userId?: string;
 }
 
+// The ingest endpoint is REGION-SPECIFIC. The SDK defaults to the US cloud
+// (https://api.axiom.co); set AXIOM_URL (e.g. https://api.eu.axiom.co) for a
+// dataset in another region. A region mismatch makes every ingest fail with
+// HTTP 400, which the SDK would otherwise swallow into console.error; the
+// onError hook routes failures through the logger instead. (DEV.75)
 let axiomClient: Axiom | null | undefined;
 function getAxiomClient(): Axiom | null {
   if (axiomClient === undefined) {
     const token = process.env.AXIOM_TOKEN;
-    axiomClient = token ? new Axiom({ token }) : null;
+    if (!token) {
+      axiomClient = null;
+    } else {
+      const url = process.env.AXIOM_URL;
+      axiomClient = new Axiom({
+        token,
+        ...(url ? { url } : {}),
+        onError: (err) => {
+          logger.warn({ err }, 'axiom: ingest failed');
+        },
+      });
+    }
   }
   return axiomClient;
 }

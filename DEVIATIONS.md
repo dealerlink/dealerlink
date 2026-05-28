@@ -1343,3 +1343,50 @@ production post-deploy.
 
 **Resolution:** ✅ Closed — health check enhanced to support least-privilege
 production keys while preserving real invalid-key detection.
+
+## DEV.75 — Stage D Day D.1 follow-up — Axiom dataset was created in the wrong region (US token ↔ EU dataset)
+
+**Date:** 2026-05-28
+
+The D.1 smoke test found the Axiom dataset `dealerlink-production` receiving
+**zero events** despite `AXIOM_TOKEN` + `AXIOM_DATASET` being correctly present
+on both web + workers DO components and `/health` fully green. Direct probing of
+the Axiom API (not the app) isolated the cause:
+
+| Request                                                                   | Result                                                                                                                                                 |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET https://api.axiom.co/v1/datasets` (US)                               | `200` — lists `dealerlink-production`, `edgeDeployment: cloud.eu-central-1.aws`                                                                        |
+| `POST https://api.axiom.co/v1/datasets/dealerlink-production/ingest` (US) | `400` — _"ingest is only allowed into datasets in the primary region: dataset region: cloud.eu-central-1.aws, deployment region: cloud.us-east-1.aws"_ |
+| `GET`/`POST` against `https://api.eu.axiom.co` (EU)                       | `403` forbidden                                                                                                                                        |
+
+The ingest token authenticates **only** against Axiom's **US** control plane,
+but the dataset's data region is **EU** (`eu-central-1`). The SDK
+(`@axiomhq/js@1.6.1`) is constructed as `new Axiom({ token })` with no region
+URL, so `resolveIngestUrl` defaults to the US cloud endpoint
+(`https://api.axiom.co/v1/datasets/{dataset}/ingest`) → every ingest returns
+`400`. Because `Axiom.ingest()` batches in the background and surfaces flush
+errors through the SDK's **default `onError` (`console.error`)** — not through
+the `Promise` our call site wrapped in `.catch()` — the failures were silently
+lost. There is **no single endpoint** where a US token can ingest into an EU
+dataset; the regions were mismatched at dataset-provisioning time.
+
+**Fix:**
+
+1. **Operator action (resolution path chosen):** recreate the
+   `dealerlink-production` dataset in the **US** org (`app.axiom.co`), matching
+   the existing token. Zero data lost (0 events had ever landed). No new token,
+   no `AXIOM_URL` needed — the SDK default endpoint then works.
+2. **Code hardening (this commit, web + workers `observability/events.ts`):**
+   - Added an `onError` hook on the Axiom client that routes ingest failures
+     through the structured `logger.warn` instead of the SDK's silent
+     `console.error`. **This is the change that would have made the bug loud on
+     day one** rather than only visible via a dashboard spot-check.
+   - Added optional `AXIOM_URL` support (passed as the SDK `url` option, omitted
+     when unset). Region is now a config flip: set
+     `AXIOM_URL=https://api.eu.axiom.co` if a dataset ever lives in EU. Default
+     stays the SDK US endpoint, matching the recreate-in-US resolution.
+   - Fixed a stale comment that named the old dataset `dealerlink-events`.
+
+**Resolution:** ✅ Code-side closed (loud failures + region-flexible). Final
+green (events flowing) gated on the operator recreating the dataset in the US
+region; the diagnostic curl above is the repeatable check.

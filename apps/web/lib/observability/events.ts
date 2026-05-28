@@ -6,7 +6,8 @@
  * a failed Axiom send can never affect the user-facing request.
  *
  * Destinations:
- *   - prod + AXIOM_TOKEN/AXIOM_DATASET set → Axiom (`dealerlink-events`).
+ *   - prod + AXIOM_TOKEN/AXIOM_DATASET set → Axiom (dataset is read from
+ *     `AXIOM_DATASET`; production is `dealerlink-production`).
  *   - otherwise (dev, or unconfigured prod) → the structured logger, so the
  *     event is still visible in the dev terminal.
  *
@@ -55,11 +56,30 @@ export function buildEvent<E extends EventName>(
 }
 
 // --- Axiom client (lazy, cached) -------------------------------------------
+// The ingest endpoint is REGION-SPECIFIC. The SDK defaults to the US cloud
+// (https://api.axiom.co); a dataset whose data region is elsewhere (e.g. EU,
+// https://api.eu.axiom.co) is reached by setting AXIOM_URL. A region mismatch
+// makes EVERY ingest fail with HTTP 400 ("ingest is only allowed into datasets
+// in the primary region") — and the SDK would otherwise swallow that into its
+// default console.error sink, invisible in our structured logs. The onError
+// hook routes any ingest failure through the logger so a future region/auth
+// mismatch is loud and traceable, not silent. (DEV.75)
 let axiomClient: Axiom | null | undefined;
 function getAxiomClient(): Axiom | null {
   if (axiomClient === undefined) {
     const token = process.env.AXIOM_TOKEN;
-    axiomClient = token ? new Axiom({ token }) : null;
+    if (!token) {
+      axiomClient = null;
+    } else {
+      const url = process.env.AXIOM_URL;
+      axiomClient = new Axiom({
+        token,
+        ...(url ? { url } : {}),
+        onError: (err) => {
+          logger.warn({ err }, 'axiom: ingest failed');
+        },
+      });
+    }
   }
   return axiomClient;
 }
