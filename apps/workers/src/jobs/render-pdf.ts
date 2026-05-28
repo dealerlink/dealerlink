@@ -100,9 +100,22 @@ export async function runRenderPdf(payload: RenderPdfPayload): Promise<RenderPdf
   );
 }
 
+/**
+ * TEMPORARY (D.1 diagnostic, DEV.77) — sentinel documentType that makes the
+ * pg-boss render-pdf handler throw on purpose, so an operator can confirm the
+ * workers → instrumentJobHandler → Sentry (`dealerlink-workers-production`)
+ * path captures a real worker-side error. Enqueued only by the operator-gated
+ * `/api/internal/workers-error-test`. Isolated to this handler; remove both
+ * after verification.
+ */
+const SENTRY_SMOKE_TEST_DOCUMENT_TYPE = 'THROW_ON_PURPOSE';
+
 /** pg-boss handler shape — registered against the `render-pdf` queue in Day 14. */
 export async function handleRenderPdfJob(job: {
   data: RenderPdfPayload;
 }): Promise<RenderPdfResult> {
+  if ((job.data.documentType as string) === SENTRY_SMOKE_TEST_DOCUMENT_TYPE) {
+    throw new Error('Sentry workers smoke test — D.1 diagnostic');
+  }
   return runRenderPdf(job.data);
 }
