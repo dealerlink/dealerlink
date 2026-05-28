@@ -48,13 +48,31 @@ New tenants need their subdomain added two places before they work on
 staging:
 
 1. A Cloudflare DNS CNAME (or rely on `*.staging` — it resolves, but DO needs
-   the explicit domain for an HTTP-01 cert).
+   the explicit domain to mint a per-subdomain cert).
 2. A custom domain entry in `.do/app.yaml` (`<slug>.staging.dealerlink.in`,
    type ALIAS), then `node scripts/staging-app-render-spec.mjs` +
    `doctl apps update <app-id> --spec .do/app.rendered.yaml`.
 
-A true wildcard cert isn't possible while DNS lives on Cloudflare (DO needs
-DNS-01 for wildcards). Stage D revisits this.
+**Staging has NO wildcard cert — it enumerates.** Each staging tenant subdomain
+gets its **own single-domain** DO-managed cert (verified:
+`demo.staging.dealerlink.in` presents `CN=demo.staging.dealerlink.in`, SAN
+`demo.staging.dealerlink.in` only, issuer Google Trust Services). `*.staging` is
+a DNS **convenience** record (names resolve) but is **not** backed by a `*.staging`
+wildcard cert. _(Earlier wording here said "a true wildcard cert isn't possible
+while DNS lives on Cloudflare." That is **wrong** — DO App Platform issues wildcard
+certs via a TXT-verification record added manually in Cloudflare; corrected at the
+pre-D.2 DNS diagnostic, DEV.78.)_ Production removes this per-tenant toil in D.3
+via a real `*.dealerlink.in` wildcard — see `STAGE_D_HANDOFF.md` §6.
+
+### DNS architecture (same DO-Cloudflare pattern as production)
+
+Staging follows the identical DO App Platform pattern: gray-cloud (DNS-only)
+CNAMEs in our Cloudflare zone point at the `…-staging-….ondigitalocean.app`
+origin, which is **itself** Cloudflare-fronted by DO. `demo.staging.dealerlink.in`
+resolves to **Cloudflare** IPs (`172.66.0.96`, `162.159.140.98`, …) via DO's own
+Cloudflare integration — not our proxy. Full architecture + implications are
+documented once, authoritatively, in `STAGE_D_HANDOFF.md` §6 (DEV.78); this is
+the proven precedent the production DNS plan mirrors.
 
 ## Tenants & seeded users
 

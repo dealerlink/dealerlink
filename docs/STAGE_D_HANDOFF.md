@@ -155,10 +155,15 @@ current DO pricing at provisioning — these are 2025-era estimates._
 
 ### 2.3 Domain
 
-Recommend **`app.dealerlink.in`** for the app (operator login at the apex,
-tenants at `<slug>.app.dealerlink.in`). Operator to confirm vs the naked
-`dealerlink.in` apex. DNS via Cloudflare (gray-cloud DNS-only, same pattern as
-staging); SSL via Let's Encrypt through DO. See §6 for the full DNS/SSL plan.
+The operator login is **`app.dealerlink.in`**; tenants resolve at
+**`<slug>.dealerlink.in`** (live config: `NEXT_PUBLIC_APP_DOMAIN=dealerlink.in`,
+with `app`/`www`/`admin`/apex reserved → operator, `apps/web/lib/tenant/resolve.ts`).
+The wildcard required is therefore **`*.dealerlink.in`**, _not_ `*.app.dealerlink.in`
+(an earlier draft of this section used the `.app.` form — that never matched the
+deployed config; corrected at the pre-D.2 DNS diagnostic, DEV.78). DNS via
+Cloudflare (gray-cloud DNS-only, same pattern as staging); SSL is a DO-managed
+cert (issuer is **Google Trust Services**, not Let's Encrypt — DO's current CA).
+See §6 for the full DNS/SSL plan.
 
 ---
 
@@ -264,32 +269,168 @@ Stage D has **4 days for ~3 days of work** — the buffer is deliberate (§10).
 
 ## 6. Production Domain + DNS Plan
 
-- **App domain:** **`app.dealerlink.in`** (recommended). The apex of this host
-  serves the **operator** login; tenants resolve at `<slug>.app.dealerlink.in`
-  (set `NEXT_PUBLIC_APP_DOMAIN=app.dealerlink.in` — it is inlined into the Edge
-  middleware bundle at build time, DEV.60). No `api.` subdomain is needed — there
-  is no separate API (reads are Server Components, writes are Server Actions).
-- **Pilot tenant:** `<pilot-slug>.app.dealerlink.in` (decide the slug _with_ the
-  customer — §9).
-- **DNS:** Cloudflare, **gray-cloud (DNS-only)** for the app records, same pattern
-  as staging. Print the exact records for the operator to add manually (the
-  operator owns the Cloudflare zone — they apply DNS by hand, per the infra
-  workflow; Claude does not use `wrangler`).
-- **SSL — the one real upgrade vs staging.** Staging _enumerates_ each tenant
-  subdomain for an HTTP-01 cert (no wildcard, because DNS is on Cloudflare and DO
-  needs DNS-01 for wildcards). Production needs a **true wildcard**
-  `*.app.dealerlink.in` strategy so new tenant subdomains work without editing the
-  spec each time. Two options (decide in D.3):
-  - **A — Cloudflare origin cert + proxied (orange-cloud):** Cloudflare terminates
-    TLS with a wildcard edge cert; DO uses a Cloudflare origin cert. Cleanest for
-    wildcards.
-  - **B — DO-managed DNS:** move the zone (or a delegated subdomain) to DO so DO
-    can do DNS-01 wildcard issuance. Heavier; conflicts with the "Cloudflare is
-    manual / operator-owned" workflow.
-  - _Recommendation:_ A (Cloudflare proxied origin cert) — keeps the zone on
-    Cloudflare and gives a real wildcard. Validate that proxying doesn't break the
-    Edge middleware host resolution (`NEXT_PUBLIC_APP_DOMAIN`) or the Resend
-    inbound webhook path.
+> **Verified at the pre-D.2 DNS diagnostic (2026-05-28, DEV.78).** The text below
+> replaces the earlier draft, which (a) used a `*.app.dealerlink.in` tenant pattern
+> that never matched the deployed `NEXT_PUBLIC_APP_DOMAIN=dealerlink.in`, and (b)
+> recommended a Cloudflare proxied origin cert — now rejected (see Option C). Raw
+> evidence: `/tmp/dns-diagnostic.md`.
+
+### DNS Architecture
+
+Our Cloudflare zone for `dealerlink.in`:
+
+| Record               | Type  | Target                                           | Cloudflare mode        | Purpose                         |
+| -------------------- | ----- | ------------------------------------------------ | ---------------------- | ------------------------------- |
+| `app`                | CNAME | `dealerlink-production-8treh.ondigitalocean.app` | DNS only (gray-cloud)  | Operator login (prod app)       |
+| `staging`            | CNAME | DO staging origin                                | DNS only (gray-cloud)  | Staging operator/login          |
+| `*.staging`          | CNAME | DO staging origin                                | DNS only (gray-cloud)  | Staging tenant subdomains       |
+| `dealerlink.in` apex | A     | `2.57.91.91`                                     | Proxied (orange-cloud) | Future marketing site (not app) |
+| `www`                | CNAME | `dealerlink.in`                                  | Proxied (orange-cloud) | Apex/marketing redirect         |
+
+Tenant routing is `<slug>.dealerlink.in` (with `app`/`www`/`admin`/apex reserved →
+operator). The wildcard production needs is therefore **`*.dealerlink.in`** — it
+will not shadow the more-specific `staging`/`*.staging`/`app`/`www` records, and
+DNS wildcards are single-label so `*.dealerlink.in` does not match
+`*.staging.dealerlink.in`.
+
+**Resolution path for production app traffic:**
+
+```
+User → our Cloudflare DNS (gray-cloud `app` CNAME)
+     → CNAME target dealerlink-production-8treh.ondigitalocean.app
+     → that ondigitalocean.app host is ITSELF behind Cloudflare's edge
+       (DO App Platform's own Cloudflare integration — NOT our zone)
+     → DO origin servers (BLR1)
+```
+
+**Verified:** `app.dealerlink.in` resolves to **Cloudflare** IPs
+(`172.66.0.96`, `162.159.140.98`, `2606:4700:7::60`, `2a06:98c1:58::60`), NOT DO
+IPs. The bare DO origin `dealerlink-production-8treh.ondigitalocean.app` resolves
+to the **same** Cloudflare IPs independent of our zone, and staging
+(`demo.staging.dealerlink.in` → `…-staging-….ondigitalocean.app`) does too. So
+the Cloudflare-fronting is **DO App Platform's architecture, not our config and
+not a misconfiguration.** The edge serves from Mumbai (`CF-RAY: …-BOM`).
+
+**Implications:**
+
+- Edge SSL termination + basic DDoS protection are already provided by DO's
+  Cloudflare integration. The cert is **DO-managed** (issuer **Google Trust
+  Services WE1**, 90-day, auto-renewed) — currently single-domain
+  (`CN=app.dealerlink.in`, SAN `app.dealerlink.in` only; **not** a wildcard).
+- We **cannot** layer our own Cloudflare WAF rules onto app traffic without
+  conflict — the traffic is already on DO's Cloudflare. Custom WAF would mean
+  droplets behind our own Cloudflare (out of scope).
+- The zone's **gray-cloud** setting for `app` is **correct**: it avoids
+  double-proxying through DO's own Cloudflare while traffic stays Cloudflare-fronted
+  (via DO). The D.1-follow-up "orange-cloud" flag was inferred from CF edge
+  IPs + `__cf_bm`/`CF-RAY`, but those signals appear on gray-cloud too (they come
+  from DO's Cloudflare), so they could not distinguish the two — the dashboard
+  shows gray-cloud and that is authoritative. **Resolved: gray-cloud, correct.**
+- This DO-Cloudflare-fronting also explains the BetterStack response-time spikes
+  (DEV.76): the spike is `/api/health`'s own cross-region Resend ping in
+  `responseMs`, not edge/app latency.
+
+### Staging precedent (what it does and does NOT prove)
+
+Staging is the proven precedent for the **enumerated single-domain** model, **not**
+for wildcards. Each staging tenant subdomain is added explicitly as a DO custom
+domain and gets its **own** single-domain cert — verified:
+`demo.staging.dealerlink.in` presents `CN=demo.staging.dealerlink.in`, SAN
+`demo.staging.dealerlink.in` only (Google Trust Services). `*.staging` is a DNS
+**convenience CNAME** (names resolve) but there is **no `*.staging` wildcard
+cert** — every new staging tenant needs a spec edit + redeploy to mint its cert.
+**That per-tenant manual step is exactly the toil D.3's wildcard removes for
+production.** (Corrects the assumption that staging "already has wildcard SSL".)
+
+### D.3 Wildcard SSL — Concrete Handoff Plan
+
+**REQUIREMENT.** By end of D.3, `*.dealerlink.in` must serve HTTPS with a valid
+wildcard cert, so Stage E pilot onboarding can create the first tenant subdomain
+(e.g. `acme.dealerlink.in`) with working SSL and **no per-tenant spec edit**.
+
+**CURRENT STATE (verified, DEV.78):**
+
+- `app.dealerlink.in`: working SSL, **single-domain** cert (Google Trust Services,
+  SAN `app.dealerlink.in`), DO-managed + auto-renewed.
+- `*.dealerlink.in`: **does not exist yet.** No wildcard DNS record
+  (`curl https://test-tenant.dealerlink.in` → "Could not resolve host"), and no
+  wildcard cert. Both are net-new D.3 work.
+- DO App Platform prod app has only `app.dealerlink.in` (type PRIMARY) configured —
+  no wildcard domain.
+- **DO App Platform supports wildcard custom domains natively** (confirmed against
+  DO docs): add `*.dealerlink.in` as a custom domain → add a `*` CNAME → DO issues
+  the wildcard cert after a one-time **TXT verification** record is added to the DNS
+  provider.
+
+**EVALUATION OF OPTIONS:**
+
+- **Option A — DO-managed native wildcard (PREFERRED).**
+  - Add `*.dealerlink.in` in DO App Platform → Networking → Add domain.
+  - Operator adds, in Cloudflare (gray-cloud, by hand — consistent with the
+    operator-owned-zone workflow): (1) a wildcard CNAME `*` →
+    `dealerlink-production-8treh.ondigitalocean.app`, and (2) the **TXT verification
+    record(s)** DO displays ("Use TXT records to verify").
+  - DO then issues + serves the wildcard cert on its Cloudflare edge.
+  - **Needs no Cloudflare API token** — just one manual TXT record.
+  - **Renewal nuance:** the 90-day cert auto-renews, **but** DO notifies ~30 days
+    before the **TXT verification token** expires and the operator must re-add the
+    updated TXT to re-verify. Mostly automated, with a periodic lightweight manual
+    TXT touch — document this cadence (next §).
+  - **TLD check:** DO/DigiCert restrict wildcard issuance only for embargoed TLDs
+    (Russia/Belarus/Venezuela) — **`.in` is fine**, and DO already issues a
+    single-domain `.in` cert today. Low risk; confirmed at provisioning when DO
+    shows the TXT step without error.
+  - _Effort: ~30–45 min_ (most of it DNS propagation wait).
+
+- **Option B — self-managed acme.sh DNS-01 + upload custom cert (FALLBACK).**
+  - Run a Let's Encrypt DNS-01 challenge ourselves via the Cloudflare API
+    (acme.sh / certbot-dns-cloudflare), then upload the wildcard cert to DO App
+    Platform as a custom certificate.
+  - **Prerequisite:** a Cloudflare API token with **DNS edit scope** for
+    `dealerlink.in` (operator creates in the Cloudflare dashboard).
+  - **Renewal:** 90-day expiry → needs cron/automation we own.
+  - _Effort: ~2–3 h initial + ongoing renewal automation._ Use **only if Option A
+    is blocked.**
+
+- **Option C — Cloudflare origin cert + orange-cloud. REJECTED.**
+  - Would require switching `app`/`*` to orange-cloud (proxied), **double-proxying**
+    through DO's own Cloudflare edge (see DNS Architecture above). The earlier draft
+    recommended this before we knew DO was already Cloudflare-fronted. Don't pursue;
+    documented for completeness.
+
+**RECOMMENDATION FOR D.3 — do, in this order:**
+
+1. Attempt **Option A** (~30–45 min). Add `*.dealerlink.in` in DO; operator adds
+   the wildcard CNAME + the TXT verification record in Cloudflare (gray-cloud).
+2. If DO's wildcard issuance is blocked (unexpected — `.in` is supported): fall
+   back to **Option B** (~2–3 h; needs the Cloudflare API token below).
+3. **Verify:** `echo | openssl s_client -connect acme-test.dealerlink.in:443
+-servername acme-test.dealerlink.in | openssl x509 -noout -subject -ext
+subjectAltName` — expect SAN `*.dealerlink.in`, even though the app itself may
+   404/redirect for a non-provisioned tenant. (Provision one throwaway test tenant
+   if an end-to-end 200 is wanted.)
+4. Document the chosen approach + the TXT re-verification renewal cadence in
+   `docs/PRODUCTION_ENV.md`.
+5. Validate that adding `*.dealerlink.in` does **not** disturb Edge host resolution
+   (`NEXT_PUBLIC_APP_DOMAIN=dealerlink.in`, DEV.60) or the Resend inbound webhook
+   path (D.3 also wires inbound MX).
+
+**PREREQUISITES TO PREPARE BEFORE D.3 STARTS:**
+
+- [ ] **Decide nothing else** — the path is decided (try A, fall back to B).
+- [ ] _Only if Option B may be needed:_ operator creates a **Cloudflare API token,
+      DNS edit scope, zone `dealerlink.in`**, in the Cloudflare dashboard. **Option A
+      needs no token** — recommend not creating it unless A is blocked.
+- [ ] DO wildcard-domain doc bookmarked:
+      https://docs.digitalocean.com/products/app-platform/how-to/manage-domains/
+
+**D.3 GO/NO-GO GATE — all must hold by end of D.3:**
+
+- `openssl s_client` to a hypothetical `*.dealerlink.in` subdomain presents a cert
+  whose SAN is `*.dealerlink.in` (cert success even if DNS/app doesn't 200).
+- Cert + TXT-verification renewal cadence documented (Option A) or renewal
+  automation tested (Option B).
+- `docs/PRODUCTION_ENV.md` updated with the wildcard SSL approach + renewal.
 
 ---
 
@@ -360,15 +501,15 @@ during Stage D infrastructure work.
 
 ## 10. Risk Register
 
-| Risk                                                               | Severity            | Mitigation                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A production-shape bug not surfaced by staging**                 | High                | The 4-day Stage D + 3-day Stage E buffer; D.0 tests the deploy pipeline before trusting it; D.3 production smoke + dry-run.                                                                                                                                                               |
-| **Partial sizing fix** — applying only one of the three §2 changes | **High (coupling)** | The worker / web-pool / DB-tier changes are **coupled** (§2.1). Bumping only the worker leaves the pool=2 serialization; bumping only the pool exhausts the Basic 1 GB DB connections; bumping only the DB does nothing alone. **Apply all three together or none.** C5b is the evidence. |
-| **Resend domain verification delay**                               | Medium              | DKIM/SPF/DMARC propagation is 24–72 h. **Start Resend + DNS on D.1 morning**, well before June 3.                                                                                                                                                                                         |
-| **PDF cold-start / worker pressure on production**                 | Medium → Low        | Resolved by `basic-xs` (§2). DO memory alert >80 % on workers is the canary (§8). Pilot PDF load (≤10/hr sequential) is well within budget per C5b.                                                                                                                                       |
-| **F-1 Next.js upgrade introduces a regression**                    | Low                 | Dedicated PR, full `pnpm verify` + critical-path E2E before merge (D.2).                                                                                                                                                                                                                  |
-| **Wildcard SSL strategy churn**                                    | Medium              | Decide option A (Cloudflare proxied origin cert) early (D.3); validate Edge host-resolution + webhook path don't break under proxy.                                                                                                                                                       |
-| **DNS propagation for `app.dealerlink.in`**                        | Medium              | Start DNS early; Cloudflare propagation is usually fast but allow buffer (Jun 1–2).                                                                                                                                                                                                       |
+| Risk                                                               | Severity            | Mitigation                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A production-shape bug not surfaced by staging**                 | High                | The 4-day Stage D + 3-day Stage E buffer; D.0 tests the deploy pipeline before trusting it; D.3 production smoke + dry-run.                                                                                                                                                                                                 |
+| **Partial sizing fix** — applying only one of the three §2 changes | **High (coupling)** | The worker / web-pool / DB-tier changes are **coupled** (§2.1). Bumping only the worker leaves the pool=2 serialization; bumping only the pool exhausts the Basic 1 GB DB connections; bumping only the DB does nothing alone. **Apply all three together or none.** C5b is the evidence.                                   |
+| **Resend domain verification delay**                               | Medium              | DKIM/SPF/DMARC propagation is 24–72 h. **Start Resend + DNS on D.1 morning**, well before June 3.                                                                                                                                                                                                                           |
+| **PDF cold-start / worker pressure on production**                 | Medium → Low        | Resolved by `basic-xs` (§2). DO memory alert >80 % on workers is the canary (§8). Pilot PDF load (≤10/hr sequential) is well within budget per C5b.                                                                                                                                                                         |
+| **F-1 Next.js upgrade introduces a regression**                    | Low                 | Dedicated PR, full `pnpm verify` + critical-path E2E before merge (D.2).                                                                                                                                                                                                                                                    |
+| **Wildcard SSL strategy churn**                                    | Low (was Medium)    | Resolved at the pre-D.2 diagnostic (DEV.78): DO supports native wildcard via TXT verification — §6 has a decided plan (try Option A DO-native, fall back to Option B acme.sh). No proxied origin cert (Option C rejected: would double-proxy DO's own Cloudflare). Validate Edge host-resolution + webhook path during D.3. |
+| **DNS propagation for `app.dealerlink.in`**                        | Medium              | Start DNS early; Cloudflare propagation is usually fast but allow buffer (Jun 1–2).                                                                                                                                                                                                                                         |
 
 ---
 

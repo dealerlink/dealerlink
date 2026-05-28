@@ -1464,3 +1464,56 @@ touched the real render flow.
 
 **Resolution:** ✅ Closed — workers Sentry capture confirmed working end to end;
 diagnostic code fully removed.
+
+## DEV.78 — Stage D pre-D.2 — DNS for `*.dealerlink.in` routes through DO App Platform's Cloudflare integration (not direct to DO); §6 DNS/SSL plan corrected
+
+**Date:** 2026-05-28
+
+**Finding.** `app.dealerlink.in` (and every `…ondigitalocean.app` host) resolves
+to **Cloudflare** IPs, not DigitalOcean. Verified via `nslookup … 1.1.1.1`:
+`app.dealerlink.in` → CNAME `dealerlink-production-8treh.ondigitalocean.app` →
+`172.66.0.96`, `162.159.140.98`, `2606:4700:7::60`, `2a06:98c1:58::60`
+(Cloudflare-owned ranges). The **bare DO origin resolves to the same Cloudflare
+IPs independent of our zone**, and staging (`demo.staging.dealerlink.in`) does
+too — so the Cloudflare-fronting is **DO App Platform's own architecture, not a
+misconfiguration and not our proxy**. Our `app` CNAME is correctly **gray-cloud
+(DNS-only)**; traffic is still Cloudflare-edged (Mumbai, `CF-RAY: …-BOM`) and
+DO-cert-terminated (issuer **Google Trust Services WE1**, single-domain SAN
+`app.dealerlink.in`, 90-day auto-renew). Raw evidence: `/tmp/dns-diagnostic.md`.
+
+**This supersedes the D.1-follow-up "orange-cloud" flag.** That flag was inferred
+from CF edge IPs + `__cf_bm`, but those signals are present on gray-cloud too
+(they come from DO's Cloudflare), so they could not distinguish the two. The zone
+dashboard shows gray-cloud — authoritative. Net: gray-cloud is correct, resolved.
+
+**Three doc corrections made (DOC-ONLY, no infra/DNS/cert change):**
+
+1. `STAGE_D_HANDOFF.md` §2.3/§6 used a `*.app.dealerlink.in` tenant pattern that
+   never matched the deployed `NEXT_PUBLIC_APP_DOMAIN=dealerlink.in`. Corrected to
+   `<slug>.dealerlink.in` / wildcard **`*.dealerlink.in`**.
+2. §6 previously recommended a **Cloudflare proxied origin cert** for wildcards.
+   **Rejected** — it would orange-cloud-proxy on top of DO's own Cloudflare
+   (double-proxy). The §6 §"Staging precedent" and `STAGING_ENV.md` claim that "a
+   true wildcard cert isn't possible while DNS is on Cloudflare (DO needs DNS-01)"
+   was **wrong**: **DO App Platform supports wildcard custom domains natively** via
+   a one-time **TXT-verification** record added manually in Cloudflare (gray-cloud),
+   then DO issues + auto-renews the cert (with periodic ~30-day TXT re-verification).
+   `.in` is not a restricted TLD. So §6 now decides: **try DO-native wildcard
+   (Option A, ~30–45 min, no API token); fall back to acme.sh DNS-01 (Option B,
+   needs a Cloudflare DNS-edit API token); Cloudflare origin cert (Option C)
+   rejected.**
+3. Staging was assumed to "already have wildcard SSL" — it does **not**. Verified:
+   `demo.staging.dealerlink.in` presents a **single-domain** cert (SAN
+   `demo.staging.dealerlink.in` only). Staging **enumerates** each tenant subdomain
+   with its own cert; `*.staging` is a DNS convenience record, not a wildcard cert.
+   That per-tenant toil is exactly what production's D.3 wildcard removes.
+
+**Gating fact for D.3.** No `*.dealerlink.in` DNS record exists yet
+(`curl https://test-tenant.dealerlink.in` → "Could not resolve host"), and the DO
+prod app has only `app.dealerlink.in` (PRIMARY). Both the wildcard CNAME and the
+wildcard cert are net-new D.3 work — the §6 "D.3 Wildcard SSL — Concrete Handoff
+Plan" is decision-ready (execute, don't re-explore).
+
+**Status:** ✅ Closed (diagnostic). No infrastructure changed. Documented in
+`STAGE_D_HANDOFF.md` §6 (authoritative), cross-referenced from
+`PRODUCTION_ENV.md`, `STAGING_ENV.md`, and `docs/DEPLOYMENT.md`.

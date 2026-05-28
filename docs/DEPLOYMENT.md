@@ -22,6 +22,19 @@ pnpm dev:workers      # in another terminal
 - Migrations run automatically on deploy via `predeploy` hook
 - Environment variables managed in DO dashboard; never commit `.env` files
 
+### DNS + custom domains (DO-Cloudflare)
+
+DNS lives in an operator-owned Cloudflare zone (`dealerlink.in`); the operator
+applies records by hand (Claude does not use `wrangler`). App records are
+**gray-cloud (DNS-only)** CNAMEs to the `…ondigitalocean.app` origin — which is
+itself Cloudflare-fronted by DO App Platform, so app traffic is Cloudflare-edged
+and DO-cert-terminated (issuer Google Trust Services, auto-renewed) **without**
+our own proxy. Do **not** flip app records to orange-cloud — that double-proxies
+DO's own Cloudflare. Production tenant subdomains (`<slug>.dealerlink.in`) need a
+`*.dealerlink.in` wildcard cert (D.3). **The authoritative DNS architecture +
+the wildcard-SSL plan live in `STAGE_D_HANDOFF.md` §6 (DEV.78)** — keep this
+section a pointer, not a second copy.
+
 ### The workers component requires a Dockerfile (DEV.63)
 
 PDF generation runs in the workers process via Puppeteer +

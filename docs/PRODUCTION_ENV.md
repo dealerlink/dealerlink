@@ -13,18 +13,18 @@ green (incl. `resend: ok`), RLS enforced, operator account seeded, SSL live,
 and all third-party observability + outbound email wired with **fresh**
 production credentials. It has **no real tenants** — those come in Stage E.
 
-| Area                                            | State                        | Lands in |
-| ----------------------------------------------- | ---------------------------- | -------- |
-| App + DB + RLS + operator login                 | ✅ live                      | D.0      |
-| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ✅ live (HTTPS 200)          | D.0/D.1  |
-| Resend outbound (verified domain + sending key) | ✅ live (`resend: ok`)       | D.1      |
-| Resend inbound webhook + MX                     | ⏳ deferred (needs MX setup) | D.3      |
-| Sentry / Better Stack / Axiom                   | ✅ wired (fresh prod creds)  | D.1      |
-| DO Spaces (`dealerlink-prod`)                   | ⏭️ skipped (see below)       | (future) |
-| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ deferred                  | D.2      |
-| Wildcard `*.dealerlink.in` SSL strategy         | ⏳ deferred                  | D.3      |
-| Backup/restore rehearsal + prod smoke           | ⏳ deferred                  | D.3      |
-| Real pilot tenant                               | ⛔ not seeded                | Stage E  |
+| Area                                            | State                             | Lands in |
+| ----------------------------------------------- | --------------------------------- | -------- |
+| App + DB + RLS + operator login                 | ✅ live                           | D.0      |
+| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ✅ live (HTTPS 200)               | D.0/D.1  |
+| Resend outbound (verified domain + sending key) | ✅ live (`resend: ok`)            | D.1      |
+| Resend inbound webhook + MX                     | ⏳ deferred (needs MX setup)      | D.3      |
+| Sentry / Better Stack / Axiom                   | ✅ wired (fresh prod creds)       | D.1      |
+| DO Spaces (`dealerlink-prod`)                   | ⏭️ skipped (see below)            | (future) |
+| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ deferred                       | D.2      |
+| Wildcard `*.dealerlink.in` SSL                  | ⏳ pending (plan decided, DEV.78) | D.3      |
+| Backup/restore rehearsal + prod smoke           | ⏳ deferred                       | D.3      |
+| Real pilot tenant                               | ⛔ not seeded                     | Stage E  |
 
 > **DO Spaces skipped at D.1 (operator decision).** Not provisioned.
 > `apps/workers/src/pdf/store.ts` flips to the Spaces path the instant
@@ -57,14 +57,21 @@ with a valid certificate. The record added (operator-owned Cloudflare zone):
 | ----- | ----- | ------------------------------------------------ | ---- |
 | CNAME | `app` | `dealerlink-production-8treh.ondigitalocean.app` | Auto |
 
-> ⚠️ **Observation (flag for the D.3 wildcard-SSL decision):** the `app` record
-> is currently **orange-cloud (Cloudflare-proxied)**, not the gray-cloud (DNS
-> only) the D.0 docs specified — `app.dealerlink.in` resolves to a Cloudflare
-> edge IP and responses carry `__cf_bm`. It is **working fine** (HTTPS 200, app
-> CSP headers intact), so this is **not changed today**. But proxying interacts
-> with the D.3 wildcard-SSL choice (STAGE_D_HANDOFF §6 option A is "Cloudflare
-> proxied origin cert") and with the Edge host-resolution + Resend inbound
-> webhook path — validate both when the wildcard strategy is finalised in D.3.
+The cert is **DO-managed**: `CN=app.dealerlink.in`, SAN `app.dealerlink.in` only
+(single-domain, **not** wildcard), issuer **Google Trust Services WE1**, 90-day,
+auto-renewed.
+
+> ✅ **Resolved at the pre-D.2 DNS diagnostic (2026-05-28, DEV.78) — the D.1
+> "orange-cloud" flag is cleared.** The `app` record is **gray-cloud (DNS-only)**,
+> which is **correct**. `app.dealerlink.in` does resolve to Cloudflare edge IPs
+> and responses carry `__cf_bm`/`CF-RAY` — but that is because the
+> `…ondigitalocean.app` origin is **itself** Cloudflare-fronted by DO App Platform
+> (verified: the bare DO origin resolves to the same Cloudflare IPs independent of
+> our zone). Those edge signals therefore appear on gray-cloud too and do **not**
+> indicate our-zone proxying. **No change needed.** Full architecture + the D.3
+> wildcard-SSL plan are documented authoritatively in `STAGE_D_HANDOFF.md` §6 (not
+> duplicated here); the prior "Cloudflare proxied origin cert" option is now
+> **rejected** (it would double-proxy DO's own Cloudflare).
 
 - **Leave the existing `staging` and `*.staging` records untouched.**
 - The `*` (wildcard) record is still **not** added — wildcard SSL is the D.3
@@ -284,6 +291,9 @@ project gives per-project cost _visibility_, but not separate billing _alerts_.)
   automation (D.2). Deferred (low value; errors are still grouped by Sentry).
 - DO Spaces not provisioned — deferred until `uploadToSpaces()` is implemented
   (would break PDF rendering today; see Status note above + DEV.16).
-- No wildcard SSL — tenant subdomains deferred to D.3 (none needed until Stage E).
+- No wildcard SSL yet — tenant subdomains land in D.3 (none needed until Stage E).
+  The DNS architecture is now verified and the D.3 plan is decided (DEV.78): DO
+  supports native wildcard via TXT verification (try that first; acme.sh fallback).
+  See `STAGE_D_HANDOFF.md` §6.
 - F-1 (Next.js upgrade) + F-3 (login rate-limit) not yet applied (D.2).
 - Reserved-slug rejection not enforced on tenant creation (DEV.73 — D.2).
