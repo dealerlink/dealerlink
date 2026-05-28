@@ -1,4 +1,4 @@
-import { indianStateCodeSchema } from '@dealerlink/schemas';
+import { indianStateCodeSchema, isReservedSlug } from '@dealerlink/schemas';
 import { z } from 'zod';
 
 import { isValidGSTIN, isValidIFSC, isValidPAN, isValidPincode } from '@/lib/format';
@@ -7,6 +7,13 @@ import { isValidGSTIN, isValidIFSC, isValidPAN, isValidPincode } from '@/lib/for
  * Slug rule: 3..32 chars; starts/ends with alphanumeric; lowercase alpha-
  * numerics and hyphens between. Tighter than the DB CHECK constraint
  * (which allows up to 64) because product policy caps tenant slugs at 32.
+ *
+ * Reserved-name guard (DEV.73): rejects routing-reserved + infra
+ * subdomains (`app`, `admin`, `www`, `mail`, `staging`, …) so a
+ * tenant can never claim a slug that would be unreachable behind the
+ * routing layer's `RESERVED_SUBDOMAINS`. The canonical list lives in
+ * `@dealerlink/schemas/reserved-slugs` — a superset of the routing
+ * reservation, single source of truth.
  */
 export const slugSchema = z
   .string()
@@ -17,7 +24,10 @@ export const slugSchema = z
   .regex(
     /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/,
     'Use lowercase letters, digits, and hyphens — not starting or ending with a hyphen',
-  );
+  )
+  .refine((slug) => !isReservedSlug(slug), {
+    message: 'That subdomain is reserved — please choose another slug',
+  });
 
 /**
  * Tenant state (tax + registered address). The operator console's state

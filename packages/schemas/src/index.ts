@@ -1,4 +1,5 @@
 export * from './states';
+export * from './reserved-slugs';
 export * from './dealer';
 export * from './product';
 export * from './procurement';
