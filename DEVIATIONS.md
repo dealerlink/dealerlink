@@ -1390,3 +1390,39 @@ dataset; the regions were mismatched at dataset-provisioning time.
 **Resolution:** ✅ Code-side closed (loud failures + region-flexible). Final
 green (events flowing) gated on the operator recreating the dataset in the US
 region; the diagnostic curl above is the repeatable check.
+
+## DEV.76 — Stage D Day D.1 follow-up — Better Stack monitor frequency is 3 min (free tier), not 30s/60s; response-time spikes diagnosed
+
+**Date:** 2026-05-28
+
+Two related D.1 smoke findings, both documentation/operational (no app code):
+
+**(a) Monitor frequency.** Docs disagreed on the uptime-monitor interval —
+`PRODUCTION_ENV.md` said `30s`, `STAGE_D_HANDOFF.md` §8 said `60 s`, and the
+secrets-file comment said `30s`. The operator confirmed Better Stack's **free
+tier caps the check interval at 3 minutes**; neither documented value was
+achievable. Corrected both docs to **3 min (free-tier max)**. The paid tier
+($25–50/mo) unlocks 30 s — revisit post-pilot if a tighter detection window is
+needed. (The `/api/health` rate-limit reasoning is unaffected: 3-min polling is
+even further under the 60/min/IP cap than the comment's assumed 60 s.)
+
+**(b) Response-time spikes.** The monitor showed a ~150 ms baseline with
+periodic ~1.2 s spikes. Diagnosis:
+
+- **Cold-start ruled out** — both `web` and `workers` are `instance_count: 1`
+  in the production spec (no scale-to-zero), confirmed via
+  `doctl apps spec get`.
+- **Primary cause:** `/api/health` makes a cross-region external `fetch` to
+  `https://api.resend.com/domains` on every poll (the `resendCheck` liveness
+  probe), and the endpoint's `responseMs` includes it. An occasional ~1 s TLS
+  handshake from BLR1 → Resend (US/EU) accounts for the spikes — measurement
+  latency, not app latency; the endpoint still returns 200/`ok` (≤3 s bound).
+  The Resend ping is intentional (DEV.74) and is **not** removed.
+- **Operator action:** switch the Better Stack monitor location to
+  **Asia/Singapore** to shrink the baseline + spike envelope (the ~150 ms
+  baseline is the India↔Europe monitoring RTT). Residual occasional spikes are
+  acceptable network variance.
+
+**Resolution:** ✅ Closed — docs corrected; spikes explained (benign,
+measurement-side). Monitor-location change is a one-click operator action in the
+Better Stack UI.

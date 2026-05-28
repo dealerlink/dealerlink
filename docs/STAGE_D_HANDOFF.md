@@ -309,8 +309,11 @@ populates them. Production config:
   `beforeSend` PII scrubber is already wired and was verified clean in the C.4
   audit (email→hash, GSTIN/PAN/card/phone→redacted) — no change needed.
 - **Better Stack:** production source + the uptime monitor on
-  `https://app.dealerlink.in/api/health` (60 s, 3-strike, expects 200 — see
-  `docs/DEPLOYMENT.md`). Alert on error-rate spike + uptime drop.
+  `https://app.dealerlink.in/api/health` (**3 min — free-tier max**, 3-strike,
+  expects 200 — see `docs/DEPLOYMENT.md`). Alert on error-rate spike + uptime
+  drop. _Earlier docs said 30 s / 60 s; the free tier's minimum interval is
+  3 min — paid tier ($25–50/mo) unlocks 30 s, revisit post-pilot if needed
+  (DEV.76)._
 - **Axiom:** production dataset `dealerlink-production` (renamed from
   `dealerlink-prod-events` at D.1), 30-day retention,
   structured logs.

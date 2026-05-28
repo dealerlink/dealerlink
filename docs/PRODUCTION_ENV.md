@@ -168,13 +168,13 @@ empty-string placeholders, leaving `DATABASE_URL`/`DATABASE_DIRECT_URL`/
 All three SDKs degrade to no-ops without credentials (Day 17 contract); D.1
 populated them with **fresh** production values. None reused from staging.
 
-| Service          | Production resource                                              | Notes                                                                           |
-| ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **Sentry (web)** | project `dealerlink-web-production` (Next.js)                    | errors 100%, `tracesSampleRate` 0.1 (10% perf), `beforeSend` PII scrub, no PII  |
-| **Sentry (wk)**  | project `dealerlink-workers-production` (Node.js)                | per-job capture; same scrubber                                                  |
-| **Better Stack** | source `dealerlink-production` + uptime monitor on `/api/health` | 30s interval, expect 200, alert on 2 failures → operator email                  |
-| **Axiom**        | dataset `dealerlink-production`, 30-day retention                | structured business events                                                      |
-| **Resend**       | domain `dealerlink.in` **verified** (send-subdomain scheme)      | sending-only key; from `noreply@dealerlink.in`; DKIM/SPF live, DMARC quarantine |
+| Service          | Production resource                                              | Notes                                                                                |
+| ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Sentry (web)** | project `dealerlink-web-production` (Next.js)                    | errors 100%, `tracesSampleRate` 0.1 (10% perf), `beforeSend` PII scrub, no PII       |
+| **Sentry (wk)**  | project `dealerlink-workers-production` (Node.js)                | per-job capture; same scrubber                                                       |
+| **Better Stack** | source `dealerlink-production` + uptime monitor on `/api/health` | **3 min interval (free-tier max)**, expect 200, alert on 2 failures → operator email |
+| **Axiom**        | dataset `dealerlink-production`, 30-day retention                | structured business events                                                           |
+| **Resend**       | domain `dealerlink.in` **verified** (send-subdomain scheme)      | sending-only key; from `noreply@dealerlink.in`; DKIM/SPF live, DMARC quarantine      |
 
 **Resend domain** was already verified on Resend's current `send.`-subdomain
 scheme (DKIM `resend._domainkey`, `send.dealerlink.in` MX → AWS SES feedback +
@@ -189,6 +189,28 @@ that exact signal as healthy (DEV.74) — least-privilege preserved.
 (by Claude). Sentry/Better Stack/Axiom **event delivery** is confirmed via the
 operator's dashboards + the operator-gated `/api/internal/sentry-test` (operator
 sign-off pending — Claude cannot see those dashboards).
+
+### Better Stack response-time spikes (D.1 smoke finding)
+
+The uptime monitor shows a ~150 ms baseline with periodic spikes to ~1.2 s.
+Diagnosis (DEV.76):
+
+- **Cold-start: ruled out.** Both `web` and `workers` run `instance_count: 1`
+  (no scale-to-zero) in the production spec — there is no pod to cold-start.
+- **Most likely cause:** `/api/health` itself makes an external, cross-region
+  `fetch` to `https://api.resend.com/domains` on every poll (the `resendCheck`
+  liveness probe, 3 s budget) and its reported `responseMs` **includes** that
+  call. A fresh TLS handshake from BLR1 → Resend (US/EU) occasionally taking
+  ~1 s produces exactly these isolated spikes on an otherwise fast baseline.
+  So the spikes are measurement latency, not app latency — the endpoint still
+  returns 200/`ok`, bounded at 3 s. We do **not** remove the Resend ping (it is
+  the intended liveness signal per DEV.74).
+- **Contributing cause + operator action:** the Better Stack monitor checks
+  from a distant region (EU/US) vs. the BLR1 app — the ~150 ms baseline is the
+  India↔Europe RTT. Operator should switch the monitor location to
+  **Asia/Singapore** in the Better Stack UI to shrink both the baseline and the
+  spike envelope. Residual occasional spikes (a handful/day) are acceptable
+  network variance.
 
 ## Database bootstrap (how D.0 built it)
 
