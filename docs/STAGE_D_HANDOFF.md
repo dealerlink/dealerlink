@@ -47,8 +47,9 @@
 > SSL confirmed live. Sentry `tracesSampleRate` 0.1 (errors 100%).
 > **Two findings + a deferral:** (1) DEV.74 — the prod Resend key is least-privilege
 > _sending-only_, so `/health` was hardened to read a `restricted_api_key` 401 as
-> healthy. (2) `app.dealerlink.in` is currently **orange-cloud proxied** (not the
-> documented gray-cloud) — working, flagged for the D.3 wildcard-SSL decision.
+> healthy. (2) `app.dealerlink.in` was flagged as **orange-cloud proxied** — _now
+> superseded: the pre-D.2 diagnostic (DEV.78) confirms it is **gray-cloud (correct)**;
+> the Cloudflare edge signals come from DO's own Cloudflare-fronting. See §6._
 > **Deferred from D.1:** Resend **inbound** webhook + Svix secret → **D.3** (needs
 > MX on the inbound domain); **DO Spaces** → future (operator-skipped — wiring it
 > would break PDF rendering until `uploadToSpaces()` is implemented, DEV.16);
