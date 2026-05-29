@@ -14,13 +14,19 @@ shipped to staging after the C.0 stand-up:
   carry `must_change_password = false`, so the pilot credentials below still log
   straight in; only newly provisioned / reset users hit the rotation screen.
 - **C.2 — state-code normalization (migration `0015_normalize_state_codes`).**
-  Applied on staging — **16 migrations applied / 16 on disk**. Every state
-  column (`tenant_settings.state`/`address_state`, `dealers.state`, and the
-  `place_of_supply` / `tenant_state_at_issue` columns on quotations / PIs /
-  orders) now holds a 2-letter ISO 3166-2:IN code (`MH`, `KA`, …), CHECK-enforced.
-  UI dropdowns submit codes; screens, PDFs and reports render the full name. Tax
-  classification (intra- vs inter-state) is unchanged — codes just guarantee a
-  consistent format on both sides (DEV.70).
+  Every state column (`tenant_settings.state`/`address_state`, `dealers.state`,
+  and the `place_of_supply` / `tenant_state_at_issue` columns on quotations /
+  PIs / orders) now holds a 2-letter ISO 3166-2:IN code (`MH`, `KA`, …),
+  CHECK-enforced. UI dropdowns submit codes; screens, PDFs and reports render
+  the full name. Tax classification (intra- vs inter-state) is unchanged —
+  codes just guarantee a consistent format on both sides (DEV.70).
+- **D.2 — F-3 lockout columns (migration `0016_true_doctor_faustus`).**
+  `users.failed_login_attempts INTEGER NOT NULL DEFAULT 0` +
+  `users.lockout_until TIMESTAMP WITH TIME ZONE` added 2026-05-29. Pre-deploy
+  (the F-3 code that uses them is staged on `main` but not yet pushed).
+  **17 migrations applied / 17 on disk** as of this entry; `/api/health`
+  reports `migrations.applied: 17` and `rls.status: ok` on both
+  `staging.dealerlink.in` and `demo.staging.dealerlink.in`.
 - **Three-party PIs reachable.** The seeded three-party Performa Invoices
   (Bill-To ≠ Ship-To, e.g. `PI-2026-0003`) are present and viewable on the
   staging `/pi` list — search the list by PI number to open one and see the

@@ -16,16 +16,21 @@ that are fixed in Part 2 are annotated **FIXED — see commit `<SHA>`** in §10.
 | Severity          | Count | Notes                                                                                                                                                                                          |
 | ----------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Critical**      | 0     | No finding is critically exploitable in Dealerlink's architecture.                                                                                                                             |
-| **High**          | 1     | F-1: outdated Next.js bundles CVE-2025-29927 (upstream-Critical) + DoS/SSRF. Exposure reduced by layout-based auth (DEV.68).                                                                   |
-| **Medium**        | 2     | F-2 (no HTTP security headers), F-3 (no login rate-limit / lockout).                                                                                                                           |
+| **High**          | 0     | ~~F-1: outdated Next.js + CVE-2025-29927~~ — **closed D.2** (Next.js 14.2.35).                                                                                                                 |
+| **Medium**        | 0     | ~~F-2 (HTTP security headers)~~ — closed C.4; ~~F-3 (login rate-limit / lockout)~~ — **closed D.2**.                                                                                           |
 | **Low**           | 3     | F-4 (drizzle-orm advisory, not exploitable), F-5 (permissive log-write policies, intentional), F-9 (logo input not content-validated / SVG unsanitized; img-context + operator-only mitigate). |
-| **Informational** | 3     | F-6 (RLS-exempt tables by design), F-7 (prod observability/email secrets blank on staging), F-8 (committed test-credentials doc).                                                              |
+| **Informational** | 3     | F-6 (RLS-exempt tables by design), F-7 (prod observability/email secrets blank on staging — closed for production D.1), F-8 (committed test-credentials doc).                                  |
 
-**Pilot verdict:** No finding blocks the guided pilot. Multi-tenant isolation
-(RLS), authentication, role enforcement, audit logging, and secrets hygiene are
-all sound. The three actionable items before _production_ (Stage D) are, in
-order: **F-1** (upgrade Next.js), **F-3** (login rate-limit + lockout),
-**F-2** (HTTP security headers).
+**Pre-production verdict (after D.2):** Every Critical / High / Medium finding
+is now landed (F-1 + F-3 closed in D.2; F-2 closed in C.4). Remaining items
+(F-4 / F-5 / F-9 / informational) are post-pilot improvements. Multi-tenant
+isolation (RLS), authentication, role enforcement, audit logging, and
+secrets hygiene are sound. **No pilot blockers.**
+
+_Original Pilot verdict (Stage C):_ no finding blocked the guided pilot;
+the three actionable items before production (Stage D) were **F-1** (upgrade
+Next.js), **F-3** (login rate-limit + lockout), **F-2** (HTTP security
+headers) — all now closed.
 
 Detail and the prioritised fix order are in **§10**.
 
@@ -624,17 +629,17 @@ for Stage D verification.)
 
 Sorted by severity. **Pilot-blocking: none.**
 
-| ID  | Sev    | Title                                                                                                       | Location                                        | Recommendation                                                                                                                           | Gate                   |
-| --- | ------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| F-1 | High   | Next.js 14.2.18 bundles CVE-2025-29927 (auth-bypass, upstream-Critical) + Server-Component DoS / SSRF highs | `apps/web` (`next` dep)                         | Upgrade Next to **≥14.2.35** in a dedicated PR + full `pnpm verify`. Mitigated today by layout-based auth (DEV.68).                      | **DEFERRED → Stage D** |
-| F-2 | Medium | No HTTP security headers (CSP, X-Frame-Options, nosniff, HSTS, …)                                           | `apps/web/next.config.mjs`                      | Add a `headers()` block (CSP report-only first) and/or enforce at Cloudflare.                                                            | **✅ FIXED `8c205ad`** |
-| F-3 | Medium | No login rate-limiting or account lockout                                                                   | `apps/web/lib/auth/actions.ts`                  | Wire existing `checkRateLimit` into `login()` (ip+email); add soft lockout.                                                              | **DEFERRED → Stage D** |
-| F-4 | Low    | drizzle-orm 0.38.4 — SQLi-via-identifiers advisory (not reachable)                                          | `drizzle-orm` dep                               | Upgrade to ≥0.45.2 as hygiene; verify migrations/queries.                                                                                | Stage D                |
-| F-5 | Low    | Permissive INSERT/UPDATE on log tables (`audit_log`, `auth_events`, `access_log`, `email_delivery_log`)     | `rls/*.sql`                                     | Intentional (DEV.07) for trigger/login/worker writes; reads stay tenant-isolated. Tighten `email_delivery_log` UPDATE scope if feasible. | Accept / Stage D       |
-| F-6 | Info   | 4 RLS-exempt tables (`tenants`, `sessions`, `webhook_events`, `rate_limit`)                                 | schema / `rls/*.sql`                            | By design + verified (§1.2). No action.                                                                                                  | Accept                 |
-| F-7 | Info   | Production observability + outbound-email secrets blank on staging                                          | `.do/app.yaml`                                  | Populate Sentry/Better Stack/Axiom/Resend with real values in Stage D.                                                                   | **✅ prod wired D.1**  |
-| F-8 | Info   | Committed test-credentials doc (`password123`)                                                              | `docs/pilot/credentials-cheatsheet.md`          | Acceptable (throwaway seed creds). Never commit the real pilot tenant's creds (Stage E).                                                 | Accept                 |
-| F-9 | Low    | Logo input not content-validated; SVG unsanitized                                                           | `lib/admin/schemas.ts` (`updateBrandingSchema`) | Mitigated (img-context render + operator-only). Add content-type/scheme check + DOMPurify before Stage D / DO Spaces.                    | Stage D                |
+| ID  | Sev    | Title                                                                                                       | Location                                        | Recommendation                                                                                                                           | Gate                       |
+| --- | ------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| F-1 | High   | Next.js 14.2.18 bundles CVE-2025-29927 (auth-bypass, upstream-Critical) + Server-Component DoS / SSRF highs | `apps/web` (`next` dep)                         | Upgrade Next to **≥14.2.35** in a dedicated PR + full `pnpm verify`. Mitigated today by layout-based auth (DEV.68).                      | **✅ FIXED D.2 `0c20952`** |
+| F-2 | Medium | No HTTP security headers (CSP, X-Frame-Options, nosniff, HSTS, …)                                           | `apps/web/next.config.mjs`                      | Add a `headers()` block (CSP report-only first) and/or enforce at Cloudflare.                                                            | **✅ FIXED `8c205ad`**     |
+| F-3 | Medium | No login rate-limiting or account lockout                                                                   | `apps/web/lib/auth/actions.ts`                  | Wire existing `checkRateLimit` into `login()` (ip+email); add soft lockout.                                                              | **✅ FIXED D.2 `0d6638d`** |
+| F-4 | Low    | drizzle-orm 0.38.4 — SQLi-via-identifiers advisory (not reachable)                                          | `drizzle-orm` dep                               | Upgrade to ≥0.45.2 as hygiene; verify migrations/queries.                                                                                | Stage D                    |
+| F-5 | Low    | Permissive INSERT/UPDATE on log tables (`audit_log`, `auth_events`, `access_log`, `email_delivery_log`)     | `rls/*.sql`                                     | Intentional (DEV.07) for trigger/login/worker writes; reads stay tenant-isolated. Tighten `email_delivery_log` UPDATE scope if feasible. | Accept / Stage D           |
+| F-6 | Info   | 4 RLS-exempt tables (`tenants`, `sessions`, `webhook_events`, `rate_limit`)                                 | schema / `rls/*.sql`                            | By design + verified (§1.2). No action.                                                                                                  | Accept                     |
+| F-7 | Info   | Production observability + outbound-email secrets blank on staging                                          | `.do/app.yaml`                                  | Populate Sentry/Better Stack/Axiom/Resend with real values in Stage D.                                                                   | **✅ prod wired D.1**      |
+| F-8 | Info   | Committed test-credentials doc (`password123`)                                                              | `docs/pilot/credentials-cheatsheet.md`          | Acceptable (throwaway seed creds). Never commit the real pilot tenant's creds (Stage E).                                                 | Accept                     |
+| F-9 | Low    | Logo input not content-validated; SVG unsanitized                                                           | `lib/admin/schemas.ts` (`updateBrandingSchema`) | Mitigated (img-context render + operator-only). Add content-type/scheme check + DOMPurify before Stage D / DO Spaces.                    | Stage D                    |
 
 ### Prioritised fix order
 
@@ -681,6 +686,42 @@ The operator reviewed this audit at the Part 1 gate and decided:
 F-4/F-5/F-9 and the informational items (F-6/F-7/F-8) remain as recorded —
 Stage D / accept. No critical-exploitable finding existed, so no fix preceded
 the planned UX work (C4e).
+
+### D.2 disposition (Stage D Day D.2, 2026-05-29)
+
+- **F-1 — ✅ CLOSED** (commit `0c20952`). Next.js `14.2.18 → 14.2.35` — exact
+  pin, clears CVE-2025-29927 (upstream-Critical) + 4× Server-Component DoS
+  highs + the SSRF/i18n highs. Verified by a full regression pass: 465 → 503
+  unit tests pass on the bumped framework, `pnpm verify` 59/59 specs green,
+  build clean, lint clean. The architectural mitigation (auth runs in
+  layouts + `tenantAction`/`operatorAction` + RLS, not middleware — DEV.68)
+  meant the CVE was never reachable here, but the bump is the correct
+  pre-production hygiene.
+- **F-3 — ✅ CLOSED** (commit `0d6638d`). Two-tier rate-limit + lockout
+  wired into `login()`:
+  1. **Short-window throttle** — 5 attempts / 15-min window, keyed by
+     email in the existing `rate_limit` table. New `peekRateLimit` reads
+     the current window without incrementing so a clean login doesn't
+     penalise the counter; `checkRateLimit` increments only on failure;
+     `resetRateLimit` clears on success.
+  2. **Cumulative lockout** — `users.failed_login_attempts` + `users.
+     lockout_until` (migration `0016`). After 10 cumulative failures the
+     account is hard-locked for 30 minutes; counter resets when the
+     lock fires.
+     Generic `"Invalid email or password."` returned on **every** failure
+     path — unknown email / bad password / rate-limited / locked-out — so the
+     non-enumerable boundary the audit verified is preserved. Decision logic
+     is pure + unit-tested (17 specs cover sub-threshold progression,
+     lockout-at-10 with 30-min window, expiry, clear). Conditional UPDATE on
+     success keeps the `users` audit trigger quiet for routine logins.
+     Production smoke verified the chain runs end-to-end (`nonexistent@
+dealerlink.test` × 7 → identical generic error each time, response-time
+     pattern shows the rate-limit short-circuit firing at attempt 6).
+- **F-2 (already FIXED in C.4)**, **F-7 (closed for prod in D.1)**, plus
+  **F-1 + F-3 (closed here)** mean every pre-production must-fix from the
+  audit is now landed. Remaining items (F-4 drizzle hygiene; F-9 logo
+  content-type/SVG sanitisation; F-5 log-write policy tightening) are
+  post-pilot improvements — not pilot blockers.
 
 ### D.1 disposition (Stage D Day D.1, 2026-05-27)
 
