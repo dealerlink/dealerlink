@@ -247,9 +247,15 @@ real secret.**
   the live spec is what deploys. Today the apply is a manual
   `doctl apps update --spec` (merged into the live spec to preserve secrets) — it
   is brittle and easy to forget.
-  - **Decision needed before the first production deploy.** Option A: DO's GitHub
-    Action for spec sync. Option B: a custom post-push CI step. Either makes repo
-    and live spec un-divergeable. Pick one in D.0.
+  - **✅ Closed in D.2.** Option C selected (operator-driven script + runbook),
+    not Option A (GitHub Action) — see DEV.79 / D.2 commit. Run
+    `pnpm sync-spec:staging` or `pnpm sync-spec:production`; the script pulls
+    the live spec, overlays non-secret committed fields, preserves every
+    encrypted `EV[...]`, shows a redacted diff, and prompts before applying.
+    Documented in `docs/RUNBOOKS.md` R18 and referenced from
+    `docs/DEPLOYMENT.md`. The merge step's secret-preservation invariant is
+    exactly the single-bug-catastrophic surface that should keep a human in
+    the loop — automating away the eyes-on diff regresses the design.
 
 ---
 

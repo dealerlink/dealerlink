@@ -669,3 +669,170 @@ still answers `200`, so the 5xx rule fires on genuine outages only. See
 
 These are analytics-derived alerts — they complement, never replace, the
 `audit_log` forensic trail.
+
+---
+
+## R17 — Production DB migration from operator workstation (whitelist-migrate-remove)
+
+**When to use:** a schema migration (`packages/db/migrations/*.sql`) must land on the production DB. Deploy_on_push rebuilds the app from `main` but does NOT run migrations — DEV.64 / the DEPLOYMENT.md \"Required env vars\" note. The migration runner connects from the operator's workstation, but the production DB firewall is locked down (D.0) to `type: app` for the production app's UUID only. So the operator must (a) whitelist their public IP, (b) run the migration, (c) **remove the rule**. Leaving the IP whitelisted shrinks the lockdown's security value and is the runbook's single non-negotiable.
+
+**Time:** ~5 minutes including verification + cleanup.
+
+**Pre-flight:**
+
+- Git tree clean; the migration SQL is in `packages/db/migrations/`.
+- `pnpm preflight` green; the migration file is generated + reviewed (`drizzle-kit generate` for schema-derived; hand-written for RLS/data fixes).
+- Staging has been migrated FIRST and verified (any column-error or
+  RLS drift surfaces there).
+- Production cluster ID known: `doctl databases list` → look for
+  `dealerlink-production-db`. As of D.2: `6e0f1d36-d651-44d0-a062-ddf82e844812`.
+
+**Steps (PowerShell on operator workstation):**
+
+```powershell
+# 1. Resolve current public IP — DON'T hardcode; ISPs rotate.
+$myIp = (Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing).Content.Trim()
+Write-Output "My IP: $myIp"
+
+# 2. Snapshot the firewall BEFORE the append (you want this to compare on cleanup).
+$clusterId = "6e0f1d36-d651-44d0-a062-ddf82e844812"   # dealerlink-production-db
+doctl databases firewalls list $clusterId
+
+# 3. Append the IP rule.
+doctl databases firewalls append $clusterId --rule "ip_addr:$myIp"
+
+# 4. Re-list and grab the NEW rule's UUID (the `ip_addr` row that wasn't there before).
+doctl databases firewalls list $clusterId
+$ruleUuid = "<paste-the-ip_addr-rule-uuid-from-step-4>"
+
+# 5. Set $env:DATABASE_DIRECT_URL to the production doadmin connection string
+#    (from C:\Users\rohit\.dealerlink\production-secrets.txt) and run the migration.
+$prodUrl = (Get-Content "C:\Users\rohit\.dealerlink\production-secrets.txt" `
+  | Select-String "^DATABASE_DIRECT_URL=").Line -replace "^DATABASE_DIRECT_URL=", ""
+$env:DATABASE_DIRECT_URL = $prodUrl
+pnpm --filter "@dealerlink/db" db:migrate   # expect "Migrations + RLS + triggers applied."
+
+# 6. Verify (use packages/db/scripts/verify-0016.mjs as a template; adapt for the
+#    column / RLS / migration-version checks the migration actually needs).
+#    Confirm via the deployed app too:
+Invoke-RestMethod https://app.dealerlink.in/api/health
+# expect status:ok, migrations.applied = N (your new count)
+
+# 7. REMOVE the IP rule. Use the --uuid flag, NOT positional args — DEV.??:
+#    `doctl databases firewalls remove <cluster> <uuid>` errors with
+#    "command contains unsupported arguments"; the working form is --uuid.
+doctl databases firewalls remove $clusterId --uuid $ruleUuid
+
+# 8. Verify cleanup — the ONLY rule remaining must be type=app, value=<prod-app-uuid>.
+#    If `ip_addr` still appears, retry step 7.
+doctl databases firewalls list $clusterId
+
+# 9. Clear the env var so future shell commands don't accidentally target prod.
+Remove-Item Env:\DATABASE_DIRECT_URL
+```
+
+**Expected migration output noise (HARMLESS):**
+
+DO Managed Postgres replies with a long block of `WARNING: no privileges were
+granted for "uuid_nil"` etc. when the `rls/*` scripts attempt broad GRANTs on
+extension-owned functions (uuid-ossp, btree_gin, pg_trgm). `doadmin` cannot
+GRANT on those — the warning is the documented refusal. **Migration still
+succeeds**; the `✓ Migrations + RLS + triggers applied.` line at the end is
+the authoritative success signal.
+
+**Failure / abort conditions:**
+
+- **Migration fails** → STOP. Do not remove the firewall rule yet — you may
+  need it for a retry. Re-read the SQL and the migrate output; fix forward
+  (don't `DROP COLUMN` on a half-applied migration).
+- **`/api/health` reports `migrations: degraded` (count mismatch)** → the
+  migration ran but the deployed app's `EXPECTED_MIGRATIONS` constant
+  (`apps/web/app/api/health/route.ts`) is stale. Code patch needed; not a
+  rollback signal.
+- **You forgot step 7 and walked away** → the production DB is open to a
+  rotated public IP. Run `doctl databases firewalls list $clusterId` from
+  any machine to see the leftover rule and remove it.
+
+**Why this is operator-only (not automated):** every step is hard to reverse
+on its own (migrations) or has audit / security implications (firewall
+mutations). Automating either invites the kind of silent-blanking failure
+mode DEV.64 documents for spec sync. R17 keeps the human in the loop.
+
+---
+
+## R18 — Deploying an App Platform spec change (DEV.64 sync)
+
+**When to use:** you edited `.do/app.yaml` (staging) or
+`.do/app.production.yaml` (production) and need the change to actually take
+effect. Pushing to `main` rebuilds the app's source code but does NOT
+re-read the committed YAML — DO stores its own copy of the spec (DEV.64).
+Without this runbook the repo file silently drifts from what's deployed.
+
+**Time:** ~2 minutes for a no-op verify; ~3-5 min including a real deploy
+cycle.
+
+**Pre-flight:**
+
+- Git tree clean (the spec change is committed).
+- `doctl auth list` shows an authenticated context.
+- You know which environment: `staging` or `production`.
+
+**Steps:**
+
+```powershell
+# Verify-only (recommended first run after any spec edit):
+pnpm sync-spec:staging      # answer 'n' at the prompt
+pnpm sync-spec:production   # answer 'n' at the prompt
+```
+
+What the script does (`scripts/sync-app-spec.mjs`):
+
+1. `doctl apps spec get $APP_ID` — pulls the live YAML.
+2. Parses live + committed YAMLs into JS objects.
+3. **Merges:** starts from the LIVE spec (preserves DO-derived fields
+   like `ingress:`), overlays committed services/workers/databases/
+   domains, and pulls each SECRET env value out of live so encrypted
+   `EV[...]` blobs survive.
+4. **Aborts** if any SECRET is declared in committed but absent from
+   live (would otherwise ship a blank into production).
+5. **Shows the diff** between live and merged with `EV[...]` redacted,
+   so you see exactly what will change.
+6. Prompts `apply? [y/N]`. Answer `n` to abort with no side effects.
+7. On `y`: `doctl apps update $APP_ID --spec <merged-tempfile>` and polls
+   the deployment phase until ACTIVE (30s interval, 15 min cap).
+
+**Reading the diff:**
+
+- Lines about `build_command` wrapping at 80 chars are cosmetic — yaml
+  library and doctl wrap at slightly different columns. Ignore unless
+  the line content itself changed.
+- Lines with `value:` changes on non-SECRET env vars are real — that's
+  the kind of drift the script exists to surface. **The operator
+  decides** which side of the drift is correct: usually update the
+  committed yaml to match live (if live was changed via the dashboard
+  or a prior manual `doctl update`), or run this script to push the
+  committed value to live.
+- Lines under `ingress:` should never appear — DO derives ingress from
+  the services list; the merge preserves it from live.
+
+**Failure / abort conditions:**
+
+- **Missing SECRET in live, declared in committed** → the script
+  exits 2 with the missing-key list and instructions for the three
+  remediation paths (DO dashboard, `staging-app-render-spec.mjs`, or
+  remove the declaration from committed).
+- **`doctl apps update` fails** → the deployment did NOT start. Re-read
+  the error (typically a YAML structural issue or a permissions
+  problem). The live spec is unchanged.
+- **Deploy reaches ERROR/FAILED/CANCELED** during the poll → DO's build
+  or deploy pipeline failed; check `doctl apps logs $APP_ID --type build`
+  or the DO dashboard for the cause. The previous deployment stays
+  ACTIVE (DO rolling-deploy behavior).
+
+**Why this is operator-driven and NOT a GitHub Action (Option A rejected
+in D.2):** the merge step preserving 16 encrypted secret values across
+every spec push is exactly the kind of single-bug-catastrophic primitive
+that should keep a human gate. The eyes-on diff before apply is the whole
+value proposition; automating it away regresses the design.
+
+---

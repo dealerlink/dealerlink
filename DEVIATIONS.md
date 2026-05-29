@@ -1578,3 +1578,46 @@ still hits before the prod / dev branches. typecheck + lint clean.
 **Status:** ✅ Closed by this commit (DEV.79). Better Stack uptime monitor
 remains live; log shipping intentionally on hold pending the operator's
 choice between the two post-pilot options above.
+
+## DEV.64 — closure note — operator-driven spec sync (Stage D Day D.2)
+
+**Date closed:** 2026-05-29
+
+Original DEV.64 (Stage C) documented that editing `.do/app.yaml` in the repo
+and pushing does NOT change the running app — DO stores its own copy of the
+spec, and `deploy_on_push` rebuilds source against the **stored** spec.
+Stage D was to pick a sustainable workflow.
+
+**Choice for D.2: Option C — `scripts/sync-app-spec.mjs` + R18 runbook**
+(committed in the DEV.79 push). Rejected Option A (GitHub Action) because
+the merge that preserves 16 encrypted secret values across every spec push
+is the kind of single-bug-catastrophic primitive that benefits from a human
+gate — automating away the eyes-on diff regresses the design, and a buggy
+merge step in CI would silently blank production secrets.
+
+The script:
+
+1. `doctl apps spec get $APP_ID` — pulls live YAML.
+2. Parses live + committed via the `yaml` library (added as root devDep).
+3. Builds merged: live as base (preserves DO-derived `ingress:` /
+   `features:` / `alerts:`), overlays committed services/workers/databases/
+   domains, pulls each SECRET env value from live so encrypted `EV[...]`
+   blobs survive.
+4. **Aborts** if any SECRET in committed has no live value (refuses to
+   ship a blank).
+5. Shows the live → merged diff with `EV[...]` redacted.
+6. Prompts `apply? [y/N]`. Runs `doctl apps update --spec` on yes, polls
+   until ACTIVE.
+
+**Drift the script caught on first run (informational, not blocked):** the
+production live spec carries `RESEND_FROM_EMAIL: noreply@dealerlink.in`
+(set during D.1's verified-domain wire-up), but the committed
+`.do/app.production.yaml` still has the placeholder `onboarding@resend.dev`.
+The committed yaml should be updated to match live (live is the source of
+truth post-D.1). Filed as a follow-up; doesn't block D.2 closeout.
+
+npm scripts wired: `pnpm sync-spec:staging` / `pnpm sync-spec:production`.
+
+**Status:** ✅ Closed (DEV.64 + DEV.79 share the same closing commit).
+Documented in `docs/RUNBOOKS.md` R18, referenced from `docs/DEPLOYMENT.md`
+and `docs/STAGE_D_HANDOFF.md` §4.3.

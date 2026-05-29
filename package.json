@@ -13,6 +13,8 @@
     "lint:strict": "pnpm -r lint",
     "lint:fix": "pnpm -r exec eslint --fix --no-error-on-unmatched-pattern .",
     "preflight": "node scripts/preflight.mjs",
+    "sync-spec:staging": "node scripts/sync-app-spec.mjs staging",
+    "sync-spec:production": "node scripts/sync-app-spec.mjs production",
     "verify": "pnpm --filter web exec playwright test --project=chromium",
     "verify:latest": "pnpm --filter web exec playwright test --project=chromium --grep verify-day-8",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
@@ -36,7 +38,8 @@
     "lint-staged": "^15.3.0",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.9",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "yaml": "^2.8.0"
   },
   "pnpm": {
     "overrides": {

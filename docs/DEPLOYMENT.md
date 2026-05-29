@@ -83,8 +83,13 @@ Notes:
   secrets on an existing app.
 - Keep `.do/app.yaml` updated too — it's the human-readable source of truth and
   the diff reviewers read. Repo file and live spec drift silently otherwise.
-- Stage D: automate the apply (post-push CI step or DO's spec-sync GitHub
-  Action) so repo and live spec cannot diverge.
+- **D.2 onwards: use `pnpm sync-spec:staging` / `pnpm sync-spec:production`** —
+  `scripts/sync-app-spec.mjs` automates the safe variant of the above (pull
+  live, overlay non-secret fields from the committed yaml, preserve every
+  encrypted `EV[...]`, show a redacted diff, prompt before apply). Documented
+  step-by-step in `docs/RUNBOOKS.md` R18. The fully manual `doctl apps spec
+get` → edit → `doctl apps update` flow above remains a valid fallback when
+  the script is unavailable or the change is too unusual to script.
 
 ## Required env vars
 
