@@ -1517,3 +1517,64 @@ Plan" is decision-ready (execute, don't re-explore).
 **Status:** ✅ Closed (diagnostic). No infrastructure changed. Documented in
 `STAGE_D_HANDOFF.md` §6 (authoritative), cross-referenced from
 `PRODUCTION_ENV.md`, `STAGING_ENV.md`, and `docs/DEPLOYMENT.md`.
+
+## DEV.79 — Stage D Day D.2 — `@logtail/pino` worker-thread transport breaks under Next webpack bundling
+
+**Date:** 2026-05-29
+
+A pre-D.2-push diagnostic against the production app (still on D.1-era code,
+commit `1cc7858`) caught a recurring `Error: Cannot find module 'worker.js'`
+event in Sentry. The stack pinned the failure to pino's `thread-stream`
+attempting to load the `@logtail/pino` transport in a worker thread; under
+Next.js webpack bundling the worker's entrypoint chunk is not produced
+reliably and `require('worker.js')` resolves to nothing.
+
+**Surface.** Every server-side log call in production (logger.info /
+logger.warn / logger.error) triggered a transport-side worker spawn. The
+visible failure landed on the **first HTTP request that logged after warmup**,
+which by request frequency was usually `POST /login` (`user.logged_in`
+event). Despite the error message, the **login itself was unaffected** —
+the login server action completed normally; only the side-channel log line
+failed inside the transport worker. Sentry caught the worker error and
+attributed it to the triggering request, which made it look like an auth
+incident.
+
+**Why D.1 introduced it.** Day 17 wired `@logtail/pino` as a conditional
+transport when `BETTERSTACK_SOURCE_TOKEN` was set; the token was deliberately
+**blank on staging** (Day 17 + STAGING_ENV "Known limitations"), so the worker
+transport never instantiated there. Production populated the token in D.1
+(`F-7 closed for production`), which flipped the conditional on and exposed
+the bundling fragility for the first time. Effectively a configuration-
+gated bundling bug — no test, no staging signal could have caught it before
+the token was real.
+
+**Built (this commit, F-1+F-3+DEV.73 push).** Removed the conditional
+`@logtail/pino` transport from both
+`apps/web/lib/observability/logger.ts` and
+`apps/workers/src/observability/logger.ts`. Production now emits NDJSON to
+stdout, which DO App Platform already collects into DO Logs (zero impact on
+the existing tail surface). The `BETTERSTACK_SOURCE_TOKEN` env var stays
+populated in production — it's still read on the Better Stack side by the
+uptime monitor (separate plumbing, not affected by this change).
+
+**Better Stack log shipping consequence.** The token-driven log forwarder is
+**out of service**; the uptime monitor on `/api/health` continues to work
+unchanged. Choices for when log shipping is revisited (post-pilot):
+
+1. Configure a **DO log drain** at the App Platform layer pointing at the
+   Better Stack ingestion endpoint — no in-app changes, survives
+   bundling. Simplest path forward.
+2. Replace the pino transport with **`@logtail/node`** in-process (HTTP
+   client, no worker thread) called from a pino async hook — survives
+   bundling, but more in-app code.
+
+Both choices are deferred. No customer-visible logging behaviour changes
+in the meantime.
+
+**Tests.** No assertions broke. `logger.test.ts` always passed a custom
+`DestinationStream` (memory stream), which the `if (destination)` guard
+still hits before the prod / dev branches. typecheck + lint clean.
+
+**Status:** ✅ Closed by this commit (DEV.79). Better Stack uptime monitor
+remains live; log shipping intentionally on hold pending the operator's
+choice between the two post-pilot options above.

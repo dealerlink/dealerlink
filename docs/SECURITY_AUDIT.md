@@ -359,17 +359,17 @@ mutating tenant action lacks a role guard.
 
 ### 4.1 Expected secrets (from `.env.example` + `.do/app.yaml`)
 
-| Secret                          | Purpose                                  | Staging status                                    | Prod-ready?  |
-| ------------------------------- | ---------------------------------------- | ------------------------------------------------- | ------------ |
-| `DATABASE_URL`                  | app role (RLS-enforced) runtime conn     | `type: SECRET`, real value injected               | ✅           |
-| `DATABASE_DIRECT_URL`           | superuser — Lucia + pg-boss + migrations | `type: SECRET`, real value injected               | ✅           |
-| `SESSION_SECRET`                | session signing                          | `type: SECRET`, real value injected               | ✅           |
-| `RESEND_INBOUND_WEBHOOK_SECRET` | Svix verification of inbound webhooks    | `type: SECRET` (web)                              | ✅           |
-| `RESEND_API_KEY`                | outbound email                           | **blank** — outbound is a no-op (DEV/STAGING_ENV) | ❌ F-7       |
-| `SENTRY_DSN` / `NEXT_PUBLIC_*`  | error reporting                          | **blank** — SDK no-ops (Day 17)                   | ❌ F-7       |
-| `BETTERSTACK_SOURCE_TOKEN`      | log shipping                             | **blank** — pino → stdout                         | ❌ F-7       |
-| `AXIOM_TOKEN`                   | event analytics                          | **blank** — `trackEvent` → pino                   | ❌ F-7       |
-| `DO_SPACES_*`                   | file storage                             | deferred to Stage D (DEV.16, base64 logos)        | ❌ (planned) |
+| Secret                          | Purpose                                                          | Staging status                                    | Prod-ready?     |
+| ------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------- | --------------- |
+| `DATABASE_URL`                  | app role (RLS-enforced) runtime conn                             | `type: SECRET`, real value injected               | ✅              |
+| `DATABASE_DIRECT_URL`           | superuser — Lucia + pg-boss + migrations                         | `type: SECRET`, real value injected               | ✅              |
+| `SESSION_SECRET`                | session signing                                                  | `type: SECRET`, real value injected               | ✅              |
+| `RESEND_INBOUND_WEBHOOK_SECRET` | Svix verification of inbound webhooks                            | `type: SECRET` (web)                              | ✅              |
+| `RESEND_API_KEY`                | outbound email                                                   | **blank** — outbound is a no-op (DEV/STAGING_ENV) | ❌ F-7          |
+| `SENTRY_DSN` / `NEXT_PUBLIC_*`  | error reporting                                                  | **blank** — SDK no-ops (Day 17)                   | ❌ F-7          |
+| `BETTERSTACK_SOURCE_TOKEN`      | log shipping (token still read by uptime monitor at the BS side) | **blank** — pino → stdout                         | ❌ F-7 / DEV.79 |
+| `AXIOM_TOKEN`                   | event analytics                                                  | **blank** — `trackEvent` → pino                   | ❌ F-7          |
+| `DO_SPACES_*`                   | file storage                                                     | deferred to Stage D (DEV.16, base64 logos)        | ❌ (planned)    |
 
 ### 4.2 Secrets hygiene — verified
 

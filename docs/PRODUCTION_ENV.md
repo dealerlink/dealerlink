@@ -6,25 +6,38 @@
 > pilot-facing environment — a **dedicated** DO project, separate from staging.
 > Staging stays the validated reference / pilot preview and is unchanged.
 
-## Status (updated D.1, 2026-05-27)
+## Status (updated D.2, 2026-05-29)
 
 Production is **functionally up and observable**: app deployed, `/api/health`
 green (incl. `resend: ok`), RLS enforced, operator account seeded, SSL live,
 and all third-party observability + outbound email wired with **fresh**
 production credentials. It has **no real tenants** — those come in Stage E.
 
-| Area                                            | State                             | Lands in |
-| ----------------------------------------------- | --------------------------------- | -------- |
-| App + DB + RLS + operator login                 | ✅ live                           | D.0      |
-| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ✅ live (HTTPS 200)               | D.0/D.1  |
-| Resend outbound (verified domain + sending key) | ✅ live (`resend: ok`)            | D.1      |
-| Resend inbound webhook + MX                     | ⏳ deferred (needs MX setup)      | D.3      |
-| Sentry / Better Stack / Axiom                   | ✅ wired (fresh prod creds)       | D.1      |
-| DO Spaces (`dealerlink-prod`)                   | ⏭️ skipped (see below)            | (future) |
-| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ deferred                       | D.2      |
-| Wildcard `*.dealerlink.in` SSL                  | ⏳ pending (plan decided, DEV.78) | D.3      |
-| Backup/restore rehearsal + prod smoke           | ⏳ deferred                       | D.3      |
-| Real pilot tenant                               | ⛔ not seeded                     | Stage E  |
+**D.2 progress (2026-05-29).** Migration **`0016_true_doctor_faustus`**
+(F-3 `users.failed_login_attempts` + `users.lockout_until` columns) applied
+to production via the R17 whitelist-migrate-remove sequence:
+`/api/health` reports `migrations.applied: 17`, `rls.status: ok`,
+`db.latencyMs: 3`. **17 migrations applied / 17 on disk.** Firewall
+rule for the operator IP added + removed within the same window; only the
+`type: app` rule for the production app's own UUID remains. The F-3 + F-1
+
+- DEV.73 application code is committed locally on `main` (3 commits ahead
+  of `origin/main`) and not yet pushed — the deploy is a separate operator-
+  authorized step.
+
+| Area                                            | State                                     | Lands in |
+| ----------------------------------------------- | ----------------------------------------- | -------- |
+| App + DB + RLS + operator login                 | ✅ live                                   | D.0      |
+| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ✅ live (HTTPS 200)                       | D.0/D.1  |
+| Resend outbound (verified domain + sending key) | ✅ live (`resend: ok`)                    | D.1      |
+| Resend inbound webhook + MX                     | ⏳ deferred (needs MX setup)              | D.3      |
+| Sentry / Axiom                                  | ✅ wired (fresh prod creds)               | D.1      |
+| Better Stack uptime monitor / log shipping      | ✅ uptime live / ⏳ shipping off (DEV.79) | D.1/D.2  |
+| DO Spaces (`dealerlink-prod`)                   | ⏭️ skipped (see below)                    | (future) |
+| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ DB ready, code unpushed                | D.2      |
+| Wildcard `*.dealerlink.in` SSL                  | ⏳ pending (plan decided, DEV.78)         | D.3      |
+| Backup/restore rehearsal + prod smoke           | ⏳ deferred                               | D.3      |
+| Real pilot tenant                               | ⛔ not seeded                             | Stage E  |
 
 > **DO Spaces skipped at D.1 (operator decision).** Not provisioned.
 > `apps/workers/src/pdf/store.ts` flips to the Spaces path the instant
@@ -175,13 +188,13 @@ empty-string placeholders, leaving `DATABASE_URL`/`DATABASE_DIRECT_URL`/
 All three SDKs degrade to no-ops without credentials (Day 17 contract); D.1
 populated them with **fresh** production values. None reused from staging.
 
-| Service          | Production resource                                              | Notes                                                                                |
-| ---------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **Sentry (web)** | project `dealerlink-web-production` (Next.js)                    | errors 100%, `tracesSampleRate` 0.1 (10% perf), `beforeSend` PII scrub, no PII       |
-| **Sentry (wk)**  | project `dealerlink-workers-production` (Node.js)                | per-job capture; same scrubber                                                       |
-| **Better Stack** | source `dealerlink-production` + uptime monitor on `/api/health` | **3 min interval (free-tier max)**, expect 200, alert on 2 failures → operator email |
-| **Axiom**        | dataset `dealerlink-production` (**US** org), 30-day retention   | structured business events; region fixed in D.1 follow-up (DEV.75)                   |
-| **Resend**       | domain `dealerlink.in` **verified** (send-subdomain scheme)      | sending-only key; from `noreply@dealerlink.in`; DKIM/SPF live, DMARC quarantine      |
+| Service          | Production resource                                                                                    | Notes                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| **Sentry (web)** | project `dealerlink-web-production` (Next.js)                                                          | errors 100%, `tracesSampleRate` 0.1 (10% perf), `beforeSend` PII scrub, no PII       |
+| **Sentry (wk)**  | project `dealerlink-workers-production` (Node.js)                                                      | per-job capture; same scrubber                                                       |
+| **Better Stack** | uptime monitor on `/api/health` (source `dealerlink-production` exists; log shipping disabled, DEV.79) | **3 min interval (free-tier max)**, expect 200, alert on 2 failures → operator email |
+| **Axiom**        | dataset `dealerlink-production` (**US** org), 30-day retention                                         | structured business events; region fixed in D.1 follow-up (DEV.75)                   |
+| **Resend**       | domain `dealerlink.in` **verified** (send-subdomain scheme)                                            | sending-only key; from `noreply@dealerlink.in`; DKIM/SPF live, DMARC quarantine      |
 
 **Resend domain** was already verified on Resend's current `send.`-subdomain
 scheme (DKIM `resend._domainkey`, `send.dealerlink.in` MX → AWS SES feedback +

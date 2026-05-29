@@ -462,7 +462,13 @@ populates them. Production config:
   at **100 %** sample, performance tracing at **~10 %** sample (cost control). The
   `beforeSend` PII scrubber is already wired and was verified clean in the C.4
   audit (email→hash, GSTIN/PAN/card/phone→redacted) — no change needed.
-- **Better Stack:** production source + the uptime monitor on
+- **Better Stack (uptime only post-DEV.79):** the production source
+  `dealerlink-production` exists but **app→Better Stack log shipping is
+  disabled** as of D.2 — the `@logtail/pino` worker-thread transport failed
+  under Next webpack bundling (`Cannot find module 'worker.js'`); pino now
+  emits NDJSON to stdout where DO Logs collects it. When log forwarding is
+  revisited, prefer either a **DO log drain** at the App Platform layer or
+  **`@logtail/node`** in-process (HTTP, no worker). Uptime monitor on
   `https://app.dealerlink.in/api/health` (**3 min — free-tier max**, 3-strike,
   expects 200 — see `docs/DEPLOYMENT.md`). Alert on error-rate spike + uptime
   drop. _Earlier docs said 30 s / 60 s; the free tier's minimum interval is
