@@ -292,22 +292,32 @@ if (!autoYes) {
 // ---------------------------------------------------------------------------
 console.log('');
 console.log(`→ doctl apps update ${appId} --spec ${mergedPath}`);
+// DEV.80 — capture (don't inherit) so we can distinguish a real failure from
+// the COSMETIC `doctl apps update` exit-1. doctl's table renderer rejects the
+// `ActiveDeployment.Phase` column on the update path ("unknown column
+// ActiveDeployment.Phase") and exits 1 AFTER the app was already updated — so
+// a successful update reads as a failure. We (a) drop that column (root-cause:
+// the deployment phase is polled separately below) and (b) keep a
+// "Notice: App updated" success net for any other cosmetic non-zero exit.
 const update = spawnSync(
   'doctl',
-  [
-    'apps',
-    'update',
-    appId,
-    '--spec',
-    mergedPath,
-    '--format',
-    'ID,Spec.Name,ActiveDeployment.Phase',
-  ],
-  { encoding: 'utf8', stdio: 'inherit' },
+  ['apps', 'update', appId, '--spec', mergedPath, '--format', 'ID,Spec.Name'],
+  { encoding: 'utf8' },
 );
-if (update.status !== 0) {
+if (update.stdout) process.stdout.write(update.stdout);
+if (update.stderr) process.stderr.write(update.stderr);
+const updateOutput = `${update.stdout ?? ''}${update.stderr ?? ''}`;
+const reportedUpdated = /Notice:\s*App updated/i.test(updateOutput);
+if (update.status !== 0 && !reportedUpdated) {
   console.error(`✗ doctl apps update failed (exit ${update.status})`);
   process.exit(update.status ?? 1);
+}
+if (update.status !== 0 && reportedUpdated) {
+  console.warn(
+    `⚠ doctl exited ${update.status} but reported "Notice: App updated" — treating as success ` +
+      `(cosmetic doctl table-render error, e.g. "unknown column ActiveDeployment.Phase"; DEV.80). ` +
+      `Confirm with: doctl apps spec get ${appId}`,
+  );
 }
 
 // ---------------------------------------------------------------------------

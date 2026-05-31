@@ -1621,3 +1621,40 @@ npm scripts wired: `pnpm sync-spec:staging` / `pnpm sync-spec:production`.
 **Status:** ✅ Closed (DEV.64 + DEV.79 share the same closing commit).
 Documented in `docs/RUNBOOKS.md` R18, referenced from `docs/DEPLOYMENT.md`
 and `docs/STAGE_D_HANDOFF.md` §4.3.
+
+## DEV.80 — Stage D Day D.3 — `doctl apps update` exits 1 on a cosmetic column error after a SUCCESSFUL update
+
+**Date:** 2026-05-31
+
+`scripts/sync-app-spec.mjs` (the DEV.64 spec-sync) ran `doctl apps update
+$APP --spec <merged> --format ID,Spec.Name,ActiveDeployment.Phase`. On the
+**update** code path doctl's table renderer rejects the
+`ActiveDeployment.Phase` column (`Error: unknown column
+"ActiveDeployment.Phase"`) and exits **1** — but only _after_ the app spec
+was already accepted (`Notice: App updated ...` prints first). The script's
+`if (update.status !== 0) { …exit }` therefore reported a **successful** spec
+apply as a failure, which would mislead the operator into re-applying (or
+aborting D.x mid-flight).
+
+**Fix (this commit, bundled into D.3):**
+
+1. **Root cause:** dropped `ActiveDeployment.Phase` from the update `--format`
+   (now `ID,Spec.Name`). The deployment phase is polled separately right after
+   via `doctl apps list-deployments` — it was never needed on the update call.
+2. **Safety net:** capture stdout/stderr (instead of `stdio: 'inherit'`) and
+   treat a `Notice: App updated` line as success even on a non-zero exit, with
+   a `⚠ … treating as success` warning that points at `doctl apps spec get`
+   for confirmation. Guards against any _other_ cosmetic non-zero exit.
+
+A genuine failure (no `Notice: App updated`) still exits non-zero and aborts,
+unchanged.
+
+**Also (R18):** added a "Cosmetic `doctl apps update` exit-1" note to the R18
+runbook — if an operator ever runs `doctl apps update` by hand and sees the
+column error, the app _was_ updated; verify with `doctl apps spec get` rather
+than re-applying.
+
+**Status:** ✅ Closed (D.3). The wildcard `*.dealerlink.in` domain in D.3
+PART 1 was added via the DO dashboard (operator), then the committed
+`.do/app.production.yaml` was reconciled to live; the hardened update path is
+now in place for the next `pnpm sync-spec:production` apply.

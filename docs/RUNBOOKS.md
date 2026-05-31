@@ -815,13 +815,25 @@ What the script does (`scripts/sync-app-spec.mjs`):
 - Lines under `ingress:` should never appear — DO derives ingress from
   the services list; the merge preserves it from live.
 
+**Cosmetic `doctl apps update` exit-1 (DEV.80):** `doctl apps update` can exit
+**1 while the update actually succeeded** — it prints `Notice: App updated ...`
+and then its table renderer chokes on a column it doesn't recognise on the
+update path (historically `Error: unknown column "ActiveDeployment.Phase"`).
+The app **was** updated. The sync script now (a) omits that column from its
+`--format` and (b) treats a `Notice: App updated` line as success even on a
+non-zero exit, logging a `⚠ … treating as success` warning. If you ever run
+`doctl apps update` by hand and see this, **don't re-apply** — verify the live
+spec took with `doctl apps spec get <app-id>` (and `/api/health`) before
+assuming failure.
+
 **Failure / abort conditions:**
 
 - **Missing SECRET in live, declared in committed** → the script
   exits 2 with the missing-key list and instructions for the three
   remediation paths (DO dashboard, `staging-app-render-spec.mjs`, or
   remove the declaration from committed).
-- **`doctl apps update` fails** → the deployment did NOT start. Re-read
+- **`doctl apps update` fails** (genuinely — no `Notice: App updated`) → the
+  deployment did NOT start. Re-read
   the error (typically a YAML structural issue or a permissions
   problem). The live spec is unchanged.
 - **Deploy reaches ERROR/FAILED/CANCELED** during the poll → DO's build
@@ -834,5 +846,118 @@ in D.2):** the merge step preserving 16 encrypted secret values across
 every spec push is exactly the kind of single-bug-catastrophic primitive
 that should keep a human gate. The eyes-on diff before apply is the whole
 value proposition; automating it away regresses the design.
+
+---
+
+## R19 — Wildcard `*.dealerlink.in` cert renewal / re-verification
+
+**When to use:** DO emails a "domain verification expiring" notice for
+`*.dealerlink.in` (≈30 days ahead), or the wildcard cert stops serving on
+tenant subdomains. Set up in Stage D D.3 via **Option A — DO-managed native
+wildcard** (STAGE_D_HANDOFF §6): `*.dealerlink.in` is a custom domain on the
+production app, verified by a one-time **TXT record** in Cloudflare, with a
+wildcard `*` CNAME → the DO origin.
+
+**Background — two separate clocks:**
+
+- **The cert (90-day) auto-renews.** DO re-issues the Google Trust Services
+  wildcard cert before expiry with no action needed, as long as the domain
+  stays **verified**.
+- **The TXT verification token does NOT auto-renew.** DO periodically rotates
+  the verification token and emails the operator ~30 days before it lapses. If
+  the TXT is not updated, the domain falls out of verification and the next
+  cert renewal fails. **This is the only recurring manual touch.**
+
+**Steps (re-verify when DO notifies):**
+
+1. DO dashboard → app `dealerlink-production` → **Settings → Domains** (or
+   Networking) → `*.dealerlink.in` → **Use TXT records to verify**. DO shows
+   the current TXT record name + value.
+2. In Cloudflare (`dealerlink.in` zone), update the existing verification TXT
+   record to the new value DO shows (gray-cloud / DNS-only — TXT is never
+   proxied). Leave the wildcard `*` CNAME and all other records untouched.
+3. Wait for DO to re-verify (5–15 min). The domain returns to verified/active.
+4. Confirm SSL still serves on a tenant subdomain:
+   ```
+   echo | openssl s_client -connect <anyslug>.dealerlink.in:443 \
+     -servername <anyslug>.dealerlink.in 2>/dev/null \
+     | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+   ```
+   Expect SAN `*.dealerlink.in`, issuer Google Trust Services, fresh dates.
+
+**Don't:**
+
+- Don't proxy (orange-cloud) the `*` CNAME or the TXT — the app traffic is
+  already Cloudflare-fronted by DO (DEV.78); double-proxying is the rejected
+  Option C.
+- Don't delete + re-add the domain to "fix" a renewal — that re-triggers a
+  full verification + cert issuance cycle and can blank tenant SSL for minutes.
+  Just update the TXT.
+
+**If re-verification fails:** fall back to **Option B** (self-managed acme.sh
+DNS-01 + custom cert upload) per STAGE_D_HANDOFF §6 — needs a Cloudflare API
+token with DNS-edit scope. ~2–3 h; only if Option A is genuinely broken.
+
+---
+
+## R20 — Production DB disaster recovery (restore from backup)
+
+**When to use:** the production database is lost, corrupted, or a destructive
+change must be rolled back beyond what in-app correction can fix. Proven by the
+D.3 restore rehearsal (`docs/DISASTER_RECOVERY.md`). **RTO target ≤ 1 h, RPO ≤
+24 h (≤ minutes with PITR).**
+
+**Prerequisites:** `doctl` authenticated; the production cluster id
+(`6e0f1d36-d651-44d0-a062-ddf82e844812`); the production secrets file
+(`C:\Users\rohit\.dealerlink\production-secrets.txt`).
+
+**Steps:**
+
+```powershell
+# 1. (Optional) confirm what backups exist + their timestamps.
+doctl databases backups 6e0f1d36-d651-44d0-a062-ddf82e844812
+
+# 2. Restore to a NEW cluster — latest backup (omit timestamp) or PITR
+#    (supply --restore-from-timestamp "<UTC>" inside the backup window).
+#    NEVER an in-place restore — `create` always makes a new cluster.
+doctl databases create dealerlink-production-restore `
+  --engine pg --version 16 --region blr1 --size db-s-1vcpu-2gb --num-nodes 1 `
+  --restore-from-cluster-name dealerlink-production-db `
+  --wait   # blocks until online (~several minutes)
+
+# 3. Verify the restored data BEFORE cutting over: connect as doadmin to the
+#    dealerlink_production DB on the new cluster and check migration count (17),
+#    the operator user, and core-table row counts. (D.3 used a throwaway
+#    verify-restore.mjs; adapt verify-0016.mjs as a template.)
+
+# 4. Re-create the app role on the restored cluster if needed, then re-point
+#    the app: update DATABASE_URL (app role) + DATABASE_DIRECT_URL (doadmin)
+#    in .do/app.production.yaml's live spec to the NEW cluster's connection
+#    strings and apply via R18:
+pnpm sync-spec:production    # review diff, confirm, applies + redeploys
+
+# 5. Confirm the app is healthy on the new DB.
+Invoke-RestMethod https://app.dealerlink.in/api/health
+# expect status:ok, db.status:ok, migrations.applied:17, rls.status:ok
+
+# 6. Lock the new cluster's firewall to the app (mirror the original):
+doctl databases firewalls append <new-cluster-id> --rule "app:d8a25cb8-e4cb-4035-8413-6baab72398cd"
+#    then remove the default-open / any temporary IP rule (see R17).
+
+# 7. Once stable, retire the old/corrupted cluster (only after a full
+#    confidence window — keep it for forensics if the cause is unknown).
+```
+
+**Notes:**
+
+- **DNS/SSL are unaffected** — the app hostname doesn't change, only its DB
+  connection strings. No Cloudflare / cert work in a DB recovery.
+- The restored cluster carries **all** databases + roles from the source
+  (`dealerlink_production`, `dealerlink_app`, `doadmin`), so RLS is intact —
+  but the app role's password may need re-setting (see the D.0 bootstrap
+  `finalize` phase in `docs/PRODUCTION_ENV.md`) if the connection string's
+  password doesn't match.
+- **Don't leave restore clusters running** — each is a full billable cluster.
+  Destroy throwaway/superseded clusters (`doctl databases delete <id>`).
 
 ---
