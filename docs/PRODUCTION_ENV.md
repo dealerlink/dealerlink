@@ -6,12 +6,16 @@
 > pilot-facing environment — a **dedicated** DO project, separate from staging.
 > Staging stays the validated reference / pilot preview and is unchanged.
 
-## Status (updated D.2, 2026-05-29)
+## Status (updated D.3, 2026-05-31 — STAGE D COMPLETE)
 
-Production is **functionally up and observable**: app deployed, `/api/health`
-green (incl. `resend: ok`), RLS enforced, operator account seeded, SSL live,
-and all third-party observability + outbound email wired with **fresh**
-production credentials. It has **no real tenants** — those come in Stage E.
+Production is **hardened, backed up, and validated end-to-end**: app deployed,
+`/api/health` green (incl. `resend: ok`), RLS enforced, operator account seeded,
+**wildcard `*.dealerlink.in` SSL live** (any tenant subdomain serves HTTPS with
+no per-tenant cert work), all observability + outbound email wired with fresh
+prod credentials, **daily backups + PITR verified and a restore rehearsed**
+(RTO ~6 min), and a **full single-tenant workflow smoke passed** on prod (first
+prod email delivered; PDF render ~2–3 s; tenant since removed). It has **no real
+tenants** — those come in Stage E (`docs/PILOT_ONBOARDING_PRODUCTION.md`).
 
 **D.2 progress (2026-05-29).** Migration **`0016_true_doctor_faustus`**
 (F-3 `users.failed_login_attempts` + `users.lockout_until` columns) applied

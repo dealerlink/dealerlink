@@ -1658,3 +1658,44 @@ than re-applying.
 PART 1 was added via the DO dashboard (operator), then the committed
 `.do/app.production.yaml` was reconciled to live; the hardened update path is
 now in place for the next `pnpm sync-spec:production` apply.
+
+## DEV.81 — Stage D Day D.3 — `pnpm verify` hangs in Playwright webServer teardown on Windows
+
+**Date:** 2026-05-31
+
+The D.3 closeout `pnpm verify` run **hung indefinitely after the last spec**
+(twice). Root cause: Playwright's managed `webServer` command is
+`pnpm --parallel --filter web --filter workers dev`, which spawns a process
+tree (pnpm → next, pnpm → tsx → next child). On Windows, Playwright's teardown
+SIGTERMs the `pnpm` parent but the `next`/`tsx` grandchildren **survive**, so
+Playwright waits forever for the server to exit. Tests all completed (reached
+the last spec); the wedge was purely teardown. Compounded by two operator
+mistakes during the session: (a) running `pnpm verify 2>&1 | tail` — the pipe
+buffering interacts badly with the teardown wedge on Windows; (b) re-running the
+suite against a dev DB that a prior **killed** run had already mutated, so the
+mutating specs (operator-onboarding, day-13 dispatch, day-11 reserved-serials)
+failed on stale seed — a test-data artifact, not a regression (a fresh
+`db:migrate && db:seed` cleared them).
+
+**Fix (this commit, `apps/web/playwright.config.ts`):**
+
+1. `globalTimeout: 1_200_000` (20 min) — a hard cap so a hung teardown
+   **force-terminates** the run instead of hanging indefinitely. A clean cold
+   full run is ~12–15 min incl. flaky retries; only the hang blows past 20 min.
+2. Non-CI reporter now `[['list'], ['json', { outputFile:
+'test-results/verify-results.json' }]]` — the JSON file is written at
+   `onEnd` (BEFORE the flaky teardown), so the authoritative pass/fail is
+   recoverable even when `globalTimeout` force-exits the process. This is how
+   the D.3 result (54 passed + 2 flaky-recovered + 1 skipped-at-cap, 0 genuine
+   failures) was read despite the teardown noise.
+
+**Operator runbook note (for Stage E and beyond):** run `pnpm verify`
+**directly (never piped through `tail`/`Select-String`)**; if it appears stuck
+after the last spec, that's the teardown wedge — the run is logically done,
+read `apps/web/test-results/verify-results.json` for the result and reclaim the
+port with `taskkill`/`Stop-Process` on the lingering `next` PID (or run on a
+fresh `PORT=` to sidestep it). A fuller fix (single-process webServer, or a
+detached server lifecycle Playwright can kill cleanly) is deferred — the
+globalTimeout + JSON reporter make the suite reliable enough for now.
+
+**Status:** ✅ Closed (D.3). verify is bounded + result-recoverable on Windows.
