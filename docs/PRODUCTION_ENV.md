@@ -37,7 +37,7 @@ rule for the operator IP added + removed within the same window; only the
 | F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ DB ready, code unpushed                  | D.2      |
 | Wildcard `*.dealerlink.in` SSL                  | ✅ live (Option A, CNAME-validated)         | D.3      |
 | Backup/restore rehearsal                        | ✅ done (RTO ~6 min, see DISASTER_RECOVERY) | D.3      |
-| Prod single-tenant smoke                        | ⏳ in progress (PART 3)                     | D.3      |
+| Prod single-tenant smoke                        | ✅ passed + tenant removed (see below)      | D.3      |
 | Real pilot tenant                               | ⛔ not seeded                               | Stage E  |
 
 > **DO Spaces skipped at D.1 (operator decision).** Not provisioned.
@@ -125,6 +125,55 @@ The platform **operator** account:
 | Role       | `operator` (platform-level, `tenant_id IS NULL`)                           |
 | Password   | temp set at D.0, `must_change_password=true` → operator's password manager |
 | Reached at | `app.dealerlink.in` (apex/reserved → operator)                             |
+
+## D.3 single-tenant production smoke (2026-05-31) — ✅ passed, tenant removed
+
+A throwaway tenant `d3smoketest` ("D3 Smoke Test Co", slug `d3smoketest`, GSTIN
+state MH) was provisioned via the real operator onboarding flow and the full
+distributor workflow walked on production, then the tenant was removed. Results:
+
+- **Wildcard SSL on a real tenant subdomain:** `d3smoketest.dealerlink.in`
+  served HTTPS 200 (`/api/health` + `/login`) on the wildcard cert (SAN
+  `*.dealerlink.in`) with **no per-tenant cert work** — the conclusive PART 1
+  validation.
+- **First production email delivered:** the welcome email (Resend,
+  `noreply@dealerlink.in`) reached `dealerlink.io@gmail.com` — outbound email
+  works end-to-end on prod.
+- **force-password-change** fired + cleared on first login (C.1).
+- **Full workflow clean:** dealer → product → inventory → quotation (send) →
+  PI → order (reserve) → payment (allocate) → dispatch → delivered → GST
+  Summary — **no errors**. Intra-state (MH) order taxed **CGST + SGST**
+  correctly.
+- **PDF render on prod workers (`basic-xs`):** **~2–3 s** — consistent with the
+  C.5 warm range (2.4–3.5 s); confirms the §2 worker sizing for the pilot's
+  ≤10-PDF/hr load. PDF render path (ADR-013 workers queue) works on prod.
+- **No new Sentry errors** attributable to the smoke.
+
+### Removing / deactivating a tenant
+
+**There is no in-app hard-delete of a tenant in Phase 1** — RLS + the FK graph
+(dealers/products/quotations/orders/payments/dispatches/audit_log all reference
+`tenant_id`, none `ON DELETE CASCADE`) make a UI cascade-delete unsafe. The
+supported way to take a tenant out of service:
+
+1. **Suspend its user(s).** Admin app → **Tenants → `<slug>` → Users** → on each
+   user click **Deactivate** (calls `deactivateTenantUser`: sets
+   `users.status = 'suspended'` **and** deletes the user's sessions). With no
+   active user, **no one can log in** → the tenant is inaccessible.
+   - ⚠️ **`tenants.status` is NOT enforced** anywhere (login checks
+     `users.status`, and `resolve.ts` doesn't filter on tenant status), so
+     setting a tenant "inactive" alone does **nothing** functionally —
+     **user-suspend is the real lever.**
+2. The subdomain keeps resolving (wildcard DNS/cert), but every login attempt
+   fails — there's no active user behind it.
+3. The tenant's data **remains in the DB**, RLS-isolated and unreachable (kept
+   for audit). A genuine hard purge is a manual, FK-ordered DB operation
+   (R17-style) — not needed for a throwaway, and out of scope for Phase 1.
+4. **Do not reuse the slug.** A removed/parked slug (e.g. `d3smoketest`) is not
+   recycled — the real pilot launches on a **fresh** slug (Stage E).
+
+> The `d3smoketest` tenant from the D.3 smoke was removed by suspending its
+> admin user; its slug is retired and must not be reused for the pilot.
 
 ## Infrastructure
 
