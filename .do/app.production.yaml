@@ -157,7 +157,7 @@ workers:
         type: SECRET
       - key: RESEND_FROM_EMAIL
         scope: RUN_TIME
-        value: onboarding@resend.dev
+        value: noreply@dealerlink.in
       - key: SENTRY_DSN
         scope: RUN_TIME
         type: SECRET
