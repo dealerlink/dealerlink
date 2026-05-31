@@ -25,19 +25,20 @@ rule for the operator IP added + removed within the same window; only the
   of `origin/main`) and not yet pushed — the deploy is a separate operator-
   authorized step.
 
-| Area                                            | State                                     | Lands in |
-| ----------------------------------------------- | ----------------------------------------- | -------- |
-| App + DB + RLS + operator login                 | ✅ live                                   | D.0      |
-| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ✅ live (HTTPS 200)                       | D.0/D.1  |
-| Resend outbound (verified domain + sending key) | ✅ live (`resend: ok`)                    | D.1      |
-| Resend inbound webhook + MX                     | ⏳ deferred (needs MX setup)              | D.3      |
-| Sentry / Axiom                                  | ✅ wired (fresh prod creds)               | D.1      |
-| Better Stack uptime monitor / log shipping      | ✅ uptime live / ⏳ shipping off (DEV.79) | D.1/D.2  |
-| DO Spaces (`dealerlink-prod`)                   | ⏭️ skipped (see below)                    | (future) |
-| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ DB ready, code unpushed                | D.2      |
-| Wildcard `*.dealerlink.in` SSL                  | ⏳ pending (plan decided, DEV.78)         | D.3      |
-| Backup/restore rehearsal + prod smoke           | ⏳ deferred                               | D.3      |
-| Real pilot tenant                               | ⛔ not seeded                             | Stage E  |
+| Area                                            | State                                       | Lands in |
+| ----------------------------------------------- | ------------------------------------------- | -------- |
+| App + DB + RLS + operator login                 | ✅ live                                     | D.0      |
+| `app.dealerlink.in` DNS + Let's Encrypt SSL     | ✅ live (HTTPS 200)                         | D.0/D.1  |
+| Resend outbound (verified domain + sending key) | ✅ live (`resend: ok`)                      | D.1      |
+| Resend inbound webhook + MX                     | ⏳ deferred (needs MX setup)                | D.3      |
+| Sentry / Axiom                                  | ✅ wired (fresh prod creds)                 | D.1      |
+| Better Stack uptime monitor / log shipping      | ✅ uptime live / ⏳ shipping off (DEV.79)   | D.1/D.2  |
+| DO Spaces (`dealerlink-prod`)                   | ⏭️ skipped (see below)                      | (future) |
+| F-1 (Next.js ≥14.2.35) + F-3 (login rate-limit) | ⏳ DB ready, code unpushed                  | D.2      |
+| Wildcard `*.dealerlink.in` SSL                  | ✅ live (Option A, CNAME-validated)         | D.3      |
+| Backup/restore rehearsal                        | ✅ done (RTO ~6 min, see DISASTER_RECOVERY) | D.3      |
+| Prod single-tenant smoke                        | ⏳ in progress (PART 3)                     | D.3      |
+| Real pilot tenant                               | ⛔ not seeded                               | Stage E  |
 
 > **DO Spaces skipped at D.1 (operator decision).** Not provisioned.
 > `apps/workers/src/pdf/store.ts` flips to the Spaces path the instant
@@ -87,8 +88,12 @@ auto-renewed.
 > **rejected** (it would double-proxy DO's own Cloudflare).
 
 - **Leave the existing `staging` and `*.staging` records untouched.**
-- The `*` (wildcard) record is still **not** added — wildcard SSL is the D.3
-  decision (STAGE_D_HANDOFF §6); no tenant subdomains until Stage E.
+- ✅ **Wildcard `*.dealerlink.in` is now live (D.3, 2026-05-31).** Cloudflare has
+  a `*` CNAME → `dealerlink-production-8treh.ondigitalocean.app` (gray-cloud,
+  DNS-only); DO has `dealerlink.in` registered as `type: ALIAS`, `wildcard: true`
+  on the prod app. DO validated via the CNAME (Option A — **no TXT** needed). The
+  wildcard cert (Let's Encrypt, SAN `*.dealerlink.in, dealerlink.in`, → Aug 19 2026) serves any `<slug>.dealerlink.in`. Renewal is automatic (R19). Apex A
+  record (marketing) untouched. **No per-tenant DNS/cert work** for Stage E.
 - DMARC added at D.1: `_dmarc.dealerlink.in` TXT
   `v=DMARC1; p=quarantine; rua=mailto:dmarc@dealerlink.in; pct=100`
   (`dmarc@` has no mailbox yet → reports not collected; harmless, the policy
@@ -280,10 +285,13 @@ PROD_APP_URL=<dealerlink_app@…/dealerlink_production> node packages/db/scripts
 
 ## Backups
 
-DO Managed Postgres includes daily automated backups. Confirm ≥7-day retention
-
-- enable PITR, and **rehearse a restore to a fresh DB in D.3** (an untested
-  backup is not a backup). Targets: RTO ≤ 1 h, RPO ≤ 24 h (≤ minutes with PITR).
+DO Managed Postgres includes daily automated backups. ✅ **Verified +
+rehearsed in D.3 (2026-05-31):** 6 daily backups present (~7-day rolling
+window); PITR available via `--restore-from-timestamp`; a full restore to a
+throwaway fork was proven (online in ~6 min, 17 migrations + operator user
+intact) then destroyed — production untouched. **Measured RTO ~6 min** (well
+under the ≤ 1 h target); RPO ≤ 24 h (≤ minutes with PITR). Full procedure +
+proof: `docs/DISASTER_RECOVERY.md` and `docs/RUNBOOKS.md` R20.
 
 ## Billing alerts — OPERATOR ACTION
 
@@ -304,9 +312,9 @@ project gives per-project cost _visibility_, but not separate billing _alerts_.)
   automation (D.2). Deferred (low value; errors are still grouped by Sentry).
 - DO Spaces not provisioned — deferred until `uploadToSpaces()` is implemented
   (would break PDF rendering today; see Status note above + DEV.16).
-- No wildcard SSL yet — tenant subdomains land in D.3 (none needed until Stage E).
-  The DNS architecture is now verified and the D.3 plan is decided (DEV.78): DO
-  supports native wildcard via TXT verification (try that first; acme.sh fallback).
-  See `STAGE_D_HANDOFF.md` §6.
+- ~~No wildcard SSL yet~~ — ✅ **resolved D.3 (2026-05-31).** `*.dealerlink.in`
+  serves a valid wildcard cert (Option A, DO-managed, CNAME-validated — no TXT).
+  Any tenant subdomain works with no per-tenant spec edit. See `STAGE_D_HANDOFF.md`
+  §6 and `docs/RUNBOOKS.md` R19 (renewal).
 - F-1 (Next.js upgrade) + F-3 (login rate-limit) not yet applied (D.2).
 - Reserved-slug rejection not enforced on tenant creation (DEV.73 — D.2).

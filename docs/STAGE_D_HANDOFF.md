@@ -379,7 +379,22 @@ cert** — every new staging tenant needs a spec edit + redeploy to mint its cer
 **That per-tenant manual step is exactly the toil D.3's wildcard removes for
 production.** (Corrects the assumption that staging "already has wildcard SSL".)
 
-### D.3 Wildcard SSL — Concrete Handoff Plan
+### D.3 Wildcard SSL — ✅ DONE (2026-05-31, Option A — CNAME validation)
+
+> **✅ Completed in D.3 PART 1.** `*.dealerlink.in` serves HTTPS with a valid
+> wildcard cert. **Option A** was used and succeeded **without a TXT challenge**:
+> the base domain `dealerlink.in` was added to the production app as
+> `type: ALIAS`, `wildcard: true`; DO validated ownership via the gray-cloud
+> `*` CNAME (`* → dealerlink-production-8treh.ondigitalocean.app`) — "Path A /
+> CNAME validation", no `_acme-challenge` TXT needed. **Verified:**
+> `test-anything.dealerlink.in/api/health` → 200; `app.dealerlink.in` (PRIMARY)
+> still → 200; cert SAN `*.dealerlink.in, dealerlink.in` (Let's Encrypt E8,
+> valid → 2026-08-19). The apex `dealerlink.in` A record (marketing, 2.57.91.91)
+> is untouched — the ALIAS attaches the wildcard to the app without claiming
+> apex traffic. Renewal is **fully automatic** (rides the CNAME, no rotating TXT
+> token) — see `docs/RUNBOOKS.md` **R19**. Committed `.do/app.production.yaml`
+> reconciled to live (domains block). New tenants need **no per-tenant spec edit**.
+> The Option B (acme.sh) fallback below was **not needed**.
 
 **REQUIREMENT.** By end of D.3, `*.dealerlink.in` must serve HTTPS with a valid
 wildcard cert, so Stage E pilot onboarding can create the first tenant subdomain

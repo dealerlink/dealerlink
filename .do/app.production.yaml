@@ -212,8 +212,15 @@ domains:
   # app. (app is a RESERVED_SUBDOMAIN → resolves to operator, resolve.ts.)
   - domain: app.dealerlink.in
     type: PRIMARY
-  # Tenant subdomains (<slug>.dealerlink.in) need a TRUE WILDCARD cert, which
-  # DO can only issue via DNS-01 — not possible with Cloudflare gray-cloud DNS.
-  # Per STAGE_D_HANDOFF §6 the wildcard SSL strategy (Cloudflare proxied origin
-  # cert vs DO-managed DNS) is a Day D.3 decision. No real tenants exist until
-  # Stage E, so no tenant subdomain is enumerated here yet.
+  # Tenant subdomains (<slug>.dealerlink.in) — TRUE WILDCARD. Added D.3 (PART 1)
+  # via DO Option A (STAGE_D_HANDOFF §6): the base domain `dealerlink.in` with
+  # `wildcard: true` mints a *.dealerlink.in + dealerlink.in cert (Let's Encrypt,
+  # SAN *.dealerlink.in). DO validated ownership via the gray-cloud `*` CNAME
+  # (`* → dealerlink-production-8treh.ondigitalocean.app`) — NO TXT challenge was
+  # required, so the cert auto-renews with no manual step (R19). The apex A
+  # record (marketing, 2.57.91.91) is untouched: this ALIAS only attaches the
+  # wildcard to the app, it does not claim apex traffic. No per-tenant spec edit
+  # is needed for new tenants (Stage E onwards).
+  - domain: dealerlink.in
+    type: ALIAS
+    wildcard: true

@@ -851,52 +851,62 @@ value proposition; automating it away regresses the design.
 
 ## R19 — Wildcard `*.dealerlink.in` cert renewal / re-verification
 
-**When to use:** DO emails a "domain verification expiring" notice for
-`*.dealerlink.in` (≈30 days ahead), or the wildcard cert stops serving on
-tenant subdomains. Set up in Stage D D.3 via **Option A — DO-managed native
-wildcard** (STAGE_D_HANDOFF §6): `*.dealerlink.in` is a custom domain on the
-production app, verified by a one-time **TXT record** in Cloudflare, with a
-wildcard `*` CNAME → the DO origin.
+**When to use:** the wildcard cert stops serving on tenant subdomains, or DO
+emails a domain/cert notice for `*.dealerlink.in`. Set up in Stage D D.3 via
+**Option A — DO-managed native wildcard** (STAGE_D_HANDOFF §6): the base domain
+`dealerlink.in` is registered on the production app as `type: ALIAS`,
+`wildcard: true`, which mints a `*.dealerlink.in` + `dealerlink.in` cert.
 
-**Background — two separate clocks:**
+**How it actually validated (D.3, 2026-05-31):** DO verified domain ownership
+via the **gray-cloud `*` CNAME** (`* → dealerlink-production-8treh.ondigitalocean.app`)
+— **no TXT challenge was required** ("Path A / CNAME validation"). Confirmed
+cert: SAN `*.dealerlink.in, dealerlink.in`, CN `dealerlink.in`, issuer
+**Let's Encrypt E8**, 90-day (`app.dealerlink.in`'s separate PRIMARY cert is
+Google Trust Services — different cert, unaffected).
 
-- **The cert (90-day) auto-renews.** DO re-issues the Google Trust Services
-  wildcard cert before expiry with no action needed, as long as the domain
-  stays **verified**.
-- **The TXT verification token does NOT auto-renew.** DO periodically rotates
-  the verification token and emails the operator ~30 days before it lapses. If
-  the TXT is not updated, the domain falls out of verification and the next
-  cert renewal fails. **This is the only recurring manual touch.**
+**Renewal — fully automatic, normally zero-touch:**
 
-**Steps (re-verify when DO notifies):**
+- The 90-day cert **auto-renews**. Because validation rides the `*` CNAME (not
+  a rotating TXT token), there is **no recurring manual step** as long as that
+  CNAME stays in Cloudflare. This is the happy path — expect to do nothing.
+- The only thing that breaks renewal is removing/repointing the `*` CNAME or
+  the domain falling out of the app spec. Keep both in place.
 
-1. DO dashboard → app `dealerlink-production` → **Settings → Domains** (or
-   Networking) → `*.dealerlink.in` → **Use TXT records to verify**. DO shows
-   the current TXT record name + value.
-2. In Cloudflare (`dealerlink.in` zone), update the existing verification TXT
-   record to the new value DO shows (gray-cloud / DNS-only — TXT is never
-   proxied). Leave the wildcard `*` CNAME and all other records untouched.
-3. Wait for DO to re-verify (5–15 min). The domain returns to verified/active.
-4. Confirm SSL still serves on a tenant subdomain:
+**If the wildcard cert ever stops serving (recovery):**
+
+1. Confirm DNS is intact in Cloudflare: `*` CNAME →
+   `dealerlink-production-8treh.ondigitalocean.app`, **gray-cloud (DNS-only)**.
+   Re-add it if missing.
+2. Confirm the domain is still on the app spec
+   (`doctl apps spec get d8a25cb8-… | grep -A2 'domain: dealerlink.in'` → should
+   show `type: ALIAS`, `wildcard: true`). Re-apply via `pnpm sync-spec:production`
+   (R18) if it drifted out.
+3. If DO now asks for TXT verification (it may, if CNAME validation ever fails):
+   DO dashboard → app → **Settings → Domains** → `dealerlink.in` → **Use TXT
+   records to verify**, add the shown TXT in Cloudflare (gray-cloud, never
+   proxied), wait 5–15 min for re-verification.
+4. Confirm SSL serves on any subdomain:
    ```
    echo | openssl s_client -connect <anyslug>.dealerlink.in:443 \
      -servername <anyslug>.dealerlink.in 2>/dev/null \
      | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
    ```
-   Expect SAN `*.dealerlink.in`, issuer Google Trust Services, fresh dates.
+   Expect SAN `*.dealerlink.in, dealerlink.in`, fresh dates.
 
 **Don't:**
 
-- Don't proxy (orange-cloud) the `*` CNAME or the TXT — the app traffic is
-  already Cloudflare-fronted by DO (DEV.78); double-proxying is the rejected
-  Option C.
-- Don't delete + re-add the domain to "fix" a renewal — that re-triggers a
-  full verification + cert issuance cycle and can blank tenant SSL for minutes.
-  Just update the TXT.
+- Don't proxy (orange-cloud) the `*` CNAME — app traffic is already
+  Cloudflare-fronted by DO (DEV.78); double-proxying is the rejected Option C.
+- Don't delete + re-add the domain to "fix" a renewal — that re-triggers a full
+  verification + cert issuance cycle and can blank tenant SSL for minutes.
+- Don't touch the apex `dealerlink.in` A record (→ 2.57.91.91, marketing). The
+  `wildcard: true` ALIAS attaches the wildcard cert to the app **without**
+  claiming apex traffic; the apex stays on the marketing site.
 
-**If re-verification fails:** fall back to **Option B** (self-managed acme.sh
-DNS-01 + custom cert upload) per STAGE_D_HANDOFF §6 — needs a Cloudflare API
-token with DNS-edit scope. ~2–3 h; only if Option A is genuinely broken.
+**If a future renewal genuinely fails** and TXT re-verification doesn't fix it:
+fall back to **Option B** (self-managed acme.sh DNS-01 + custom cert upload) per
+STAGE_D_HANDOFF §6 — needs a Cloudflare API token with DNS-edit scope. ~2–3 h;
+only if Option A is genuinely broken.
 
 ---
 
