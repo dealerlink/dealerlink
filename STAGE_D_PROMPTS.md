@@ -1,467 +1,386 @@
 # Stage D — Production Deployment Prompts
 
-Stage D runs from May 26 to May 31, 2026 (started 2 days ahead of original plan). Pilot live target: Wednesday, June 3, 2026.
+Stage D runs from May 26 to May 31, 2026. Pilot live target: Wednesday, June 3, 2026.
 
 ## Schedule
 
-| Day            | Date       | Focus                                                          | Status      |
-| -------------- | ---------- | -------------------------------------------------------------- | ----------- |
-| D.0            | May 26     | Production environment provisioning + DB + initial deploy      | ✅ Done     |
-| D.1            | May 27     | Production secrets + Resend + observability                    | ✅ Done     |
-| D.1 follow-up  | May 27     | Axiom region fix + Sentry workers verify + BetterStack docs    | ✅ Done     |
-| DNS diagnostic | May 28     | DNS architecture documented + D.3 wildcard plan                | ✅ Done     |
-| **D.2**        | **May 28** | **F-1 (Next.js upgrade) + F-3 (rate limit) + DEV.64 + DEV.73** | **Current** |
-| D.3            | May 29     | Wildcard SSL + Production smoke + pilot dry run                | ⏳          |
-| Buffer         | May 30-31  | 2 days of slack                                                | —           |
-| Stage E start  | Jun 1      | Pilot tenant provisioning                                      | —           |
+| Day            | Date       | Focus                                                                     | Status      |
+| -------------- | ---------- | ------------------------------------------------------------------------- | ----------- |
+| D.0            | May 26     | Production environment provisioning                                       | ✅ Done     |
+| D.1            | May 27     | Production secrets + Resend + observability                               | ✅ Done     |
+| D.1 follow-up  | May 27     | Axiom region + Sentry workers + BetterStack                               | ✅ Done     |
+| DNS diagnostic | May 28     | DNS architecture documented + D.3 wildcard plan                           | ✅ Done     |
+| D.2            | May 28     | F-1 + F-3 + DEV.64 + DEV.73 + DEV.79                                      | ✅ Done     |
+| **D.3**        | **May 29** | **Wildcard SSL + backup rehearsal + single-tenant smoke + pilot dry-run** | **Current** |
+| Buffer         | May 30-31  | 2 days of slack                                                           | —           |
+| Stage E start  | Jun 1      | Pilot tenant provisioning                                                 | —           |
 
-## Locked Decisions (carried forward from D.0)
+## Locked Decisions
 
 - Production domain: `app.dealerlink.in` + tenant subdomains `<tenant>.dealerlink.in`
-- SSL: DO-managed (gray-cloud Cloudflare → DO's Cloudflare-fronted edge → DO origin)
+- SSL: DO-managed; wildcard via DO-native (Option A per STAGE_D_HANDOFF §6)
 - Sizing: web basic-xs + workers basic-xs + DB Basic 2 GB = ~$54/mo
-- Reserved slugs: `app`, `www`, `api`, `admin`, `blog`, `docs`, `status`, `mail`, `staging` (enforcement in D.2 per DEV.73)
+- Reserved slugs: enforced (DEV.73)
 
 ---
 
-## Retrospectives — D.0 through DNS Diagnostic
+## Retrospectives — D.0 through D.2
 
 ### D.0 — Production Environment (✅ May 26)
 
-**Commits:** a53ffd9 → 47d70339
+**Commits:** a53ffd9 → 47d70339. DO project + Postgres Basic 2GB + App Platform web+workers basic-xs + dual-role RLS + operator seed + Cloudflare gray-cloud + SSL on app.dealerlink.in. DB firewall locked.
 
-DO project `dealerlink-production` (5ca8a796), Managed Postgres Basic 2 GB BLR1, App Platform web+workers basic-xs, dual-role RLS, operator seeded, Cloudflare DNS gray-cloud, SSL on app.dealerlink.in, DB firewall locked. /api/health 200 green.
+### D.1 — Observability + Email (✅ May 27)
 
-### D.1 — Production Observability + Email (✅ May 27)
-
-**Commits:** 0d2a34c → 61bedc0
-
-Resend prod key wired (sending-only scope), Sentry web+workers prod projects (tracesSampleRate 0.1), BetterStack + Axiom wired, DEV.74 health-check patch for restricted_api_key. Single doctl apps update for secret swap.
+**Commits:** 0d2a34c → 61bedc0. Resend (sending-only), Sentry web+workers, BetterStack, Axiom, DEV.74 health-check patch.
 
 ### D.1 Follow-up (✅ May 27)
 
-**Commits:** ced11d7 → 063e2ea
-
-- DEV.75: Axiom region mismatch (dataset in EU, token in US) → recreated in US, hardened client with `onError→logger.warn`
-- DEV.76: BetterStack frequency 3min (free tier), monitor location → Asia/Singapore
-- DEV.77: Sentry workers verified via temporary THROW_ON_PURPOSE diagnostic endpoint (then removed)
-- Sentry workers project confirmed receiving PII-clean errors
+**Commits:** ced11d7 → 063e2ea. DEV.75 (Axiom EU/US region fix), DEV.76 (BetterStack 3min + Singapore), DEV.77 (Sentry workers verified).
 
 ### DNS Architecture Diagnostic (✅ May 28)
 
-**Commits:** 5fbffc0
+**Commit:** 5fbffc0. DEV.78. STAGE_D_HANDOFF §6 rewritten. DO supports native wildcards → D.3 Option A (~30-45 min). Cert issuer = Google Trust Services. Staging has per-tenant single-domain certs (no wildcard).
 
-- DEV.78: DNS for \*.dealerlink.in routes through DO's Cloudflare integration (not ours)
-- STAGE_D_HANDOFF.md §6 rewritten with verified architecture
-- D.3 wildcard SSL plan: DO supports native wildcards → Option A (~30-45 min) is the path
-- No pre-D.3 operator action required
-- Cert issuer corrected from "Let's Encrypt" to "Google Trust Services WE1"
-- Staging does NOT have wildcard SSL (per-tenant single-domain certs); production gets wildcard in D.3
+### D.2 — F-1 + F-3 + DEV.64 + DEV.73 + DEV.79 (✅ May 28)
+
+**Commits:** 0c20952 → aa09192 (6 commits)
+
+- F-1: Next.js 14.2.35 (CVE-2025-29927), 503 unit + 59 verify green
+- F-3: login rate-limit + lockout, migration 0016 on both DBs, smoke verified
+- DEV.64: Option C sync-spec script + R18 runbook (caught RESEND_FROM_EMAIL drift on first dry-run)
+- DEV.73: reserved slug enforcement + 21 tests
+- DEV.79: removed @logtail/pino worker-transport (was silently breaking Better Stack log shipping since D.1; surfaced via the Sentry worker.js diagnostic). Pino now stdout-only.
+
+**Operator follow-up still open:** Update RESEND_FROM_EMAIL in .do/app.production.yaml to noreply@dealerlink.in on next spec edit.
 
 ---
 
-## Stage D Day D.2 — F-1 + F-3 + DEV.64 + DEV.73 (Current — Thursday May 28)
+## Stage D Day D.3 — Wildcard SSL + Backup Rehearsal + Single-Tenant Smoke + Pilot Dry-Run (Current — Friday May 29)
 
-**Goal:** Ship 4 substantial work items in priority order: framework upgrade, security hardening, infrastructure improvement, and feature gap closure.
+**Goal:** Final production hardening before Stage E pilot. Wildcard SSL so tenant subdomains work. Backup/restore rehearsal so we know recovery works. Single-tenant production smoke validates the full workflow on production infrastructure. Pilot dry-run rehearses the exact Stage E procedure.
 
-**This is the longest day of Stage D.** Expect a full focused day.
+**Estimated time:** 4-5 hours
 
-**Estimated time:** 6-8 hours total
+- Wildcard SSL: 30-45 min (Option A) OR 2-3 hours (Option B fallback)
+- Backup rehearsal: 1 hour
+- Single-tenant smoke: 1-2 hours
+- Pilot dry-run procedure doc: 1 hour
 
-- F-1 (Next.js upgrade): 3-4 hours including full regression
-- F-3 (Login rate limit): 1-2 hours
-- DEV.64 (Spec sync workflow): 1-2 hours
-- DEV.73 (Reserved slugs): 30-45 min
-
-**Order matters:** F-1 first because framework upgrade affects everything. F-3 second (auth changes belong on top of upgraded Next.js). DEV.64 third (infrastructure improvement, independent surface). DEV.73 fourth (small, validation-only, end-of-day work).
-
-**Critical:** Each item ships as its own commit. Don't batch. If any item surfaces unexpected issues, surface and discuss before continuing — don't carry hidden risk into later items.
+**This is the last validation gate before real pilot data touches production.**
 
 ### Prompt for Claude Code
 
-````
-You are implementing Stage D Day D.2 of the Dealerlink build. Production environment is live at app.dealerlink.in (D.0-D.1 complete; DNS architecture documented). Today closes 4 deferred items in priority order:
+```
+You are implementing Stage D Day D.3 — the final day of Stage D. D.2 closed yesterday (6 commits, F-1/F-3/DEV.64/DEV.73/DEV.79 all live). Today does four things in sequence:
 
-PART 1 (3-4 hours): F-1 — Next.js upgrade to ≥14.2.35 (CVE-2025-29927)
-PART 2 (1-2 hours): F-3 — Login rate limit + account lockout
-PART 3 (1-2 hours): DEV.64 — app.yaml ↔ live spec sync workflow
-PART 4 (30-45 min): DEV.73 — Reserved tenant slug rejection
+PART 1 (~30-45 min): Wildcard SSL for *.dealerlink.in (Option A per STAGE_D_HANDOFF §6)
+PART 2 (~1 hour): Backup + restore rehearsal
+PART 3 (~1-2 hours): Single-tenant production smoke (create test tenant, full workflow, delete)
+PART 4 (~1 hour): Pilot dry-run procedure documentation for Stage E
 
-Each part is independent. Each commits separately. If any part surfaces unexpected issues, STOP and surface before continuing.
+Each part is independent. PART 1 has an operator gate (DNS TXT record). PART 3 creates + deletes a temporary tenant — careful cleanup required.
 
 PRELIMINARY:
-P.1. `pnpm preflight` confirms green.
-P.2. Read SECURITY_AUDIT.md F-1 + F-3 sections (the original audit findings from C.4)
-P.3. Read DEVIATIONS.md DEV.64 + DEV.73 entries
-P.4. Read STAGE_D_HANDOFF.md §4 (resolved-findings-to-address) and §6 (DNS architecture context)
-P.5. Read package.json — current Next.js version (14.2.18)
-P.6. Read apps/web/lib/security/rate-limit.ts (or equivalent — the existing checkRateLimit primitive used on /api/health)
-P.7. Read apps/web/lib/auth/login.ts — the action F-3 modifies
-P.8. Read .do/app.production.yaml — current production spec
+P.1. pnpm preflight green
+P.2. Read STAGE_D_HANDOFF.md §6 — the D.3 Wildcard SSL Handoff Plan (Option A/B/C evaluation)
+P.3. Read DEVIATIONS.md — current count is DEV.79; new entries start at DEV.80
+P.4. Read docs/RUNBOOKS.md — R17 (migration), R18 (spec sync); D.3 may add R19+
+P.5. Read PRODUCTION_ENV.md — current production state
+P.6. Read the operator-onboarding flow (apps/web — how tenants get created) — PART 3 + 4 exercise this
 
 PRIMARY REFERENCES:
-1. SECURITY_AUDIT.md F-1, F-3
-2. CVE-2025-29927 details (Next.js middleware authorization bypass)
-3. Existing checkRateLimit primitive (already proven working on /api/health)
-4. CLAUDE.md §6 (auth + login flow)
+1. STAGE_D_HANDOFF.md §6 (wildcard SSL plan)
+2. DO App Platform domain docs (wildcard custom domains)
+3. operator-onboarding flow (tenant creation)
+4. critical-path E2E spec (the workflow PART 3 validates)
 
 ==========================================================
-PART 1 — F-1 NEXT.JS UPGRADE (PRIORITY 1, 3-4 HOURS)
+PART 1 — WILDCARD SSL (Option A — DO-native, ~30-45 min)
 ==========================================================
 
-Background:
-- CVE-2025-29927 is a critical middleware authorization bypass in Next.js <14.2.25
-- Architecturally mitigated in our app (we don't use middleware for auth per DEV.68 — auth is in layouts + actions + RLS)
-- Still must upgrade to ≥14.2.35 for production hygiene
-- Framework bump needs full regression pass; this is why C.4 deferred it to Stage D
-
-CHUNK D2a — Next.js upgrade prep + version bump
+CHUNK D3a — Add wildcard domain to DO + DNS verification
 ---------------------------------
 
-A1.1. Pre-upgrade snapshot:
-   - Git status clean
-   - All gates green (preflight + typecheck + lint + test + verify)
-   - Tag pre-upgrade state: `git tag d2-pre-nextjs-upgrade` (local only, for rollback reference)
+A1.1. Add *.dealerlink.in as a custom domain in DO App Platform:
+   - Via doctl OR DO dashboard
+   - Add domain: *.dealerlink.in to the production app (d8a25cb8)
+   - DO will require DNS verification — it shows a TXT record to add
 
-A1.2. Identify all Next.js-related packages to upgrade:
-   - next (currently 14.2.18 → ≥14.2.35; recommend latest 14.x stable for security patches)
-   - eslint-config-next (match next version)
-   - @next/* packages if any
-   - Check if @sentry/nextjs has a minimum Next.js version requirement
-   - Document which version to upgrade to (latest 14.2.x, NOT 15.x — that's a major upgrade with breaking changes)
+A1.2. OPERATOR GATE — DNS TXT record:
+   - DO displays a TXT record (e.g., _acme-challenge or DO-specific verification)
+   - SHOW me the exact TXT record name + value
+   - I (operator) add it in Cloudflare (gray-cloud, DNS only)
+   - PAUSE here — wait for operator confirmation that the TXT record is added
 
-A1.3. Upgrade Next.js:
-   - `pnpm --filter web add next@^14.2.35 eslint-config-next@^14.2.35`
-   - This updates the workspace package
-   - DO NOT upgrade to Next.js 15.x — major version with breaking changes; out of scope for pilot
+A1.3. Add wildcard CNAME in Cloudflare:
+   - CNAME: * → dealerlink-production-8treh.ondigitalocean.app
+   - Proxy: DNS only (gray-cloud) — consistent with app record
+   - This makes <anything>.dealerlink.in resolve to the production app
+   - VERIFY existing records (app, staging, *.staging, apex, www) unchanged
 
-A1.4. First verification — pnpm install:
-   - Run `pnpm install --frozen-lockfile` (should fail because we just changed dep)
-   - Run `pnpm install` (regenerates lock file)
-   - Verify no peer dep warnings or errors
-   - Document the new lock file changes briefly
+A1.4. Wait for DO to verify + issue wildcard cert:
+   - DO validates the TXT record (can take 5-15 min)
+   - DO issues the wildcard Let's Encrypt/Google Trust cert
+   - Poll status: doctl apps get <app-id> — domain shows ACTIVE/verified
 
-A1.5. Pre-build smoke:
-   - `pnpm --filter web typecheck` — must pass with new Next.js version
-   - `pnpm --filter web lint` — must pass
-   - `pnpm --filter web build` — must succeed
-   - If any step fails: debug + document the failure; don't proceed until clean
+A1.5. Verify wildcard SSL works:
+   - curl -vI https://test-tenant.dealerlink.in 2>&1 | findstr -i "subject issuer HTTP"
+   - Even though test-tenant isn't a real tenant, the cert should cover it (wildcard)
+   - Expect: cert subject *.dealerlink.in OR SAN includes it; HTTP response (may be 404/redirect for non-existent tenant, but SSL handshake succeeds)
+   - curl -sI https://app.dealerlink.in/api/health — confirm existing app domain STILL works (didn't break)
 
-COMMIT D2a: `chore(deps): upgrade Next.js 14.2.18 → 14.2.35 (CVE-2025-29927)`
+A1.6. Document:
+   - Update STAGE_D_HANDOFF.md §6: mark wildcard SSL ✅, note the approach used (Option A)
+   - Update PRODUCTION_ENV.md: wildcard SSL active
+   - Add RUNBOOK R19: "Wildcard cert renewal" — DO auto-renews but needs periodic TXT re-verification (~30-day notice); document the re-verify steps
+   - Note the renewal nuance flagged in the diagnostic (DO needs periodic TXT re-verification even though cert auto-renews)
 
-CHUNK D2b — Regression test pass
+COMMIT D3a: `feat(prod): wildcard SSL for *.dealerlink.in (Option A, DO-native)`
+
+==========================================================
+PART 2 — BACKUP + RESTORE REHEARSAL (~1 hour)
+==========================================================
+
+CHUNK D3b — Verify backups + rehearse restore
 ---------------------------------
 
-A2.1. Run full local test suite:
-   - `pnpm test` — all unit tests (expect 465+ passing as of D.1)
-   - `pnpm verify` — all E2E specs (expect 57/57 as of D.1)
-   - All must pass; document any new failures
-   - If Playwright hangs, kill orphan processes from a separate shell (the documented pattern)
+A2.1. Verify production DB automated backups are enabled:
+   - doctl databases backups list <prod-db-cluster-id>
+   - DO Managed Postgres includes daily backups (7-day retention default)
+   - Confirm backups exist + retention period
+   - If not enabled: enable + document
 
-A2.2. Specific smoke checks for Next.js upgrade impact:
-   - Server Actions still work (login, change-password, quotation create)
-   - RSC streaming still works (dashboard, list pages render with data)
-   - Image optimization still works (logo on PDF templates if any)
-   - Sentry integration still works (`@sentry/nextjs` is sensitive to Next.js version)
-   - Middleware behavior unchanged (we don't use it for auth, but it exists)
+A2.2. Verify point-in-time recovery (PITR):
+   - DO Managed Postgres supports PITR within the backup window
+   - Confirm it's available for the production cluster
+   - Document the recovery window (how far back can we restore)
 
-A2.3. Local smoke check against dev DB:
-   - `pnpm dev` starts cleanly
-   - Login flow works
-   - Force-password-change flow works (C.1 closure)
-   - State display works (C.2 closure)
-   - PDF generation works (queue-based per ADR-013)
-   - Reports load
+A2.3. Rehearse a restore (to a NEW cluster, NOT overwriting production):
+   - Create a temporary restore-target: fork the production DB to a new cluster from latest backup
+   - doctl databases create dealerlink-restore-test --engine pg ... OR use DO's fork-from-backup
+   - This creates a SEPARATE cluster — production is untouched
+   - Verify the restored cluster has the data (connect, check row counts on a few tables)
+   - Confirm migration version matches (should be 17)
+   - This proves restore WORKS — the whole point of the rehearsal
 
-A2.4. Push to main → triggers staging auto-deploy:
-   - Wait for staging deploy ACTIVE
-   - Run critical-path E2E against staging: `PLAYWRIGHT_BASE_URL=https://demo.staging.dealerlink.in pnpm --filter web exec playwright test critical-path --project=chromium`
-   - All 27 steps must pass on staging with the upgraded Next.js
-   - If anything fails on staging that passes locally: investigate before continuing
+A2.4. Document RTO/RPO:
+   - RPO (Recovery Point Objective): how much data could we lose = backup frequency (daily) + PITR granularity
+   - RTO (Recovery Time Objective): how long to restore = time to provision new cluster + repoint app
+   - Document realistic numbers based on the rehearsal timing
+   - Add to STAGE_D_HANDOFF.md or a new docs/DISASTER_RECOVERY.md
 
-A2.5. Production deploy (via doctl spec update per DEV.64 pattern):
-   - Production spec doesn't need changes for Next.js upgrade — version is in package.json, not in spec
-   - But the production app needs to redeploy to pull the new package.json
-   - Trigger production redeploy: `doctl apps create-deployment <prod-app-id>`
-   - OR: push triggers staging redeploy; production redeploy is manual (per DEV.64 — DEV.64 is PART 3's work)
-   - For today: explicitly trigger production deploy after staging verification
-   - Wait for production deploy ACTIVE
-   - Verify /api/health on app.dealerlink.in still green
+A2.5. CLEANUP — destroy the restore-test cluster:
+   - doctl databases delete dealerlink-restore-test
+   - Confirm deletion (don't leave a ~$30/mo orphan cluster)
+   - Verify production cluster untouched throughout
 
-A2.6. Production smoke:
-   - Login as operator
-   - Navigate dashboard, settings
-   - Verify no Sentry errors during the smoke
-   - Confirm Next.js version in production: `curl -I https://app.dealerlink.in | grep -i x-powered-by` or via /api/health if it exposes version
+A2.6. Document the recovery procedure:
+   - RUNBOOK R20: "Production DB disaster recovery" — step-by-step restore from backup
+   - Reference the rehearsal that proved it works
 
-A2.7. Document upgrade in DEVIATIONS.md:
-   - Mark F-1 as ✅ CLOSED
-   - Reference commit SHA
-   - Note: full regression passed (465 unit + 57 verify + critical-path on staging + smoke on production)
-
-COMMIT D2b: `test(prod): F-1 Next.js upgrade verified — full regression pass + production deploy`
+COMMIT D3b: `docs(dr): backup verification + restore rehearsal + R20 recovery runbook`
 
 ==========================================================
-PART 2 — F-3 LOGIN RATE LIMIT + LOCKOUT (PRIORITY 2, 1-2 HOURS)
+PART 3 — SINGLE-TENANT PRODUCTION SMOKE (~1-2 hours)
 ==========================================================
 
-Background:
-- F-3 was deferred from C.4 for production: bounded for pilot (≤5 trusted users), but must-fix before pilot scales
-- The checkRateLimit primitive already exists from /api/health work; F-3 extends it to login()
-- Recommended thresholds: 5 attempts / 15-min window, then 30-min lockout
+This validates the FULL workflow on production infrastructure using a temporary tenant. The pilot's real tenant comes in Stage E; this is the rehearsal.
 
-CHUNK D2c — Extend rate-limit primitive + apply to login
+CHUNK D3c — Create test tenant + full workflow + cleanup
 ---------------------------------
 
-A3.1. Review existing checkRateLimit primitive:
-   - Confirm its API and current usage on /api/health
-   - Verify it's pluggable (different keys, windows, max attempts per use case)
-   - If primitive needs extension, document what changes
+A3.1. Create a temporary production test tenant via operator-onboarding:
+   - Login as operator on app.dealerlink.in
+   - Create tenant: "D3 Smoke Test Co" with slug "d3smoketest" (NOT a reserved slug)
+   - This exercises the real tenant-creation flow on production
+   - Admin user gets temp password + must_change_password=true (per C.1)
+   - Tenant subdomain: d3smoketest.dealerlink.in (validates the new wildcard SSL!)
 
-A3.2. Add login rate limit:
-   - In apps/web/lib/auth/login.ts (or equivalent login action)
-   - Key: `login:<email>` (per-email, not per-IP — better signal for B2B SaaS)
-   - Window: 15 minutes
-   - Max attempts: 5
-   - After 5 failed attempts in 15 min: return rate-limit error WITHOUT revealing whether email exists (preserves non-enumerable login errors)
-   - Successful login: reset the counter for that email
+A3.2. Verify wildcard SSL on the real tenant subdomain:
+   - curl -sI https://d3smoketest.dealerlink.in/api/health — 200, valid wildcard cert
+   - This is the REAL test of PART 1's wildcard SSL — an actual tenant subdomain
 
-A3.3. Add account lockout:
-   - Separate from rate limit (which is short-term)
-   - After cumulative 10 failed attempts across any windows: 30-min lockout
-   - Lockout is tracked in DB (users.lockout_until timestamp column — add if not present via migration)
-   - Lockout duration: 30 min
-   - After lockout expires, counter resets
-   - Operator can manually clear lockout via admin action (runbook entry needed)
+A3.3. Complete the tenant admin first-login:
+   - Login as the test tenant admin with temp password
+   - Forced to /change-password (C.1 flow)
+   - Set a password
+   - Land on dashboard
 
-A3.4. Schema migration if needed:
-   - If users.lockout_until doesn't exist: add via Drizzle migration
-   - Column: TIMESTAMP NULL, no default
-   - Audit log trigger continues to fire on user updates (no special handling needed)
+A3.4. Run the full workflow as the test tenant:
+   - Create a dealer
+   - Create a product in catalog
+   - Add inventory
+   - Create a deal → quotation → send → accept
+   - Convert to PI → confirm
+   - Verify order created + inventory reserved
+   - Record a payment → allocate
+   - Create a dispatch → pick serials → mark delivered
+   - Generate PDFs at each step (quotation, PI, receipt, dispatch note)
+   - Verify each PDF renders (tests the queue-based rendering on production, ADR-013)
+   - Check a report (GST summary)
 
-A3.5. Update login action logic:
-   - Check rate limit BEFORE password verification (prevents timing attacks on rate-limit logic)
-   - Check lockout status before password verification
-   - On failed attempt: increment counter; if 5+ in window → return rate limit error; if 10+ cumulative → set lockout_until
-   - On success: clear counter, clear lockout_until
-   - All paths return generic "Invalid email or password" — never reveal lockout/rate-limit status to clients (security through obscurity at the user-facing message level)
+A3.5. Verify production-specific behaviors:
+   - PDF generation works (workers basic-xs, eager-warm) — time the renders
+   - Email send: does it actually deliver via Resend? (send a quotation, check the configured inbox)
+   - State display correct (C.2 normalization)
+   - Tax calc correct (intra vs inter-state)
+   - Observability: do events reach Sentry/Axiom for this tenant's activity?
 
-A3.6. Add tests:
-   - Unit: 5 successful logins don't trigger rate limit
-   - Unit: 5 failed attempts in 15 min → 6th returns rate limit error
-   - Unit: 10 cumulative failures → lockout set; even correct password rejected during lockout
-   - Unit: lockout expires after 30 min, counter resets
-   - Integration: rate limit error message matches "Invalid email or password" (non-enumerable)
+A3.6. CLEANUP — remove the test tenant:
+   - This is critical: the test tenant must NOT exist when the real pilot launches
+   - Operator deletes the tenant (or marks inactive + purges)
+   - Document HOW to cleanly remove a tenant (this becomes useful knowledge)
+   - Verify: d3smoketest.dealerlink.in no longer serves the tenant
+   - Verify: no orphaned data (the tenant's dealers/products/orders gone or archived)
+   - NOTE: if hard-delete isn't supported (RLS + FKs make it complex), document the "deactivate + the data stays but is inaccessible" approach
+   - The pilot tenant in Stage E should be a FRESH tenant, not reusing this slug
 
-A3.7. Runbook entry:
-   - Add to RUNBOOKS.md: "Operator: clear user lockout"
-   - SQL command (operator-only): `UPDATE users SET lockout_until = NULL WHERE email = '<email>';`
-   - When to use: legitimate user locked out after typo attempts; operator manually clears
+A3.7. Document findings:
+   - Did the full workflow work end-to-end on production?
+   - Any production-specific issues (latency, PDF cold-start, email delivery)?
+   - PDF render times on production workers (basic-xs) — confirms C.5 sizing decision
+   - Email actually delivered? (first real email send on production)
 
-A3.8. Test locally then push:
-   - pnpm test (all new tests pass)
-   - pnpm typecheck + lint
-   - Push to main → staging auto-deploy
-   - Test on staging: deliberately fail login 5 times, verify rate-limit message
-   - Production deploy: `doctl apps create-deployment <prod-app-id>` (manual trigger per DEV.64)
-
-A3.9. Mark F-3 ✅ CLOSED in SECURITY_AUDIT.md and DEVIATIONS.md.
-
-COMMIT D2c: `feat(security): F-3 login rate-limit + account lockout`
+COMMIT D3c: `test(prod): single-tenant full-workflow smoke + cleanup procedure`
 
 ==========================================================
-PART 3 — DEV.64 APP.YAML ↔ LIVE SPEC SYNC WORKFLOW (PRIORITY 3, 1-2 HOURS)
+PART 4 — PILOT DRY-RUN PROCEDURE (~1 hour)
 ==========================================================
 
-Background:
-- DEV.64 documented the brittleness: editing .do/app.yaml doesn't auto-deploy; requires `doctl apps update --spec`
-- We've been doing it manually throughout Stage D
-- D.2 establishes a sustainable workflow
-
-CHUNK D2d — Spec sync automation
+CHUNK D3d — Document the exact Stage E pilot onboarding procedure
 ---------------------------------
 
-A4.1. Decide automation approach:
-   - Option A: GitHub Action that detects .do/app.production.yaml changes + runs doctl apps update --spec
-     - Pros: fully automated; same as code-deploy pipeline
-     - Cons: requires DO API token in GitHub secrets (rotatable)
-   - Option B: Pre-commit hook or push hook locally that runs doctl apps update --spec when production spec changes
-     - Pros: no GitHub secrets
-     - Cons: depends on operator's local environment
-   - Option C: Document a tight manual workflow (script + checklist)
-     - Pros: simplest; no automation overhead
-     - Cons: still manual, just less error-prone
+A4.1. Create docs/PILOT_ONBOARDING_PRODUCTION.md:
+   - This is the step-by-step procedure for Stage E Day E.1
+   - Based on what PART 3 just rehearsed, but for the REAL pilot
+   - Sections:
+     1. Pre-onboarding checklist (pilot's legal name, GSTIN, address, bank details, T&C, logo)
+     2. Operator creates the pilot tenant (exact steps, slug selection)
+     3. Pilot admin receives credentials (how — email or manual handoff?)
+     4. Pilot first-login + password change walkthrough
+     5. Initial data setup guidance (pilot enters their dealers, products)
+     6. Validation checklist (operator confirms tenant is correctly configured)
+     7. Go-live confirmation
 
-   Recommend Option A for production-grade sustainability. Operator confirmation before proceeding.
+A4.2. Define the pilot tenant specifics (gather from operator):
+   - Pilot company legal name: [operator provides]
+   - Proposed slug: [operator decides — must not be reserved, must be available]
+   - GSTIN, state (for tax calc): [operator provides]
+   - This info needed before Stage E Day E.1
 
-A4.2. If Option A (GitHub Action):
-   - Create .github/workflows/sync-prod-spec.yml
-   - Trigger: push to main with changes to .do/app.production.yaml
-   - Step: `doctl apps update <prod-app-id> --spec .do/app.production.yaml`
-   - Requires GitHub repository secret: DO_API_TOKEN
-   - Operator must add the secret in GitHub settings
-   - First run after merge: confirm it works by making a no-op spec edit + watching the workflow
+A4.3. Document rollback/abort procedure:
+   - If pilot onboarding goes wrong, how to cleanly reset
+   - Based on PART 3's cleanup learnings
 
-A4.3. If Option B or C: implement and document.
+A4.4. Stage E readiness checklist:
+   - Wildcard SSL working (PART 1) ✅
+   - Backup/restore proven (PART 2) ✅
+   - Full workflow validated on production (PART 3) ✅
+   - Email delivery confirmed (PART 3) ✅
+   - Onboarding procedure documented (this part) ✅
+   - Pilot company details gathered: [operator action before E.1]
 
-A4.4. Update documentation:
-   - DEPLOYMENT.md: document the sync workflow
-   - STAGE_D_HANDOFF.md: mark DEV.64 ✅ closed
-   - Add to RUNBOOKS.md: "How to deploy a production spec change"
-
-A4.5. Verify workflow on a test edit:
-   - Make a small, safe spec edit (e.g., comment update in .do/app.production.yaml)
-   - Push to main
-   - Verify the workflow triggers and the deployment succeeds
-   - Confirm production /api/health still green
-
-COMMIT D2d: `feat(infra): DEV.64 app.yaml → live spec sync workflow`
+COMMIT D3d: `docs(pilot): production onboarding procedure for Stage E`
 
 ==========================================================
-PART 4 — DEV.73 RESERVED SLUG REJECTION (PRIORITY 4, 30-45 MIN)
+CHUNK D3e — Stage D closeout
 ==========================================================
 
-Background:
-- DEV.73 surfaced in D.0: tenant creation doesn't reject reserved slugs (app, www, admin, etc.)
-- Routing already reserves them so it's not a security risk
-- But pilot tenant slug in Stage E shouldn't conflict — add validation now
+A5.1. Verify all gates green:
+   - pnpm preflight, typecheck, lint, test, verify
+   - Production /api/health green
+   - Wildcard SSL active
+   - No new Sentry errors from D.3 activity
 
-CHUNK D2e — Reserved slug enforcement
----------------------------------
+A5.2. Update STAGE_D_HANDOFF.md:
+   - Mark D.3 ✅
+   - Mark Stage D COMPLETE
+   - All deferred Stage C findings resolved (F-1, F-3) or documented (F-4 through F-9 post-pilot)
 
-A5.1. Define the canonical reserved slug list in code:
-   - Create or update packages/schemas/src/reserved-slugs.ts:
-     ```
-     export const RESERVED_SLUGS = new Set([
-       'app', 'www', 'api', 'admin', 'blog',
-       'docs', 'status', 'mail', 'staging',
-       'support', 'help', 'mail', 'smtp', 'pop',
-       'ftp', 'cdn', 'media', 'static'
-     ]);
-     ```
-   - Single source of truth; don't duplicate elsewhere
+A5.3. Update PROJECT_PLAN.md:
+   - D.3 ✅ with date 2026-05-29
+   - Stage D ✅ COMPLETE
+   - Add Stage E section header
 
-A5.2. Add validation to tenant creation Zod schema:
-   - In packages/schemas/src/tenant.ts (or wherever tenant slug is validated)
-   - Add custom refinement: `.refine(slug => !RESERVED_SLUGS.has(slug.toLowerCase()), { message: "This slug is reserved and cannot be used" })`
-   - Add to slug format validation: must be lowercase, alphanumeric + dash, 3-50 chars
-   - Case-insensitive check (test "App", "APP", "app" all rejected)
+A5.4. Update PRODUCTION_ENV.md:
+   - Final production state: wildcard SSL, backups verified, workflow validated
+   - Ready for Stage E pilot
 
-A5.3. Update operator-onboarding action to use the validated schema:
-   - Confirm the tenant creation flow uses the new schema
-   - If somewhere bypasses Zod, fix to use it
+A5.5. Tag Stage D complete:
+   - git tag -a stage-d-complete -m "Stage D complete — production hardened + validated, ready for pilot"
+   - git push --tags
 
-A5.4. Add tests:
-   - Unit: each reserved slug rejected
-   - Unit: case variations rejected (App, APP, aPp)
-   - Unit: valid slugs accepted (acme, demo-company, solar-1)
-   - Integration: tenant creation rejects "app", returns clear error
-
-A5.5. Local test + staging + production:
-   - pnpm test passes
-   - Push to main → staging deploy
-   - Production deploy via doctl (or now via DEV.64 automation if D.2d completed)
-
-A5.6. Mark DEV.73 ✅ CLOSED in DEVIATIONS.md.
-
-COMMIT D2e: `feat(tenants): DEV.73 reject reserved slugs at tenant creation`
-
-==========================================================
-CHUNK D2f — Day closeout
-==========================================================
-
-A6.1. Verify all gates green:
-   - pnpm preflight
-   - pnpm typecheck, lint, test, verify
-   - Production /api/health all green
-   - Sentry shows no new errors from D.2 changes
-
-A6.2. Update SECURITY_AUDIT.md:
-   - F-1 ✅ CLOSED (reference commit)
-   - F-3 ✅ CLOSED (reference commit)
-   - Remaining: F-2 already closed in C.4; F-4 through F-9 deferred to post-pilot
-   - Update overall posture: "Remaining findings are post-pilot improvements; no pilot-blockers"
-
-A6.3. Update STAGE_D_HANDOFF.md:
-   - Mark D.2 ✅ in Stage D Progress section
-   - All 4 items ✅: F-1, F-3, DEV.64, DEV.73
-   - D.3 cleared to start
-
-A6.4. Update PROJECT_PLAN.md:
-   - D.2 ✅ with date 2026-05-28
-   - All 4 items checked off in carried-forward section
-
-A6.5. Final commit:
-   - `feat(stage-d): Day D.2 complete — Next.js upgrade + rate limit + spec sync + reserved slugs`
+A5.6. Final commit:
+   - `feat(stage-d): Stage D complete — production ready for pilot launch`
    - Push to main
 
-GUARDRAILS (D.2):
-- Each PART commits separately. Don't batch a framework upgrade with auth changes with infrastructure changes — that's 4 distinct review surfaces.
-- F-1 (Next.js upgrade) MUST pass full regression before proceeding. If any test fails, STOP — surface to operator before continuing.
-- F-3 (rate limit + lockout) MUST NOT change the user-facing error message. "Invalid email or password" for ALL failure paths (preserves non-enumerable behavior per C.4 audit).
-- DEV.64 automation needs operator confirmation on which option (A/B/C) before proceeding. Don't assume.
-- DEV.73 reserved-slug list is in code, not config. Future additions are code commits, intentional.
-- Don't upgrade to Next.js 15.x — major version, breaking changes, out of scope.
-- Don't rotate any production secrets today (operator hasn't requested; would invalidate Sentry/Resend/etc. wired in D.1).
-- Each PART has a manual smoke check on production after deploy. Don't skip — production behaves differently than local.
+COMMIT D3e: `chore: Stage D close — tag stage-d-complete`
+
+GUARDRAILS (D.3):
+- PART 1 has an operator gate for the DNS TXT record. PAUSE and wait for confirmation. Don't proceed to cert verification until operator confirms TXT added.
+- PART 2 restore rehearsal creates a SEPARATE cluster. NEVER restore over production. Destroy the test cluster after (don't leave a $30/mo orphan).
+- PART 3 creates a REAL tenant on production. It MUST be cleaned up before Stage E. The pilot launches with a FRESH tenant, not this test one.
+- PART 3's email send is the FIRST real production email. Verify it actually delivers (check inbox, including spam).
+- Don't reuse the d3smoketest slug for the real pilot.
+- If wildcard SSL Option A fails (DO doesn't verify the TXT), fall back to Option B (acme.sh) per STAGE_D_HANDOFF §6 — but surface to operator first, it's a 2-3 hour path vs 30 min.
+- Each part commits separately.
 
 WHEN DONE:
-- Print summary: F-1 ✅, F-3 ✅, DEV.64 ✅, DEV.73 ✅
-- Confirm: 5 chunk commits + closeout commit (6 total)
-- Confirm: /api/health on production all green
-- Confirm: Critical-path E2E passes on staging after Next.js upgrade
-- Confirm: F-3 rate limit + lockout verified by deliberate failed-login attempts on staging
-- Confirm: DEV.64 spec sync workflow chose option (A/B/C) and verified working
-- Confirm: DEV.73 reserved slug "app" rejected on staging
-- Tell me D.2 is complete and Day D.3 (wildcard SSL + production smoke + pilot dry run) is next
-````
+- Print summary of all 4 parts
+- Confirm: wildcard SSL works on a real tenant subdomain (d3smoketest.dealerlink.in served with valid cert)
+- Confirm: backup/restore rehearsal succeeded; test cluster destroyed
+- Confirm: full workflow ran end-to-end on production; test tenant cleaned up
+- Confirm: first production email delivered
+- Confirm: PILOT_ONBOARDING_PRODUCTION.md ready for Stage E
+- Confirm: stage-d-complete tag pushed
+- Tell operator Stage D is COMPLETE and Stage E (pilot launch) is cleared to start
+```
 
 ### Verification checklist (operator)
 
-#### F-1 (Next.js upgrade)
+#### PART 1 — Wildcard SSL
 
-- [ ] package.json shows next ≥14.2.35
-- [ ] pnpm test passes (465+)
-- [ ] pnpm verify passes (57/57)
-- [ ] Critical-path E2E passes on staging
-- [ ] Production redeploy completes; /api/health green
-- [ ] Manual smoke on production — login + dashboard + state display + PDF + reports all work
+- [ ] \*.dealerlink.in added to DO App Platform
+- [ ] DNS TXT verification record added in Cloudflare
+- [ ] Wildcard CNAME added (gray-cloud)
+- [ ] DO issued wildcard cert (ACTIVE)
+- [ ] curl https://test-tenant.dealerlink.in → valid cert
+- [ ] app.dealerlink.in still works (not broken)
 
-#### F-3 (Rate limit + lockout)
+#### PART 2 — Backup/Restore
 
-- [ ] users.lockout_until column exists (if added)
-- [ ] 5 failed logins in 15 min → 6th rejected with "Invalid email or password"
-- [ ] 10 cumulative failures → user locked out
-- [ ] After 30 min lockout expires, login works
-- [ ] Operator can manually clear lockout per runbook
+- [ ] Production backups confirmed enabled + retention documented
+- [ ] PITR availability confirmed
+- [ ] Restore rehearsed to separate cluster (data verified)
+- [ ] RTO/RPO documented
+- [ ] Test cluster destroyed (no orphan cost)
+- [ ] R20 recovery runbook written
 
-#### DEV.64 (Spec sync)
+#### PART 3 — Single-Tenant Smoke
 
-- [ ] Workflow chosen (A/B/C) and documented
-- [ ] Test edit triggered automated deploy (if A)
-- [ ] DEPLOYMENT.md + RUNBOOKS.md updated
+- [ ] Test tenant created via operator-onboarding
+- [ ] Wildcard SSL works on d3smoketest.dealerlink.in
+- [ ] Full workflow (deal→quote→PI→order→payment→dispatch) works
+- [ ] All 4 PDFs generate on production
+- [ ] First production email delivered (checked inbox)
+- [ ] Observability events reached Sentry/Axiom
+- [ ] Test tenant cleaned up (no orphan data)
 
-#### DEV.73 (Reserved slugs)
+#### PART 4 — Pilot Dry-Run
 
-- [ ] Tenant creation rejects "app", "www", "admin"
-- [ ] Case variations rejected (App, APP)
-- [ ] Valid slugs accepted (acme, solar-1)
+- [ ] PILOT_ONBOARDING_PRODUCTION.md created
+- [ ] Pilot company details gathered (operator)
+- [ ] Stage E readiness checklist complete
 
 #### Closeout
 
-- [ ] SECURITY_AUDIT.md F-1 + F-3 marked ✅
-- [ ] STAGE_D_HANDOFF.md D.2 ✅
-- [ ] PROJECT_PLAN.md D.2 ✅
 - [ ] All gates green
-
----
-
-## Stage D Day D.3 — Wildcard SSL + Production Smoke + Pilot Dry Run (Friday May 29)
-
-_Will be added when D.2 closes. Per STAGE_D_HANDOFF.md §6 D.3 plan: Option A (DO native wildcards, ~30-45 min). Then full critical-path E2E on production. Then pilot tenant creation procedure documented for Stage E._
+- [ ] stage-d-complete tag pushed
+- [ ] STAGE_D_HANDOFF.md + PROJECT_PLAN.md + PRODUCTION_ENV.md updated
 
 ---
 
 ## Stage E — Pilot Launch (June 1 - June 3)
 
-_Detailed prompts added at close of Stage D._
+_Detailed prompts added at close of Stage D. Provision real pilot tenant, training session, final dry run, go-live June 3._
