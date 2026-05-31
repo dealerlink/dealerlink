@@ -69,7 +69,7 @@ services:
       # D.1 moves this to a verified @dealerlink.in address.
       - key: RESEND_FROM_EMAIL
         scope: RUN_TIME
-        value: onboarding@resend.dev
+        value: noreply@dealerlink.in
       # --- Sentry (populated D.1) ---
       - key: SENTRY_DSN
         scope: RUN_AND_BUILD_TIME
