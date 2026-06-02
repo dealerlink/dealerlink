@@ -11,7 +11,63 @@
 > **Companion docs:** `docs/RUNBOOKS.md` (R1 onboarding, R2–R9 day-to-day,
 > R3/R3c lockout/reset), `docs/PRODUCTION_ENV.md` (live infra state),
 > `docs/STAGE_D_HANDOFF.md` §9 (pilot provisioning preview),
-> `docs/USER_MANUAL.md` (hand to the pilot admin).
+> `docs/USER_MANUAL.md` + `docs/PILOT_GETTING_STARTED.md` (hand to the pilot admin),
+> `docs/pilot/PILOT_COVER_EMAIL.md` (follow-up email),
+> `docs/pilot/E1_VALIDATION.sql` (post-create checks).
+
+---
+
+## 🟢 LIVE — first pilot onboarded (Stage E, E.1 — 2026-06-02)
+
+**UMA TRADING COMPANY is LIVE on production.** First real pilot tenant.
+
+| Field       | Value                                                           |
+| ----------- | --------------------------------------------------------------- |
+| Legal name  | UMA TRADING COMPANY                                             |
+| Slug / URL  | `umatrading` → https://umatrading.dealerlink.in                 |
+| GSTIN       | `27ADOPA1874B1ZT` (PAN `ADOPA1874B`)                            |
+| State (tax) | Maharashtra (`MH`) — matches GSTIN state code 27                |
+| Address     | SHOP NO 6, K B MISTRY COMPLEX, 80 FOOTI ROAD, DHULE, 424001     |
+| Admin user  | Akhshay Mittal — `info.umatrading@gmail.com` (stored lowercase) |
+| Created at  | 2026-06-02 08:47:38 UTC                                         |
+
+**Go-live validation — all green (2026-06-02):**
+
+- ✅ Tenant record correct (legal name, slug, GSTIN, PAN, state, address).
+- ✅ Admin user: email lowercase, `must_change_password=true`, role `admin`,
+  status `active` — **login left pristine** (operator/DB-side validation only;
+  the admin's temp password was never consumed).
+- ✅ Tenant **EMPTY** — dealers/products/quotations/orders/payments/dispatches
+  all 0 (no demo/test pollution).
+- ✅ Welcome email **sent** (Resend, `noreply@dealerlink.in` → the pilot;
+  `email_delivery_log` status `sent`, sent_at 08:47:40 UTC). Temp password
+  delivered by email only — **never committed anywhere** (F-8).
+- ✅ `umatrading.dealerlink.in` serves HTTPS 200 (`/api/health` + `/login`) on
+  the wildcard cert (SAN `*.dealerlink.in`, → Aug 19 2026); login page renders
+  the tenant brand "UMA TRADING".
+- ✅ Tax classification verified via the authoritative pure engine
+  (`packages/tax`): intra-MH → **CGST+SGST**, inter-state (e.g. GJ) → **IGST**.
+  Verified WITHOUT creating any document, so the tenant stays empty (no cleanup
+  needed).
+- ✅ Audit trail present (3 rows: tenant + settings + admin-user inserts).
+- ✅ DB validation run via the R17 whitelist-run-remove pattern; the temporary
+  IP firewall rule was removed afterward (only the `app` rule remains).
+
+**⚠️ Bank details are PLACEHOLDER.** At the operator's choice, the tenant was
+created with placeholder bank values (account name = legal name, branch = `NA`,
+dummy account number/IFSC). **The pilot must enter real bank details in Settings
+before issuing any tax invoice** — this is called out prominently in
+`docs/PILOT_GETTING_STARTED.md` §3 and the cover email. Branding (logo, T&C) also
+defaults — acceptable for launch, optional post-launch.
+
+**Operator follow-ups (manual):**
+
+- Send `docs/PILOT_GETTING_STARTED.md` (as PDF/link) + the cover email to
+  `info.umatrading@gmail.com` as a follow-up to the auto-sent welcome.
+- Optionally record the walkthrough (`docs/pilot/PILOT_WALKTHROUGH_SCRIPT.md`).
+- First-day monitoring → E.2.
+
+---
 
 ---
 
