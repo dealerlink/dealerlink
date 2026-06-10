@@ -97,3 +97,64 @@ describe('operator impersonation read-only enforcement', () => {
     });
   });
 });
+
+describe('operator read-only view — belt #2: SET TRANSACTION READ ONLY', () => {
+  // These prove the Postgres-level guard `withTenant` adds (ADR-014) refuses
+  // writes INDEPENDENTLY of the audit trigger. We DISARM the trigger here
+  // (app.read_only = '') so a failure can only come from the transaction being
+  // read-only at the database engine level — the path-independent belt that
+  // also covers non-audited / non-RLS tables and any future write path.
+
+  it('INSERT is rejected by the read-only transaction even with the audit trigger disarmed', async () => {
+    const tenantId = await getDemoTenantId();
+    let caught: unknown = null;
+    try {
+      await db.transaction(async (tx) => {
+        // Order mirrors withTenant: SET TRANSACTION READ ONLY must precede the
+        // first real query, so it comes BEFORE the set_config SELECTs.
+        await tx.execute(sql`SET TRANSACTION READ ONLY`);
+        await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
+        await tx.execute(sql`SELECT set_config('app.read_only', '', true)`); // trigger DISARMED
+        await tx.execute(sql`
+          INSERT INTO dealers (tenant_id, dealer_code, legal_name, display_name)
+          VALUES (${tenantId}, 'ZZ-RO-TEST', 'Illegal', 'Illegal')
+        `);
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeTruthy();
+    // 25006 = read_only_sql_transaction. Proves Postgres itself refused it,
+    // not the audit trigger (which was disarmed).
+    expect(String(caught)).toMatch(/read-only transaction|25006/i);
+  });
+
+  it('UPDATE is rejected by the read-only transaction even with the audit trigger disarmed', async () => {
+    const tenantId = await getDemoTenantId();
+    let caught: unknown = null;
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET TRANSACTION READ ONLY`);
+        await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
+        await tx.execute(sql`SELECT set_config('app.read_only', '', true)`);
+        await tx.execute(
+          sql`UPDATE dealers SET display_name = 'Hacked' WHERE tenant_id = ${tenantId}`,
+        );
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeTruthy();
+    expect(String(caught)).toMatch(/read-only transaction|25006/i);
+  });
+
+  it('SELECT still works inside a read-only transaction', async () => {
+    const tenantId = await getDemoTenantId();
+    const rows = await db.transaction(async (tx) => {
+      await tx.execute(sql`SET TRANSACTION READ ONLY`);
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
+      return tx.select({ email: users.email }).from(users);
+    });
+    expect(rows.length).toBeGreaterThan(0);
+  });
+});

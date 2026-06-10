@@ -1,6 +1,7 @@
 export type AppErrorCode =
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
+  | 'READ_ONLY'
   | 'NOT_FOUND'
   | 'VALIDATION'
   | 'CONFLICT'
@@ -35,6 +36,8 @@ export function userMessage(code: AppErrorCode): string {
       return 'You need to sign in to continue.';
     case 'FORBIDDEN':
       return 'You do not have permission to do that.';
+    case 'READ_ONLY':
+      return 'This is a read-only operator view. Changes are disabled.';
     case 'NOT_FOUND':
       return 'We could not find what you were looking for.';
     case 'VALIDATION':

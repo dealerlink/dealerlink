@@ -4,7 +4,12 @@ import { headers } from 'next/headers';
 import { getAuthContext } from '@/lib/auth/session';
 import { logger } from '@/lib/observability/logger';
 
-export type AccessAction = 'view' | 'export' | 'download' | 'operator_impersonation_view';
+export type AccessAction =
+  | 'view'
+  | 'export'
+  | 'download'
+  | 'operator_impersonation_view'
+  | 'operator_impersonation_exit';
 
 /**
  * Record a sensitive-route observation. Per docs/LOGGING.md, this fires on

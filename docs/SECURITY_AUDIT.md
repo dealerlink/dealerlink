@@ -172,10 +172,31 @@ false`. Mutations are audited by the `audit_trg` trigger.
 first. All tenant-facing reads/writes flow through `withTenant`/`tenantAction`,
 which bind `app.tenant_id`. ✅ No bypass finding.
 
-The operator-impersonation path is additionally **read-only**: `tenantAction`
-sets `readOnly: true` for impersonating operators, and the `audit_log_writer()`
-trigger `RAISE`s `42501` on any INSERT/UPDATE/DELETE when `app.read_only` is set
-(`triggers/audit-log.sql`). Covered by `packages/db/tests/impersonation.test.ts`.
+The operator-impersonation path (the operator read-only tenant view) is
+**read-only by construction with two independent belts** (ADR-014, DEV.82):
+
+- **Belt #1 — app layer.** `tenantAction` **refuses every action before its body
+  runs** when the impersonation cookie is present (returns `READ_ONLY`). This is
+  deterministic and stops the side channels the DB cannot see — pg-boss PDF/email
+  enqueues run on a separate connection, so they are cut off at the source.
+- **Belt #2 — DB layer.** `withTenant` issues `SET TRANSACTION READ ONLY`
+  whenever read-only is forced, so Postgres itself refuses every
+  INSERT/UPDATE/DELETE on **any** table — including non-audited / non-RLS tables
+  and any future write path. A resolver (`setReadOnlyResolver`, registered in
+  `instrumentation.ts`) forces this on EVERY `withTenant` in an impersonated
+  request (reads included) based on the operator-gated, httpOnly cookie, so the
+  guarantee holds without every call site remembering `{ readOnly }`. The
+  `audit_log_writer()` trigger `RAISE 42501` on `app.read_only` remains as a
+  third, friendlier-message guard.
+
+The view uses the normal `dealerlink_app` (NOBYPASSRLS) role scoped by
+`app.tenant_id` — **no BYPASSRLS/superuser path**, and RLS is unchanged for
+tenant users (no cookie ⇒ neither belt engages). The cookie is scoped to
+`.dealerlink.in` so it reaches the tenant subdomain; the `(app)` shell enforces
+that the subdomain slug matches the cookie's audited tenant. Entry + exit are
+written to `access_log` (`operator_impersonation_view` / `_exit`). Covered by
+`packages/db/tests/impersonation.test.ts` (belt #2, trigger-disarmed) and
+`apps/web/lib/actions/wrap.test.ts` (belt #1).
 
 ### 1.4 Cross-tenant query test (confirmed)
 
@@ -304,10 +325,12 @@ transaction. Hiding a UI button is never the control.
 
 `requireRole` (`lib/auth/require-role.ts`) throws `UNAUTHORIZED` if unauthenticated,
 `FORBIDDEN` if the account is not `active`, and `FORBIDDEN` if the role is not in
-the allow-list — all _before_ any DB work. `tenantAction` additionally allows an
-**operator** caller **iff** an impersonation cookie is present, and then forces
-`readOnly: true` (so impersonating operators can never mutate — enforced again by
-the audit trigger, §1.3). ✅
+the allow-list — all _before_ any DB work. When an impersonation cookie is
+present, `tenantAction` confirms the caller is an **operator** and then **refuses
+the action with `READ_ONLY` before its body runs** (ADR-014/DEV.82) — so an
+impersonating operator can never mutate or trigger a side-effect (e.g. a pg-boss
+enqueue). The DB independently forces the transaction read-only as a backstop
+(§1.3). ✅
 
 ### 3.2 Role matrix (representative; every action verified to declare an allow-list)
 

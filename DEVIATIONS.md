@@ -1699,3 +1699,62 @@ detached server lifecycle Playwright can kill cleanly) is deferred — the
 globalTimeout + JSON reporter make the suite reliable enough for now.
 
 **Status:** ✅ Closed (D.3). verify is bounded + result-recoverable on Windows.
+
+---
+
+## DEV.82 — Operator read-only tenant view: completed + hardened (was a prod dead-end)
+
+**Date:** 2026-06-10
+**ADR:** ADR-014
+
+The operator "Enter workspace" button (operator console, ADR-002) **dead-ended
+at the tenant login** in production. Root cause: the `dealerlink_impersonation`
+cookie was **host-only** (set with `path:'/'`, no `domain`), so on the
+cross-host redirect to `<slug>.dealerlink.in` the browser never sent it. The
+operator landed authenticated (the Lucia session cookie IS scoped to
+`.dealerlink.in`) but cookieless → the `(app)` shell bounced operators to
+`/admin` → middleware bounced `/admin` on a tenant subdomain to the tenant
+login. Worked in dev only because dev is single-host `localhost` + `?tenant=`.
+
+A second, subtler gap: read-only was armed **only on the write path**
+(`tenantAction` set `readOnly:true`); reads (`lib/queries/* → withTenant`) did
+not arm it, and pg-boss PDF/email enqueues run on a **separate connection** the
+audit trigger cannot see. So read-only was "safe because nothing writes there
+yet", not safe by construction.
+
+**Fix (this commit):**
+
+1. **Cookie domain** — `lib/impersonation/actions.ts` scopes the cookie to
+   `.dealerlink.in` in production (mirrors the Lucia session cookie), so it
+   travels to the tenant subdomain. Still httpOnly, `secure` in prod, 1h TTL,
+   operator-gated. Exit deletes with the same domain + writes an
+   `operator_impersonation_exit` audit row.
+2. **Belt #1 (app)** — `tenantAction` now REFUSES every action before its body
+   runs while impersonating (`READ_ONLY`), so no mutation and no pg-boss enqueue
+   can fire (deterministic, order-independent).
+3. **Belt #2 (DB)** — `withTenant` issues `SET TRANSACTION READ ONLY` whenever
+   read-only is forced; a resolver injected via `setReadOnlyResolver`
+   (registered in `instrumentation.ts`, returns true when the impersonation
+   cookie is present) forces it on EVERY `withTenant` in an impersonated
+   request — reads included. Postgres refuses writes on any table regardless of
+   code path. Fails safe outside a request (workers/seeds/cron).
+4. **Slug/cookie consistency** — `(app)/layout.tsx` requires the resolved
+   subdomain/`?tenant=` slug to match the cookie's tenant; mismatch → `/admin`.
+
+RLS is unchanged for tenant users (no cookie ⇒ neither belt engages); the view
+uses the normal `dealerlink_app` (NOBYPASSRLS) role scoped by `app.tenant_id` —
+no BYPASSRLS/superuser path. Tests: `packages/db/tests/impersonation.test.ts`
+(belt #2: `SET TRANSACTION READ ONLY` blocks writes with the audit trigger
+disarmed; reads still work), `apps/web/lib/actions/wrap.test.ts` (belt #1: body
+never runs, `withTenant` never opens, while impersonating), and the existing
+`rls.test.ts` isolation suite stays green.
+
+**Local test note (environment):** on this Windows host, Node's `postgres-js`
+client resets when connecting via `localhost` (resolves to IPv6 `::1`, which the
+container's `[::]:5432` mapping refuses); `127.0.0.1` connects fine, and `psql`
+inside the container is unaffected. This pre-dates this change (the project's
+`.env.local` uses `localhost`). Run the DB/verify gates with
+`DATABASE_URL`/`DATABASE_DIRECT_URL`/`APP_DATABASE_URL` pointed at `127.0.0.1`
+(Next does not override pre-set `process.env`).
+
+**Status:** ✅ Closed (feature live; see ADR-014 + docs/pilot/PILOT_MONITORING.md).

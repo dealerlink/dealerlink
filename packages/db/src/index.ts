@@ -4,6 +4,7 @@ export {
   withTenant,
   withTenantUser,
   withOperator,
+  setReadOnlyResolver,
   type DrizzleTx,
   type TenantContextOptions,
 } from './with-tenant';

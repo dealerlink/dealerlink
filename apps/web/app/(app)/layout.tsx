@@ -6,7 +6,8 @@ import type { ReactNode } from 'react';
 import { ImpersonationBanner } from '@/components/shell/ImpersonationBanner';
 import { Shell } from '@/components/shell';
 import { getAuthContext } from '@/lib/auth/session';
-import { impersonationTenantId } from '@/lib/tenant/context';
+import { currentTenantSlug, impersonationTenantId } from '@/lib/tenant/context';
+import { resolveTenantBySlug } from '@/lib/tenant/resolve';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getAuthContext();
@@ -21,10 +22,26 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   const impersonatingId = impersonationTenantId();
 
-  // Operators are only allowed in the tenant shell if they hold an
-  // impersonation cookie. Otherwise they belong on /admin.
-  if (ctx.user.role === 'operator' && !impersonatingId) {
-    redirect('/admin');
+  if (ctx.user.role === 'operator') {
+    // Operators are only allowed in the tenant shell while impersonating.
+    if (!impersonatingId) redirect('/admin');
+
+    // Slug/cookie consistency (ADR-014). The impersonation cookie is scoped to
+    // `.dealerlink.in`, so it travels to EVERY tenant subdomain. When the
+    // request carries a tenant scope (the subdomain in prod — always present on
+    // an (app) route there — or ?tenant=<slug> in dev), it MUST be the same
+    // tenant the cookie authorises (the one whose entry we audited). Otherwise
+    // a stale/mismatched cookie could render tenant B's data under a "viewing
+    // A" claim, or let the operator browse a tenant they never entered.
+    // When no slug is present (dev navigation without ?tenant — no other tenant
+    // is referenced, so no leak is possible) we trust the cookie as before.
+    const slug = currentTenantSlug();
+    if (slug) {
+      const slugTenant = await resolveTenantBySlug(slug);
+      if (!slugTenant || slugTenant.id !== impersonatingId) {
+        redirect('/admin');
+      }
+    }
   }
 
   const effectiveTenantId = ctx.user.role === 'operator' ? impersonatingId : ctx.user.tenantId;

@@ -53,8 +53,10 @@ function toActionError(err: unknown): { code: AppErrorCode; message: string } {
  *   3. Zod-validated input.
  *   4. A `withTenant()` transaction so RLS + audit triggers see the right
  *      tenant/user/ip/UA.
- *   5. Operator-impersonation calls run with `readOnly: true`, which the
- *      audit trigger enforces by raising on any mutation.
+ *   5. Operator read-only view (ADR-014): if an operator is impersonating a
+ *      tenant, the action is REFUSED before its body runs (READ_ONLY). The DB
+ *      then independently forces every `withTenant` read-only via the resolver
+ *      (belt #2), so even reads run in a read-only Postgres transaction.
  *   6. Errors are normalized to `{ ok: false, error: {code, message} }`.
  *
  * Example:
@@ -81,17 +83,28 @@ export function tenantAction<I, O>(
         });
       }
 
-      // Allow operator role IFF impersonating a tenant; otherwise only the
-      // four tenant roles may invoke a tenantAction.
+      // Operator read-only view (ADR-014) — belt #1, app layer.
+      // If an operator is impersonating a tenant, REFUSE every tenantAction
+      // before its body runs. This is deterministic and statement-order
+      // independent: it stops not just DB writes (also blocked at the DB by
+      // belt #2 / SET TRANSACTION READ ONLY) but the side-channel writes the
+      // DB guard cannot see — pg-boss PDF/email enqueues run on a SEPARATE
+      // connection (see lib/queue/client.ts), so they must be cut off here at
+      // the source rather than relying on a later in-transaction write to trip.
       const impersonatingTenant = impersonationTenantId();
-      let auth: AuthContext;
       if (impersonatingTenant) {
-        auth = await requireRole(['operator']);
-      } else {
-        auth = await requireRole(allowedRoles);
+        // Confirm it really is an operator (tenant users can't hold the
+        // httpOnly cookie, but never trust the cookie alone).
+        await requireRole(['operator']);
+        throw new AppError(
+          'READ_ONLY',
+          'Read-only operator view: changes are disabled while viewing a tenant.',
+        );
       }
 
-      const tenantId = impersonatingTenant ?? auth.user.tenantId;
+      const auth: AuthContext = await requireRole(allowedRoles);
+
+      const tenantId = auth.user.tenantId;
       if (!tenantId) {
         throw new AppError('FORBIDDEN', 'No tenant context for this action');
       }
@@ -114,13 +127,15 @@ export function tenantAction<I, O>(
                 tx,
                 auth,
                 input: parsed.data,
-                impersonating: !!impersonatingTenant,
+                // An impersonating operator never reaches here — tenantAction
+                // refuses above. So a body that runs is always a real tenant
+                // user. The flag is retained for the ctx shape / call sites.
+                impersonating: false,
               }),
             {
               userId: auth.user.id,
               ip,
               userAgent,
-              readOnly: !!impersonatingTenant,
             },
           ),
       );

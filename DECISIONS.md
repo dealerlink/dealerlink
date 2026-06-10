@@ -6,6 +6,123 @@
 
 ---
 
+## ADR-014 — Operator read-only tenant view (defense-in-depth, no RLS weakening)
+
+**Date:** 2026-06-10
+**Status:** Accepted
+**Closes:** DEV.82
+**Relates:** ADR-001 (subdomain routing), ADR-002 (operator role), ADR-009 (Zod at Lucia boundary)
+
+### Context
+
+The operator console (`/admin`, ADR-002) had an "Enter workspace" button that
+set an impersonation cookie and redirected to the tenant workspace, where the
+`(app)` shell renders the tenant's app under a read-only banner. A Stage B Day 3
+build wired most of this, and the audit trigger already refuses mutations when
+`app.read_only` is set (`withTenant({ readOnly })`).
+
+Two problems remained:
+
+1. **Dead-end in production.** The impersonation cookie was **host-only** (no
+   `domain`), so on the cross-host redirect to `<slug>.dealerlink.in` the browser
+   did not send it. The operator arrived authenticated (the Lucia session cookie
+   IS scoped to `.dealerlink.in`) but with no impersonation cookie → the shell
+   bounced operators to `/admin` → middleware bounced `/admin` on a tenant
+   subdomain to the tenant login. Net effect: the button dead-ended at a tenant
+   login the operator could not use. (It worked in dev only because dev stays on
+   one host, `localhost`, with `?tenant=<slug>` routing.)
+
+2. **Read-only rested on a single layer.** `readOnly: true` was set only on the
+   **write** path (`tenantAction`). Reads (`lib/queries/* → withTenant(tenantId)`)
+   did not arm it, and pg-boss enqueues (PDF/email) run on a **separate
+   connection** the audit trigger never sees. So the guarantee was "safe because
+   nothing currently writes on the read path / no enqueue currently slips
+   through", not safe by construction.
+
+This feature deliberately crosses the tenant-isolation boundary RLS exists to
+enforce, so it must be read-only by construction, must never weaken RLS for
+normal tenant users, must never use a BYPASSRLS/superuser role, and every access
+must be audited.
+
+### Decision
+
+Keep the existing architecture (operator views the real tenant app under a
+banner) and make read-only **defense-in-depth, path-independent**:
+
+- **Belt #1 — app layer (deterministic).** `tenantAction` now **refuses every
+  action before its body runs** when an impersonation cookie is present
+  (returns `READ_ONLY`). This is statement-order-independent and cuts off the
+  side channels the DB cannot see — pg-boss PDF/email enqueues run on a separate
+  pool, so they must be stopped at the source, not by a later in-transaction
+  write tripping.
+
+- **Belt #2 — DB layer (by construction).** `withTenant` issues
+  `SET TRANSACTION READ ONLY` (and sets `app.read_only`) whenever read-only is
+  forced. Postgres itself then refuses every INSERT/UPDATE/DELETE on **any**
+  table — including non-audited / non-RLS tables and any future write path —
+  regardless of whether the caller remembered `{ readOnly }`. A **resolver**
+  injected by the web app (`setReadOnlyResolver`, registered in
+  `instrumentation.ts`) returns true whenever the impersonation cookie is
+  present, so EVERY `withTenant` in an impersonated request (reads included) is
+  read-only. The resolver can only ADD restriction, never relax it, and returns
+  false outside a request (workers/seeds/cron), so it fails safe.
+
+- **Production dead-end fix.** The impersonation cookie is scoped to
+  `.dealerlink.in` in production (mirroring the Lucia session cookie) so it
+  travels to the tenant subdomain. It remains httpOnly, `secure` in prod, 1-hour
+  TTL, and is issued only by `enterImpersonation` (operator-gated).
+
+- **Slug/cookie consistency.** Because the cookie now travels to every tenant
+  subdomain, the `(app)` shell requires the resolved subdomain/`?tenant=` slug to
+  match the cookie's tenant (the one whose entry was audited); a mismatch
+  redirects to `/admin`. Prevents rendering tenant B under a "viewing A" claim.
+
+- **Audit.** Entry (`operator_impersonation_view`) and exit
+  (`operator_impersonation_exit`) are written to `access_log` with operator id,
+  tenant, IP, UA, timestamp — queryable later. These are append-only audit
+  writes via a direct connection (not `withTenant`), so they are intentionally
+  exempt from the read-only guard and keep working during a view.
+
+RLS is untouched: normal tenant users have no impersonation cookie, so neither
+belt engages for them, and tenant-to-tenant isolation is unchanged. No
+BYPASSRLS/superuser role powers the view — reads run through `dealerlink_app`
+(NOBYPASSRLS) scoped by `app.tenant_id`, exactly like a tenant user.
+
+### Consequences
+
+Positive:
+
+- Read-only is true by construction: a future "last-viewed" / counter / async
+  job added on the read path cannot write during a view, even if the author
+  never routes through `tenantAction`.
+- Two independent belts: the app refusal and the Postgres read-only transaction
+  each suffice alone; a missed code path on one is caught by the other.
+- The operator sees exactly what the tenant sees (best for support), under a
+  persistent read-only banner.
+
+Tradeoffs:
+
+- All `tenantActions` are refused during a view, including PDF/email generation.
+  This is deliberate: generating a document enqueues a job and writes
+  `generated_documents` — a state mutation. The operator views on-screen instead.
+- Write buttons remain visible in the tenant app and surface a read-only error
+  when clicked, rather than being hidden. Server refusal is the security
+  boundary; hiding is cosmetic (a future UX nicety).
+
+### Rejected alternatives
+
+1. **Dedicated operator read-only "inspector" pages (Design 2).** Safe by
+   construction (no write paths exist) but discards the working flow and adds a
+   large parallel read-only UI to build and maintain. The two-belt approach
+   reaches the same guarantee without the rebuild.
+2. **Time-boxed signed read-only token (Design 3).** More machinery; the 1-hour
+   httpOnly cookie already time-boxes access. Overkill for a support use case.
+3. **A BYPASSRLS/read-only DB role for the view.** Rejected — would route tenant
+   reads through a role outside the RLS model. The view uses the normal
+   `dealerlink_app` role + `app.tenant_id`, so RLS still scopes every read.
+
+---
+
 ## ADR-011 — Server Components + typed query helpers replace tRPC for reads
 
 **Date:** May 2026 (Day 5)
