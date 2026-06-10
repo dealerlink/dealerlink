@@ -3,58 +3,98 @@
 > **Purpose:** Reference for what Dealerlink costs to run, where costs can spike, and what to do about it. Update as tiers change or new services are added.
 >
 > **Companion files:**
+>
 > - `CLAUDE.md` — implementation guide
 > - `DECISIONS.md` — architecture decisions affecting cost
 > - `PROJECT_PLAN.md` — production infrastructure tasks (Stage D)
+>
+> **Last updated:** June 2026 — reconciled against actual DO invoice (June 2–8, 2026). Previous estimates replaced with invoice-confirmed figures throughout.
 
 ---
 
 ## TL;DR
 
-| Stage | Tenants | Monthly cost | Risk band |
-|---|---|---|---|
-| **Pilot baseline** | 1 (smoke test) | **~$40** | None |
-| **Early growth** | 2–3 | **~$120** | Low |
-| **One heavy tenant** | 1 large + 2 small | **~$160** | Medium |
-| **Pre-scale trigger** | 5+ tenants | **~$250–350** | Time to consider DOKS migration |
+| Stage                 | Tenants           | Monthly cost (USD) | Monthly cost (INR, ~₹85/USD incl. forex) | Risk band                       |
+| --------------------- | ----------------- | ------------------ | ---------------------------------------- | ------------------------------- |
+| **Pilot baseline**    | 1 (live)          | **~$96**           | **~₹8,160**                              | None                            |
+| **Early growth**      | 2–3               | **~$130–145**      | **~₹11,050–12,325**                      | Low                             |
+| **One heavy tenant**  | 1 large + 2 small | **~$165**          | **~₹14,025**                             | Medium                          |
+| **Pre-scale trigger** | 5+ tenants        | **~$270–370**      | **~₹22,950–31,450**                      | Time to consider DOKS migration |
 
-The architecture is **financially well-behaved**. Every line is a fixed-tier subscription; no service has unbounded usage-based pricing that could surprise you.
+> ⚠ **INR note:** DO bills in USD. Your card applies a forex conversion (~2% markup over RBI rate). At ₹83/USD spot + 2% = ~₹85/USD effective. All INR figures use ₹85/USD. The rate fluctuates — recheck quarterly.
 
----
-
-## Pilot Baseline (Month 1–6)
-
-Realistic Phase 1 volumes per BRD: ~500 inventory items, 30 deals, 50 emails, 10 dispatches/month per tenant. All costs in USD.
-
-| Service | Plan | Monthly | Notes |
-|---|---|---|---|
-| **DigitalOcean App Platform** (Basic) | 1 GB RAM, 1 vCPU, BLR | $12 | Hosts the Next.js web app (Process 1) |
-| **DigitalOcean Droplet** (workers) | 1 GB RAM, 1 vCPU, BLR | $6 | Puppeteer + pg-boss runner; alternative: same App Platform |
-| **DO Managed Postgres** (Basic) | 1 GB RAM, 10 GB disk, BLR | $15 | Includes daily backups + 7-day point-in-time recovery |
-| **DO Spaces** | 250 GB storage + 1 TB egress | $5 | Invoices, attachments, logos |
-| **Resend** | Free tier (3K emails/mo) | $0 | Sufficient for Phase 1 |
-| **Sentry** | Developer (free) | $0 | 5K errors/mo, 1 user |
-| **Better Stack** | Free tier | $0 | 10 monitors, sufficient for uptime + status page |
-| **DO Monitoring** | Built-in | $0 | CPU/RAM/disk/bandwidth alerts |
-| **Axiom** | Free tier (~30 GB/mo) | $0 | Structured app logs |
-| **GitHub Actions** | Free tier | $0 | 2K minutes/mo on private repos |
-| **Domain + SSL** | Namecheap/Cloudflare + Let's Encrypt | $1 | ~$12/year amortized |
-| **Total** | | **~$39/month** | |
+> ⚠ **GST on DO bill:** DO collects 18% GST on your subscription as a registered foreign digital service provider in India. This is charged on top of the compute fees and appears as a separate tax line on every invoice. If Dealerlink becomes GST-registered, this may be claimable as Input Tax Credit (ITC) — confirm with your CA.
 
 ---
 
-## Realistic Ceiling (Month 6–12, 2–3 tenants onboarded)
+## Actual Pilot Baseline — Invoice-Confirmed (June 2026)
 
-| Service | Plan | Monthly | Why it goes up |
-|---|---|---|---|
-| **DO App Platform** (Pro) | 2 GB / 1 vCPU | $25 | Multi-tenant load |
-| **DO Droplet** (workers) | 2 GB / 1 vCPU | $12 | Puppeteer needs more headroom |
-| **DO Managed Postgres** | 2 GB / 25 GB | $30 | More tenants = more rows, RLS overhead |
-| **DO Spaces** | Same | $5 | |
-| **Resend** | Pro (50K emails) | $20 | If you cross 3K/mo |
-| **Sentry** | Team | $26 | Multi-user, more errors |
-| **GitHub Actions** | Free tier | $0 | Still under 2K min |
-| **Total** | | **~$118/month** | |
+Reconciled against DO invoice preview for June 2–8, 2026 (8-day period, extrapolated to monthly).
+All costs in USD unless stated.
+
+### Production Environment (`dealerlink-production`)
+
+| Service                 | Plan                      | Monthly (est.) | Invoice basis      | Notes                                        |
+| ----------------------- | ------------------------- | -------------- | ------------------ | -------------------------------------------- |
+| App Platform — web      | basic-xs · 1 GB RAM · BLR | ~$9.70         | $2.50 / 8 days     | Next.js web app                              |
+| App Platform — workers  | basic-xs · 1 GB RAM · BLR | ~$9.70         | $2.50 / 8 days     | Puppeteer + pg-boss; Dockerfile (Chromium)   |
+| DB — primary node       | Basic 2 GB / 1 vCPU · BLR | ~$23.25        | $6.00 / 8 days     | PG 16, ~50 connections, PITR backups         |
+| DB — additional storage | 30 GiB (above base)       | ~$6.25         | $1.61 / 8 days     | Grows with data; monitor monthly             |
+| DO Spaces               | 250 GB + 1 TB egress      | ~$5.00         | not yet on invoice | PDFs, attachments, logos — provision pending |
+| **Production subtotal** |                           | **~$53.90**    |                    | Spaces not yet active                        |
+
+### Staging Environment (`dealerlink-staging`, `first-project`)
+
+| Service                 | Plan                      | Monthly (est.) | Invoice basis  | Notes                                                        |
+| ----------------------- | ------------------------- | -------------- | -------------- | ------------------------------------------------------------ |
+| App Platform — web      | basic-xs · 1 GB RAM · BLR | ~$9.70         | $2.50 / 8 days | ⚠ Same size as production — previously modelled as basic-xxs |
+| App Platform — workers  | basic-xxs · 512 MB · BLR  | ~$4.85         | $1.25 / 8 days | Smaller OK — no OOM concern at demo volumes                  |
+| DB — primary node       | Basic 1 GB / 1 vCPU · BLR | ~$12.60        | $3.25 / 8 days |                                                              |
+| DB — additional storage | 10 GiB (above base)       | ~$2.10         | $0.54 / 8 days | Grows with dev/demo data                                     |
+| **Staging subtotal**    |                           | **~$29.25**    |                |                                                              |
+
+### Taxes
+
+| Line                                | Monthly (est.) | Invoice basis  | Notes                                          |
+| ----------------------------------- | -------------- | -------------- | ---------------------------------------------- |
+| GST India 18% — IaaS (DB nodes)     | ~$6.47         | $1.67 / 8 days | Charged by DO on IaaS lines                    |
+| GST India 18% — PaaS (App Platform) | ~$7.60         | $1.96 / 8 days | Charged by DO on PaaS lines                    |
+| **GST subtotal**                    | **~$14.07**    |                | Potentially claimable as ITC if GST-registered |
+
+### Domain
+
+| Service      | Monthly (est.) | Notes                                                 |
+| ------------ | -------------- | ----------------------------------------------------- |
+| Domain + SSL | ~$1.00         | dealerlink.in, ~$12/yr amortised, Cloudflare DNS free |
+
+---
+
+### All-in Monthly Total (Invoice-Confirmed)
+
+| Category                         | USD/mo       | INR/mo (₹85/USD) |
+| -------------------------------- | ------------ | ---------------- |
+| Production compute + DB + Spaces | ~$53.90      | ~₹4,582          |
+| Staging compute + DB             | ~$29.25      | ~₹2,486          |
+| GST on DO bill                   | ~$14.07      | ~₹1,196          |
+| Domain                           | ~$1.00       | ~₹85             |
+| Forex markup on card (~2%)       | ~$1.96       | ~₹167            |
+| **True all-in total**            | **~$100.18** | **~₹8,516**      |
+
+> **DO's own monthly prediction: ~$94** (excl. card forex markup). This is consistent with the 8-day extrapolation and confirms the model.
+
+---
+
+## What Changed vs Previous Estimates
+
+| Item                  | Old estimate  | Actual (invoice)                     | Delta        | Reason                                           |
+| --------------------- | ------------- | ------------------------------------ | ------------ | ------------------------------------------------ |
+| Production DB         | $30 flat      | $23.25 node + $6.25 storage = $29.50 | ~−$0.50      | Composition different; storage will grow         |
+| Staging web           | basic-xxs ~$5 | basic-xs ~$9.70                      | **+$4.70**   | Was not downgraded after staging was set up      |
+| Staging DB storage    | $0            | ~$2.10                               | **+$2.10**   | 10 GiB extra storage not modelled                |
+| Production DB storage | $0 (included) | ~$6.25                               | **+$6.25**   | 30 GiB extra storage billed separately           |
+| GST on DO bill        | $0            | **~$14.07**                          | **+$14.07**  | DO collects Indian GST — not previously modelled |
+| Card forex markup     | $0            | **~$1.96**                           | **+$1.96**   | ~2% on USD charge to Indian card                 |
+| **Net delta**         | **~$85/mo**   | **~$100/mo**                         | **+~$15/mo** |                                                  |
 
 ---
 
@@ -62,121 +102,121 @@ Realistic Phase 1 volumes per BRD: ~500 inventory items, 30 deals, 50 emails, 10
 
 Where surprise bills can come from, ranked by likelihood × impact.
 
-| Risk | Likelihood | Impact | Trigger | Mitigation |
-|---|---|---|---|---|
-| **Puppeteer memory spike → forced upgrade** | Medium | +$12–25/mo | Bulk PDF generation (100+ invoices in one batch for month-end). Chromium leaks ~50MB per render | Queue concurrency limit in pg-boss (max 2 concurrent renders); restart worker every 100 jobs |
-| **Postgres storage growth** | Medium | +$15–30/mo per tier jump | Audit log + email body storage. 10K logged emails ≈ 500MB | Move email bodies + attachments to Spaces; keep only metadata in Postgres |
-| **DO Spaces egress overage** | Low | +$0.01/GB after 1 TB | Repeated PDF downloads, or serving PDFs without caching | CDN-cache PDFs (DO Spaces has CDN built in, free); use signed short-lived URLs |
-| **Resend volume spike** | Low | $20 → $90+ | Tenant with 50K+ emails/mo | Pro plan covers 50K; Scale plan ($90) covers 100K. Monitor and tier accordingly |
-| **Sentry error storm** | Low | Plan auto-throttles, no surprise bill | Bad deploy floods errors | Set spike protection in Sentry settings (free) |
-| **Bandwidth on App Platform** | Very low | $0.02/GB after 100 GB | Serving large file downloads through the app instead of Spaces | Always serve files from Spaces, not from the app |
+| Risk                                            | Likelihood | Impact | Mitigation                                                                                                                                            |
+| ----------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DB storage growth (audit logs, email bodies)    | High       | Medium | Move email bodies + attachments to Spaces; keep only metadata in DB. Monitor `pg_database_size()` monthly.                                            |
+| Puppeteer OOM on bulk PDF runs                  | Medium     | Low    | Queue concurrency capped at 2 concurrent renders (ADR-013). Workers memory alert set at 80% in DO Monitoring.                                         |
+| DO Spaces egress spike (repeated PDF downloads) | Low        | Low    | Enable CDN on Spaces bucket. Egress alert at 800 GB (80% of free 1 TB).                                                                               |
+| Resend volume >3K/mo                            | Low        | Low    | Upgrade to Pro ($20/mo) when triggered. Per-tenant email caps recommended.                                                                            |
+| DB storage crosses tier boundary                | Medium     | Medium | Basic 2 GB includes 25 GB storage. Additional storage at ~$0.21/GiB/mo. At current rate (~30 GiB in use after 1 month), budget ~$6/mo growing slowly. |
+| Card forex rate worsening                       | Low        | Low    | Monitor quarterly. At ₹87/USD the all-in INR cost rises ~2.4%.                                                                                        |
+
+### Billing Alerts (set in DO dashboard)
+
+| Threshold      | Action                                                   |
+| -------------- | -------------------------------------------------------- |
+| **$50/month**  | Email alert — sanity check                               |
+| **$100/month** | Email alert — at current baseline; review what's growing |
+| **$150/month** | Email + SMS — something unexpected, investigate          |
+| **$200/month** | Email + SMS — scaling event or misconfiguration          |
+
+Also maintain:
+
+- **Sentry spike protection** (Settings → Quotas → On-Demand Budgets)
+- **Resend usage cap** in account settings
+- **DO Spaces egress alarm** at 800 GB in DO Monitoring
+- **DB connection count alert** at >40 (Pro-tier upgrade signal)
+- **Workers memory alert** at >80% (PDF OOM signal, DEV.67)
 
 ---
 
-## The Two Realistic Spike Scenarios
+## Realistic Ceiling (Month 6–12, 2–3 tenants onboarded)
 
-### 1. Inventory volume explosion
+Based on invoice-confirmed baseline + expected growth triggers.
 
-A tenant procures 50,000 panels in a month (plausible for a large solar distributor). You'll have:
-- 50K rows in `inventory_items`
-- 50K audit log entries
-- Search performance degradation on `pg_trgm` → forces upgrade to 4 GB Postgres tier
-
-**Realistic ceiling: +$30/mo for a heavy tenant.**
-
-If `pg_trgm` becomes the bottleneck, add Meilisearch:
-- Self-hosted on a $6 Droplet, OR
-- Meili Cloud at ~$30/mo
-
-### 2. PDF generation bottleneck
-
-Each Puppeteer render takes 2–5 seconds and ~150 MB peak RAM. If a tenant generates 200 invoices in a batch (month-end), the worker queue backs up and the 1 GB Droplet swaps. Options:
-- Upgrade worker to 2 GB Droplet (+$6/mo)
-- Run Puppeteer with `--single-process` flag and limit concurrency to 1
-
-**Realistic ceiling: +$6/mo, plus a one-time engineering tweak.**
+| Service            | Plan                         | Monthly             | Why it goes up                           |
+| ------------------ | ---------------------------- | ------------------- | ---------------------------------------- |
+| Production web     | basic-xs (current)           | ~$9.70              | Stable unless sustained >80% memory      |
+| Production workers | basic-xs (current)           | ~$9.70              | Stable; monitor memory on bulk PDF runs  |
+| Production DB      | Basic 2 GB + growing storage | ~$32–38             | Storage grows ~5–10 GiB/month per tenant |
+| Staging (all)      | Current                      | ~$29.25             | Stable                                   |
+| DO Spaces          | 250 GB + 1 TB egress         | ~$5.00              | Once provisioned                         |
+| Resend             | Pro (50K emails)             | ~$20.00             | When >3K emails/mo                       |
+| Sentry             | Team                         | ~$26.00             | Multi-user, higher error budget          |
+| GST on DO          | 18%                          | ~$20–22             | Grows with bill                          |
+| Domain             | Same                         | ~$1.00              |                                          |
+| **Total**          |                              | **~$152–161/month** | ~₹12,920–13,685                          |
 
 ---
 
-## What Has No Cost Spike Risk
+## Phase 2 Cost Triggers
 
-These services scale linearly with the database or have hard caps:
+When the triggers below are met, expect these additions on top of the ceiling above:
 
-- **Postgres-as-queue (pg-boss)** — scales linearly with the database; no separate billing surface
-- **Lucia auth** — sessions in Postgres, zero per-user cost ever
-- **Tremor / shadcn / Tailwind** — all open source, no SaaS tier
-- **Server Actions / tRPC** — zero per-request cost; you're paying for compute, not invocations
-- **Better Stack** — free tier covers you well past 5 tenants
-- **Axiom** — free tier (~30 GB/mo) covers structured logs at this scale
+| Trigger                                     | Service to add                        | Monthly cost (USD) |
+| ------------------------------------------- | ------------------------------------- | ------------------ |
+| Email volume > 3K/mo                        | Resend Pro (50K/mo)                   | +$20               |
+| Scale-tier SLA commitment (30s monitoring)  | Better Stack paid                     | +$25–50            |
+| Job volume > 1K/day OR shared session store | Redis (DO Managed)                    | +$15               |
+| `pg_trgm` slow on 100K+ records             | Meilisearch (self-hosted $6 Droplet)  | +$6                |
+| Bulk PDF batches > 100 invoices at once     | Workers Droplet upgrade to 2 GB       | +$6                |
+| DB storage > 25 GB included (growing)       | Billed at ~$0.21/GiB/mo automatically | variable           |
+| 5+ tenants OR per-tenant isolation needed   | DOKS Kubernetes (3-node cluster)      | +$60–120           |
+| Product analytics + session replay          | PostHog Cloud (>1M events)            | +$250              |
 
----
+**Phase 2 ceiling estimate (5+ tenants, all triggers, on Kubernetes):** ~$450–550/month (~₹38,250–46,750).
 
-## Mandatory Cost Protection — Day One
-
-Set DigitalOcean billing alerts on these thresholds. Five minutes of setup, total protection from runaway costs.
-
-| Threshold | Action |
-|---|---|
-| **$50/month** | Email alert (sanity check that you haven't misconfigured something) |
-| **$100/month** | Email alert (you're scaling — review what's growing) |
-| **$200/month** | Email + SMS alert (something unexpected is happening) |
-
-Also enable:
-- **Sentry spike protection** (Settings → Quotas → On-Demand Budgets) — caps at your monthly limit
-- **Resend usage cap** in account settings if available
-- **DO Spaces egress alarm** in DO Monitoring at 800 GB (80% of free tier)
+> **Kubernetes timing:** delay migration until 7–8 tenants (not 5) to avoid margin compression. At 5 tenants (₹42,500/mo revenue) Kubernetes at ~$100/mo is affordable but tight. At 8 tenants (₹68,000/mo) it's comfortable.
 
 ---
 
-## Phase 2 Cost Considerations
+## Cost Per Tenant — Rule of Thumb (Updated)
 
-When triggers below are met, expect these additions:
+Marginal cost per additional tenant is ~$5/month (incremental DB storage + Spaces growth). Fixed cost (~$96/mo all-in) is shared across all tenants.
 
-| Trigger | Service to add | Monthly cost |
-|---|---|---|
-| Job volume > 1K/day OR shared session store needed | Redis (DO Managed) | +$15 |
-| `pg_trgm` slows on 100K+ records | Meilisearch (self-hosted on $6 Droplet) | +$6 |
-| Multi-tenant data justifies session replay | PostHog Cloud | +$0 (free tier 1M events) → $250/mo for 5+ tenants |
-| Tenant count crosses 5+ OR per-tenant scaling matters | DOKS (Kubernetes) | +$60–120 (3-node cluster) |
-| Enterprise tenants land | SSO infra (Lucia + provider configs) | $0 (Lucia covers it) |
+| Tenants      | Total cost/mo (USD) | Total cost/mo (INR) | Per-tenant cost (USD) |
+| ------------ | ------------------- | ------------------- | --------------------- |
+| 1            | ~$100               | ~₹8,500             | ~$100                 |
+| 2            | ~$105               | ~₹8,925             | ~$52.50               |
+| 3            | ~$110               | ~₹9,350             | ~$36.70               |
+| 5            | ~$120               | ~₹10,200            | ~$24                  |
+| 10 (Phase 2) | ~$600 (Kubernetes)  | ~₹51,000            | ~$60                  |
 
-**Phase 2 ceiling estimate (5+ tenants on Kubernetes):** ~$400–500/month.
+At ₹8,500/month pricing (~$100/USD), you need **2 tenants to reach healthy margin (>50%)**. Tenant #1 at monthly plan is approximately break-even; tenant #1 at annual plan (₹7,083/mo effective) runs at a small loss until tenant #2 arrives.
 
 ---
 
-## Cost Per Tenant — Rule of Thumb
+## ITC Consideration (Action Required)
 
-At realistic Phase 1 volumes:
+DO charges 18% GST on your subscription (~$14/month → ~₹1,190/month). Once Dealerlink is GST-registered and billing its own customers with GST:
 
-| Tenants | Total cost | Per-tenant cost |
-|---|---|---|
-| 1 | $40 | $40 |
-| 3 | $120 | $40 |
-| 5 | $250 | $50 |
-| 10 (Phase 2 scale) | $500 | $50 |
+- The GST paid to DO is potentially claimable as **Input Tax Credit (ITC)**
+- This would reduce the effective infra cost by ~₹1,190/month (~$14/month)
+- Net true cost if ITC claimed: ~$86/month → ~₹7,310/month
 
-Dealerlink is cheap to operate at low tenant counts and stays roughly flat per tenant as you scale, with a small step-up around the Kubernetes migration. Pricing your SaaS at $50–100/tenant/month gives you a healthy margin from tenant #2 onward.
+Confirm with your CA before relying on this in the P&L model.
 
 ---
 
 ## Reviewing This File
 
 Update this file when:
-- A service tier changes
+
+- A DO invoice arrives and actuals differ from estimates
+- A service tier changes (upgrade or downgrade)
 - A new service is added or removed
-- A real-world cost spike occurs (capture in a "Spike Log" appendix below)
+- A real-world cost spike occurs (capture in Spike Log below)
 - Phase 2 triggers fire and you upgrade
+- Forex rate moves materially (>5% from ₹85/USD assumed here)
 
 ---
 
 ## Spike Log
 
-Append entries here when a real-world cost spike happens. Format: date, what happened, action taken, new monthly baseline.
-
-| Date | Event | Action | New baseline |
-|---|---|---|---|
-| | | | |
+| Date      | Event                                                                                                                                                                          | Action                                                                                          | New baseline       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------ |
+| June 2026 | First DO invoice preview (8-day). Identified: GST on DO bill (~$14/mo) not previously modelled; staging web basic-xs (not basic-xxs as assumed); DB storage billed separately. | Updated COSTS.md with invoice-confirmed figures. Total revised from ~$85/mo to ~$100/mo all-in. | ~$100/mo (~₹8,500) |
 
 ---
 
-*Last updated: May 2026 · Phase 1 baseline*
+_Last updated: June 2026 · Reconciled against DO invoice June 2–8, 2026_

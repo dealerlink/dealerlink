@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Getting Started with Dealerlink</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>/* vietnamese */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("d8cd2831-d39f-45b3-93d1-b68bb89bbccc") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("3fde750d-fa7d-4143-9e4d-1953e5bedc54") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("640814ed-09c3-43e1-808c-fa4654708285") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("d8cd2831-d39f-45b3-93d1-b68bb89bbccc") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("3fde750d-fa7d-4143-9e4d-1953e5bedc54") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("640814ed-09c3-43e1-808c-fa4654708285") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("d8cd2831-d39f-45b3-93d1-b68bb89bbccc") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("3fde750d-fa7d-4143-9e4d-1953e5bedc54") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("640814ed-09c3-43e1-808c-fa4654708285") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("d8cd2831-d39f-45b3-93d1-b68bb89bbccc") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("3fde750d-fa7d-4143-9e4d-1953e5bedc54") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("640814ed-09c3-43e1-808c-fa4654708285") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("b1d607f3-1565-42d2-bd3c-2c76ffcc8487") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("06813e9b-8311-451b-8650-a9e8a49ec652") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("6061282e-0ee5-464b-90cf-2d3f22f92c4d") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("ade6ec45-b00f-4343-b544-da7aa44ab605") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("b6060d7d-c526-429f-bd58-8e359ef607a3") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("e73f2ae9-400f-4edb-9925-757673c0cc2d") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("ea3b4c2e-721c-45fb-8e76-a24b3da6e7a2") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("a136de37-9211-4084-9278-a2256b8deb62") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("cb8e6507-b827-4ae5-a7e5-5f57f133330a") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("b6ca198a-79e0-487e-a055-b7cf0f1c1ab6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("27b7924b-0448-4284-97d2-69fa1a2de72d") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("2d0f5132-7fce-45c5-8115-01496d55c44f") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("3ad69293-bb59-4ad9-adbe-6be391e8cf69") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("4ad4cf30-4e7f-4d4b-8d7b-38d7f887965b") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("82fd551c-672f-44c5-b43a-0700c762f421") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c8b122d2-1fb2-45ea-bf75-57c8c99fc788") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("ada8425d-f43c-4f73-88a2-90283d55b2a1") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("268b3aed-5c17-45d5-9417-eb593d323f13") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c5708787-65a8-4382-bb97-d732aaadd41f") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("120a797f-e628-4ed2-9c5c-371454422c06") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("37f7d9f9-8008-4312-83d0-61da3a4c4370") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c8b122d2-1fb2-45ea-bf75-57c8c99fc788") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("ada8425d-f43c-4f73-88a2-90283d55b2a1") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("268b3aed-5c17-45d5-9417-eb593d323f13") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c5708787-65a8-4382-bb97-d732aaadd41f") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("120a797f-e628-4ed2-9c5c-371454422c06") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("37f7d9f9-8008-4312-83d0-61da3a4c4370") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c8b122d2-1fb2-45ea-bf75-57c8c99fc788") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("ada8425d-f43c-4f73-88a2-90283d55b2a1") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("268b3aed-5c17-45d5-9417-eb593d323f13") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c5708787-65a8-4382-bb97-d732aaadd41f") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("120a797f-e628-4ed2-9c5c-371454422c06") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("37f7d9f9-8008-4312-83d0-61da3a4c4370") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c8b122d2-1fb2-45ea-bf75-57c8c99fc788") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("ada8425d-f43c-4f73-88a2-90283d55b2a1") format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("268b3aed-5c17-45d5-9417-eb593d323f13") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("c5708787-65a8-4382-bb97-d732aaadd41f") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("120a797f-e628-4ed2-9c5c-371454422c06") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("37f7d9f9-8008-4312-83d0-61da3a4c4370") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("303c14f6-f764-4e33-98a9-7782ce3b0dc6") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("2fa16aa1-f993-4a27-82ba-04a11d050cfd") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("864427db-0c2c-4214-906a-09e64935825b") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("aad62a03-4d47-4b1a-8c22-bc46646ffaf6") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("2692156f-3739-464c-b25f-08194d5a2854") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("cc6f9b04-fece-44ae-9c70-3dc1f9296203") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("aad62a03-4d47-4b1a-8c22-bc46646ffaf6") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("2692156f-3739-464c-b25f-08194d5a2854") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("cc6f9b04-fece-44ae-9c70-3dc1f9296203") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("aad62a03-4d47-4b1a-8c22-bc46646ffaf6") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("2692156f-3739-464c-b25f-08194d5a2854") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("cc6f9b04-fece-44ae-9c70-3dc1f9296203") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<style>
+  :root{
+    --ink:#1a1f1c;
+    --ink-soft:#3d4642;
+    --ink-faint:#6b7570;
+    --paper:#fbfaf6;
+    --paper-warm:#f4f1e8;
+    --paper-warm2:#efebdf;
+    --line:#e0ddd2;
+    --line-soft:#ebe8de;
+    --green:#1b5e44;
+    --green-deep:#0f3a2a;
+    --green-deepest:#0b2c20;
+    --green-bright:#2a8060;
+    --green-mist:#7fd3ac;
+    --gold:#b8893b;
+    --gold-deep:#9a6f28;
+    --gold-soft:#f0e6d0;
+    --amber-bg:#fdf6e8;
+    --amber-line:#e6c578;
+    --amber-ink:#7a5a18;
+    --blue-bg:#eef3f4;
+    --blue-line:#bcd2d6;
+    --blue-ink:#2c5560;
+    --shadow-sm:0 1px 2px rgba(26,31,28,.05);
+    --shadow:0 1px 2px rgba(26,31,28,.04),0 10px 34px rgba(26,31,28,.07);
+    --shadow-lg:0 2px 4px rgba(11,44,32,.06),0 24px 60px rgba(11,44,32,.16);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body{
+    font-family:'Newsreader',Georgia,serif;
+    font-size:17.5px; line-height:1.74; color:var(--ink);
+    background:var(--paper); font-optical-sizing:auto;
+  }
+  ::selection{ background:rgba(184,137,59,.22); }
+  .wrap{ max-width:768px; margin:0 auto; padding:0 40px; }
+
+  /* ============================================================
+     COVER
+  ============================================================ */
+  .cover{
+    background:
+      radial-gradient(1100px 520px at 84% -8%, rgba(127,211,172,.16), transparent 58%),
+      radial-gradient(820px 420px at -12% 116%, rgba(184,137,59,.13), transparent 56%),
+      linear-gradient(168deg, var(--green-deepest) 0%, var(--green-deep) 46%, #134a36 100%);
+    color:#f6f4ec; position:relative; overflow:hidden;
+    padding:0;
+  }
+  .cover::after{
+    content:""; position:absolute; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.045) 1px, transparent 1px);
+    background-size:24px 24px; opacity:.6; pointer-events:none;
+  }
+  /* faint oversized monogram watermark */
+  .cover-glyph{
+    position:absolute; right:-70px; bottom:-130px; width:430px; height:430px;
+    opacity:.07; pointer-events:none; z-index:0;
+  }
+  .cover-inner{
+    position:relative; z-index:1;
+    max-width:768px; margin:0 auto; padding:46px 40px 60px;
+  }
+  /* editorial frame */
+  .cover-frame{
+    border:1px solid rgba(255,255,255,.16);
+    border-radius:20px;
+    padding:42px 44px 46px;
+    background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0));
+    position:relative;
+  }
+  .cover-frame::before{
+    content:""; position:absolute; left:44px; right:44px; top:0; height:2px;
+    background:linear-gradient(90deg, transparent, var(--gold) 22%, var(--gold) 78%, transparent);
+    opacity:.8;
+  }
+
+  .top-rail{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:58px;
+  }
+  .brand-row{ display:flex; align-items:center; gap:13px; }
+  .brand-mark{
+    width:44px;height:44px;border-radius:12px;
+    background:linear-gradient(145deg,#54c596,#1b5e44);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 6px 18px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.3); flex:none;
+  }
+  .brand-mark svg{ width:24px;height:24px; }
+  .brand-name{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:20px; letter-spacing:.2px; color:#fff; }
+  .top-tag{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.26em;
+    text-transform:uppercase; color:#a9ddc6;
+    border:1px solid rgba(127,211,172,.3); border-radius:30px; padding:7px 15px;
+    background:rgba(127,211,172,.06);
+  }
+
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:.34em;
+    text-transform:uppercase; color:#9fd9bf; margin-bottom:24px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .eyebrow::after{ content:""; height:1px; flex:1; max-width:120px; background:linear-gradient(90deg, rgba(159,217,191,.5), transparent); }
+
+  .cover h1{
+    font-family:'Fraunces',serif; font-weight:480; font-size:60px; line-height:1.02;
+    letter-spacing:-.02em; margin-bottom:22px; color:#fff;
+    font-optical-sizing:auto;
+  }
+  .cover h1 em{ font-style:italic; color:#aee2ca; font-weight:420; }
+  .cover .sub{ font-size:20px; line-height:1.62; color:#d8e8e0; max-width:560px; font-weight:400; }
+  .cover .sub em{ font-style:italic; color:#fff; }
+
+  .workspace-card{
+    margin-top:40px; display:inline-flex; align-items:center; gap:18px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(6px); border-radius:16px; padding:18px 24px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .workspace-card .ws-label{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.22em;
+    text-transform:uppercase; color:#9fd9bf; margin-bottom:6px;
+  }
+  .workspace-card .ws-url{
+    font-family:'IBM Plex Mono',monospace; font-size:16.5px; color:#fff; font-weight:500; letter-spacing:.01em;
+  }
+  .workspace-card .ws-icon{
+    width:42px;height:42px;border-radius:11px;flex:none;
+    background:rgba(127,211,172,.16); border:1px solid rgba(127,211,172,.22);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .workspace-card .ws-icon svg{ width:20px;height:20px; }
+
+  .meta-strip{
+    margin-top:40px; padding-top:28px; border-top:1px solid rgba(255,255,255,.14);
+    display:grid; grid-template-columns:repeat(3,1fr); gap:28px;
+  }
+  .meta-strip .m-item{ position:relative; padding-left:18px; }
+  .meta-strip .m-item::before{
+    content:""; position:absolute; left:0; top:3px; bottom:3px; width:2px; border-radius:2px;
+    background:linear-gradient(180deg, var(--gold), rgba(184,137,59,.2));
+  }
+  .meta-strip .m-item .m-k{
+    font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.2em;
+    text-transform:uppercase; color:#8fc9af; margin-bottom:6px;
+  }
+  .meta-strip .m-item .m-v{ font-family:'IBM Plex Sans',sans-serif; font-size:15px; color:#eaf3ee; font-weight:500; }
+
+  /* ============================================================
+     BODY
+  ============================================================ */
+  main{ padding:72px 0 40px; }
+  .intro{ font-size:20px; line-height:1.7; color:var(--ink-soft); margin-bottom:16px; }
+  .intro:last-of-type{ margin-bottom:0; }
+  .intro em{ font-style:italic; color:var(--ink); }
+  .lead-rule{ width:54px; height:3px; border-radius:3px; background:var(--gold); margin-bottom:30px; }
+
+  /* CONTENTS */
+  .toc{
+    margin:52px 0 8px; background:linear-gradient(180deg,#fff,var(--paper-warm));
+    border:1px solid var(--line); border-radius:20px; padding:34px 38px 30px;
+    box-shadow:var(--shadow-sm);
+    position:relative; overflow:hidden;
+  }
+  .toc::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:linear-gradient(180deg, var(--green-bright), var(--gold));
+  }
+  .toc h2{
+    font-family:'IBM Plex Sans',sans-serif; font-size:12px; letter-spacing:.24em;
+    text-transform:uppercase; color:var(--green); font-weight:600; margin-bottom:22px;
+    display:flex; align-items:center; gap:11px;
+  }
+  .toc h2 .toc-count{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.1em; color:var(--gold-deep);
+    background:var(--gold-soft); border-radius:20px; padding:3px 10px; text-transform:none;
+  }
+  .toc ol{ list-style:none; counter-reset:toc; columns:2; column-gap:38px; }
+  .toc li{
+    counter-increment:toc; display:flex; align-items:baseline; gap:13px; padding:8px 0;
+    font-family:'IBM Plex Sans',sans-serif; font-size:14.5px; color:var(--ink-soft);
+    break-inside:avoid;
+  }
+  .toc li::before{
+    content:counter(toc,decimal-leading-zero); font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px; color:var(--gold-deep); font-weight:600; flex:none; width:22px;
+    border-bottom:1px solid var(--gold-soft); text-align:center;
+  }
+
+  /* SECTION / CHAPTER */
+  .section{ margin-top:64px; }
+  .section-head{
+    position:relative; margin-bottom:26px; padding-bottom:20px;
+    border-bottom:1px solid var(--line);
+  }
+  .section-head::after{
+    content:""; position:absolute; left:0; bottom:-1px; width:64px; height:3px; border-radius:3px;
+    background:var(--gold);
+  }
+  .sec-kicker{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.24em;
+    text-transform:uppercase; color:var(--gold-deep); margin-bottom:12px; padding-left:2px;
+  }
+  .section-head .row{ display:flex; align-items:flex-start; gap:20px; }
+  .section-num{
+    font-family:'Fraunces',serif; font-size:52px; font-weight:380; line-height:.86;
+    color:var(--green); flex:none; min-width:58px;
+    font-optical-sizing:auto; letter-spacing:-.02em;
+    background:linear-gradient(160deg, var(--green-bright), var(--green-deep));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .section-head h2{
+    font-family:'Fraunces',serif; font-weight:560; font-size:29px; line-height:1.16;
+    letter-spacing:-.012em; color:var(--ink); padding-top:5px;
+  }
+  .section p{ margin-bottom:16px; color:var(--ink-soft); }
+  .section p strong, .section li strong{ color:var(--ink); font-weight:600; }
+
+  code,.mono{
+    font-family:'IBM Plex Mono',monospace; font-size:.82em; background:var(--paper-warm);
+    border:1px solid var(--line); border-radius:5px; padding:2px 6px;
+    color:var(--green-deep); white-space:nowrap; font-weight:500;
+  }
+
+  /* STEPS */
+  ol.steps{ counter-reset:step; list-style:none; margin:22px 0; }
+  ol.steps > li{
+    counter-increment:step; position:relative; padding-left:50px; margin-bottom:18px; color:var(--ink-soft);
+    break-inside:avoid;
+  }
+  ol.steps > li::before{
+    content:counter(step); position:absolute; left:0; top:-1px; width:32px;height:32px;
+    background:linear-gradient(155deg, var(--green-bright), var(--green)); color:#fff; border-radius:10px;
+    font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:14.5px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 9px rgba(27,94,68,.28), inset 0 1px 0 rgba(255,255,255,.22);
+  }
+  /* vertical connector between steps */
+  ol.steps > li::after{
+    content:""; position:absolute; left:15px; top:36px; bottom:-15px; width:2px;
+    background:var(--line); border-radius:2px;
+  }
+  ol.steps > li:last-child::after{ display:none; }
+  ol.steps ul{ margin-top:10px; }
+
+  ul.bul{ list-style:none; margin:16px 0; }
+  ul.bul li{ position:relative; padding-left:25px; margin-bottom:10px; color:var(--ink-soft); }
+  ul.bul li::before{
+    content:""; position:absolute; left:3px; top:11px; width:7px;height:7px;border-radius:2px;
+    background:var(--gold); transform:rotate(45deg);
+  }
+
+  /* CALLOUTS */
+  .callout{
+    border-radius:15px; padding:20px 24px 20px 56px; margin:24px 0; font-size:16px; line-height:1.62;
+    position:relative; box-shadow:var(--shadow-sm); break-inside:avoid;
+  }
+  .callout p{ margin-bottom:9px; } .callout p:last-child{ margin-bottom:0; }
+  .callout .c-title{
+    font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:.02em; margin-bottom:9px;
+  }
+  .callout .ico-chip{
+    position:absolute; left:18px; top:20px; width:26px; height:26px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  .callout .ico{ width:16px;height:16px;flex:none; }
+
+  .tip{ background:var(--blue-bg); border:1px solid var(--blue-line); color:var(--blue-ink); }
+  .tip .c-title{ color:var(--blue-ink); } .tip .ico-chip{ background:#dce8ea; color:var(--blue-ink); }
+  .note{ background:var(--paper-warm); border:1px solid var(--line); color:var(--ink-soft); }
+  .note::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:15px 0 0 15px; background:var(--gold); }
+  .note .c-title{ color:var(--gold-deep); } .note .ico-chip{ background:var(--gold-soft); color:var(--gold-deep); }
+  .warn{ background:var(--amber-bg); border:1px solid var(--amber-line); color:var(--amber-ink); }
+  .warn .c-title{ color:var(--amber-ink); font-size:14px; } .warn strong{ color:#5e4410 !important; }
+  .warn .ico-chip{ background:#f6e4ba; color:var(--amber-ink); }
+
+  /* EXPLAIN (GST) */
+  .explain{
+    background:linear-gradient(162deg,#f0f5f2,#e7efe9); border:1px solid #cfe0d6; border-radius:18px;
+    padding:26px 28px; margin:26px 0; box-shadow:var(--shadow-sm); break-inside:avoid;
+  }
+  .explain .c-title{
+    font-family:'Fraunces',serif; font-weight:600; font-size:19px; color:var(--green-deep);
+    margin-bottom:6px; display:flex; align-items:center; gap:11px; letter-spacing:-.01em;
+  }
+  .explain .c-title .ico{ width:20px;height:20px; }
+  .explain .e-sub{ font-family:'Newsreader',serif; color:#2f4a3f; font-size:16px; margin-bottom:18px; }
+  .explain p, .explain li{ color:#2f4a3f; font-size:16px; }
+  .explain ul.bul li::before{ background:var(--green-bright); }
+
+  /* GST DIAGRAM */
+  .gst-diagram{ margin:18px 0 6px; }
+  .gst-origin{
+    display:flex; align-items:center; gap:12px; justify-content:center;
+    font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600; color:var(--green-deep);
+    background:#fff; border:1px solid #cfe0d6; border-radius:10px; padding:11px 18px;
+    width:fit-content; margin:0 auto 6px; box-shadow:var(--shadow-sm);
+  }
+  .gst-origin svg{ width:17px; height:17px; }
+  .gst-stem{ width:2px; height:18px; background:#bcd2c5; margin:0 auto; }
+  .gst-branches{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .branch{
+    background:#fff; border:1px solid #cfe0d6; border-radius:14px; padding:18px 20px;
+    box-shadow:var(--shadow-sm); position:relative; text-align:center;
+  }
+  .branch-cond{
+    font-family:'IBM Plex Sans',sans-serif; font-size:13.5px; font-weight:500; color:#2f4a3f;
+    line-height:1.45; margin-bottom:14px; min-height:39px;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+  }
+  .branch-cond span{ display:inline; }
+  .branch-arrow{ width:1px; height:14px; background:#cfe0d6; margin:0 auto 12px; position:relative; }
+  .branch-arrow::after{
+    content:""; position:absolute; left:50%; bottom:-1px; transform:translateX(-50%);
+    border-left:4px solid transparent; border-right:4px solid transparent; border-top:5px solid #bcd2c5;
+  }
+  .branch-result{
+    font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600; letter-spacing:.02em;
+    padding:9px 16px; border-radius:10px; display:inline-block;
+  }
+  .branch-result .rb-lbl{
+    display:block; font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.18em;
+    text-transform:uppercase; font-weight:500; margin-bottom:3px; opacity:.7;
+  }
+  .branch-result.split{ background:#dff0e6; color:#15523c; }
+  .branch-result.single{ background:#fbeed6; color:#7a5418; }
+
+  /* MENU TABLE */
+  .menu-table{
+    width:100%; border-collapse:separate; border-spacing:0; margin:22px 0;
+    font-family:'IBM Plex Sans',sans-serif; font-size:14.5px;
+    border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow-sm);
+  }
+  .menu-table thead th{
+    background:linear-gradient(160deg,var(--green-deep),var(--green)); color:#eaf3ee; text-align:left;
+    padding:13px 20px; font-weight:600; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+  }
+  .menu-table td{ padding:12px 20px; border-top:1px solid var(--line-soft); color:var(--ink-soft); vertical-align:top; }
+  .menu-table td:first-child{
+    font-weight:600; color:var(--green-deep); white-space:nowrap;
+  }
+  .menu-table tbody tr:nth-child(even) td{ background:var(--paper-warm); }
+  .menu-table tbody tr:hover td{ background:#eef4f0; }
+
+  /* FLOW RIBBON */
+  .flow-ribbon{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:6px;
+    background:linear-gradient(150deg,var(--green-deepest),var(--green-deep));
+    border-radius:18px; padding:26px 24px 22px; margin:26px 0; position:relative; overflow:hidden;
+    box-shadow:var(--shadow);
+  }
+  .flow-ribbon::after{
+    content:""; position:absolute; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px); background-size:20px 20px; opacity:.5;
+  }
+  .flow-node{ position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:9px; flex:1; }
+  .flow-node .fn-dot{
+    width:34px; height:34px; border-radius:11px; flex:none;
+    background:rgba(127,211,172,.14); border:1px solid rgba(127,211,172,.4);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:#bde8d2;
+  }
+  .flow-node.is-last .fn-dot{ background:var(--gold); border-color:var(--gold); color:#fff; }
+  .flow-node .fn-label{ font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:600; color:#eaf3ee; text-align:center; line-height:1.2; }
+  .flow-arrow{
+    flex:none; align-self:flex-start; margin-top:9px; color:#5fa886; font-size:14px; font-weight:700;
+    position:relative; z-index:1;
+  }
+
+  /* HELP BLOCK */
+  .help-block{
+    background:linear-gradient(158deg,var(--green-deep),var(--green-deepest)); border-radius:20px;
+    padding:38px 40px; margin-top:26px; color:#e8f1ec; position:relative; overflow:hidden;
+    box-shadow:var(--shadow);
+  }
+  .help-block::after{
+    content:""; position:absolute; inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px); background-size:22px 22px; opacity:.5;
+  }
+  .help-block > *{ position:relative; z-index:1; }
+  .help-block h3{ font-family:'Fraunces',serif; font-weight:560; font-size:24px; color:#fff; margin-bottom:10px; letter-spacing:-.01em; }
+  .help-block p{ color:#cfe0d8; margin-bottom:14px; }
+  .help-contact{
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.18); border-radius:13px;
+    padding:18px 22px; margin:18px 0; display:flex; align-items:center; gap:16px;
+  }
+  .help-contact .hc-icon{ width:44px;height:44px;border-radius:11px;flex:none; background:rgba(127,211,172,.18); border:1px solid rgba(127,211,172,.24); display:flex;align-items:center;justify-content:center; }
+  .help-contact .hc-icon svg{ width:21px;height:21px; }
+  .help-contact .hc-label{ font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#9fd9bf; margin-bottom:4px; }
+  .help-contact .hc-val{ font-family:'IBM Plex Mono',monospace; font-size:16.5px; color:#fff; font-weight:500; }
+  .help-block ul.bul li{ color:#cfe0d8; } .help-block ul.bul li::before{ background:var(--green-mist); }
+  .help-block strong, .help-block p strong, .help-block li strong{ color:#fff; }
+
+  /* CLOSING */
+  .closing{ text-align:center; margin:56px 0 8px; padding:40px 0 0; position:relative; }
+  .closing::before{
+    content:""; position:absolute; left:50%; top:0; transform:translateX(-50%);
+    width:54px; height:3px; border-radius:3px; background:var(--gold);
+  }
+  .closing p{ font-family:'Fraunces',serif; font-style:italic; font-size:22px; color:var(--green); font-weight:420; line-height:1.5; max-width:480px; margin:0 auto; }
+
+  /* FOOTER */
+  footer{ margin-top:48px; background:var(--paper-warm); border-top:1px solid var(--line); padding:30px 0; }
+  footer .wrap{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  footer .f-brand{ font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:15px; color:var(--green-deep); }
+  footer .f-meta{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-faint); letter-spacing:.04em; }
+
+  a{ color:var(--green-bright); text-decoration:none; border-bottom:1px solid rgba(42,128,96,.3); }
+
+  /* ============================================================
+     PRINT  (A4)
+  ============================================================ */
+  @media print{
+    @page{ margin:16mm 0; }
+    html,body{ background:#fff; font-size:10.8pt; line-height:1.58; }
+    .wrap{ max-width:none; padding:0 18mm; }
+    .cover-inner{ max-width:none; padding:0 18mm; }
+
+    /* force backgrounds everywhere */
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+
+    .cover{ padding:0; }
+    .cover-inner{ padding-top:16mm; padding-bottom:14mm; }
+    .cover-frame{ padding:26px 30px 30px; }
+    .cover h1{ font-size:40px; }
+    .cover .sub{ font-size:15px; }
+    .top-rail{ margin-bottom:34px; }
+    .meta-strip{ margin-top:26px; padding-top:18px; }
+    main{ padding:12mm 0 0; }
+    .lead-rule{ margin-bottom:20px; }
+
+    /* keep blocks whole */
+    .callout, .explain, .flow-ribbon, .menu-table, .help-block, .gst-diagram,
+    .gst-branches, .branch, .workspace-card, .toc, .closing, .help-contact{
+      page-break-inside:avoid; break-inside:avoid;
+    }
+    ol.steps > li{ page-break-inside:avoid; break-inside:avoid; }
+    .toc li{ break-inside:avoid; }
+    .section{ page-break-inside:auto; margin-top:26px; }
+    .section-head{ page-break-after:avoid; }
+    h1,h2,h3,.section-head h2,.explain .c-title,.help-block h3{ page-break-after:avoid; }
+
+    /* TOC starts a fresh page after the cover */
+    .toc{ page-break-after:always; }
+
+    a{ border-bottom:none; color:var(--green-deep); }
+
+    /* tighten shadows for print clarity */
+    .callout, .explain, .menu-table, .toc, .branch, .gst-origin, .flow-ribbon, .help-block, .workspace-card{ box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+
+
+
+
+<!-- ============================================================
+     COVER
+============================================================ -->
+<header class="cover">
+  <svg class="cover-glyph" viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4v10l-8 4-8-4V7z" stroke="#fff" stroke-width="1.1" stroke-linejoin="round"></path><path d="M4 7l8 4 8-4M12 11v10" stroke="#fff" stroke-width="1.1" stroke-linejoin="round"></path></svg>
+  <div class="cover-inner">
+    <div class="cover-frame">
+      <div class="top-rail">
+        <div class="brand-row">
+          <div class="brand-mark">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4v10l-8 4-8-4V7z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"></path><path d="M4 7l8 4 8-4M12 11v10" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" opacity=".85"></path></svg>
+          </div>
+          <div class="brand-name">Dealerlink</div>
+        </div>
+        <div class="top-tag">Handbook · 2026</div>
+      </div>
+
+      <div class="eyebrow">Getting Started Guide</div>
+      <h1>Welcome to <em>Dealerlink</em></h1>
+      <p class="sub">A step-by-step guide for your first session. <em>No technical background needed</em> — just follow the steps in order.</p>
+
+      <div class="workspace-card">
+        <div class="ws-icon">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#7fd3ac" stroke-width="1.5"></circle><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" stroke="#7fd3ac" stroke-width="1.3"></path></svg>
+        </div>
+        <div>
+          <div class="ws-label">Your private workspace</div>
+          <div class="ws-url">your‑company.dealerlink.in</div>
+        </div>
+      </div>
+
+      <div class="meta-strip">
+        <div class="m-item"><div class="m-k">Pace</div><div class="m-v">At your own speed</div></div>
+        <div class="m-item"><div class="m-k">Time needed</div><div class="m-v">About an hour</div></div>
+        <div class="m-item"><div class="m-k">Saves as you go</div><div class="m-v">Nothing to lose</div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <p class="intro">Welcome to Dealerlink. This guide walks you through everything you need for your first day: signing in, setting up your business details, adding your first customer and product, and running a complete sale from quotation to dispatch.</p>
+  <p class="intro">You can do it all yourself, at your own pace. Set aside about an hour for a relaxed first run-through. You don't have to finish in one sitting — <em>Dealerlink saves everything as you go.</em></p>
+  <div class="lead-rule"></div>
+
+  <div class="callout tip">
+    <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 2l1 7 7 1-7 1-1 7-1-7-7-1 7-1 1-7z" fill="currentColor" opacity=".9"></path></svg></div>
+    <div class="c-title">Bookmark your workspace</div>
+    <p>Your workspace lives at your own web address — <code>your-company.dealerlink.in</code> (the exact link is in your welcome email). Save it in your browser. It is your private workspace — only your company's data appears there, never anyone else's.</p>
+  </div>
+
+  <!-- CONTENTS -->
+  <nav class="toc">
+    <h2>What's inside <span class="toc-count">13 steps</span></h2>
+    <ol>
+      <li>First login &amp; setting your password</li>
+      <li>A quick tour of the dashboard</li>
+      <li>Finish your company setup <strong style="font-weight:600;color:var(--gold-deep)">(important: bank details)</strong></li>
+      <li>Add your first dealer (customer)</li>
+      <li>Add your first product</li>
+      <li>Put stock into the system (inventory)</li>
+      <li>Create your first quotation and send it</li>
+      <li>Turn the quotation into a Proforma Invoice, then an Order</li>
+      <li>Record a payment</li>
+      <li>Dispatch the goods</li>
+      <li>Where to find reports</li>
+      <li>Adding your logo and terms (optional)</li>
+      <li>Getting help</li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 01 of 13</div>
+      <div class="row"><div class="section-num">01</div><h2>First login &amp; setting your password</h2></div>
+    </div>
+    <p>You will have received a <strong>welcome email</strong> from Dealerlink (<code>noreply@dealerlink.in</code>). It contains your login link and a <strong>temporary password</strong>.</p>
+    <div class="callout note">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></div>
+      <div class="c-title">Can't find the email?</div>
+      <p>Check your spam/junk folder — Dealerlink is a new sender, so the first email can occasionally land there. If it still isn't there after a few minutes, contact us (see section 13) and we'll resend it.</p>
+    </div>
+    <p>To sign in:</p>
+    <ol class="steps">
+      <li>Open your workspace link from the welcome email in your web browser (Chrome, Edge, or Safari on a desktop or laptop works best).</li>
+      <li>Enter <strong>your email address</strong> and the <strong>temporary password</strong> from the email.</li>
+      <li>Click <strong>Continue</strong>.</li>
+    </ol>
+    <p><strong>You'll be asked to set a new password straight away.</strong> This is normal and required — the temporary one only works once. Choose a password that has:</p>
+    <ul class="bul">
+      <li>at least <strong>8 characters</strong>,</li>
+      <li>one <strong>capital letter</strong>,</li>
+      <li>one <strong>number</strong>, and</li>
+      <li>one <strong>symbol</strong> (like <code>!</code>, <code>@</code>, <code>#</code>).</li>
+    </ul>
+    <p>A strength meter shows you when it's good enough. Type it twice and save it.</p>
+    <div class="callout note">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.6"></rect><path d="M8 10V7a4 4 0 018 0v3" stroke="currentColor" stroke-width="1.6"></path></svg></div>
+      <p>Write your new password down somewhere safe, or store it in your phone's password manager. <strong>Dealerlink staff can never see your password</strong> — if you forget it, we can issue a new temporary one, but we can't tell you your current one.</p>
+    </div>
+    <p>Once saved, you land on your <strong>dashboard</strong>. You're in.</p>
+  </section>
+
+  <!-- 2 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 02 of 13</div>
+      <div class="row"><div class="section-num">02</div><h2>A quick tour of the dashboard</h2></div>
+    </div>
+    <p>The <strong>dashboard</strong> (also called <strong>Overview</strong>) is your home screen. It gives you a quick read on the business at a glance:</p>
+    <ul class="bul">
+      <li><strong>Pipeline</strong> — deals in progress and their total value.</li>
+      <li><strong>Inventory</strong> — stock on hand, reserved, and dispatched.</li>
+      <li><strong>Payments</strong> — money received recently and anything overdue.</li>
+      <li><strong>Reports</strong> — quick highlights, like your top dealer.</li>
+    </ul>
+    <p>On your very first login everything will read <strong>zero</strong> — that's expected, because you haven't entered any data yet. The numbers fill in as you start working.</p>
+    <div class="callout note">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></div>
+      <p>You may see a generic greeting like "Good afternoon" at the top — that's just a placeholder and doesn't affect anything.</p>
+    </div>
+    <p><strong>The dark sidebar on the left is how you move around.</strong> You'll use these the most:</p>
+    <table class="menu-table">
+      <thead><tr><th>Menu item</th><th>What it's for</th></tr></thead>
+      <tbody>
+        <tr><td>Overview</td><td>This dashboard / home screen</td></tr>
+        <tr><td>Pipeline</td><td>Track sales deals through stages</td></tr>
+        <tr><td>Dealers</td><td>Your customers</td></tr>
+        <tr><td>Catalog</td><td>The products you sell</td></tr>
+        <tr><td>Inventory</td><td>Stock you've bought in and have on hand</td></tr>
+        <tr><td>Quotations</td><td>Price quotes you send to customers</td></tr>
+        <tr><td>Performa Invoices</td><td>A formal quote/invoice before the sale is confirmed</td></tr>
+        <tr><td>Orders</td><td>Confirmed sales</td></tr>
+        <tr><td>Payments</td><td>Money received</td></tr>
+        <tr><td>Dispatch</td><td>Shipping goods out, with serial numbers</td></tr>
+        <tr><td>Reports</td><td>Sales, GST, stock and outstanding-money reports</td></tr>
+        <tr><td>Settings</td><td>Your company details, bank, logo, defaults</td></tr>
+      </tbody>
+    </table>
+    <p>Click any item to open it. Don't worry about breaking anything — you can always click back.</p>
+  </section>
+
+  <!-- 3 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 03 of 13</div>
+      <div class="row"><div class="section-num">03</div><h2>Finish your company setup <span style="color:var(--gold-deep);font-style:italic;font-weight:500;">(important: bank details)</span></h2></div>
+    </div>
+    <p>Before you send any real document to a customer, spend two minutes confirming your company details. Open <strong>Settings</strong> in the sidebar.</p>
+    <p>Check that these are correct (we set them up for you, but please verify):</p>
+    <ul class="bul">
+      <li><strong>Legal name</strong> — your registered company name</li>
+      <li><strong>GSTIN</strong> — your 15-character GST number</li>
+      <li><strong>State</strong> — your home state <em>(this decides how GST is calculated — see the note below — so it must be right)</em></li>
+      <li><strong>Registered address</strong></li>
+    </ul>
+    <div class="callout warn">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 3l9 16H3l9-16z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path><path d="M12 10v4M12 16.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></div>
+      <div class="c-title">Please update your bank details before issuing any invoice</div>
+      <p>Your account may be set up with <strong>placeholder bank details</strong> until we have your real ones.</p>
+      <p>Your <strong>real</strong> bank details (account name, account number, IFSC code, branch) print on the footer of every tax invoice. In <strong>Settings</strong>, find the <strong>Bank</strong> section, click to edit, enter your real details, and save. Do this <strong>before</strong> you create your first invoice so customers get correct payment information.</p>
+    </div>
+    <p>While you're in Settings, you can also set sensible defaults (all optional, with reasonable values already in place):</p>
+    <ul class="bul">
+      <li><strong>Default quotation validity</strong> — how many days a quote stays valid (e.g. 30).</li>
+      <li><strong>Default credit period</strong> — your usual payment terms in days.</li>
+      <li><strong>Low-stock threshold</strong> — when to warn you that a product is running low.</li>
+      <li><strong>Default terms &amp; conditions</strong> — standard text that appears on quotations.</li>
+    </ul>
+    <div class="explain">
+      <div class="c-title"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#1b5e44" stroke-width="1.6"></circle><path d="M9.5 9.5a2.5 2.5 0 113.5 2.3c-.8.4-1 .9-1 1.7M12 16.5h.01" stroke="#1b5e44" stroke-width="1.7" stroke-linecap="round"></path></svg>How GST works in Dealerlink</div>
+      <p class="e-sub">Worth understanding once. Dealerlink decides the tax type automatically based on <strong>where the goods go</strong>, relative to your home state:</p>
+      <div class="gst-diagram">
+        <div class="gst-origin">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 9l9-5 9 5v9l-9 5-9-5V9z" stroke="#1b5e44" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          Goods leave your warehouse
+        </div>
+        <div class="gst-stem"></div>
+        <div class="gst-branches">
+          <div class="branch">
+            <div class="branch-cond"><span>Selling to a customer <strong>in your state</strong></span></div>
+            <div class="branch-arrow"></div>
+            <span class="branch-result split"><span class="rb-lbl">Intra-state</span>CGST + SGST</span>
+          </div>
+          <div class="branch">
+            <div class="branch-cond"><span>Selling to <strong>another state</strong></span></div>
+            <div class="branch-arrow"></div>
+            <span class="branch-result single"><span class="rb-lbl">Inter-state</span>IGST</span>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:16px;">You never calculate this by hand — Dealerlink does it for every quotation and invoice. Just make sure each customer's <strong>state</strong> is entered correctly (next section), because that's what drives the tax.</p>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 04 of 13</div>
+      <div class="row"><div class="section-num">04</div><h2>Add your first dealer (customer)</h2></div>
+    </div>
+    <p>A <strong>dealer</strong> is a customer you sell to — a retailer, sub-dealer, or a project buyer.</p>
+    <ol class="steps">
+      <li>Click <strong>Dealers</strong> in the sidebar, then <strong>Create a dealer</strong>.</li>
+      <li>Fill in:
+        <ul class="bul">
+          <li><strong>Legal name</strong> and <strong>Display name</strong> — the registered name, and a short name to show on screen.</li>
+          <li><strong>State</strong> — <strong>important.</strong> This decides whether the sale is taxed as CGST + SGST (same state as you) or IGST (a different state). Choose it carefully from the dropdown.</li>
+          <li><strong>GSTIN</strong> — the dealer's 15-character GST number. Dealerlink checks it's valid; if it's rejected, re-read it from their GST certificate. The <strong>PAN</strong> fills in automatically.</li>
+          <li><strong>Contact details, address, credit limit and credit period</strong> — as much as you have. You can always edit later.</li>
+        </ul>
+      </li>
+      <li>Click <strong>Create dealer</strong>.</li>
+    </ol>
+    <p>That's your first customer in the system. Repeat for as many as you like.</p>
+    <div class="callout tip">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 2l1 7 7 1-7 1-1 7-1-7-7-1 7-1 1-7z" fill="currentColor" opacity=".9"></path></svg></div>
+      <div class="c-title">Moving from an older system?</div>
+      <p>If you have many dealers in a spreadsheet, we can bulk-import them for you — just ask (see section 13).</p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 05 of 13</div>
+      <div class="row"><div class="section-num">05</div><h2>Add your first product</h2></div>
+    </div>
+    <p>A <strong>product</strong> is something you sell — for example a solar panel, an inverter, a battery, or a mounting structure.</p>
+    <ol class="steps">
+      <li>Click <strong>Catalog</strong> in the sidebar, then <strong>Create a product</strong>.</li>
+      <li>Fill in:
+        <ul class="bul">
+          <li><strong>SKU</strong> — your own short code for the product (must be unique). For example <code>PANEL-540W</code>.</li>
+          <li><strong>Name</strong>, manufacturer and model — e.g. "Premier 540W Bifacial Panel".</li>
+          <li><strong>HSN code</strong> — the GST classification code for the product (4–8 digits). Check your supplier invoice if unsure.</li>
+          <li><strong>GST rate</strong> — pick from 0%, 5%, 12%, 18% or 28%. This is applied on every quotation and invoice for this product, so get it right. <em>(Confirm the current rate for your products.)</em></li>
+          <li><strong>Prices</strong> — MRP, your usual purchase price, and your usual selling price. The selling price is offered as a starting point when you build a quotation; you can change it per quote.</li>
+          <li><strong>Requires serial number</strong> — <strong>tick this for items tracked individually</strong> (panels, inverters). Each unit will then need a serial number recorded when stock arrives. Leave it unticked for bulk items like cables or bolts.</li>
+        </ul>
+      </li>
+      <li>Click <strong>Create product</strong>.</li>
+    </ol>
+    <div class="callout note">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></div>
+      <p>Don't worry about getting the catalog perfect on day one. Add a few products you sell most, and grow it as you go.</p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 06 of 13</div>
+      <div class="row"><div class="section-num">06</div><h2>Put stock into the system (inventory)</h2></div>
+    </div>
+    <p>Before you can sell, Dealerlink needs to know what stock you have. You record this as a <strong>procurement</strong> — a batch of stock arriving from a supplier. This is a few steps in sequence — follow them in order:</p>
+    <ol class="steps">
+      <li>Click <strong>Inventory → Procurements</strong>, then <strong>New procurement</strong>.</li>
+      <li>Enter the <strong>supplier</strong>, the procurement date, and optionally the supplier's invoice number and date.</li>
+      <li>Add a <strong>line</strong> for each product: choose the product, the quantity, and the unit price you paid.</li>
+      <li>Click <strong>Save as draft</strong>.</li>
+      <li>On the procurement's page, click <strong>Confirm procurement</strong>.</li>
+      <li>For <strong>serial-tracked</strong> products (the ones you ticked "requires serial number"), click <strong>Enter serials</strong> and paste one serial number per line — one per unit. Dealerlink rejects duplicates and any serial already in your system.</li>
+      <li>Once every serial is entered, click <strong>Finalize as received</strong>.</li>
+    </ol>
+    <p>Your stock is now <strong>in stock</strong> and ready to sell.</p>
+    <div class="callout tip">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"></circle><path d="M8 12l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+      <div class="c-title">Why serials matter</div>
+      <p>Recording a serial for each unit means you can later see exactly which physical units were reserved for an order, which were shipped, and which were delivered — right down to the customer. It's the backbone of warranty and traceability.</p>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 07 of 13</div>
+      <div class="row"><div class="section-num">07</div><h2>Create your first quotation and send it</h2></div>
+    </div>
+    <p>A <strong>quotation</strong> is a price quote you send to a customer.</p>
+    <ol class="steps">
+      <li>Click <strong>Quotations</strong> in the sidebar, then <strong>New quotation</strong> (you can also start one from a deal in the Pipeline).</li>
+      <li>Choose the <strong>dealer</strong> (customer). Their state is picked up automatically — so the correct GST (CGST+SGST or IGST) is applied for you.</li>
+      <li>Add <strong>line items</strong>: pick a product, set the quantity, adjust the price if needed. The selling price you set in the catalog is offered as a starting point.</li>
+      <li>Watch the totals on the right update live — <strong>subtotal, discount, taxable value, GST, and grand total</strong> all calculate automatically as you type.</li>
+      <li>Optionally add a document-level <strong>discount</strong> and <strong>terms &amp; conditions</strong>.</li>
+      <li><strong>Save</strong> the quotation. It gets a number like <code>QT-2026-0001</code>.</li>
+    </ol>
+    <p><strong>To send it to the customer:</strong> open the saved quotation and click <strong>Download</strong> (or <strong>Generate PDF</strong>) to get a professional PDF you can email or print. You can also email it directly from Dealerlink if you've set that up.</p>
+    <div class="callout note">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+      <div class="c-title">First PDF is a little slow — that's normal</div>
+      <p>The very first PDF you create can take a few seconds (you may briefly see a "preparing…" message). After that, they're quick. If it ever seems stuck, just wait a moment and try again.</p>
+    </div>
+    <div class="callout note">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></div>
+      <p><strong>A note you may notice:</strong> in the read-only view of a saved quotation, the GST <em>percentages</em> (e.g. "9%") may not show even though the GST <em>amounts</em> are correct and present. The maths is right and the PDF is correct — this is a small display detail we're polishing.</p>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 08 of 13</div>
+      <div class="row"><div class="section-num">08</div><h2>Turn the quotation into a Proforma Invoice, then an Order</h2></div>
+    </div>
+    <p>When the customer agrees, you move the quotation forward — you don't re-type anything.</p>
+    <ol class="steps">
+      <li><strong>Quotation → Proforma Invoice (PI).</strong> Open the quotation and choose <strong>Convert to PI</strong>. A PI is a formal document sent before the sale is confirmed.
+        <ul class="bul">
+          <li>At this step you can set a <strong>Ship-To</strong> address if the goods go somewhere different from the customer's billing address. <strong>If the Ship-To is in a different state, the GST type can change</strong> (e.g. from CGST+SGST to IGST) — Dealerlink warns you when this happens and recalculates for you. This is correct and expected.</li>
+        </ul>
+      </li>
+      <li><strong>PI → Order.</strong> When the customer confirms, convert the PI to an <strong>Order</strong> (<code>ORD-2026-0001</code>). Confirming an order <strong>reserves stock</strong> for it.
+        <ul class="bul">
+          <li>If you don't have enough stock, Dealerlink blocks the confirmation and tells you exactly which product is short and by how much. Add stock (section 6), then try again.</li>
+        </ul>
+      </li>
+    </ol>
+  </section>
+
+  <!-- 9 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 09 of 13</div>
+      <div class="row"><div class="section-num">09</div><h2>Record a payment</h2></div>
+    </div>
+    <p>When money comes in, record it against the order. This is a short three-step flow:</p>
+    <ol class="steps">
+      <li>Click <strong>Payments</strong> in the sidebar, then <strong>Record payment</strong>.</li>
+      <li>Enter the amount, date, and method (bank transfer, cheque, etc.), and link it to the dealer/order.</li>
+      <li><strong>Verify</strong> the payment, then <strong>Allocate</strong> it to the order.</li>
+    </ol>
+    <p>Once allocated, the order's status updates (for example to <strong>Paid</strong>), and the money shows up in your dashboard and reports. You can generate a <strong>payment receipt PDF</strong> to send to the customer.</p>
+    <div class="callout note">
+      <div class="ico-chip"><svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"></circle><path d="M8 12l3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+      <p>The three steps (<strong>Record → Verify → Allocate</strong>) exist so your books stay accurate — a payment is only counted against an order once you've confirmed and allocated it.</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 10 of 13</div>
+      <div class="row"><div class="section-num">10</div><h2>Dispatch the goods</h2></div>
+    </div>
+    <p>When you're ready to ship a confirmed order:</p>
+    <ol class="steps">
+      <li>Click <strong>Dispatch</strong> in the sidebar, then create a dispatch for the order.</li>
+      <li><strong>Pick the serial numbers</strong> of the actual units going out (from the stock you reserved). Dealerlink tracks exactly which physical items ship.</li>
+      <li>Record transporter / LR (lorry receipt) details as needed.</li>
+      <li>Generate the <strong>Dispatch Note PDF</strong> to travel with the goods.</li>
+      <li>Mark the dispatch <strong>delivered</strong> when it arrives.</li>
+    </ol>
+    <p>That completes the full cycle, with every unit traceable by serial number:</p>
+    <div class="flow-ribbon">
+      <div class="flow-node"><div class="fn-dot">1</div><div class="fn-label">Quotation</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-dot">2</div><div class="fn-label">PI</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-dot">3</div><div class="fn-label">Order</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-dot">4</div><div class="fn-label">Payment</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-dot">5</div><div class="fn-label">Dispatch</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node is-last"><div class="fn-dot">✓</div><div class="fn-label">Delivered</div></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 11 of 13</div>
+      <div class="row"><div class="section-num">11</div><h2>Where to find reports</h2></div>
+    </div>
+    <p>Click <strong>Reports</strong> in the sidebar. You'll find:</p>
+    <ul class="bul">
+      <li><strong>Sales Summary</strong> — what you've sold.</li>
+      <li><strong>GST Summary</strong> — your tax, correctly split into intra-state (CGST+SGST) and inter-state (IGST) — useful at filing time.</li>
+      <li><strong>Inventory / Stock</strong> — what you have on hand.</li>
+      <li><strong>Outstanding Receivables</strong> — who owes you money and how much is overdue.</li>
+    </ul>
+    <p>These update automatically as you work — no manual report-building needed.</p>
+  </section>
+
+  <!-- 12 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 12 of 13</div>
+      <div class="row"><div class="section-num">12</div><h2>Adding your logo and terms <span style="color:var(--ink-faint);font-style:italic;font-weight:500;">(optional, when ready)</span></h2></div>
+    </div>
+    <p>You can run the whole system without these, but they make your documents look more professional. Do them whenever you have a moment, in <strong>Settings</strong>:</p>
+    <ul class="bul">
+      <li><strong>Logo</strong> — upload a PNG, SVG, or JPG up to <strong>1 MB</strong> (about <strong>400×120 pixels</strong> works best). It appears in the sidebar, on your login screen, on PDF letterheads, and in emails. Until you add one, documents simply show your company name as text — which is perfectly fine.</li>
+      <li><strong>Default terms &amp; conditions</strong> — standard text that pre-fills on new quotations.</li>
+      <li><strong>Bank details</strong> — <em>please do this one before issuing invoices, not later (see section 3).</em></li>
+    </ul>
+  </section>
+
+  <!-- 13 -->
+  <section class="section">
+    <div class="section-head">
+      <div class="sec-kicker">Step 13 of 13</div>
+      <div class="row"><div class="section-num">13</div><h2>Getting help</h2></div>
+    </div>
+    <div class="help-block">
+      <h3>You're not on your own.</h3>
+      <p>If anything is unclear or doesn't behave as you expect, reach out — especially during your first week, we're here to help you settle in.</p>
+      <div class="help-contact">
+        <div class="hc-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="#7fd3ac" stroke-width="1.5" stroke-linejoin="round"></path><path d="M4 7l8 6 8-6" stroke="#7fd3ac" stroke-width="1.5" stroke-linejoin="round"></path></svg></div>
+        <div>
+          <div class="hc-label">Your Dealerlink contact</div>
+          <div class="hc-val">dealerlink.io@gmail.com</div>
+        </div>
+      </div>
+      <p style="margin-top:18px;"><strong>When you write, it helps us help you faster if you include:</strong></p>
+      <ul class="bul">
+        <li>What you were trying to do (e.g. "creating a quotation for dealer X").</li>
+        <li>What you expected to happen, and what actually happened.</li>
+        <li>The document number if there is one (e.g. <code style="background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);color:#eaf3ee;">QT-2026-0001</code>).</li>
+        <li>A screenshot if you can — it's often the quickest way to show us.</li>
+      </ul>
+      <p style="margin-top:16px;"><strong>Response time:</strong> we aim to reply within a few hours on business days. For anything urgent, don't hesitate to reach out.</p>
+    </div>
+  </section>
+
+  <div class="closing">
+    <p>Welcome aboard — we're glad to have you on Dealerlink.</p>
+  </div>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="f-brand">Dealerlink<span style="color:var(--gold)">.</span></div>
+    <div class="f-meta">Getting Started Guide · dealerlink.in</div>
+  </div>
+</footer>
+
+
+
+</body></html>
