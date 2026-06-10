@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 // --- Mocks for the request-bound dependencies of wrap.ts -------------------
-const impersonationTenantId = vi.fn<[], string | null>();
+const impersonationTenantId = vi.fn<() => string | null>();
 const requireRole = vi.fn();
 const withTenant = vi.fn(async (_tenantId: string, fn: (tx: unknown) => Promise<unknown>) =>
   fn({}),

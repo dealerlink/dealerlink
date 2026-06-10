@@ -74,10 +74,15 @@ export async function enterImpersonation(tenantId: string): Promise<void> {
     maxAge: IMPERSONATION_TTL_S,
   });
 
-  // In dev, route via ?tenant=<slug> (no subdomains). In prod, point at the
-  // tenant subdomain.
+  // In dev, route via ?tenant=<slug> (no subdomains). In prod/staging, point at
+  // the tenant subdomain. The apex MUST come from NEXT_PUBLIC_APP_DOMAIN, not a
+  // hardcoded `dealerlink.in`: staging also runs NODE_ENV=production but its
+  // apex is `staging.dealerlink.in`, so a hardcoded apex would send the
+  // operator to the PRODUCTION subdomain (`demo.dealerlink.in`) instead of
+  // `demo.staging.dealerlink.in`. Mirrors apexDomain() in lib/tenant/resolve.ts.
   if (process.env.NODE_ENV === 'production') {
-    redirect(`https://${tenant.slug}.dealerlink.in/dashboard`);
+    const apex = (process.env.NEXT_PUBLIC_APP_DOMAIN ?? 'dealerlink.in').toLowerCase();
+    redirect(`https://${tenant.slug}.${apex}/dashboard`);
   }
   redirect(`/dashboard?tenant=${tenant.slug}`);
 }
