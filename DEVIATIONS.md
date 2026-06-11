@@ -1757,4 +1757,22 @@ inside the container is unaffected. This pre-dates this change (the project's
 `DATABASE_URL`/`DATABASE_DIRECT_URL`/`APP_DATABASE_URL` pointed at `127.0.0.1`
 (Next does not override pre-set `process.env`).
 
+**Cross-subdomain redirect follow-ups (found during staging/prod verification —
+these are exactly what gating on a real subdomain environment surfaces, since
+dev is single-host localhost):**
+
+1. **Enter redirect apex (commit 4ff6a9b).** `enterImpersonation` hardcoded
+   `https://<slug>.dealerlink.in` for the `NODE_ENV=production` redirect. Staging
+   ALSO runs `NODE_ENV=production` but its apex is `staging.dealerlink.in`, so it
+   would send the operator to the PRODUCTION subdomain. Now derives the apex from
+   `NEXT_PUBLIC_APP_DOMAIN`. Caught on staging.
+2. **Exit/operator redirect host (commit c537147).** `exitImpersonation` and the
+   `(app)` layout's operator redirects used a RELATIVE `redirect('/admin')`. An
+   operator leaving a tenant workspace is ON the tenant subdomain, so `/admin`
+   resolved to `<slug>.dealerlink.in/admin` → bounced to the tenant login instead
+   of returning to the operator console. New `operatorAdminUrl()`
+   (lib/tenant/context.ts) returns the absolute operator host (`NEXT_PUBLIC_APP_URL`)
+   in production. Caught by the live pilot exit step on production. (The staging
+   exit smoke had asserted the `/admin` PATH but not the HOST — gap closed.)
+
 **Status:** ✅ Closed (feature live; see ADR-014 + docs/pilot/PILOT_MONITORING.md).
