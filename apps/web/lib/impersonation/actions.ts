@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 
 import { requireRole } from '@/lib/auth/require-role';
 import { AppError } from '@/lib/errors';
+import { operatorAdminUrl } from '@/lib/tenant/context';
 
 const IMPERSONATION_COOKIE = 'dealerlink_impersonation';
 const IMPERSONATION_TTL_S = 60 * 60; // 1 hour
@@ -121,5 +122,7 @@ export async function exitImpersonation(): Promise<void> {
     ...impersonationCookieOptions(),
     maxAge: 0,
   });
-  redirect('/admin');
+  // Absolute operator-console URL: a relative '/admin' would stay on the tenant
+  // subdomain we're exiting from and bounce to the tenant login (DEV.82).
+  redirect(operatorAdminUrl());
 }

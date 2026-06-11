@@ -32,6 +32,27 @@ export function impersonationTenantId(): string | null {
 }
 
 /**
+ * Absolute URL of the operator console (`/admin`). Cross-subdomain-safe: an
+ * operator leaving a tenant workspace is ON the tenant subdomain
+ * (`<slug>.dealerlink.in`), where a RELATIVE `/admin` would resolve to
+ * `<slug>.dealerlink.in/admin` — a tenant-scoped path that bounces to the
+ * tenant login (DEV.82 follow-up: the exit dead-end). In production we send
+ * them back to the operator host via NEXT_PUBLIC_APP_URL (e.g.
+ * `https://app.dealerlink.in` in prod, `https://staging.dealerlink.in` on
+ * staging). In dev everything is one host, so a relative path is correct.
+ */
+export function operatorAdminUrl(): string {
+  if (process.env.NODE_ENV === 'production') {
+    const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.dealerlink.in').replace(
+      /\/$/,
+      '',
+    );
+    return `${base}/admin`;
+  }
+  return '/admin';
+}
+
+/**
  * Cached per request — returns the tenant + settings for the current scope.
  * Throws `AppError('NOT_FOUND')` if the slug does not resolve to a real
  * tenant. Server Components only.

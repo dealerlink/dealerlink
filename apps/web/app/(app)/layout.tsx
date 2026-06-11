@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { ImpersonationBanner } from '@/components/shell/ImpersonationBanner';
 import { Shell } from '@/components/shell';
 import { getAuthContext } from '@/lib/auth/session';
-import { currentTenantSlug, impersonationTenantId } from '@/lib/tenant/context';
+import { currentTenantSlug, impersonationTenantId, operatorAdminUrl } from '@/lib/tenant/context';
 import { resolveTenantBySlug } from '@/lib/tenant/resolve';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -24,7 +24,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   if (ctx.user.role === 'operator') {
     // Operators are only allowed in the tenant shell while impersonating.
-    if (!impersonatingId) redirect('/admin');
+    // Use the absolute operator-console URL: this layout runs ON the tenant
+    // subdomain, where a relative '/admin' would bounce to the tenant login.
+    if (!impersonatingId) redirect(operatorAdminUrl());
 
     // Slug/cookie consistency (ADR-014). The impersonation cookie is scoped to
     // `.dealerlink.in`, so it travels to EVERY tenant subdomain. When the
@@ -39,7 +41,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     if (slug) {
       const slugTenant = await resolveTenantBySlug(slug);
       if (!slugTenant || slugTenant.id !== impersonatingId) {
-        redirect('/admin');
+        redirect(operatorAdminUrl());
       }
     }
   }
