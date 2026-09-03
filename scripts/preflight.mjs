@@ -5,7 +5,7 @@
  * Checks (each prints ✅ / ⚠️ / ❌):
  *   - Git working tree clean
  *   - Local branch in sync with origin (warn if ahead/behind/no remote)
- *   - Docker Desktop running + dealerlink-postgres healthy
+ *   - Postgres reachable over DATABASE_URL
  *   - Postgres extensions loaded (uuid-ossp, pg_trgm, btree_gin)
  *   - .env.local present and core secrets are non-placeholder
  *   - Port 3000 free (pnpm dev not running)
@@ -18,6 +18,7 @@
  */
 import { exec as cbExec } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +27,11 @@ import { promisify } from 'node:util';
 const exec = promisify(cbExec);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..');
+
+// `postgres` is a dependency of packages/db (not hoisted to the repo root),
+// so resolve it from there rather than assuming a root-level install.
+const require = createRequire(path.join(repoRoot, 'packages/db/package.json'));
+const postgres = require('postgres');
 
 const ICON = { ok: '✅', warn: '⚠️', fail: '❌' };
 let hardFails = 0;
@@ -71,24 +77,45 @@ async function checkGitSync() {
   return report('warn', 'Git remote sync', `${a} ahead / ${b} behind ${upstream.stdout}`);
 }
 
-async function checkDocker() {
-  const r = await tryExec('docker info --format "ok"');
-  if (!r.ok) return report('fail', 'Docker', 'docker daemon not reachable');
-  report('ok', 'Docker', 'running');
-  const ps = await tryExec('docker inspect --format "{{.State.Health.Status}}" dealerlink-postgres');
-  if (!ps.ok) return report('fail', 'Postgres container', 'dealerlink-postgres not found');
-  if (ps.stdout !== 'healthy') {
-    return report('fail', 'Postgres container', `status=${ps.stdout}`);
-  }
-  report('ok', 'Postgres container', 'healthy');
+function getDatabaseUrl(key = 'DATABASE_URL') {
+  if (process.env[key]) return process.env[key];
+  const envPath = path.resolve(repoRoot, '.env.local');
+  if (!existsSync(envPath)) return null;
+  const m = readFileSync(envPath, 'utf8').match(new RegExp(`^${key}=(.*)$`, 'm'));
+  if (!m) return null;
+  return m[1].trim().replace(/^['"]|['"]$/g, '');
 }
 
-async function checkExtensions() {
-  const r = await tryExec(
-    `docker exec dealerlink-postgres psql -U dealerlink -d dealerlink_dev -tA -c "SELECT extname FROM pg_extension ORDER BY 1;"`,
-  );
-  if (!r.ok) return report('fail', 'Postgres extensions', 'cannot query pg_extension');
-  const have = new Set(r.stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean));
+// Direct connection attempt over DATABASE_URL, replacing the old Docker-daemon
+// and container-health probes. Returns a live `sql` client (reused by the
+// extension + migration checks) or null when the DB is unreachable.
+async function connectPostgres() {
+  const url = getDatabaseUrl();
+  if (!url) {
+    report('fail', 'Postgres', 'DATABASE_URL not set');
+    return null;
+  }
+  const sql = postgres(url, { max: 1, connect_timeout: 5, idle_timeout: 5, prepare: false });
+  try {
+    await sql`select 1`;
+    report('ok', 'Postgres', 'connected');
+    return sql;
+  } catch (err) {
+    report('fail', 'Postgres', `cannot connect: ${err?.message ?? err}`);
+    await sql.end({ timeout: 1 }).catch(() => {});
+    return null;
+  }
+}
+
+async function checkExtensions(sql) {
+  if (!sql) return report('fail', 'Postgres extensions', 'cannot query pg_extension');
+  let have;
+  try {
+    const rows = await sql`SELECT extname FROM pg_extension ORDER BY 1`;
+    have = new Set(rows.map((row) => row.extname));
+  } catch {
+    return report('fail', 'Postgres extensions', 'cannot query pg_extension');
+  }
   const missing = ['uuid-ossp', 'pg_trgm', 'btree_gin'].filter((e) => !have.has(e));
   if (missing.length > 0) {
     return report('fail', 'Postgres extensions', `missing: ${missing.join(', ')}`);
@@ -146,14 +173,32 @@ async function checkNodeAndPnpm() {
   else report('warn', 'pnpm version', `${r.stdout} (expected 9.x)`);
 }
 
-async function checkMigrations() {
+async function checkMigrations(sql) {
   // Cheap check: are there any *.sql files in migrations/ that don't show up in
-  // drizzle's __drizzle_migrations table?
-  const r = await tryExec(
-    `docker exec dealerlink-postgres psql -U dealerlink -d dealerlink_dev -tA -c "SELECT count(*) FROM drizzle.__drizzle_migrations;"`,
-  );
-  if (!r.ok) return report('warn', 'Migrations', 'cannot read __drizzle_migrations (first run?)');
-  const applied = Number(r.stdout);
+  // drizzle's __drizzle_migrations table? The `drizzle` bookkeeping schema is
+  // owned by the migration role and not readable by the RLS-restricted app role
+  // that DATABASE_URL uses, so query it over the direct/admin connection —
+  // matching the old `docker exec … psql -U dealerlink`. Fall back to the shared
+  // app client when no direct URL is configured.
+  const directUrl = getDatabaseUrl('DATABASE_DIRECT_URL');
+  const adminSql = directUrl
+    ? postgres(directUrl, { max: 1, connect_timeout: 5, idle_timeout: 5, prepare: false })
+    : sql;
+  if (!adminSql) return report('warn', 'Migrations', 'cannot read __drizzle_migrations (first run?)');
+  let applied;
+  try {
+    const rows = await adminSql`SELECT count(*) FROM drizzle.__drizzle_migrations`;
+    applied = Number(rows[0].count);
+  } catch (err) {
+    // A genuinely-absent table (first run) is a warn; anything else — e.g. a
+    // permission error — is a real problem and must not be masked as "first run".
+    if (err?.code === '42P01') {
+      return report('warn', 'Migrations', 'cannot read __drizzle_migrations (first run?)');
+    }
+    return report('warn', 'Migrations', `cannot read __drizzle_migrations: ${err?.message ?? err}`);
+  } finally {
+    if (adminSql !== sql) await adminSql.end({ timeout: 1 }).catch(() => {});
+  }
   const migrationsDir = path.resolve(repoRoot, 'packages/db/migrations');
   let onDisk = 0;
   try {
@@ -171,12 +216,13 @@ async function main() {
   console.log('\nDealerlink preflight\n────────────────────');
   await checkGitClean();
   await checkGitSync();
-  await checkDocker();
-  await checkExtensions();
+  const sql = await connectPostgres();
+  await checkExtensions(sql);
   checkEnv();
   await checkPort(3000);
   await checkNodeAndPnpm();
-  await checkMigrations();
+  await checkMigrations(sql);
+  if (sql) await sql.end({ timeout: 5 }).catch(() => {});
   console.log('────────────────────');
   if (hardFails > 0) {
     console.log(`${ICON.fail}  ${hardFails} hard failure(s), ${warns} warning(s)`);
