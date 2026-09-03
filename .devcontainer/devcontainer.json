@@ -1,0 +1,34 @@
+{
+  "name": "Dealerlink",
+  "dockerComposeFile": ["../docker-compose.yml", "docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "node",
+
+  "forwardPorts": [3000, 5050, 5432],
+  "portsAttributes": {
+    "3000": { "label": "Dealerlink web" },
+    "5050": { "label": "pgAdmin" },
+    "5432": { "label": "Postgres" }
+  },
+
+  "postCreateCommand": "pnpm install --frozen-lockfile && pnpm playwright:install",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "drizzle.drizzle-vscode-extension",
+        "usernamehw.errorlens",
+        "streetsidesoftware.code-spell-checker",
+        "ms-vscode.vscode-typescript-next",
+        "prisma.prisma"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

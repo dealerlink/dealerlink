@@ -1,0 +1,30 @@
+# Devcontainer overlay. Merged with the repo-root docker-compose.yml by
+# devcontainer.json — postgres, pgadmin, the healthcheck and the init-db.sql
+# mount are inherited unchanged from that file.
+#
+# NOTE: relative paths here resolve against the COMPOSE PROJECT DIRECTORY
+# (the repo root, set by the first -f file), not against this file's location.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Kolkata
+    volumes:
+      - .:/workspace:cached
+      # Production/staging secrets, read-only. Same trust boundary as the host.
+      - ${HOME}/.dealerlink:/home/node/.dealerlink:ro
+      # Named volumes survive rebuilds — pnpm store, Playwright browsers, Claude auth.
+      - pnpm-store:/home/node/.local/share/pnpm
+      - playwright-cache:/home/node/.cache/ms-playwright
+      - claude-config:/home/node/.claude
+
+volumes:
+  pnpm-store:
+  playwright-cache:
+  claude-config:
