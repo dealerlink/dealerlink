@@ -220,7 +220,9 @@ Automating this (so repo + live spec can't diverge) is a **D.2** item.
 ## Secrets
 
 Not in the repo. Local source of truth:
-`C:\Users\rohit\.dealerlink\production-secrets.txt` (outside the repo tree).
+`$DEALERLINK_SECRETS/production-secrets.txt` (default `~/.dealerlink`; the
+devcontainer mounts it read-only at `/home/node/.dealerlink`), outside the
+repo tree.
 The running app reads them from DO App Platform encrypted env vars. All are
 **fresh** for production (none reused from staging). As of **D.1** all secrets
 are populated (injected via `doctl apps update --spec`, replacing the D.0

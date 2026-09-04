@@ -6,9 +6,10 @@
 # Conventions:
 #   - `type: SECRET` env vars have NO `value:` here — they are committed
 #     intentionally blank. Real values live in
-#     C:\Users\rohit\.dealerlink\staging-secrets.txt and are populated into
-#     the running app via the UI or `doctl apps spec update`. This file
-#     is committed; secrets are not.
+#     $DEALERLINK_SECRETS/staging-secrets.txt (default ~/.dealerlink; the
+#     devcontainer mounts it read-only at /home/node/.dealerlink) and are
+#     populated into the running app via the UI or `doctl apps spec update`.
+#     This file is committed; secrets are not.
 #   - `scope: RUN_AND_BUILD_TIME` is used for anything Next.js needs at build
 #     (NEXT_PUBLIC_*, NODE_ENV, Sentry build-time config). Server-only
 #     secrets are RUN_TIME so they don't bake into the client bundle.

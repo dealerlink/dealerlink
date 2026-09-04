@@ -8,9 +8,11 @@
 #
 # Conventions (same as .do/app.yaml staging):
 #   - `type: SECRET` env vars have NO `value:` here — committed intentionally
-#     blank. Real values live in C:\Users\rohit\.dealerlink\production-secrets.txt
-#     and are injected at `apps create` time via a LOCAL (uncommitted) copy of
-#     this spec, then round-tripped on subsequent `apps update`.
+#     blank. Real values live in $DEALERLINK_SECRETS/production-secrets.txt
+#     (default ~/.dealerlink; the devcontainer mounts it read-only at
+#     /home/node/.dealerlink) and are injected at `apps create` time via a
+#     LOCAL (uncommitted) copy of this spec, then round-tripped on subsequent
+#     `apps update`.
 #   - `scope: RUN_AND_BUILD_TIME` for anything Next.js needs at build
 #     (NEXT_PUBLIC_*, NODE_ENV, Sentry build config). Server-only secrets are
 #     RUN_TIME so they don't bake into the client bundle.

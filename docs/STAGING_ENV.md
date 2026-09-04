@@ -115,9 +115,10 @@ is `.do/app.yaml`; secret values live outside the repo (see below).
 ## Secrets
 
 Secret values are **not** in this repo. The local source of truth is
-`C:\Users\rohit\.dealerlink\staging-secrets.txt` (gitignored, outside the
-repo tree). The running app reads them from DO App Platform encrypted env
-vars. To re-sync after editing the secrets file:
+`$DEALERLINK_SECRETS/staging-secrets.txt` (default `~/.dealerlink`; the
+devcontainer mounts it read-only at `/home/node/.dealerlink`), gitignored and
+outside the repo tree. The running app reads them from DO App Platform
+encrypted env vars. To re-sync after editing the secrets file:
 
 ```
 node scripts/staging-app-render-spec.mjs        # → .do/app.rendered.yaml (gitignored)

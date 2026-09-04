@@ -3,8 +3,10 @@
  *
  * Reads the committed .do/app.yaml (env declarations only, no secret values)
  * and produces .do/app.rendered.yaml with secret values injected from
- * C:\Users\rohit\.dealerlink\staging-secrets.txt. The rendered file is
- * gitignored and is what gets handed to `doctl apps update <id> --spec`.
+ * $DEALERLINK_SECRETS/staging-secrets.txt (default ~/.dealerlink; the
+ * devcontainer mounts the host's ~/.dealerlink read-only at
+ * /home/node/.dealerlink). The rendered file is gitignored and is what gets
+ * handed to `doctl apps update <id> --spec`.
  *
  * Design:
  *   - We do not parse YAML; we operate on text. Each SECRET env entry in
@@ -20,11 +22,14 @@
  *   - Keys present in the secrets file but absent in the spec are reported
  *     so we notice drift between sources of truth.
  *
- * Usage (pwsh):
+ * Usage (bash, inside the devcontainer):
  *   node scripts/staging-app-render-spec.mjs
- *     [--secrets C:\Users\rohit\.dealerlink\staging-secrets.txt]
+ *     [--secrets "$DEALERLINK_SECRETS/staging-secrets.txt"]
  *     [--in .do/app.yaml]
  *     [--out .do/app.rendered.yaml]
+ *
+ * The --secrets path defaults to $DEALERLINK_SECRETS/staging-secrets.txt,
+ * and $DEALERLINK_SECRETS itself defaults to ~/.dealerlink.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -35,10 +40,8 @@ function arg(name, fallback) {
   return idx > -1 ? process.argv[idx + 1] : fallback;
 }
 
-const secretsPath = arg(
-  'secrets',
-  path.join(os.homedir(), '.dealerlink', 'staging-secrets.txt'),
-);
+const secretsDir = process.env.DEALERLINK_SECRETS || path.join(os.homedir(), '.dealerlink');
+const secretsPath = arg('secrets', path.join(secretsDir, 'staging-secrets.txt'));
 const inPath = arg('in', '.do/app.yaml');
 const outPath = arg('out', '.do/app.rendered.yaml');
 

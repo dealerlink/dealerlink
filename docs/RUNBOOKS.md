@@ -687,48 +687,50 @@ These are analytics-derived alerts — they complement, never replace, the
 - Production cluster ID known: `doctl databases list` → look for
   `dealerlink-production-db`. As of D.2: `6e0f1d36-d651-44d0-a062-ddf82e844812`.
 
-**Steps (PowerShell on operator workstation):**
+**Steps (bash, run inside the dev container):**
 
-```powershell
+```bash
 # 1. Resolve current public IP — DON'T hardcode; ISPs rotate.
-$myIp = (Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing).Content.Trim()
-Write-Output "My IP: $myIp"
+#    (NAT means the container's egress IP is the workstation's public IP.)
+myIp="$(curl -fsSL https://api.ipify.org)"
+echo "My IP: $myIp"
 
 # 2. Snapshot the firewall BEFORE the append (you want this to compare on cleanup).
-$clusterId = "6e0f1d36-d651-44d0-a062-ddf82e844812"   # dealerlink-production-db
-doctl databases firewalls list $clusterId
+clusterId="6e0f1d36-d651-44d0-a062-ddf82e844812"   # dealerlink-production-db
+doctl databases firewalls list "$clusterId"
 
 # 3. Append the IP rule.
-doctl databases firewalls append $clusterId --rule "ip_addr:$myIp"
+doctl databases firewalls append "$clusterId" --rule "ip_addr:$myIp"
 
 # 4. Re-list and grab the NEW rule's UUID (the `ip_addr` row that wasn't there before).
-doctl databases firewalls list $clusterId
-$ruleUuid = "<paste-the-ip_addr-rule-uuid-from-step-4>"
+doctl databases firewalls list "$clusterId"
+ruleUuid="<paste-the-ip_addr-rule-uuid-from-step-4>"
 
-# 5. Set $env:DATABASE_DIRECT_URL to the production doadmin connection string
-#    (from C:\Users\rohit\.dealerlink\production-secrets.txt) and run the migration.
-$prodUrl = (Get-Content "C:\Users\rohit\.dealerlink\production-secrets.txt" `
-  | Select-String "^DATABASE_DIRECT_URL=").Line -replace "^DATABASE_DIRECT_URL=", ""
-$env:DATABASE_DIRECT_URL = $prodUrl
+# 5. Set DATABASE_DIRECT_URL to the production doadmin connection string (from
+#    $DEALERLINK_SECRETS/production-secrets.txt — default ~/.dealerlink, mounted
+#    read-only at /home/node/.dealerlink in the container) and run the migration.
+export DATABASE_DIRECT_URL="$(grep '^DATABASE_DIRECT_URL=' \
+  "${DEALERLINK_SECRETS:-$HOME/.dealerlink}/production-secrets.txt" \
+  | head -n1 | cut -d= -f2-)"
 pnpm --filter "@dealerlink/db" db:migrate   # expect "Migrations + RLS + triggers applied."
 
 # 6. Verify (use packages/db/scripts/verify-0016.mjs as a template; adapt for the
 #    column / RLS / migration-version checks the migration actually needs).
 #    Confirm via the deployed app too:
-Invoke-RestMethod https://app.dealerlink.in/api/health
+curl -fsS https://app.dealerlink.in/api/health
 # expect status:ok, migrations.applied = N (your new count)
 
 # 7. REMOVE the IP rule. Use the --uuid flag, NOT positional args — DEV.??:
 #    `doctl databases firewalls remove <cluster> <uuid>` errors with
 #    "command contains unsupported arguments"; the working form is --uuid.
-doctl databases firewalls remove $clusterId --uuid $ruleUuid
+doctl databases firewalls remove "$clusterId" --uuid "$ruleUuid"
 
 # 8. Verify cleanup — the ONLY rule remaining must be type=app, value=<prod-app-uuid>.
 #    If `ip_addr` still appears, retry step 7.
-doctl databases firewalls list $clusterId
+doctl databases firewalls list "$clusterId"
 
 # 9. Clear the env var so future shell commands don't accidentally target prod.
-Remove-Item Env:\DATABASE_DIRECT_URL
+unset DATABASE_DIRECT_URL
 ```
 
 **Expected migration output noise (HARMLESS):**
@@ -777,9 +779,9 @@ cycle.
 - `doctl auth list` shows an authenticated context.
 - You know which environment: `staging` or `production`.
 
-**Steps:**
+**Steps (bash, run inside the dev container):**
 
-```powershell
+```bash
 # Verify-only (recommended first run after any spec edit):
 pnpm sync-spec:staging      # answer 'n' at the prompt
 pnpm sync-spec:production   # answer 'n' at the prompt
@@ -919,20 +921,21 @@ D.3 restore rehearsal (`docs/DISASTER_RECOVERY.md`). **RTO target ≤ 1 h, RPO �
 
 **Prerequisites:** `doctl` authenticated; the production cluster id
 (`6e0f1d36-d651-44d0-a062-ddf82e844812`); the production secrets file
-(`C:\Users\rohit\.dealerlink\production-secrets.txt`).
+(`$DEALERLINK_SECRETS/production-secrets.txt`, default `~/.dealerlink`, mounted
+read-only at `/home/node/.dealerlink` in the container).
 
 **Steps:**
 
-```powershell
+```bash
 # 1. (Optional) confirm what backups exist + their timestamps.
 doctl databases backups 6e0f1d36-d651-44d0-a062-ddf82e844812
 
 # 2. Restore to a NEW cluster — latest backup (omit timestamp) or PITR
 #    (supply --restore-from-timestamp "<UTC>" inside the backup window).
 #    NEVER an in-place restore — `create` always makes a new cluster.
-doctl databases create dealerlink-production-restore `
-  --engine pg --version 16 --region blr1 --size db-s-1vcpu-2gb --num-nodes 1 `
-  --restore-from-cluster-name dealerlink-production-db `
+doctl databases create dealerlink-production-restore \
+  --engine pg --version 16 --region blr1 --size db-s-1vcpu-2gb --num-nodes 1 \
+  --restore-from-cluster-name dealerlink-production-db \
   --wait   # blocks until online (~several minutes)
 
 # 3. Verify the restored data BEFORE cutting over: connect as doadmin to the
@@ -947,7 +950,7 @@ doctl databases create dealerlink-production-restore `
 pnpm sync-spec:production    # review diff, confirm, applies + redeploys
 
 # 5. Confirm the app is healthy on the new DB.
-Invoke-RestMethod https://app.dealerlink.in/api/health
+curl -fsS https://app.dealerlink.in/api/health
 # expect status:ok, db.status:ok, migrations.applied:17, rls.status:ok
 
 # 6. Lock the new cluster's firewall to the app (mirror the original):

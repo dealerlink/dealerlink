@@ -11,7 +11,9 @@
  * The naive remedy — `doctl apps update <app-id> --spec .do/app.production.yaml`
  * — wipes every encrypted SECRET in the live spec, because the committed file
  * ships blank `type: SECRET` env entries (real values live ONLY in
- * `C:\Users\rohit\.dealerlink\<env>-secrets.txt` outside the repo). This
+ * `$DEALERLINK_SECRETS/<env>-secrets.txt`, default `~/.dealerlink`, outside
+ * the repo — the devcontainer mounts them read-only at
+ * `/home/node/.dealerlink`). This
  * script does the safe variant: pulls the live spec, overlays the committed
  * non-secret fields onto it, and applies the merged result — preserving the
  * encrypted `EV[...]` value blobs for every SECRET.

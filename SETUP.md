@@ -1,170 +1,58 @@
 # SETUP.md — Dealerlink Local Development Setup
 
-> **Purpose:** Get a fresh machine ready to develop Dealerlink. Cross-platform (macOS, Windows, Linux).
+> **Purpose:** Get a fresh machine ready to develop Dealerlink using the
+> project's dev container. The container carries the entire toolchain (Node,
+> pnpm, Postgres client, Chromium, doctl, …) so your host only needs Docker,
+> VS Code, and Git.
 >
-> **Time required:** 30–60 minutes depending on what's already installed.
+> **Time required:** 15–30 minutes, most of it the first container build.
 >
 > **Companion files:**
 >
 > - `CLAUDE.md` — implementation guide
 > - `README.md` — project overview and daily commands
-> - `docker-compose.yml` — service definitions
+> - `.devcontainer/` — dev container definition (image, services, secrets mount)
+> - `docker-compose.yml` — Postgres + pgAdmin service definitions
 > - `.env.example` — environment variable template
 
 ---
 
 ## Prerequisites
 
-| Tool                              | Required version | Why                                                |
-| --------------------------------- | ---------------- | -------------------------------------------------- |
-| **Node.js**                       | v20.x LTS        | Application runtime (web + workers)                |
-| **pnpm**                          | v9.x             | Package manager (faster than npm, workspace-aware) |
-| **Docker Desktop**                | Any recent       | Local Postgres + pgAdmin via docker-compose        |
-| **Git**                           | Any recent       | Source control                                     |
-| **PowerShell 7** _(Windows only)_ | v7.x             | Modern shell with cross-platform compatibility     |
+Everything is provisioned inside the dev container, so the host machine needs
+only three things:
 
-### Optional but recommended
+| Tool                         | Required version | Why                                                                        |
+| ---------------------------- | ---------------- | -------------------------------------------------------------------------- |
+| **Docker Desktop**           | Any recent       | Builds and runs the dev container + Postgres/pgAdmin services              |
+| **VS Code**                  | Any recent       | Editor that drives the container                                           |
+| **Dev Containers extension** | Any recent       | `ms-vscode-remote.remote-containers` — opens the repo inside the container |
+| **Git**                      | Any recent       | Clone the repo on the host before opening it in the container              |
 
-- **VS Code** with extensions: ESLint, Prettier, Tailwind CSS IntelliSense, Drizzle Kit
-- **TablePlus** or **DBeaver** — visual Postgres client (alternative to pgAdmin)
-
-### Node version management (recommended)
-
-This project pins Node 20.18.0 via `.nvmrc`. Use a version manager so your local Node always matches the project's expected version — this avoids native-module ABI mismatches and prevents drift from production (which runs Node 20 on DigitalOcean).
-
-**Windows:** [nvm-windows](https://github.com/coreybutler/nvm-windows)
-
-```powershell
-winget install CoreyButler.NVMforWindows
-# After restart:
-nvm install 20.18.0
-nvm use 20.18.0
-```
-
-**macOS / Linux:** [nvm](https://github.com/nvm-sh/nvm)
+Install the Dev Containers extension from the VS Code Marketplace (search
+"Dev Containers", publisher **Microsoft**), or from the command line:
 
 ```bash
-nvm install        # reads .nvmrc automatically
-nvm use            # switches to 20.18.0
+code --install-extension ms-vscode-remote.remote-containers
 ```
 
-**Verify:**
+Everything else — Node 20.18.0, pnpm 9.15.9, Postgres 16 client (`psql`,
+`pg_dump`), Chromium for Puppeteer/Playwright, `doctl`, `jq`, and the Claude
+Code CLI — comes baked into the image (`.devcontainer/Dockerfile`). Do **not**
+install Node, pnpm, or a Node version manager on the host; the pinned versions
+live in the image and are guaranteed to match production.
 
-```bash
-node --version     # should print v20.18.0
-```
-
-If you skip this, your local Node may drift from the project version. The build will still likely work, but native modules (Argon2 used by Lucia auth) may need rebuilding when versions change. The `pnpm playwright:install` step below is also Node-version-sensitive.
-
-The OS-specific install commands below install Node directly; once Node is on PATH, prefer the version manager above for day-to-day work — it lets you switch versions per project without reinstalling.
-
----
-
-## Installation by OS
-
-### macOS
-
-```bash
-# Install Homebrew if not present
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install tools
-brew install node@20
-brew install git
-brew install --cask docker  # Docker Desktop
-
-# Install pnpm via npm (after Node)
-npm install -g pnpm@9
-
-# Verify
-node --version    # v20.x
-pnpm --version    # 9.x
-docker --version
-git --version
-```
-
-### Windows
-
-Use PowerShell 7 (install first if you only have Windows PowerShell 5.1):
-
-```powershell
-# Install PowerShell 7
-winget install --id Microsoft.PowerShell -e
-
-# Restart terminal, then continue in pwsh
-
-# Install tools
-winget install --id OpenJS.NodeJS.LTS -e         # Node 20 LTS
-winget install --id Git.Git -e
-winget install --id Docker.DockerDesktop -e
-
-# Install pnpm via npm (restart terminal first so node is on PATH)
-npm install -g pnpm@9
-
-# Verify
-node --version
-pnpm --version
-docker --version
-git --version
-```
-
-**Windows-specific extras:**
-
-```powershell
-# Set Git line endings to LF on commit, native on checkout
-git config --global core.autocrlf input
-git config --global init.defaultBranch main
-
-# Optional: add Defender exclusions for performance (run as admin)
-Add-MpPreference -ExclusionPath "C:\dev\dealerlink\node_modules"
-Add-MpPreference -ExclusionPath "C:\dev\dealerlink\.next"
-```
-
-**WSL2 requirement:** Docker Desktop on Windows requires WSL2. After installing Docker Desktop, launch it once manually and complete the WSL2 setup wizard.
-
-### Linux (Ubuntu/Debian)
-
-```bash
-# Install Node 20 via nvm
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-source ~/.bashrc
-nvm install 20
-nvm use 20
-
-# Install other tools
-sudo apt update
-sudo apt install -y git docker.io docker-compose
-
-# Install pnpm
-npm install -g pnpm@9
-
-# Add yourself to docker group (logout/login after)
-sudo usermod -aG docker $USER
-
-# Verify
-node --version
-pnpm --version
-docker --version
-git --version
-```
+> **macOS note:** Docker Desktop is the reference host. The container is
+> Linux (`node:20.18.0-bookworm-slim`) regardless of host OS, so the dev
+> experience is identical whether the host is macOS, Linux, or Windows.
 
 ---
 
 ## Project Setup
 
-### 1. Clone the repository
+### 1. Clone the repository (on the host)
 
 ```bash
-# Choose a project location
-mkdir -p ~/projects                    # macOS/Linux
-# OR
-mkdir -p C:\dev                        # Windows
-
-cd ~/projects                          # macOS/Linux
-# OR
-cd C:\dev                              # Windows
-
-# Clone
 git clone git@github.com:<your-username>/dealerlink.git
 cd dealerlink
 ```
@@ -175,38 +63,52 @@ If SSH isn't configured, use HTTPS:
 git clone https://github.com/<your-username>/dealerlink.git
 ```
 
-### 2. Install dependencies
+### 2. (Optional) Place production/staging secrets on the host
+
+The container mounts `~/.dealerlink` from the host **read-only** at
+`/home/node/.dealerlink` (see `.devcontainer/docker-compose.yml`). This is only
+needed for the deploy/ops runbooks (R17–R20) that read
+`$DEALERLINK_SECRETS/<env>-secrets.txt`. Day-to-day feature work does not need
+it — skip this step if you're not touching production infra.
+
+If you do need it, create the directory on the host so the mount has something
+to bind:
 
 ```bash
-pnpm install
+mkdir -p ~/.dealerlink
+# drop staging-secrets.txt / production-secrets.txt here (never commit them)
 ```
 
-This installs all workspace packages. Takes 1–3 minutes on first run.
+`$DEALERLINK_SECRETS` defaults to `~/.dealerlink`; override it only if you keep
+the files elsewhere.
 
-### 3. Start local Postgres
+### 3. Open the repo in the container
 
-```bash
-docker compose up -d
+1. Open the cloned folder in VS Code (`code .`).
+2. VS Code detects `.devcontainer/` and prompts **"Reopen in Container"** —
+   click it. (Or run **Dev Containers: Reopen in Container** from the command
+   palette, `F1`.)
+
+On the first open, VS Code builds the image and starts the Compose project.
+This pulls the base image, installs the toolchain, and starts two service
+containers:
+
+- `dealerlink-postgres` — Postgres 16 (health-checked; the app container waits
+  for it)
+- `dealerlink-pgadmin` — pgAdmin UI
+
+When the container is ready, VS Code runs the `postCreateCommand` automatically:
+
+```
+pnpm install --frozen-lockfile && pnpm playwright:install
 ```
 
-This starts two containers:
+That installs all workspace dependencies and the Playwright browsers. First run
+takes a few minutes; subsequent opens are fast because the pnpm store,
+Playwright cache, and Claude config live in named volumes that survive rebuilds.
 
-- `dealerlink-postgres` on port 5432
-- `dealerlink-pgadmin` on port 5050 (UI for inspecting the DB)
-
-Wait 15–20 seconds for Postgres to initialize, then verify:
-
-```bash
-docker compose ps
-# dealerlink-postgres should show "healthy"
-```
-
-Verify extensions are loaded:
-
-```bash
-docker compose exec postgres psql -U dealerlink -d dealerlink_dev -c "SELECT extname FROM pg_extension;"
-# Should list: plpgsql, uuid-ossp, pg_trgm, btree_gin
-```
+**All commands from here on run in the VS Code integrated terminal, which is a
+shell _inside_ the container.**
 
 ### 4. Configure environment variables
 
@@ -214,38 +116,42 @@ Copy the template:
 
 ```bash
 cp .env.example .env.local
-# Windows PowerShell:
-Copy-Item .env.example .env.local
 ```
 
-Generate a secure session secret:
+Then edit `.env.local`:
 
-```bash
-# macOS/Linux:
-openssl rand -hex 32
+1. **Database URLs.** The template already points at hostname **`postgres`** (the
+   Compose service name, reachable from inside the container) — so no change is
+   needed for the default containerized setup. Only if you run Postgres directly
+   on the host instead should you switch `postgres` back to `localhost`.
 
-# Windows PowerShell (no openssl needed):
--join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
-```
-
-Open `.env.local` in your editor and:
-
-1. Replace `replace_with_64_char_hex_string` with the generated secret
-2. Add your **Resend API key**: `RESEND_API_KEY=re_xxxxxxxx` (from https://resend.com/api-keys)
-3. Add your **Sentry DSN**: `SENTRY_DSN=https://xxxxx@xxxxx.ingest.sentry.io/xxxxx` (from sentry.io)
-4. Generate a **Resend inbound webhook secret** (`RESEND_INBOUND_WEBHOOK_SECRET`):
+2. **Generate a session secret** (`openssl` is on PATH in the container):
 
    ```bash
-   # Windows PowerShell / macOS / Linux (Node is already installed):
+   openssl rand -hex 32
+   ```
+
+   Paste the result over `replace_with_64_char_hex_string` in `SESSION_SECRET`.
+
+3. Add your **Resend API key**: `RESEND_API_KEY=re_xxxxxxxx` (from
+   https://resend.com/api-keys).
+
+4. Add your **Sentry DSN** if you want error capture locally
+   (`SENTRY_DSN=` / `NEXT_PUBLIC_SENTRY_DSN=`); the SDKs no-op cleanly when
+   blank, so this is optional for dev.
+
+5. Generate a **Resend inbound webhook secret** (`RESEND_INBOUND_WEBHOOK_SECRET`):
+
+   ```bash
    node -e "console.log('whsec_' + require('crypto').randomBytes(32).toString('base64url'))"
    ```
 
    This server-only secret signs/verifies inbound Resend webhook events
    (delivery, bounce, open, click). In **local dev** any generated value
    works — the webhook integration tests sign their fixtures with the same
-   secret. In **production**, replace it with the signing secret Resend
-   shows when you create the webhook endpoint in their dashboard (see
-   `docs/RUNBOOKS.md` → "Setting up Resend webhook in production").
+   secret. In **production**, replace it with the signing secret Resend shows
+   when you create the webhook endpoint (see `docs/RUNBOOKS.md` → "Setting up
+   Resend webhook in production").
 
    ⚠️ Never expose this via a `NEXT_PUBLIC_*` variable — it is server-only.
 
@@ -257,7 +163,15 @@ Leave the deferred-to-Phase-2 variables (DO Spaces, Axiom) commented out.
 pnpm db:migrate
 ```
 
-This applies all pending Drizzle migrations to your local database.
+This applies all pending Drizzle migrations to the containerized database.
+
+Verify the extensions loaded (the image ships `psql` 16, so connect directly —
+there is no `docker` CLI inside the container):
+
+```bash
+psql "$DATABASE_DIRECT_URL" -c "SELECT extname FROM pg_extension;"
+# Should list: plpgsql, uuid-ossp, pg_trgm, btree_gin
+```
 
 ### 6. Seed sample data
 
@@ -265,11 +179,12 @@ This applies all pending Drizzle migrations to your local database.
 pnpm db:seed
 ```
 
-This creates 2 demo tenants, ~500 inventory items, 30 deals, and other seed data per `CLAUDE.md` §13.
+This creates 2 demo tenants, ~500 inventory items, 30 deals, and other seed
+data per `CLAUDE.md` §13.
 
 ### 7. Start the dev servers
 
-In two separate terminal windows:
+In two VS Code terminals (both inside the container):
 
 ```bash
 # Terminal 1 — web app
@@ -280,11 +195,15 @@ pnpm dev
 pnpm dev:workers
 ```
 
-You can also start both at once:
+Or both at once:
 
 ```bash
 pnpm dev:all
 ```
+
+Ports **3000** (web), **5050** (pgAdmin), and **5432** (Postgres) are forwarded
+to the host automatically (`.devcontainer/devcontainer.json`), so open them in
+your host browser as usual.
 
 ### 8. Verify everything works
 
@@ -298,6 +217,10 @@ Open in your browser:
 
 Sign in with the seeded admin credentials (printed by the seed script).
 
+> **pgAdmin → Postgres:** when adding the server in pgAdmin, use host
+> **`postgres`** (the Compose service name), port `5432`, user `dealerlink`,
+> password `dev_password_change_me`.
+
 ### 9. (Optional) Receiving Resend webhooks locally
 
 Outbound email works locally with no extra setup — without a real
@@ -307,8 +230,8 @@ Outbound email works locally with no extra setup — without a real
 publicly reachable URL, because Resend calls `POST /api/webhooks/resend` from
 their infrastructure. Three options:
 
-- **Option A — ngrok tunnel (recommended).** Install ngrok
-  (`https://ngrok.com/download`), then:
+- **Option A — ngrok tunnel (recommended).** Run ngrok on the **host** (not in
+  the container) against the forwarded port:
 
   ```bash
   ngrok http 3000
@@ -321,10 +244,10 @@ their infrastructure. Three options:
 - **Option B — preview deployment.** Point the Resend webhook at a deployed
   preview environment instead of localhost.
 
-- **Option C — skip locally.** Webhook handling is covered by the
-  integration tests (`apps/web/lib/email/resend-webhook.test.ts`), which sign
-  fixtures with your local secret. Defer real webhook testing to staging
-  (Stage D). The outbound path is unaffected.
+- **Option C — skip locally.** Webhook handling is covered by the integration
+  tests (`apps/web/lib/email/resend-webhook.test.ts`), which sign fixtures with
+  your local secret. Defer real webhook testing to staging (Stage D). The
+  outbound path is unaffected.
 
 See `docs/RUNBOOKS.md` → "Setting up Resend webhook in production".
 
@@ -332,52 +255,66 @@ See `docs/RUNBOOKS.md` → "Setting up Resend webhook in production".
 
 ## Daily Commands
 
-| Command                  | What it does                                    |
-| ------------------------ | ----------------------------------------------- |
-| `pnpm dev`               | Start Next.js web app                           |
-| `pnpm dev:workers`       | Start workers process                           |
-| `pnpm dev:all`           | Start both concurrently                         |
-| `pnpm typecheck`         | Run TypeScript type checking                    |
-| `pnpm lint`              | Run ESLint                                      |
-| `pnpm test`              | Run Vitest unit tests                           |
-| `pnpm test:e2e`          | Run Playwright E2E tests                        |
-| `pnpm db:migrate`        | Apply pending migrations                        |
-| `pnpm db:rollback`       | Roll back the last migration                    |
-| `pnpm db:seed`           | Reset and seed sample data                      |
-| `pnpm db:studio`         | Open Drizzle Studio (visual DB browser)         |
-| `docker compose up -d`   | Start Postgres + pgAdmin                        |
-| `docker compose down`    | Stop Postgres + pgAdmin (preserves data)        |
-| `docker compose down -v` | Stop and **delete all DB data** (use with care) |
-| `pnpm format`            | Auto-format all files with Prettier             |
+Run all of these in a VS Code terminal inside the container.
+
+| Command            | What it does                            |
+| ------------------ | --------------------------------------- |
+| `pnpm dev`         | Start Next.js web app                   |
+| `pnpm dev:workers` | Start workers process                   |
+| `pnpm dev:all`     | Start both concurrently                 |
+| `pnpm typecheck`   | Run TypeScript type checking            |
+| `pnpm lint`        | Run ESLint                              |
+| `pnpm test`        | Run Vitest unit tests                   |
+| `pnpm test:e2e`    | Run Playwright E2E tests                |
+| `pnpm db:migrate`  | Apply pending migrations                |
+| `pnpm db:rollback` | Roll back the last migration            |
+| `pnpm db:seed`     | Reset and seed sample data              |
+| `pnpm db:studio`   | Open Drizzle Studio (visual DB browser) |
+| `pnpm format`      | Auto-format all files with Prettier     |
+
+Postgres and pgAdmin are started and stopped by VS Code together with the dev
+container — you do **not** run `docker compose up` yourself. To stop them,
+close the container window (**Dev Containers: Reopen Folder Locally**) or quit
+VS Code.
 
 ---
 
 ## Common Issues
 
-| Issue                                                               | Fix                                                                                                                                                          |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Port 5432 already in use**                                        | You have another Postgres running. Stop it, OR change port in `docker-compose.yml` to `5433:5432` and update `DATABASE_URL`                                  |
-| **Docker daemon not running**                                       | Start Docker Desktop; on Linux: `sudo systemctl start docker`                                                                                                |
-| **`pnpm: command not found`**                                       | Restart terminal, or `source ~/.zshrc` / `source ~/.bashrc`                                                                                                  |
-| **Permission errors on Linux Docker**                               | `sudo usermod -aG docker $USER` then logout/login                                                                                                            |
-| **pgAdmin can't connect to "postgres"**                             | In pgAdmin add server, use host = `host.docker.internal` (Mac/Win) or container name `postgres`                                                              |
-| **`pnpm install` is slow on Windows**                               | Add Defender exclusion for `node_modules` (see Windows section above)                                                                                        |
-| **Migrations fail with "permission denied for schema public"**      | RLS may be blocking; check that the migration role has `BYPASSRLS` or runs as superuser                                                                      |
-| **Worker keeps restarting**                                         | Check `pnpm dev:workers` output; usually missing env var or DB connection issue                                                                              |
-| **Hot reload not working in Next.js**                               | Try restarting the dev server; on Windows, file system events can be flaky in WSL paths                                                                      |
-| **`pnpm.ps1 cannot be loaded because running scripts is disabled`** | PowerShell execution policy blocks unsigned scripts. Fix: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` (one-time, no admin needed) |
-| **Native module ABI errors after Node upgrade**                     | Rebuild native deps: `pnpm install --force` or switch back to Node 20.18.0 via `.nvmrc` (see Node version management above)                                  |
+| Issue                                                          | Fix                                                                                                                                             |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **App can't reach the database / `ECONNREFUSED ::1:5432`**     | Your `.env.local` `DATABASE_URL` points at `localhost`. Inside the container it must use host `postgres` (the template default; see step 4).    |
+| **"Reopen in Container" doesn't appear**                       | Ensure the Dev Containers extension is installed and Docker Desktop is running, then run **Dev Containers: Reopen in Container** from `F1`.     |
+| **Container build fails on first open**                        | Confirm Docker Desktop has enough resources and network access (the image pulls PGDG + doctl release assets). Retry with **Rebuild Container**. |
+| **Postgres not ready / app waits forever**                     | The app service waits for the Postgres healthcheck. Give it 15–20s; if it never goes healthy, **Rebuild Container**.                            |
+| **`pnpm: command not found` in a terminal**                    | You opened a host terminal, not the container's. Reopen the folder in the container, or use the VS Code integrated terminal.                    |
+| **Migrations fail with "permission denied for schema public"** | RLS may be blocking; check that the migration role has `BYPASSRLS` or runs as superuser (`DATABASE_DIRECT_URL` uses the `dealerlink` role).     |
+| **Worker keeps restarting**                                    | Check `pnpm dev:workers` output; usually a missing env var or DB connection issue.                                                              |
+| **`git` reports "dubious ownership"**                          | The image already runs `git config --global --add safe.directory /workspace`; if you mounted elsewhere, add that path the same way.             |
+| **Native module ABI errors**                                   | Rebuild native deps: `pnpm install --force`. The image pins Node 20.18.0, so ABI drift shouldn't happen unless you changed the image.           |
 
 ---
 
 ## Resetting Your Local Environment
 
-If your local DB gets into a bad state, nuke and reseed:
+For a **logical reset** (wipe app data, re-seed) — run inside the container:
 
 ```bash
-docker compose down -v        # deletes the volume
-docker compose up -d           # fresh Postgres
-sleep 15                       # wait for it to be ready
+pnpm db:seed        # truncates and re-seeds sample data
+```
+
+For a **full database wipe** (drop the Postgres volume entirely), the data
+lives in the `postgres-data` named volume, which the container can't remove
+from inside. From a **host** terminal, with the container stopped:
+
+```bash
+docker compose down -v     # deletes the postgres-data volume
+```
+
+Then reopen the folder in the container (VS Code brings Postgres back up fresh)
+and re-run:
+
+```bash
 pnpm db:migrate
 pnpm db:seed
 ```
@@ -386,27 +323,26 @@ pnpm db:seed
 
 ## IDE Setup (VS Code)
 
-The repo includes `.vscode/extensions.json` recommending:
+The dev container installs its recommended extensions automatically
+(`.devcontainer/devcontainer.json` → `customizations.vscode.extensions`):
 
+- Prettier — Code formatter
 - ESLint
-- Prettier - Code formatter
 - Tailwind CSS IntelliSense
-- Drizzle Kit
+- Drizzle
 - Error Lens
+- Code Spell Checker
+- TypeScript Nightly
+- Prisma
 
-VS Code will prompt to install these on first open. Click "Install All" for the best experience.
-
-The repo also includes `.vscode/settings.json` with sensible defaults:
-
-- Format on save (Prettier)
-- ESLint auto-fix on save
-- Tailwind class-name sorting
+Format-on-save and ESLint auto-fix are configured for the workspace, and the
+integrated terminal defaults to bash.
 
 ---
 
 ## Updating Your Environment
 
-When pulling new changes from main:
+When pulling new changes from `main` (inside the container):
 
 ```bash
 git pull
@@ -414,14 +350,14 @@ pnpm install                  # in case dependencies changed
 pnpm db:migrate               # apply any new migrations
 ```
 
-When the team adds a new env variable, it'll be added to `.env.example`. Compare your `.env.local` against it:
+If `.devcontainer/` itself changed (new tool, new base image), rebuild the
+container: **Dev Containers: Rebuild Container** from `F1`.
+
+When the team adds a new env variable, it'll be added to `.env.example`.
+Compare your `.env.local` against it:
 
 ```bash
-# macOS/Linux:
 diff <(grep -v '^#' .env.example | sort) <(grep -v '^#' .env.local | sort)
-
-# Windows PowerShell:
-Compare-Object (Get-Content .env.example | Where-Object {$_ -notmatch '^#'} | Sort-Object) (Get-Content .env.local | Where-Object {$_ -notmatch '^#'} | Sort-Object)
 ```
 
 ---
@@ -436,4 +372,4 @@ Compare-Object (Get-Content .env.example | Where-Object {$_ -notmatch '^#'} | So
 
 ---
 
-_Last updated: May 2026 · Phase 1 setup_
+_Last updated: September 2026 · devcontainer setup · Phase 1_

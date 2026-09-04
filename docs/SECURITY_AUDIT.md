@@ -403,8 +403,9 @@ mutating tenant action lacks a role guard.
 
 - **No secret values in the repo.** `.do/app.yaml` ships `type: SECRET` envs with
   **no `value:`** (committed blank); real values live in
-  `C:\Users\rohit\.dealerlink\staging-secrets.txt` (outside the repo) and are
-  injected via `doctl apps update --spec` (DEV.64). ✅
+  `$DEALERLINK_SECRETS/staging-secrets.txt` (default `~/.dealerlink`; the
+  devcontainer mounts it read-only at `/home/node/.dealerlink`), outside the
+  repo, and are injected via `doctl apps update --spec` (DEV.64). ✅
 - **`.gitignore`** excludes `.env`, `.env.local`, `.env.*.local` (keeps
   `.env.example`), `secrets/`, `/staging-secrets.txt`, and the rendered spec
   (`.do/app.rendered.yaml`). ✅

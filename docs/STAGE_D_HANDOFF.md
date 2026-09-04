@@ -247,8 +247,10 @@ See §6 for the full DNS/SSL plan.
 
 ## 3. Production Secrets Provisioning Checklist
 
-All real values live **only** in `C:\Users\rohit\.dealerlink\production-secrets.txt`
-(gitignored, outside the repo) and are injected into the running app via
+All real values live **only** in `$DEALERLINK_SECRETS/production-secrets.txt`
+(default `~/.dealerlink`; the devcontainer mounts it read-only at
+`/home/node/.dealerlink`), gitignored and outside the repo, and are injected
+into the running app via
 `doctl apps update --spec` (DEV.64 — see §11 and `docs/DEPLOYMENT.md`). The
 committed spec ships `type: SECRET` envs with **no `value:`**. **Never commit a
 real secret.**
