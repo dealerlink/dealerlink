@@ -45,4 +45,8 @@ secrets/
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
 # Load-test captured session cookies (live session tokens — never commit)
-scripts/load-test/.sessions.json.claude/settings.local.json
+scripts/load-test/.sessions.json
+
+# Claude Code local session artifacts
+.claude/settings.local.json
+.claude/*.local.json
