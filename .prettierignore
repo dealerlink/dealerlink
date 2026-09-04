@@ -5,3 +5,6 @@ build
 coverage
 *.min.js
 pnpm-lock.yaml
+.pnpm-store/
+test-results/
+playwright-report/
