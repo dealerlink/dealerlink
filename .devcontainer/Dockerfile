@@ -59,3 +59,5 @@ RUN mkdir -p /home/node/.npm-global /home/node/.claude \
 # without this git aborts subprocesses (including the husky pre-commit hook)
 # with "dubious ownership".
 RUN git config --global --add safe.directory /workspace
+
+RUN printf 'store-dir=/home/node/.local/share/pnpm/store\n' > /home/node/.npmrc
