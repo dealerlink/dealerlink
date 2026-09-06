@@ -24,8 +24,12 @@ C2. pnpm verify                            # all spec files pass
 C3. pnpm typecheck && pnpm lint            # both green
 C4. pnpm build && pnpm test                # both green
 C5. Update PROJECT_PLAN.md:
-    - find row B.N, set status ✅, set date, add notes summary
+    - Stage A–E (hand-maintained): find the row, set status ✅, set date,
+      add notes summary
+    - Stage F (GENERATED — see below): edit docs/stage-f-tasks.json, then
+      run `pnpm plan:sync`. NEVER hand-edit the Stage F table.
     - append a changelog row at the bottom with the commit SHA
+      (the changelog is outside the markers, so it is a normal edit)
 C6. Append the day's deviations to /DEVIATIONS.md
     (append-only; never edit historic entries; if a deviation is
      resolved later, write a new RESOLVED entry referencing the original)
@@ -34,6 +38,28 @@ C8. git push
 C9. Print final summary: tests delta, files added (A vs B), deviations count,
     commit SHA + push confirmation.
 ```
+
+## Stage F — marking a task complete (Day 19 onwards)
+
+From Stage F Day 19, the Stage F task table in `PROJECT_PLAN.md` is
+**generated from `docs/stage-f-tasks.json`** and must never be hand-edited.
+
+Every Stage F day's close-out therefore does this instead of editing the table:
+
+```text
+1. Edit the task's object in docs/stage-f-tasks.json:
+     "status": "complete", "completedDate": "YYYY-MM-DD", "notes": "<summary + SHA>"
+2. pnpm plan:sync                # regenerates the table between the markers
+3. Commit stage-f-tasks.json AND PROJECT_PLAN.md together
+```
+
+`pnpm plan:check` runs inside `pnpm verify`, so a table that has drifted from
+the JSON fails the gate. The script writes only between
+`<!-- STAGE_F_TASKS:START -->` and `<!-- STAGE_F_TASKS:END -->` and asserts
+that everything outside those markers is byte-identical before writing.
+
+Full workflow, failure modes and recovery: `docs/RUNBOOKS.md` — "Updating the
+Stage F task table".
 
 ## Verification commands (Day 6 onwards)
 

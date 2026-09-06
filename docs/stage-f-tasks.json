@@ -1,0 +1,284 @@
+{
+  "$comment": "SOURCE OF TRUTH for the Stage F task table in PROJECT_PLAN.md. Edit THIS file, then run `pnpm plan:sync`. Never hand-edit the table between the STAGE_F_TASKS markers in PROJECT_PLAN.md — `pnpm plan:check` (wired into `pnpm verify`) fails CI if they drift. Task names are verbatim from docs/STAGE_F_BUILD_v2.md 'Revised Stage F task table'.",
+  "tasks": [
+    {
+      "id": "F.1",
+      "task": "Security remediation (F-1 CVE, F-2 CSP, F-3 rate-limit, F-4 drizzle)",
+      "subPhase": "SP0",
+      "days": "19",
+      "status": "complete",
+      "completedDate": "2026-09-06",
+      "notes": "Verification pass, not remediation — F-1/F-2/F-3 were already closed in C.4 + D.2 (next 14.2.35 `0c20952`; headers `8c205ad`; rate-limit + lockout `0d6638d`), verified in code and recorded in SECURITY_AUDIT.md with dates + SHAs. Closed the real gap instead: 18 new specs (rate-limit.test.ts 8, login-enumeration.test.ts 6, verify-day-19.spec.ts 4). F-4 split out to F.2a. DEV.83, DEV.85."
+    },
+    {
+      "id": "F.2",
+      "task": "Tax invoice existence audit + gap spec",
+      "subPhase": "SP0",
+      "days": "19",
+      "status": "complete",
+      "completedDate": "2026-09-06",
+      "notes": "docs/TAX_INVOICE_AUDIT.md. VERDICT: tax invoice DOES NOT EXIST (enum placeholders only; render-pdf throws on `invoice`). Per-line hsnCode + gstRate CONFIRMED on quotation/PI/order lines — Day 20 unblocked. Ship-To GSTIN: dealers.gstin exists, format-validated only; no checksum, no state cross-check, never required. Two plan variances flagged: F.6 needs ~3.5 d vs 2 allocated and is blocked on F.4; F.5 assumes a shipping-address entity that does not exist."
+    },
+    {
+      "id": "F.2a",
+      "task": "ORM upgrade — drizzle-orm 0.38.4 → 0.45.x (security finding F-4)",
+      "subPhase": "SP0",
+      "days": "20",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Split out of F.1 on Day 19. Sequenced before any new schema work (F.6/F.8/F.11) so the ORM bump has the smallest possible surface to break. Advisory CVE-2026-39356 / GHSA-gpj5-g38j-94v9 is NOT reachable in our code — see DEVIATIONS DEV.84."
+    },
+    {
+      "id": "F.3",
+      "task": "Multi-rate tax summary — data layer + screens",
+      "subPhase": "SP1",
+      "days": "21",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.4",
+      "task": "Multi-rate tax summary — PDF + HSN/SAC table",
+      "subPhase": "SP1",
+      "days": "22",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.5",
+      "task": "Ship-To GSTIN capture + validation",
+      "subPhase": "SP1",
+      "days": "23",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Day 19 audit: scope assumes a shipping-address entity that does not exist — Ship-To is a dealer. Needs an (a) keep-as-dealer / (b) new dealer_addresses decision first. 2.7 d for (a), ~5 d for (b). See docs/TAX_INVOICE_AUDIT.md §B.4."
+    },
+    {
+      "id": "F.6",
+      "task": "GST tax invoice document",
+      "subPhase": "SP1",
+      "days": "24–25",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Day 19 audit VERDICT: DOES NOT EXIST. Estimated 3.5 d against 2 d allocated. Hard-blocked on F.4 — TaxSummary is single-rate today. See docs/TAX_INVOICE_AUDIT.md §A.4."
+    },
+    {
+      "id": "F.7",
+      "task": "Serials rendered on invoice lines",
+      "subPhase": "SP1",
+      "days": "25",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.8",
+      "task": "Credit note / sales return",
+      "subPhase": "SP1",
+      "days": "26–27",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.9",
+      "task": "GST report: rate-wise + HSN-wise grouping",
+      "subPhase": "SP1",
+      "days": "28",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.10",
+      "task": "GSTR-1 export (B2B, B2CL, CDNR, HSN)",
+      "subPhase": "SP1",
+      "days": "29–30",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.11",
+      "task": "Tally mapping configuration module",
+      "subPhase": "SP1",
+      "days": "31–33",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.12",
+      "task": "Tally export — voucher generation engine",
+      "subPhase": "SP1",
+      "days": "34–35",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.13",
+      "task": "Tally export — XML output + idempotency",
+      "subPhase": "SP1",
+      "days": "36",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.14",
+      "task": "Vendor bill export",
+      "subPhase": "SP1",
+      "days": "37",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.15",
+      "task": "Data migration importers",
+      "subPhase": "SP1",
+      "days": "38–39",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.16",
+      "task": "Opening balance import",
+      "subPhase": "SP1",
+      "days": "40",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.17",
+      "task": "ADR: serial capture (swap-on-scan)",
+      "subPhase": "SP2",
+      "days": "41",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.18",
+      "task": "Serial bulk import at procurement",
+      "subPhase": "SP2",
+      "days": "42–43",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.19",
+      "task": "`swapReservedSerial` + scan-to-assign",
+      "subPhase": "SP2",
+      "days": "44–46",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.20",
+      "task": "Serial format validation per product/tenant",
+      "subPhase": "SP2",
+      "days": "46",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.21",
+      "task": "Mobile-responsive / PWA",
+      "subPhase": "SP2",
+      "days": "47–49",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.22",
+      "task": "Dealer price lists",
+      "subPhase": "SP2",
+      "days": "50–51",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.23",
+      "task": "GSP provider abstraction + credential vault",
+      "subPhase": "SP3",
+      "days": "52",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.24",
+      "task": "E-invoice / IRN",
+      "subPhase": "SP3",
+      "days": "53–56",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.25",
+      "task": "E-way bill",
+      "subPhase": "SP3",
+      "days": "57–59",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.26",
+      "task": "Remaining UX defects (P-10, P-11, P-12, P-4/5/6)",
+      "subPhase": "SP4",
+      "days": "60",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.27",
+      "task": "`USER_MANUAL.md` sections 3–10",
+      "subPhase": "SP4",
+      "days": "61–62",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.28",
+      "task": "Payment links / UPI",
+      "subPhase": "post",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.29",
+      "task": "ADR: plugin entitlement architecture",
+      "subPhase": "post",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    },
+    {
+      "id": "F.30",
+      "task": "`docs/PLUGIN_ROADMAP.md`",
+      "subPhase": "post",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": null
+    }
+  ]
+}

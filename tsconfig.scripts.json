@@ -1,0 +1,20 @@
+{
+  // Repo-tooling TypeScript that lives outside any workspace package.
+  // `pnpm typecheck` runs `pnpm -r typecheck`, which only visits workspaces, so
+  // scripts/*.ts would otherwise ship untypechecked. Added Stage F Day 19 with
+  // scripts/sync-project-plan.ts.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["scripts/**/*.ts"]
+}

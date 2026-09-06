@@ -974,3 +974,74 @@ doctl databases firewalls append <new-cluster-id> --rule "app:d8a25cb8-e4cb-4035
   Destroy throwaway/superseded clusters (`doctl databases delete <id>`).
 
 ---
+
+## R? — Updating the Stage F task table (PROJECT_PLAN.md)
+
+**Established Stage F Day 19.** The Stage F table in `PROJECT_PLAN.md` is
+**generated**. Never hand-edit it.
+
+The source of truth is `docs/stage-f-tasks.json`. `PROJECT_PLAN.md` holds only
+a rendered copy, between these two markers:
+
+```
+<!-- STAGE_F_TASKS:START -->   … generated, do not touch …   <!-- STAGE_F_TASKS:END -->
+```
+
+### Marking a task complete (the common case)
+
+1. Edit the task's object in `docs/stage-f-tasks.json`:
+   ```json
+   {
+     "id": "F.3",
+     "task": "Multi-rate tax summary — data layer + screens",
+     "subPhase": "SP1",
+     "days": "21",
+     "status": "complete",
+     "completedDate": "2026-09-08",
+     "notes": "Short summary + commit SHA."
+   }
+   ```
+   `status` must be one of `pending`, `in_progress`, `complete`, `parked`,
+   `deferred`, `blocked` — anything else is rejected with a named error.
+2. Run `pnpm plan:sync`.
+3. Commit **both** files together. They are a pair; committing one without the
+   other is what `plan:check` exists to catch.
+
+### Adding, re-sequencing or re-scoping a task
+
+Same flow — it is always a JSON edit plus `pnpm plan:sync`. Day numbers live in
+the `days` field, so re-sequencing means editing `days` on the affected tasks
+(as Day 19 did when it inserted **F.2a** and shifted Days 20+ by one).
+
+### Commands
+
+| Command           | What it does                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| `pnpm plan:sync`  | Renders the JSON into `PROJECT_PLAN.md`. Idempotent — a second run writes nothing. |
+| `pnpm plan:check` | Renders and diffs **without writing**; exits 1 on drift. Wired into `pnpm verify`. |
+
+### Why it refuses to run sometimes
+
+The script is deliberately paranoid, because it writes into the project's
+canonical tracker:
+
+- **"malformed markers"** — the marker pair is duplicated, nested, orphaned, or
+  END precedes START. Repair `PROJECT_PLAN.md` by hand, then re-run. The script
+  writes nothing in this state.
+- **"already contains a Stage F heading … but no STAGE_F_TASKS markers"** — some
+  other section has claimed the name. The script will not overwrite a section it
+  does not own. Put the markers inside the intended section yourself, then re-run.
+- **"REFUSING TO WRITE: content outside the STAGE_F_TASKS markers would change"** —
+  an internal assertion tripped. Stage A–E content is compared byte-for-byte
+  before and after every write. Treat this as a bug in the script, not something
+  to work around.
+
+### If CI fails on `plan:check`
+
+The table drifted from the JSON — almost always because someone hand-edited the
+table. Run `pnpm plan:sync` and commit the result. Do not "fix" it by editing
+the markdown.
+
+Tests for all of the above: `scripts/sync-project-plan.test.ts` (`pnpm test:scripts`).
+
+---

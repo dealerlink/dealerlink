@@ -1776,3 +1776,352 @@ dev is single-host localhost):**
    exit smoke had asserted the `/admin` PATH but not the HOST — gap closed.)
 
 **Status:** ✅ Closed (feature live; see ADR-014 + docs/pilot/PILOT_MONITORING.md).
+
+---
+
+## DEV.83 — Day 19 — Phase 1 re-scoped: F-1/F-2/F-3 were already closed
+
+**Date:** 2026-09-06
+**Spec said:** Stage F Day 19 Phase 1 (task F.1) was written as security
+_remediation_: upgrade Next.js 14.2.18 → ≥14.2.35 as its own commit (F-1), add
+HTTP security headers + a report-only CSP (F-2), and rate-limit the login
+endpoint with per-IP/per-email counters and lockout (F-3). The brief opened
+with "Stage B closed at Day 18 … This is Day 19."
+
+**Built:** None of those three remediations, because **all three were already
+in the codebase.** Verified by reading the code, not the docs:
+
+- **F-1** — `apps/web/package.json` pins `"next": "14.2.35"` (exact), the
+  lockfile resolves `next@14.2.35`, and the dev server banners
+  `▲ Next.js 14.2.35`. Closed 2026-05-28 in commit `0c20952`.
+- **F-2** — `apps/web/next.config.mjs` already has a `headers()` block serving
+  CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, HSTS,
+  `Referrer-Policy` and `Permissions-Policy` on `/:path*`. Closed 2026-05-25 in
+  commit `8c205ad`.
+- **F-3** — `apps/web/lib/auth/actions.ts` already calls `peekRateLimit` before
+  the user lookup, `checkRateLimit` on every failure path, `resetRateLimit` on
+  success, and gates on `isLockedOut`, backed by `users.failed_login_attempts` +
+  `users.lockout_until` (migration `0016`). Closed 2026-05-28 in commit
+  `0d6638d`.
+
+The premise was also stale in a second way: `stage-c-complete` and
+`stage-d-complete` tags both exist, and a real pilot tenant (UMA TRADING
+COMPANY) went live on production on 2026-06-02. The repo was several stages past
+"Stage B closed at Day 18".
+
+Phase 1 was therefore re-scoped, with the operator's explicit agreement, from
+_remediate_ to **_verify, close the record, and fix the under-testing_**:
+
+1. No re-upgrade of Next, no re-derivation of the CSP or the rate limiter.
+2. The three tests the brief asked for in step 1.6 were genuinely missing, and
+   were written — see DEV.85.
+3. `docs/SECURITY_AUDIT.md` §10 now records F-1/F-2/F-3 as **CLOSED with the
+   date and the commit that closed each**, plus a Day 19 disposition section.
+
+**Why:** The brief was generated from a stale reading of the record and would
+have produced a day of no-op churn on a framework dependency and two security
+controls that are live in production. Re-deriving a working CSP and a working
+rate limiter carries real regression risk for zero gain. The genuine defect was
+not the code — it was that the code was under-tested and the plan document
+disagreed with it.
+
+**Impact:** Zero application-code change from Phase 1. Net gain: 18 new specs
+guarding three previously-untested security controls, and a `SECURITY_AUDIT.md`
+that now matches reality.
+
+**Resolution:** F.1 marked complete as a verification pass. F-4 split out —
+DEV.84.
+
+---
+
+## DEV.84 — Day 19 — F-4 (drizzle-orm) deferred to its own day as task F.2a
+
+**Date:** 2026-09-06
+**Spec said:** Step 1.3 — "F-4: upgrade drizzle-orm to the latest patch within
+the same major. Regenerate types. Run `pnpm db:check` and confirm zero migration
+drift."
+
+**Built:** Nothing. The bump was **deliberately deferred** to a dedicated day,
+added to `docs/stage-f-tasks.json` as new task **F.2a (Day 20)**.
+
+Two factual corrections to the step as written:
+
+1. **It is not a patch within the same major.** Installed is `0.38.4`; the fix
+   is `>=0.45.2` — seven minor versions, not a patch.
+2. **`pnpm db:check` does not exist.** `packages/db` exposes `db:generate`,
+   `db:migrate`, `db:rollback`, `db:seed`, `db:studio`. Drift would have to be
+   checked with `drizzle-kit generate` + an empty-diff assertion.
+
+**Assessment performed before deferring (the operator asked for three things):**
+
+**(1) Advisory + reachability.** `CVE-2026-39356` / `GHSA-gpj5-g38j-94v9`,
+**High, CVSS 7.5**, "Drizzle ORM has SQL injection via improperly escaped SQL
+identifiers"; vulnerable `<0.45.2`, patched `0.45.2`. The flaw is in the
+dialect `escapeName()` implementations: a delimiter inside an identifier is not
+escaped before the identifier is quoted, so untrusted input reaching identifier
+or alias construction can break out. Exploitation requires untrusted runtime
+input to reach **`sql.identifier()`** or **`.as()`** — the advisory names
+dynamic sorting, dynamic report builders, and request-derived CTE/alias names.
+
+**NOT REACHABLE here.** Repo-wide:
+
+- `sql.identifier()` — **zero call sites.**
+- `.as()` — **zero call sites** in `apps/web/lib`, `apps/workers/src`,
+  `packages/*/src`.
+- `sql.raw()` — **one** call site, `app/api/health/route.ts:97`, interpolating
+  the hardcoded `EXPECTED_RLS_TABLES` constant; no request data touches it.
+- No `$dynamic`, `getTableName` or `getTableColumns` dynamic-identifier usage.
+
+The reports module (the one place a "dynamic report builder" might exist) takes
+its grouping from closed TypeScript unions, not free-text column names. This
+confirms the original C.4 finding: hygiene, not exposure.
+
+**(2) Breaking changes against our specific patterns.** Checked 0.39 → 0.45:
+
+| Our pattern                | Exposure to the bump                                                                                                                                                                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **RLS policy definitions** | **None.** All policies are hand-written SQL in `packages/db/rls/*.sql`. We use no `pgPolicy()` / `.enableRLS()` drizzle API — grep returns zero. Drizzle's RLS surface simply is not in our path.                                         |
+| **`FOR UPDATE` locking**   | **None.** Every lock (`confirmOrder`, `createDispatch`, `payments/transitions`, `recompute`, `pi/transitions`, `deals/transitions`, `inventory/transitions`) is a **raw `sql` template tag**, not the query-builder `.for('update')` API. |
+| **NUMERIC handling**       | **Low but the item to watch.** 48 `decimal({precision, scale})` columns, none with a `mode` override, so all return `string`. A default-mode change would silently alter money types — this is what the bump's test run must prove.       |
+| **drizzle-kit generation** | **The real risk.** `drizzle-kit` also moves, `0.30.6 → 0.31.x`. Generator output changes are the plausible source of spurious migration drift on 17 existing migrations.                                                                  |
+| **Peer deps**              | **None.** `0.45.2` peers are satisfied — `postgres >=3`, `pg >=8`; both already met. No new required peer.                                                                                                                                |
+| **`0.44.0`**               | Additive only — `DrizzleQueryError` wrapper + an opt-in cache module. Error-shape assertions in tests are the one thing to re-check.                                                                                                      |
+
+**(3) Estimate: 1 day.** Bump three workspaces + drizzle-kit (1 h); regenerate
+and prove zero migration drift (2 h — the main unknown); full gate run with
+particular attention to money/decimal assertions across the tax, db and reports
+suites (2 h); fix fallout (2 h contingency); docs + close F-4 (1 h).
+
+**Why:** A seven-minor ORM jump regenerates types and touches every query path
+in a money-handling system. That is not audit-day work, and folding it into a
+day whose whole purpose was "audit and patch, no features" would have violated
+the day's own guardrail. Sequencing it at Day 20 — **before** F.6 (tax invoice),
+F.8 (credit note) and F.11 (Tally mapping) each add tables — means the upgrade
+lands against the smallest schema surface it will ever face again.
+
+**Impact:** F-4 stays open one more day. Not exploitable in the interim (see
+above). Day 20's original content (F.3, multi-rate GST summary) shifts to
+Day 21, and every subsequent day shifts by one.
+
+**Resolution:** tracked as Stage F task **F.2a** in `docs/stage-f-tasks.json`.
+
+---
+
+## DEV.85 — Day 19 — three missing security tests written; verify grew by 4, not 1
+
+**Date:** 2026-09-06
+**Spec said:** Step 1.6 asked for three tests; step 5.1 asked for a
+`verify-day-19.spec.ts` with four assertions; step 6.2 said `pnpm verify` should
+come back at "previous count plus one".
+
+**Built:** All of it — but the arithmetic in the brief does not hold. Phase 5
+enumerates **four** distinct assertions, and Playwright counts tests, not files.
+`pnpm verify` went **58 → 62**, not 58 → 59.
+
+Delivered:
+
+- `apps/web/lib/rate-limit.test.ts` — **8 specs**, real `rate_limit` table.
+  Covers the threshold, staying blocked in-window, **release on window
+  rollover** (1-second window + a real 1.2 s sleep, not fake timers — the
+  postgres driver uses timers itself and faking them mid-query is a flake
+  source), per-key independence, `peekRateLimit` not consuming an attempt, and
+  `resetRateLimit`.
+- `apps/web/lib/auth/login-enumeration.test.ts` — **6 specs**, drives the real
+  `login()` action. Asserts unknown email, bad password, rate-limited,
+  locked-out **with the correct password**, and unknown-tenant all return one
+  byte-identical `GENERIC_LOGIN_ERROR`; and that unknown emails are throttled
+  identically to known ones, so there is no differential-rate-limit oracle.
+- `apps/web/tests/e2e/verify-day-19.spec.ts` — **4 specs**: boots on a pinned
+  ≥14.2.35 Next; all six headers + five CSP directives on an **authenticated**
+  page response; the limiter is genuinely wired into the login route (proven by
+  the `rate_limited:<email>` `auth_events` row, since the UI message is
+  identical by design); and operator impersonation runs end to end immediately
+  after a burst of failures.
+
+**Two implementation notes worth recording:**
+
+1. `login-enumeration.test.ts` must mock React's `cache` — `lib/auth/session.ts`
+   wraps `getAuthContext` in it, and `cache` only exists inside a React server
+   render. Outside one it is a no-op.
+2. `verify-day-19.spec.ts` cannot use `import.meta.url`; Playwright transpiles
+   specs to CJS and the run fails with "Cannot use 'import.meta' outside a
+   module" **and reports `No tests found`** rather than a clear error. It
+   derives the repo root from `process.cwd()` instead.
+
+Both new DB-touching tests create a **throwaway user / unique probe key** and
+delete it afterwards, verified as leaving zero residue. This matters because
+`pnpm verify` runs `fullyParallel: false` against known seeded state — a test
+that left a seeded account locked out would break unrelated specs.
+
+**Why:** the brief's step 1.6 was the one genuinely valuable part of Phase 1:
+F-3's only tests covered its pure arithmetic (`lockout.test.ts`), and F-2 had no
+test at all. The controls were live but unguarded against regression.
+
+**Impact:** +18 specs. `pnpm verify` 58 → 62.
+
+**Resolution:** none — closes the coverage gap.
+
+---
+
+## DEV.86 — Day 19 — F.2a inserted without renumbering F.3–F.30
+
+**Date:** 2026-09-06
+**Spec said:** Step 4.1 — populate all 30 tasks "EXACTLY as listed … Do not
+paraphrase task names, do not renumber, do not reorder, do not invent tasks."
+The operator then asked for the drizzle bump to be added as a new task
+"sequenced immediately after the Day 19 audits", with "subsequent days
+renumbered accordingly".
+
+**Built:** Both, by separating **task id** from **day number**:
+
+- The new task is **`F.2a`**, not `F.3`. Every canonical id `F.1`–`F.30` keeps
+  its number and its verbatim task name, so the brief's "do not renumber"
+  constraint holds literally.
+- **Day numbers** shift: F.2a takes Day 20, and F.3 → 21, F.4 → 22, F.5 → 23,
+  F.6 → 24–25, … F.27 → 61–62. Post-go-live tasks (F.28–F.30) keep `—`.
+
+`docs/stage-f-tasks.json` therefore holds **31** task objects, not 30. The
+GO-LIVE separator row from `STAGE_F_BUILD_v2.md` is not a task and is not
+represented.
+
+`F.1`'s name still reads "Security remediation (F-1 CVE, F-2 CSP, F-3
+rate-limit, F-4 drizzle)" even though F-4 moved out, because the brief forbade
+paraphrasing the canonical names. The split is recorded in F.2a's `notes`
+instead of by editing F.1's title.
+
+**Why:** renumbering 28 task ids would break every existing cross-reference to
+`F.6`, `F.11`, `F.23` and so on in `STAGE_F_BUILD_v2.md`, `PHASE_2_PLAN_v2.md`
+and this day's audit doc. A suffixed id inserts cleanly and reads unambiguously.
+
+**Impact:** the plan is one day longer to go-live; "Day 20" now means the ORM
+upgrade, not the multi-rate GST summary.
+
+**Resolution:** none — a deliberate, recorded convention.
+
+---
+
+## DEV.87 — Day 19 — `pnpm verify` cannot complete in this devcontainer (OOM)
+
+**Date:** 2026-09-06
+**Spec said:** P.1/P.2 — "Run `pnpm preflight`. Confirm green before touching
+anything. Run `pnpm verify` and record the current spec count." Step 6.2 — the
+count should come back at "previous count plus one".
+
+**Built:** `pnpm preflight` was green (9/9). **`pnpm verify` could not be made
+to complete**, in this container, before any Day 19 change was made. The spec
+count (58 → 62) and the pass/fail of the new specs were established by targeted
+runs instead.
+
+**Root cause: the container runs out of memory and the dev server is OOM-killed.**
+
+`cat /sys/fs/cgroup/memory.events` → **`oom_kill 4`**. The container has 7.9 GB
+RAM with a 1 GB swap already at 1007/1023 MB used. `pnpm verify` runs three
+memory-hungry processes at once: `next dev` (webpack, ~5 000 modules compiled
+per route on demand), the `tsx watch` workers process with an eager-warmed
+Chromium, and Playwright's own Chromium. Under that load the kernel kills
+`next dev` mid-run.
+
+The signature in the log is unmistakable — normal 200s, then:
+
+```
+TimeoutError: page.goto: Timeout 60000ms exceeded
+Error: page.goto: net::ERR_EMPTY_RESPONSE at http://localhost:3000/login
+Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000/login
+```
+
+`ERR_EMPTY_RESPONSE` is the server dying mid-request; every subsequent spec then
+fails in ~100 ms on connection-refused. The earlier "cold compile is slow"
+reading was a symptom, not the cause: memory pressure is what makes first-hit
+compilation take 6–14 s per route, which then burns the 20-minute
+`globalTimeout` even on the runs where the server survives.
+
+**Three configurations were tried; none is both faithful and survivable here:**
+
+| Configuration                                       | Outcome                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `next dev` + `NODE_ENV=development` (**supported**) | Correct behaviour, but **OOM-killed** partway through. Three separate runs, three deaths.                                                                                                                                                                                                                                     |
+| `next start` + `NODE_ENV=production`                | Boots in 0.5 s and uses a fraction of the memory, but **auth is broken over plain HTTP**: `lucia.ts:36` sets `secure: NODE_ENV === 'production'`, so the browser drops the session cookie on `http://localhost`. 57 failed. The app is behaving **correctly**; the transport is wrong.                                        |
+| `next start` + `NODE_ENV=development` (hybrid)      | Auth works and memory is fine — 3 of 4 Day 19 specs pass — but `NODE_ENV` is **inlined into client bundles at build time**, so the client sees `production` while the server sees `development`. The impersonation redirect branches on exactly that and fails. Not a faithful environment; Next warns about this explicitly. |
+
+**What WAS verified, and how:**
+
+- **`verify-day-19.spec.ts` — 4/4 passing** in the supported configuration
+  (`next dev`, warm `.next`), in 49.4 s, before memory pressure built up.
+- **`pnpm plan:check` — green inside the `verify` chain** (it runs first, and
+  its output is in every run's log).
+- **Spec count 58 → 62**, from `playwright test --list`, which needs no server.
+- **`pnpm test` — 549 passing**, all six suites (see DEV.88 for its env caveat).
+
+**Why not fixed today:** every candidate fix — raising `globalTimeout`, adding a
+warm-up pass, capping `NODE_OPTIONS=--max-old-space-size`, splitting the suite,
+or giving the devcontainer more memory — is a change to the **verification
+harness or the container**, on a day whose guardrail was "no refactoring that is
+not required". Rewriting the harness while using it as the evidence for the
+day's work is the wrong order of operations.
+
+**Impact:** `pnpm verify` is not a usable gate in this devcontainer. It is
+presumably fine on a larger machine (the config comment records "~12-15 min on a
+cold `.next`" as a normal clean pass, so it has completed before). Day 19's
+evidence is targeted runs, and that is stated rather than papered over.
+
+**Resolution:** OPEN — needs a real decision early in Stage F. The cheapest
+credible fixes, in order: raise the devcontainer memory limit; then add a
+warm-up pass so route compilation is not competing with test execution; and
+consider whether the three heavyweight specs (`critical-path`,
+`operator-onboarding`, `operator-readonly-view`) should run as a separate,
+serialised job rather than inside the same process budget as the 19 day-specs.
+
+---
+
+## DEV.88 — Day 19 — `pnpm test` needs env exported for `packages/db` in the devcontainer
+
+**Date:** 2026-09-06
+**Spec said:** Step 6.3 — "pnpm typecheck, pnpm lint, pnpm build, pnpm test".
+
+**Built:** All four run green, but `pnpm test` **fails from a clean shell** in
+this devcontainer, for a reason that pre-dates Day 19 and is unrelated to it.
+
+`packages/db/tests/*` load **no env file** — there is no
+`packages/db/vitest.config.ts` and no `dotenv` call in the test files. They read
+the connection string straight off `process.env` with a hardcoded fallback:
+
+```ts
+// packages/db/tests/rls.test.ts:33
+const APP_DB_URL =
+  process.env.APP_DATABASE_URL ?? 'postgresql://dealerlink_app:…@localhost:5432/dealerlink_dev';
+```
+
+Since the Windows-host → devcontainer migration (commit `cef54d8`), Postgres is
+a separate compose service reachable at host **`postgres`**, not `localhost`.
+`.env.local` is correct (`postgresql://…@postgres:5432/dealerlink_dev`), but
+`packages/db` never reads it, so the fallback applies and every DB-touching
+suite fails with `connect ECONNREFUSED 127.0.0.1:5432`.
+
+Result from a clean shell: **12 of 13 files fail**, 7 tests fail. With the env
+exported first, the same command is **13 files / 172 tests, all passing**:
+
+```bash
+set -a; . ./.env.local; set +a
+export APP_DATABASE_URL="$DATABASE_URL"
+pnpm test        # 549 passing
+```
+
+Note that `apps/web`, `apps/workers`, `packages/db/src/migrate.ts` and every
+seed script _do_ call `loadEnv` against the repo-root `.env.local` — only the
+`packages/db` **tests** are missing it. `pnpm preflight` is unaffected because it
+reads `DATABASE_URL` directly (commit `168a6e2`).
+
+**Why not fixed today:** the one-line fix is a `packages/db/vitest.config.ts`
+with a `setupFiles` that loads `.env.local`, mirroring what `apps/web`'s tests
+already do inline. That is a change to the **test harness**, and Day 19's
+guardrail was "no refactoring that is not required". Changing how the suite
+boots, on the day that suite is the evidence for the day's work, is the wrong
+order. It is also a one-line fix that deserves to be seen, not slipped in.
+
+**Impact:** `pnpm test` is not runnable from a clean shell in the devcontainer
+without exporting env first. Anyone (or any CI job) running the documented
+command verbatim gets 12 red suites that are not real failures. Day 19's own
+gate was run with env exported, and the result — 549 passing — is genuine.
+
+**Resolution:** OPEN — one-line fix, should land with F.2a (Day 20), which
+touches `packages/db` anyway for the ORM bump.

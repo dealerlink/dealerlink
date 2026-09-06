@@ -653,17 +653,17 @@ for Stage D verification.)
 
 Sorted by severity. **Pilot-blocking: none.**
 
-| ID  | Sev    | Title                                                                                                       | Location                                        | Recommendation                                                                                                                           | Gate                       |
-| --- | ------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| F-1 | High   | Next.js 14.2.18 bundles CVE-2025-29927 (auth-bypass, upstream-Critical) + Server-Component DoS / SSRF highs | `apps/web` (`next` dep)                         | Upgrade Next to **≥14.2.35** in a dedicated PR + full `pnpm verify`. Mitigated today by layout-based auth (DEV.68).                      | **✅ FIXED D.2 `0c20952`** |
-| F-2 | Medium | No HTTP security headers (CSP, X-Frame-Options, nosniff, HSTS, …)                                           | `apps/web/next.config.mjs`                      | Add a `headers()` block (CSP report-only first) and/or enforce at Cloudflare.                                                            | **✅ FIXED `8c205ad`**     |
-| F-3 | Medium | No login rate-limiting or account lockout                                                                   | `apps/web/lib/auth/actions.ts`                  | Wire existing `checkRateLimit` into `login()` (ip+email); add soft lockout.                                                              | **✅ FIXED D.2 `0d6638d`** |
-| F-4 | Low    | drizzle-orm 0.38.4 — SQLi-via-identifiers advisory (not reachable)                                          | `drizzle-orm` dep                               | Upgrade to ≥0.45.2 as hygiene; verify migrations/queries.                                                                                | Stage D                    |
-| F-5 | Low    | Permissive INSERT/UPDATE on log tables (`audit_log`, `auth_events`, `access_log`, `email_delivery_log`)     | `rls/*.sql`                                     | Intentional (DEV.07) for trigger/login/worker writes; reads stay tenant-isolated. Tighten `email_delivery_log` UPDATE scope if feasible. | Accept / Stage D           |
-| F-6 | Info   | 4 RLS-exempt tables (`tenants`, `sessions`, `webhook_events`, `rate_limit`)                                 | schema / `rls/*.sql`                            | By design + verified (§1.2). No action.                                                                                                  | Accept                     |
-| F-7 | Info   | Production observability + outbound-email secrets blank on staging                                          | `.do/app.yaml`                                  | Populate Sentry/Better Stack/Axiom/Resend with real values in Stage D.                                                                   | **✅ prod wired D.1**      |
-| F-8 | Info   | Committed test-credentials doc (`password123`)                                                              | `docs/pilot/credentials-cheatsheet.md`          | Acceptable (throwaway seed creds). Never commit the real pilot tenant's creds (Stage E).                                                 | Accept                     |
-| F-9 | Low    | Logo input not content-validated; SVG unsanitized                                                           | `lib/admin/schemas.ts` (`updateBrandingSchema`) | Mitigated (img-context render + operator-only). Add content-type/scheme check + DOMPurify before Stage D / DO Spaces.                    | Stage D                    |
+| ID  | Sev    | Title                                                                                                       | Location                                        | Recommendation                                                                                                                           | Gate                                     |
+| --- | ------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| F-1 | High   | Next.js 14.2.18 bundles CVE-2025-29927 (auth-bypass, upstream-Critical) + Server-Component DoS / SSRF highs | `apps/web` (`next` dep)                         | Upgrade Next to **≥14.2.35** in a dedicated PR + full `pnpm verify`. Mitigated today by layout-based auth (DEV.68).                      | **✅ CLOSED 2026-05-28 — D.2 `0c20952`** |
+| F-2 | Medium | No HTTP security headers (CSP, X-Frame-Options, nosniff, HSTS, …)                                           | `apps/web/next.config.mjs`                      | Add a `headers()` block (CSP report-only first) and/or enforce at Cloudflare.                                                            | **✅ CLOSED 2026-05-25 — C.4 `8c205ad`** |
+| F-3 | Medium | No login rate-limiting or account lockout                                                                   | `apps/web/lib/auth/actions.ts`                  | Wire existing `checkRateLimit` into `login()` (ip+email); add soft lockout.                                                              | **✅ CLOSED 2026-05-28 — D.2 `0d6638d`** |
+| F-4 | Low    | drizzle-orm 0.38.4 — SQLi-via-identifiers advisory (not reachable)                                          | `drizzle-orm` dep                               | Upgrade to ≥0.45.2 as hygiene; verify migrations/queries.                                                                                | **⏳ OPEN — Stage F task F.2a (Day 20)** |
+| F-5 | Low    | Permissive INSERT/UPDATE on log tables (`audit_log`, `auth_events`, `access_log`, `email_delivery_log`)     | `rls/*.sql`                                     | Intentional (DEV.07) for trigger/login/worker writes; reads stay tenant-isolated. Tighten `email_delivery_log` UPDATE scope if feasible. | Accept / Stage D                         |
+| F-6 | Info   | 4 RLS-exempt tables (`tenants`, `sessions`, `webhook_events`, `rate_limit`)                                 | schema / `rls/*.sql`                            | By design + verified (§1.2). No action.                                                                                                  | Accept                                   |
+| F-7 | Info   | Production observability + outbound-email secrets blank on staging                                          | `.do/app.yaml`                                  | Populate Sentry/Better Stack/Axiom/Resend with real values in Stage D.                                                                   | **✅ prod wired D.1**                    |
+| F-8 | Info   | Committed test-credentials doc (`password123`)                                                              | `docs/pilot/credentials-cheatsheet.md`          | Acceptable (throwaway seed creds). Never commit the real pilot tenant's creds (Stage E).                                                 | Accept                                   |
+| F-9 | Low    | Logo input not content-validated; SVG unsanitized                                                           | `lib/admin/schemas.ts` (`updateBrandingSchema`) | Mitigated (img-context render + operator-only). Add content-type/scheme check + DOMPurify before Stage D / DO Spaces.                    | Stage D                                  |
 
 ### Prioritised fix order
 
@@ -767,3 +767,71 @@ dealerlink.test` × 7 → identical generic error each time, response-time
   errors 100%, `sendDefaultPii: false`). Live-event PII confirmation is part of
   the operator's post-deploy Sentry dashboard smoke (operator-gated
   `/api/internal/sentry-test`), pending operator sign-off.
+
+### Stage F Day 19 disposition (2026-09-06) — verification pass, no re-remediation
+
+Day 19 opened Stage F with security remediation as task **F.1**. On arrival the
+brief assumed F-1, F-2 and F-3 were still open. **They were not** — all three had
+been closed in Stage C.4 / Stage D.2, and this document already recorded that.
+The brief was written against a stale reading of the record, so Day 19's Phase 1
+was re-scoped from "remediate" to "verify and close the record".
+
+**Verified in code, not taken from this doc:**
+
+| Finding | Verification performed on 2026-09-06                                                                                                                                                                                                                                                                                 |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F-1** | `apps/web/package.json` pins `"next": "14.2.35"` (exact, not a range) and `pnpm-lock.yaml` resolves `next@14.2.35`. The dev server banners `▲ Next.js 14.2.35`. Above the ≥14.2.35 floor. **Closed 2026-05-28, commit `0c20952`.**                                                                                   |
+| **F-2** | `apps/web/next.config.mjs` ships a `headers()` block applying `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, `Referrer-Policy: strict-origin-when-cross-origin` and `Permissions-Policy` to `/:path*`. **Closed 2026-05-25, commit `8c205ad`.** |
+| **F-3** | `apps/web/lib/auth/actions.ts` calls `peekRateLimit` before the user lookup, `checkRateLimit` on every failure, `resetRateLimit` on success, and gates on `isLockedOut`. **Closed 2026-05-28, commit `0d6638d`.**                                                                                                    |
+| **F-4** | `drizzle-orm@0.38.4` is still installed across `packages/db`, `apps/web`, `apps/workers`. **Still open.**                                                                                                                                                                                                            |
+
+**Coverage gaps found and closed today.** The remediations were real but
+under-tested — F-3 had tests only for its _pure_ lockout arithmetic
+(`lockout.test.ts`), and nothing asserted the headers at all. Three test files
+now guard them:
+
+- `apps/web/lib/rate-limit.test.ts` (8 specs) — the Postgres-backed limiter
+  against the real `rate_limit` table: blocks at the threshold, stays blocked
+  inside the window, **releases when the window rolls over**, keys are
+  independent, `peekRateLimit` does not consume an attempt, `resetRateLimit`
+  restores the budget.
+- `apps/web/lib/auth/login-enumeration.test.ts` (6 specs) — drives the real
+  `login()` action and asserts that unknown email, bad password, rate-limited,
+  locked-out (**even with the correct password**) and unknown-tenant all return
+  one byte-identical `GENERIC_LOGIN_ERROR`, and that unknown emails are
+  throttled identically to known ones so no differential-rate-limit oracle
+  exists. Uses a throwaway user, deleted afterwards, so seeded accounts are
+  never left locked.
+- `apps/web/tests/e2e/verify-day-19.spec.ts` (4 specs) — browser-level: the app
+  boots on a pinned ≥14.2.35 Next, all six headers plus the CSP directives are
+  present on an **authenticated** page response, the limiter is genuinely wired
+  into the login route (proven via the `rate_limited:` `auth_events` row), and
+  **operator impersonation is not collateral damage** of the limiter.
+
+**F-4 deliberately deferred to its own day (Stage F task F.2a, Day 20).**
+Advisory **CVE-2026-39356 / GHSA-gpj5-g38j-94v9**, High (CVSS 7.5),
+"SQL injection via improperly escaped SQL identifiers", vulnerable `<0.45.2`.
+
+_Reachability re-assessed today and it remains **NOT reachable**._ The advisory
+requires untrusted runtime input to reach identifier or alias construction —
+`sql.identifier()` or `.as()`. In this repo:
+
+- `sql.identifier()` — **zero call sites.**
+- `.as()` — **zero call sites** in `apps/web/lib`, `apps/workers/src`, `packages/*/src`.
+- `sql.raw()` — **one call site** (`app/api/health/route.ts:97`), interpolating
+  the hardcoded `EXPECTED_RLS_TABLES` constant. No request data.
+- No `$dynamic` / `getTableName` / `getTableColumns` dynamic-column usage.
+
+The bump is therefore **hygiene, not an exposure**, which is exactly why it can
+wait one day and be done properly rather than folded into an audit day. It is
+sequenced **before** F.6 / F.8 / F.11 so the ORM upgrade lands while the schema
+surface is at its smallest. See `DEVIATIONS.md` DEV.84 for the full breaking-
+change assessment and effort estimate.
+
+**Documentation defect found (not a security finding).**
+`docs/PILOT_GETTING_STARTED.md:135`, `docs/PILOT_ONBOARDING_PRODUCTION.md:59`
+and `docs/RUNBOOKS.md:21` tell pilot tenants their bank details print on
+"every tax invoice". **Dealerlink has no tax invoice** (see
+`docs/TAX_INVOICE_AUDIT.md` — verdict DOES NOT EXIST). Bank details do print,
+on quotations, PIs, dispatch notes and payment receipts. The copy points at a
+document that does not exist and should be corrected with F.6.
