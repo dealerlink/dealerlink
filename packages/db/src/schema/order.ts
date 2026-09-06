@@ -169,7 +169,7 @@ export const orderLines = pgTable(
     index('order_lines_tenant_product_ix').on(t.tenantId, t.productId),
     check('order_lines_qty_chk', sql`${t.quantity} > 0`),
     check('order_lines_unit_price_chk', sql`${t.unitPrice} >= 0`),
-    check('order_lines_gst_rate_chk', sql`${t.gstRate} IN (0, 5, 12, 18, 28)`),
+    check('order_lines_gst_rate_chk', sql`${t.gstRate} IN (0, 3, 5, 12, 18, 28)`),
     check('order_lines_total_chk', sql`${t.lineTotal} >= 0`),
     check(
       'order_lines_reserved_chk',

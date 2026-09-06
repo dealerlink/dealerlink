@@ -2125,3 +2125,153 @@ gate was run with env exported, and the result — 549 passing — is genuine.
 
 **Resolution:** OPEN — one-line fix, should land with F.2a (Day 20), which
 touches `packages/db` anyway for the ORM bump.
+
+## DEV.89 — Day 20 — arm64 devcontainer: `@sparticuz/chromium` is x86-64, PDF/render Chromium can't launch
+
+**Date:** 2026-09-07
+**Surfaced during:** Day 20 clean-shell `pnpm test` — the first gate run in an
+**arm64** devcontainer (`uname -m` → `aarch64`).
+
+**Symptom:** `apps/workers/tests/render.test.ts` failed:
+`rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2` →
+`Failed to launch the browser process!`. The render smoke test's built-in
+"No Chromium executable" skip guard did **not** catch it: `browser.ts`
+`resolveLaunchConfig()` on Linux resolves `@sparticuz/chromium`, whose binary
+pack is **x86-64 only**. On arm64 it extracts, `existsSync` is true, so the
+path is handed to puppeteer — which then dies at launch (the binary exists, it
+just cannot run on this arch). Not a "no executable" case, so no skip.
+
+**Why it's new:** Day 19's `549 passing` was on an environment where the
+workers Chromium ran (x86, or a system Chrome). This container is arm64.
+Playwright, by contrast, installs an **arm64** Chromium
+(`~/.cache/ms-playwright/chromium-<v>/chrome-linux/chrome`, ELF e_machine
+`b7 00` = aarch64), so the E2E browser was never affected.
+
+**Built:** point puppeteer at the arm64 Chromium Playwright already installs,
+via `PUPPETEER_EXECUTABLE_PATH` (which `browser.ts` honours first, before
+`@sparticuz`). Set in three harness-only places, all **gated to `process.arch
+!== 'x64'`** so x86 environments are byte-for-byte unchanged and keep
+`@sparticuz` as the intended dev/prod binary:
+
+- `apps/workers/vitest.config.ts` + `tests/setup-chromium.ts` — for `pnpm test`.
+- `apps/web/playwright.config.ts` `webServer.env` — for the PDF verify specs
+  (day 10–13, critical-path), whose workers process is booted by Playwright.
+
+**No production code path changed** — `browser.ts` is untouched; production sets
+its own `PUPPETEER_EXECUTABLE_PATH` or runs `@sparticuz` on x86.
+
+**Impact:** `pnpm test` and `pnpm verify` both run the real PDF pipeline on
+arm64. If a future contributor is on x86, the override is a no-op.
+
+**Resolution:** Permanent (harness-only). If the project ever standardises on
+arm64 hosts, swap `@sparticuz/chromium` for an arch-aware Chromium in
+`browser.ts` — out of Day 20 scope (that is production code).
+
+## DEV.90 — Day 20 — RESOLVED (supersedes DEV.88): `packages/db` test env committed
+
+**Date:** 2026-09-07
+**Resolves:** DEV.88 (Day 19).
+
+**Reproduced first (P.3):** from a clean shell
+(`env -i HOME="$HOME" PATH="$PATH" sh -c 'pnpm --filter
+@dealerlink/db test'`) → **12 of 13 files fail, 7 tests fail**,
+`connect ECONNREFUSED 127.0.0.1:5432` — exactly DEV.88.
+
+**Built:** mirrored the pattern `apps/web` tests already use (dotenv against a
+repo env file), but with a **committed baseline** so a clean shell needs no
+setup:
+
+- `packages/db/.env.test` (COMMITTED) — the docker-compose **dev/test** DB
+  URLs at host `postgres` (`APP_DATABASE_URL`, `DATABASE_URL`,
+  `DATABASE_DIRECT_URL`). No secrets: the identical creds already live in the
+  committed `.env.example`; `dealerlink_dev` is a throwaway local DB.
+- `packages/db/vitest.config.ts` + `tests/setup-env.ts` — loads, in precedence
+  order, real exported env → repo-root `.env.local` (dev override) →
+  `.env.test` (baseline), and maps `DATABASE_URL`→`APP_DATABASE_URL` if only
+  the former is set.
+
+**Verified the hard way:** `env -i HOME="$HOME" PATH="$PATH" sh -c 'cd
+/workspace && pnpm test'` → **549 passing** (tax 51, schemas 68, db 172, web
+192, workers 40, scripts 26) from a genuinely clean shell. (The workers 40
+also needed DEV.89.)
+
+**Resolution:** CLOSED. DEV.88 was correct that this is a one-shot harness fix;
+it landed on Day 20 (F.2b) rather than with the drizzle bump, which moved to
+Day 21.
+
+## DEV.91 — Day 20 — RESOLVED (supersedes DEV.87): `pnpm verify` completes; cookie `secure` decoupled from NODE_ENV
+
+**Date:** 2026-09-07
+**Resolves:** DEV.87 (Day 19).
+
+**Reproduced first (P.3):** confirmed the two DEV.87 mechanisms before touching
+anything — `secure: process.env.NODE_ENV === 'production'` at `lucia.ts:36`
+(and the identical `impersonation/actions.ts:32`) is why `next start` (which
+runs NODE_ENV=production) drops the session cookie over plain HTTP; and the
+webServer boots `next dev` + workers + Playwright Chromium concurrently, the
+memory triad DEV.87 blamed for the OOM.
+
+**Root fix (the real config bug, Phase 2):** cookie transport security is now
+an explicit runtime decision, not a build-mode artefact.
+`apps/web/lib/auth/cookie-security.ts` exports `sessionCookieSecure()` →
+**fail-safe secure UNLESS `SESSION_COOKIE_SECURE` is exactly `'false'`**. A
+missing var in production can never yield an insecure cookie. Both auth cookie
+sites (Lucia session + operator impersonation) use it. `SESSION_COOKIE_SECURE`
+is server-only and asserted **absent from the client bundle**. It is set to
+`false` only in the devcontainer (`.env.local`) and the verify webServer env;
+prod/staging leave it unset → secure. Unit test (7 cases) + `verify-day-20`
+(3 specs) guard it.
+
+**Verify now COMPLETES in this devcontainer — demonstrated twice, no OOM
+(`oom_kill` stayed 0 throughout):**
+
+- Run against clean seeded state: **65/65 pass**, ~11 min.
+- An earlier run also completed (no OOM); its 2 failures were **test residue**,
+  not the harness: my own `pnpm test` runs had left 66 non-`QT-` quotation rows
+  in the shared dev DB (the DEV.31 pattern), pushing the seeded revision-chain
+  quotation off page 1 of the list. `pnpm db:seed` cleared it (0 residue) and
+  the re-run went green. Closeout order matters: **verify (C2) runs before the
+  residue-generating `pnpm test` (C4)**.
+
+**Honest accounting of WHY it completes now vs Day 19:** under `next dev`
+(NODE_ENV=development) the _old_ code already produced a non-secure cookie, so
+the cookie fix is **not** what stopped the OOM. Verify completed because this
+session's container started **fresh** — swap ~46 MB vs Day 19's 1007/1023 MB
+already exhausted — so the peak stayed just under the ceiling. Peak observed:
+**mem.current ≈ 7.1 GB + swap ≈ 0.96 GB ≈ 8.06 GB committed** against a
+**7.9 GB RAM + 1 GB swap ≈ 8.9 GB** ceiling (the container has no hard cgroup
+`memory.max`; it uses the whole host). Headroom ≈ 0.9 GB — **it survived, but
+the margin is thin.** `next dev` self-restarts mid-run also periodically
+relieved pressure (mem dropped ~7 GB → ~3 GB on restart).
+
+**Memory work done (Phase 3.2):**
+
+- (a) limit reported above; peak ≈ 8.06 GB committed.
+- (b) Playwright `workers: 1` — already set; kept, now with a comment noting it
+  is a **correctness** requirement (fullyParallel:false, shared seeded state),
+  not only a memory guard, so there is no CI parallelism to preserve.
+- (c) web + workers + Postgres do run concurrently; the workers process is only
+  needed for the PDF specs, but splitting it out is a bigger refactor than
+  harness-repair day allows and was unnecessary since the run fits (barely).
+- (d) **Recommendation:** the margin depends on a fresh container. To make
+  verify reliably survivable regardless of session state, **raise Docker
+  Desktop memory to ≥ 12 GB** (from the current ~8 GB host). Coverage was NOT
+  reduced to fit — all 65 specs run.
+
+**`next start` (Phase 3.1) — tested the hypothesis, NOT adopted:** the Phase 2
+cookie fix is necessary but **not sufficient** to make `next start` (low
+memory) usable for verify. Under NODE_ENV=production the cookie **domain**
+(`lucia.ts:40`, `impersonation/actions.ts:26` → `.dealerlink.in`) is also set,
+which a localhost browser rejects; and the operator **impersonation redirect**
+(`impersonation/actions.ts:84`) plus `operatorAdminUrl` / `tenantLoginUrl`
+switch to absolute production subdomain URLs — both break localhost verify.
+Decoupling those from NODE_ENV has production routing blast-radius (needs
+`SESSION_COOKIE_DOMAIN` + a single-host flag set correctly in the DO app spec)
+and is out of a harness-repair day's scope. So verify stays on the faithful
+`next dev`. A future day can migrate to `next start` for the large memory win.
+
+**Resolution:** CLOSED — verify completes and the cookie config bug is fixed.
+Two follow-ups recorded, neither blocking: (1) raise the devcontainer memory
+allocation to ≥ 12 GB for comfortable headroom; (2) optionally migrate verify
+to `next start` by decoupling cookie-domain + operator subdomain routing from
+NODE_ENV (see the 2.5 findings above).

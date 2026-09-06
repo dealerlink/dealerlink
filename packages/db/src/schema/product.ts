@@ -69,7 +69,7 @@ export const products = pgTable(
     index('products_tenant_manufacturer_ix').on(t.tenantId, t.manufacturer),
     index('products_tenant_category_ix').on(t.tenantId, t.category, t.subcategory),
     check('products_hsn_chk', sql`${t.hsnCode} ~ '^[0-9]{4,8}$'`),
-    check('products_gst_rate_chk', sql`${t.gstRate} IN (0, 5, 12, 18, 28)`),
+    check('products_gst_rate_chk', sql`${t.gstRate} IN (0, 3, 5, 12, 18, 28)`),
     check('products_mrp_chk', sql`${t.mrp} IS NULL OR ${t.mrp} >= 0`),
     check(
       'products_purchase_chk',

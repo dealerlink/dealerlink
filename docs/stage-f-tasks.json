@@ -20,10 +20,19 @@
       "notes": "docs/TAX_INVOICE_AUDIT.md. VERDICT: tax invoice DOES NOT EXIST (enum placeholders only; render-pdf throws on `invoice`). Per-line hsnCode + gstRate CONFIRMED on quotation/PI/order lines — Day 20 unblocked. Ship-To GSTIN: dealers.gstin exists, format-validated only; no checksum, no state cross-check, never required. Two plan variances flagged: F.6 needs ~3.5 d vs 2 allocated and is blocked on F.4; F.5 assumes a shipping-address entity that does not exist."
     },
     {
+      "id": "F.2b",
+      "task": "Verify-harness repair (cookie security config + deploy verification)",
+      "subPhase": "SP0",
+      "days": "20",
+      "status": "complete",
+      "completedDate": "2026-09-07",
+      "notes": "Day 20, harness repair only (no feature work). Closed DEV.88 (packages/db tests loaded no env → committed packages/db/.env.test + vitest setupFiles; `pnpm test` 549 green from a clean shell) and DEV.87 (verify OOM): cookie `secure` decoupled from NODE_ENV via SESSION_COOKIE_SECURE (fail-safe secure; lib/auth/cookie-security.ts) so the faithful `next dev` verify runs over plain HTTP — full chain now COMPLETES with no OOM (65/65). DEV.89: arm64 devcontainer Chromium — @sparticuz ships x86, pointed workers/PDF at Playwright arm64 via PUPPETEER_EXECUTABLE_PATH. Deploy verification added (scripts/verify-deploy.mjs + R21 + closeout step C9). Day-19 audit one-liners folded in: bank-details copy corrected to the 4 docs it prints on, gstRate CHECK +3% (migration 0017), gstRate-string grouping note in CLAUDE.md §5. F.2a (drizzle bump) moved to Day 21."
+    },
+    {
       "id": "F.2a",
       "task": "ORM upgrade — drizzle-orm 0.38.4 → 0.45.x (security finding F-4)",
       "subPhase": "SP0",
-      "days": "20",
+      "days": "21",
       "status": "pending",
       "completedDate": null,
       "notes": "Split out of F.1 on Day 19. Sequenced before any new schema work (F.6/F.8/F.11) so the ORM bump has the smallest possible surface to break. Advisory CVE-2026-39356 / GHSA-gpj5-g38j-94v9 is NOT reachable in our code — see DEVIATIONS DEV.84."
@@ -32,7 +41,7 @@
       "id": "F.3",
       "task": "Multi-rate tax summary — data layer + screens",
       "subPhase": "SP1",
-      "days": "21",
+      "days": "22",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -41,7 +50,7 @@
       "id": "F.4",
       "task": "Multi-rate tax summary — PDF + HSN/SAC table",
       "subPhase": "SP1",
-      "days": "22",
+      "days": "23",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -50,7 +59,7 @@
       "id": "F.5",
       "task": "Ship-To GSTIN capture + validation",
       "subPhase": "SP1",
-      "days": "23",
+      "days": "24",
       "status": "pending",
       "completedDate": null,
       "notes": "Day 19 audit: scope assumes a shipping-address entity that does not exist — Ship-To is a dealer. Needs an (a) keep-as-dealer / (b) new dealer_addresses decision first. 2.7 d for (a), ~5 d for (b). See docs/TAX_INVOICE_AUDIT.md §B.4."
@@ -59,7 +68,7 @@
       "id": "F.6",
       "task": "GST tax invoice document",
       "subPhase": "SP1",
-      "days": "24–25",
+      "days": "25–26",
       "status": "pending",
       "completedDate": null,
       "notes": "Day 19 audit VERDICT: DOES NOT EXIST. Estimated 3.5 d against 2 d allocated. Hard-blocked on F.4 — TaxSummary is single-rate today. See docs/TAX_INVOICE_AUDIT.md §A.4."
@@ -68,7 +77,7 @@
       "id": "F.7",
       "task": "Serials rendered on invoice lines",
       "subPhase": "SP1",
-      "days": "25",
+      "days": "26",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -77,7 +86,7 @@
       "id": "F.8",
       "task": "Credit note / sales return",
       "subPhase": "SP1",
-      "days": "26–27",
+      "days": "27–28",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -86,7 +95,7 @@
       "id": "F.9",
       "task": "GST report: rate-wise + HSN-wise grouping",
       "subPhase": "SP1",
-      "days": "28",
+      "days": "29",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -95,7 +104,7 @@
       "id": "F.10",
       "task": "GSTR-1 export (B2B, B2CL, CDNR, HSN)",
       "subPhase": "SP1",
-      "days": "29–30",
+      "days": "30–31",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -104,7 +113,7 @@
       "id": "F.11",
       "task": "Tally mapping configuration module",
       "subPhase": "SP1",
-      "days": "31–33",
+      "days": "32–34",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -113,7 +122,7 @@
       "id": "F.12",
       "task": "Tally export — voucher generation engine",
       "subPhase": "SP1",
-      "days": "34–35",
+      "days": "35–36",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -122,7 +131,7 @@
       "id": "F.13",
       "task": "Tally export — XML output + idempotency",
       "subPhase": "SP1",
-      "days": "36",
+      "days": "37",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -131,7 +140,7 @@
       "id": "F.14",
       "task": "Vendor bill export",
       "subPhase": "SP1",
-      "days": "37",
+      "days": "38",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -140,7 +149,7 @@
       "id": "F.15",
       "task": "Data migration importers",
       "subPhase": "SP1",
-      "days": "38–39",
+      "days": "39–40",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -149,7 +158,7 @@
       "id": "F.16",
       "task": "Opening balance import",
       "subPhase": "SP1",
-      "days": "40",
+      "days": "41",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -158,7 +167,7 @@
       "id": "F.17",
       "task": "ADR: serial capture (swap-on-scan)",
       "subPhase": "SP2",
-      "days": "41",
+      "days": "42",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -167,7 +176,7 @@
       "id": "F.18",
       "task": "Serial bulk import at procurement",
       "subPhase": "SP2",
-      "days": "42–43",
+      "days": "43–44",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -176,7 +185,7 @@
       "id": "F.19",
       "task": "`swapReservedSerial` + scan-to-assign",
       "subPhase": "SP2",
-      "days": "44–46",
+      "days": "45–47",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -185,7 +194,7 @@
       "id": "F.20",
       "task": "Serial format validation per product/tenant",
       "subPhase": "SP2",
-      "days": "46",
+      "days": "47",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -194,7 +203,7 @@
       "id": "F.21",
       "task": "Mobile-responsive / PWA",
       "subPhase": "SP2",
-      "days": "47–49",
+      "days": "48–50",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -203,7 +212,7 @@
       "id": "F.22",
       "task": "Dealer price lists",
       "subPhase": "SP2",
-      "days": "50–51",
+      "days": "51–52",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -212,7 +221,7 @@
       "id": "F.23",
       "task": "GSP provider abstraction + credential vault",
       "subPhase": "SP3",
-      "days": "52",
+      "days": "53",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -221,7 +230,7 @@
       "id": "F.24",
       "task": "E-invoice / IRN",
       "subPhase": "SP3",
-      "days": "53–56",
+      "days": "54–57",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -230,7 +239,7 @@
       "id": "F.25",
       "task": "E-way bill",
       "subPhase": "SP3",
-      "days": "57–59",
+      "days": "58–60",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -239,7 +248,7 @@
       "id": "F.26",
       "task": "Remaining UX defects (P-10, P-11, P-12, P-4/5/6)",
       "subPhase": "SP4",
-      "days": "60",
+      "days": "61",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -248,7 +257,7 @@
       "id": "F.27",
       "task": "`USER_MANUAL.md` sections 3–10",
       "subPhase": "SP4",
-      "days": "61–62",
+      "days": "62–63",
       "status": "pending",
       "completedDate": null,
       "notes": null

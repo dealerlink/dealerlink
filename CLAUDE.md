@@ -256,6 +256,7 @@ Rules:
   - The rationale is recorded in **ADR-012** (`DECISIONS.md`); the original "Bill-To only" simplification was a single-dealer artefact corrected on Day 11.
 - **TDS on Purchase**: optional deduction at order level (e.g., 0.1%).
 - **Round-off**: applied at grand total, not per line. Handle ±0.99 paise per BRD reference PO.
+- **`gstRate` is a STRING out of the DB.** The `gst_rate` column is Postgres `numeric`, which the driver returns as a **string** (`'18'`, `'18.00'`, `'3'`). Any code that **groups or keys by rate** (e.g. a multi-rate GST summary — Day 26) MUST normalise to a number first (`Number(gstRate)` / a canonical numeric key), or `'18'` and `'18.00'` silently become two separate groups and the summary double-counts. The allowed rates are `0, 3, 5, 12, 18, 28` (the `*_gst_rate_chk` constraints).
 
 ### When tax recalculates
 

@@ -3,6 +3,8 @@ import { DrizzlePostgreSQLAdapter } from '@lucia-auth/adapter-drizzle';
 import { Lucia } from 'lucia';
 import { z } from 'zod';
 
+import { sessionCookieSecure } from './cookie-security';
+
 // Lucia uses the admin client because session validation must look up the
 // user row by id BEFORE we know which tenant context to set. The lookup is
 // by primary key (no enumeration risk) and only the matching user is
@@ -33,7 +35,10 @@ export const lucia = new Lucia(adapter, {
     name: 'dealerlink_session',
     expires: false, // session cookie expiry follows the DB session
     attributes: {
-      secure: process.env.NODE_ENV === 'production',
+      // Transport security is an explicit runtime decision, never NODE_ENV
+      // (see cookie-security.ts / DEV.87). Fail-safe: secure unless a devcontainer
+      // env file explicitly sets SESSION_COOKIE_SECURE=false.
+      secure: sessionCookieSecure(),
       sameSite: 'lax',
       path: '/',
       // Cross-subdomain sharing per ADR-001 in production

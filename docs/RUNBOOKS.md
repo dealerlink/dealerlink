@@ -1045,3 +1045,46 @@ the markdown.
 Tests for all of the above: `scripts/sync-project-plan.test.ts` (`pnpm test:scripts`).
 
 ---
+
+## R21 — Verifying a deploy actually landed (not just pushed)
+
+**When to use:** after every `git push` to `main` that should deploy — and as
+the closeout gate (BUILD_PROMPT_TEMPLATE.md step C9). A green push says nothing
+about whether DO's build/deploy succeeded: the pipeline was silently broken
+across three commits (`cef54d8`, `9756c6f`, `e3e3afe`) before anyone noticed,
+because each "deploy" ERROR'd while the previous ACTIVE deployment kept serving.
+
+**Time:** seconds if the deploy is already terminal; up to 15 min while a real
+deploy cycles.
+
+**Pre-flight:** `doctl auth list` shows an authenticated context.
+
+**Command:**
+
+```bash
+node scripts/verify-deploy.mjs both          # staging + production (default)
+node scripts/verify-deploy.mjs staging       # one app
+node scripts/verify-deploy.mjs production
+```
+
+**What it does (`scripts/verify-deploy.mjs`):** for each app it reads the
+LATEST deployment (`doctl apps list-deployments <appId> --format ID,Phase`,
+first row) and polls every 15 s until the phase is terminal (ACTIVE, ERROR,
+CANCELED, SUPERSEDED) or 15 min elapses. It prints each phase transition and a
+final ✅/❌ line. **Exit 0 iff every polled app is ACTIVE**, so CI or the
+closeout can gate on it.
+
+App IDs (also in `scripts/sync-app-spec.mjs`):
+
+- staging — `dealerlink-staging` — `77edf06b-3273-479c-ae1c-15caca0db95b`
+- production — `dealerlink-production` — `d8a25cb8-e4cb-4035-8413-6baab72398cd`
+
+**If a deploy is ERROR:** read the cause with
+`doctl apps logs <appId> --type build` (or `--type deploy`), or open the DO
+dashboard. The previous ACTIVE deployment keeps serving (DO rolling deploy), so
+the site is not down — but the last commit is NOT live. Fix and re-push; do not
+close the day on an ERROR.
+
+**Note:** this verifies the deploy _phase_, not the committed App Platform
+_spec_. A spec/YAML change still needs R18 (`pnpm sync-spec:*`) — pushing source
+does not re-read `.do/*.yaml`.

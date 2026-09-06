@@ -35,8 +35,18 @@ C6. Append the day's deviations to /DEVIATIONS.md
      resolved later, write a new RESOLVED entry referencing the original)
 C7. git add -A && git commit -m "feat(<scope>): day N — <summary>"
 C8. git push
-C9. Print final summary: tests delta, files added (A vs B), deviations count,
-    commit SHA + push confirmation.
+C9. VERIFY THE DEPLOY LANDED — a push that lands is NOT a deploy that works.
+    The DO pipeline was silently broken across three commits (cef54d8,
+    9756c6f, e3e3afe) before anyone noticed. After push:
+        node scripts/verify-deploy.mjs both
+    It polls the LATEST deployment of BOTH apps (dealerlink-staging
+    77edf06b-…, dealerlink-production d8a25cb8-…) until each reaches a
+    terminal phase and reports ACTIVE / ERROR. Exit 0 iff both are ACTIVE.
+    Do NOT declare the day complete on a push alone. If either is ERROR,
+    open the deploy logs (`doctl apps logs <appId> --type build|deploy`)
+    before closing. Requires an authenticated doctl (`doctl auth list`).
+C10. Print final summary: tests delta, files added (A vs B), deviations count,
+     commit SHA + push confirmation, and the deploy phase of both apps.
 ```
 
 ## Stage F — marking a task complete (Day 19 onwards)

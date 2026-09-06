@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+import { sessionCookieSecure } from '@/lib/auth/cookie-security';
 import { requireRole } from '@/lib/auth/require-role';
 import { AppError } from '@/lib/errors';
 import { operatorAdminUrl } from '@/lib/tenant/context';
@@ -29,7 +30,9 @@ function impersonationCookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
+    // Same explicit runtime decision as the Lucia session cookie
+    // (cookie-security.ts / DEV.87) — fail-safe secure, never NODE_ENV.
+    secure: sessionCookieSecure(),
     path: '/',
     ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
   };

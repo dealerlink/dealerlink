@@ -19,6 +19,7 @@
     "sync-spec:staging": "node scripts/sync-app-spec.mjs staging",
     "sync-spec:production": "node scripts/sync-app-spec.mjs production",
     "verify": "pnpm plan:check && pnpm --filter web exec playwright test --project=chromium",
+    "verify:deploy": "node scripts/verify-deploy.mjs",
     "verify:latest": "pnpm --filter web exec playwright test --project=chromium --grep verify-day-8",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",

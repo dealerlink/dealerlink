@@ -1,4 +1,28 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { defineConfig, devices } from '@playwright/test';
+
+/**
+ * On an arm64 devcontainer the workers process's `@sparticuz/chromium` is an
+ * x86-64 binary that cannot launch (DEV.89), so the PDF verify specs would
+ * fail. Point the workers process (booted by the webServer below) at the
+ * arm64 Chromium that Playwright installs. No-op on x64 / when already set.
+ */
+function findPlaywrightChromium(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH || process.arch === 'x64') return undefined;
+  const base = path.join(os.homedir(), '.cache', 'ms-playwright');
+  if (!fs.existsSync(base)) return undefined;
+  for (const dir of fs.readdirSync(base)) {
+    if (!dir.startsWith('chromium-') || dir.includes('headless')) continue;
+    const exe = path.join(base, dir, 'chrome-linux', 'chrome');
+    if (fs.existsSync(exe)) return exe;
+  }
+  return undefined;
+}
+
+const puppeteerExecutable = findPlaywrightChromium();
 
 /**
  * Playwright config for Dealerlink verify specs.
@@ -52,6 +76,11 @@ export default defineConfig({
   // default 5s expect timeout is too tight for that. 15s matches the
   // per-step budget the critical-path spec is written against.
   expect: { timeout: 15_000 },
+  // Always 1 — local AND CI. Not just a devcontainer memory guard (DEV.87):
+  // fullyParallel is false and every day-spec asserts against a shared, known
+  // seeded state, so two workers would race the same rows. Serial execution is
+  // a correctness requirement here, not only a resource one, so there is no CI
+  // parallelism to preserve.
   workers: 1,
   // DEV.81 — always emit a machine-readable result file (written at onEnd,
   // before the flaky Windows webServer teardown) so the pass/fail outcome is
@@ -88,6 +117,17 @@ export default defineConfig({
           timeout: 120_000,
           stdout: 'pipe' as const,
           stderr: 'pipe' as const,
+          env: {
+            // The verify server is http://localhost — auth cookies must not be
+            // Secure or the browser drops the session and every spec fails at
+            // login (DEV.87). This is the explicit, dev-only opt-out; the
+            // fail-safe default stays secure. Set here (not just in .env.local)
+            // so verify is reproducible from a clean checkout.
+            SESSION_COOKIE_SECURE: 'false',
+            // arm64 devcontainer: give the workers process a runnable Chromium
+            // for the PDF specs (DEV.89). Undefined on x64 → spread drops it.
+            ...(puppeteerExecutable ? { PUPPETEER_EXECUTABLE_PATH: puppeteerExecutable } : {}),
+          },
         },
       }),
 });

@@ -120,6 +120,13 @@
       "when": 1779979256847,
       "tag": "0016_true_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788718964858,
+      "tag": "0017_friendly_logan",
+      "breakpoints": true
     }
   ]
 }

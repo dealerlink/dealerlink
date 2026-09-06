@@ -529,7 +529,7 @@ function BankSection({
 
   return (
     <SectionFrame
-      title="Bank (printed on invoices)"
+      title="Bank (printed on quotations, PIs, dispatch notes & receipts)"
       icon={<CreditCard size={13} />}
       editing={editing}
       onEdit={() => setEditing(true)}

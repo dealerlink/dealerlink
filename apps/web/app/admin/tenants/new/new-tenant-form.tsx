@@ -304,7 +304,7 @@ export function NewTenantForm() {
             </Field>
           </Section>
 
-          <Section title="Bank (printed on invoices)">
+          <Section title="Bank (printed on quotations, PIs, dispatch notes & receipts)">
             <Field label="Account name" error={errors.bankAccountName?.message}>
               <input
                 {...register('bankAccountName')}
