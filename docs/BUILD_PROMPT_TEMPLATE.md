@@ -12,17 +12,37 @@
    - Start with `pnpm preflight` (script in `scripts/preflight.mjs`).
    - Run `pnpm verify` before declaring work done (specs in
      `apps/web/tests/e2e/verify-day-N.spec.ts`).
+   - From Day 23, open a PR and let CI run the same gates (R22).
 4. **Phase C — end-of-day routine** (mandatory, see below).
 
 ## Phase C — end-of-day routine (mandatory)
 
 Every future day's prompt **must** conclude with these steps. Do not skip.
 
+> **Changed Day 22 (task F.33): days land via PR, and CI is authoritative.**
+> From **Day 23** onward there are **no direct pushes to `main`**. A day's work
+> goes onto a branch, opens a pull request, and merges only once all three CI
+> jobs are green. `main` carries `deploy_on_push: true` on **both** DO apps, so
+> the merge _is_ the production deploy — see `docs/RUNBOOKS.md` R22.
+>
+> Local `pnpm verify` stays in the closeout but is **demoted to a fast local
+> signal**. CI runs the same chain against a fresh, ephemeral, freshly seeded
+> database on a 16 GB runner. If local verify cannot complete because of the
+> devcontainer memory ceiling (DEV.87 / DEV.91 — the margin is ~0.9 GB and
+> depends on a fresh container), **that is no longer a reason to hold a merge**.
+> Say so, and let CI be the gate. It is _not_ licence to merge red CI.
+
 ```text
 C1. pnpm preflight                         # 0 hard failures, warnings only ok
-C2. pnpm verify                            # all spec files pass
+C2. pnpm verify                            # local signal; CI is the gate (see C7-C9)
 C3. pnpm typecheck && pnpm lint            # both green
 C4. pnpm build && pnpm test                # both green
+                                           # NOTE the order: C2 verify BEFORE C4
+                                           # test. pnpm test writes rows to the
+                                           # shared dev DB and verify asserts
+                                           # against a known seeded state
+                                           # (DEV.91). Re-run pnpm db:seed if
+                                           # you need to go back the other way.
 C5. Update PROJECT_PLAN.md:
     - Stage A–E (hand-maintained): find the row, set status ✅, set date,
       add notes summary
@@ -33,9 +53,21 @@ C5. Update PROJECT_PLAN.md:
 C6. Append the day's deviations to /DEVIATIONS.md
     (append-only; never edit historic entries; if a deviation is
      resolved later, write a new RESOLVED entry referencing the original)
-C7. git add -A && git commit -m "feat(<scope>): day N — <summary>"
-C8. git push
-C9. VERIFY THE DEPLOY LANDED — a push that lands is NOT a deploy that works.
+C7. git switch -c day-<N>-<slug>
+    git add -A && git commit -m "feat(<scope>): day N — <summary>"
+    git push -u origin day-<N>-<slug>
+C8. OPEN A PR AND WAIT FOR GREEN CI. No direct pushes to main (Day 22 on).
+        gh pr create --fill --base main
+        gh pr checks --watch        # non-zero exit if any check fails
+    All three checks — `checks`, `test`, `e2e` — must be green. Do NOT
+    disable, skip or mark-as-flaky a spec to get a merge through; if a spec
+    is genuinely environment-dependent, leave it failing and report it.
+    Then merge:
+        gh pr merge --squash --delete-branch
+    Merging IS the production deploy: both DO apps have deploy_on_push: true
+    on main. Triage guidance + the branch-protection setup are in
+    docs/RUNBOOKS.md R22; `gh` setup is R23.
+C9. VERIFY THE DEPLOY LANDED — a merge that lands is NOT a deploy that works.
     The DO pipeline was silently broken across three commits (cef54d8,
     9756c6f, e3e3afe) before anyone noticed. After push:
         node scripts/verify-deploy.mjs both
@@ -46,7 +78,8 @@ C9. VERIFY THE DEPLOY LANDED — a push that lands is NOT a deploy that works.
     open the deploy logs (`doctl apps logs <appId> --type build|deploy`)
     before closing. Requires an authenticated doctl (`doctl auth list`).
 C10. Print final summary: tests delta, files added (A vs B), deviations count,
-     commit SHA + push confirmation, and the deploy phase of both apps.
+     the PR number + merge commit SHA, the CI run URL, and the deploy phase
+     of both apps.
 ```
 
 ## Stage F — marking a task complete (Day 19 onwards)
@@ -82,6 +115,11 @@ Stage F task table".
 - `pnpm test` — Vitest in every workspace.
 - `pnpm verify` / `pnpm verify:latest` — Playwright E2E specs that smoke-test
   every shipped day. Each day adds a `verify-day-N.spec.ts` file.
+
+From Day 22 all of the above also run in CI (`.github/workflows/verify.yml`)
+on every pull request, against a fresh ephemeral Postgres. **CI is the
+authoritative gate**; the local commands are the fast signal. See
+`docs/RUNBOOKS.md` R22.
 
 ## Lint toolchain split (intentional)
 
