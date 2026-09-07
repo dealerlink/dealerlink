@@ -76,6 +76,25 @@ export interface RecordedWebhook {
 }
 
 /**
+ * Extract a Postgres error `code` (e.g. `'23505'`) from an error that may be
+ * wrapped. drizzle-orm >= 0.44 wraps every driver error in a `DrizzleQueryError`
+ * and moves the original postgres.js `PostgresError` (which carries `.code`) to
+ * `.cause`, so the code is no longer on the top-level error (F.2a / Day 21).
+ * Walk a short cause chain so both the wrapped (>= 0.44) and bare (< 0.44)
+ * shapes resolve to the same code.
+ */
+export function pgErrorCode(err: unknown): string | undefined {
+  let cur: unknown = err;
+  for (let depth = 0; depth < 5 && cur != null; depth++) {
+    if (typeof cur === 'object' && typeof (cur as { code?: unknown }).code === 'string') {
+      return (cur as { code: string }).code;
+    }
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+/**
  * Persist a webhook event to `webhook_events`. The Svix message id is stored
  * as `payload.id` so the `(provider, payload->>'id')` unique index rejects a
  * replayed delivery — a duplicate insert is reported, not thrown.
@@ -106,7 +125,9 @@ export async function recordWebhookEvent(input: {
     return { id: row.id, duplicate: false };
   } catch (err) {
     // 23505 = unique_violation → the same event id arrived twice (replay).
-    if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505') {
+    // drizzle-orm >= 0.44 wraps the driver error in DrizzleQueryError, so the
+    // pg code lives on `.cause`, not the top-level error — unwrap it (F.2a).
+    if (pgErrorCode(err) === '23505') {
       return { id: '', duplicate: true };
     }
     throw err;
