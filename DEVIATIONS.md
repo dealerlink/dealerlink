@@ -2329,3 +2329,172 @@ NOT the trivial one-line change the scope implied: the 0.44 error-wrapping is a
 behavioural change that reached one production path and a dozen test assertions.
 Any future code that inspects a pg error's `.code`/`.message`/constraint name
 must unwrap `.cause` (use `pgErrorCode` / `errChainText`).
+
+---
+
+## DEV.93 — Day 22 — CI's first run exposed a latent e2e flake set; `verify-day-c1` is NOT a state bug
+
+**Date:** 2026-09-07
+**Spec said:** Day 22 Phase 3 — "Iterate until all three jobs are green. Report
+each failure and its fix." And: "Do NOT disable, skip or mark-as-flaky any spec
+to make CI pass. If a spec is genuinely environment-dependent, report it and
+leave it failing."
+
+**What happened.** CI run 1 was red. The `e2e` job reported **63 passed, 1
+failed, 1 flaky** in 19.4 m — the failure being `verify-day-c1` ("a provisioned
+admin is forced to rotate before reaching the app"), which failed on **both**
+attempts. The working hypothesis handed to me was a fresh-database state
+assumption: the spec passes locally against a long-lived dev DB and fails on a
+virgin CI database.
+
+**It is not that.** Five escalating reproductions were run against a purpose-built
+virgin database (`dealerlink_ci_repro`, created on the compose Postgres and taken
+through `scripts/init-db.sql` → `pnpm db:migrate` → `pnpm db:seed`):
+
+| #   | Configuration                                                 | `verify-day-c1` |
+| --- | ------------------------------------------------------------- | --------------- |
+| 1   | alone, virgin DB                                              | pass, 17.1 s    |
+| 2   | after `verify-day-19`, virgin DB                              | pass            |
+| 3   | alone, virgin DB, `.env.local` moved aside (CI-identical env) | pass, 14.2 s    |
+| 4   | **full 65-spec suite**, virgin DB, CI env                     | pass, 28.7 s    |
+| 5   | alone, virgin DB, CI env, **cold `.next`**                    | pass, 16.6 s    |
+
+Experiment 4 is the faithful one — virgin DB, no `.env.local`, CI-identical env
+vars, full alphabetical ordering — and it completed in **19.1 m against CI's
+19.4 m**, so the two environments perform comparably. It scored **61 passed, 3
+flaky, 1 failed**, and the failure was a _different_ spec:
+
+```
+verify-day-19 "operator impersonation … not caught by the rate limiter"
+  attempt 1: TimeoutError page.waitForURL(/admin/) 30000ms — helpers.ts:40
+  retry 1:   toHaveURL(/\/admin\/tenants\/[0-9a-f-]+/) got ".../admin/tenants"
+flaky: verify-day-5 (1.2m → 5.6s), verify-day-6 (46s → 32.5s), verify-day-16 (→30.1s)
+```
+
+**Confirmed by CI run 2: `verify-day-c1` passed with NO fix applied.** The only
+change between the red and green runs was the webhook secret in the `test` job
+(DEV.94), which the `e2e` job does not use. A state bug fails identically every
+time; a timing flake does not.
+
+**Mechanisms actively ruled out** (so a future day does not re-investigate them):
+
+- **Rate limiter / lockout.** `lib/rate-limit.ts` is Postgres-backed and keyed by
+  **email** (`login:<email>`), not IP. c1 uses a unique per-run email, so
+  `verify-day-19`'s deliberate burst of failed logins cannot reach it. Confirmed
+  by experiment 2.
+- **`closeDbConnection()` in `verify-day-19`'s `afterAll`.** Harmless: day-19 is
+  the **only** e2e spec that imports `@dealerlink/db`, so no later spec shares
+  that pool.
+- **Provisioning collisions.** `operator-onboarding` and c1 build PANs from
+  different prefixes (`AABCA` vs `AABCR`), and there is no unique constraint on
+  `tenant_settings.gstin` in any case (only `tenants.slug` globally, and
+  `dealers (tenant_id, gstin)`).
+- **Missing seed / DB setup.** The full CI sequence runs clean on a virgin DB,
+  and the 172 `packages/db` integration tests pass against it — so there is no
+  hidden dependency on accumulated dev-DB state.
+
+**Why c1 is the likely CI victim.** It has the least timing margin in the suite:
+it sets `page.setDefaultTimeout(15_000)` — **tighter** than the 60 s config
+default — and its steps use 15 s/20 s/30 s budgets while walking the heaviest
+cold-route path in the run (`/admin/tenants/new`, `/admin/tenants/[id]`,
+`/change-password`, three logins). Its own runtime doubled from **14.2 s
+standalone to 28.7 s** at the end of the full run. Every one of the five
+observed failures across both environments is a `waitForURL` / `toHaveURL` /
+visibility **timeout** on an operator-or-admin navigation; not one is an
+assertion that data was wrong, missing, or unexpected. Retries get _further_
+rather than failing identically (day-19 reached `/admin/tenants` on retry;
+day-5 went 1.2 m → 5.6 s) — the signature of warming, not of broken state.
+
+**Built:** nothing. No spec was disabled, skipped, retried harder, or marked
+flaky, and no seed step was added for c1's benefit. The finding is recorded and
+the work is scheduled.
+
+**Impact.** The e2e suite has a **known-flaky set** — `verify-day-c1`,
+`verify-day-19`, `verify-day-5`, `verify-day-6`, `verify-day-16` — that will
+produce intermittent red PRs until fixed. With branch protection now requiring
+`e2e`, a flake blocks a merge. Re-running the job is the interim workaround;
+that is a cost, not a fix, and it erodes the gate's credibility if it becomes
+routine.
+
+**Resolution:** OPEN — tracked as **F.52** ("e2e suite stabilisation"),
+sequenced at Day 24, deliberately **BEFORE** the Typst migration (F.38) so that
+migration lands on a stable suite. Two parts: a route warm-up pass so first-hit
+dev-server compilation is not competing with test execution (the fix DEV.87
+recommended and never got), and an audit of specs that tighten timeouts below
+the config default. **`verify-day-c1` must NOT be recorded as fixed** — it was
+never diagnosed, only observed to pass.
+
+---
+
+## DEV.94 — Day 22 — `RESEND_INBOUND_WEBHOOK_SECRET` in CI must be valid base64
+
+**Date:** 2026-09-07
+**Spec said:** Day 22 guardrail — "No real secrets in the workflow or any
+committed env file. If a test needs one, stop and tell me which." Phase 1.2 had
+established that no gate needs a real secret.
+
+**Built:** the workflow's first draft used the obviously-fake placeholder
+`whsec_ci_dummy_not_a_real_secret`. That turned the **entire `test` job red in
+~1 minute** on CI run 1. `apps/web/lib/email/resend-webhook.test.ts` constructs
+a `svix` `Webhook` in its own `sign()` helper (line 46), and `svix`
+base64-decodes the key **in the constructor** — so the suite threw before any
+assertion ran. Underscores are not in the base64 alphabet.
+
+Verified against the installed library rather than assumed:
+
+```
+whsec_ci_dummy_not_a_real_secret       -> THROW Base64Coder: incorrect characters for decoding
+whsec_aTMoWyL4NfZWLrPBiF9JF9gNfJl34AA6 -> OK
+```
+
+Replaced with `whsec_` + base64 of 24 random bytes, hardcoded in the workflow
+with a comment stating the constraint. The library was **not** mocked and no
+spec was skipped.
+
+**Why:** this is a test fixture, not a secret. The suite signs and verifies
+fixtures it generates for itself; nothing in CI talks to Resend (with
+`RESEND_API_KEY` unset the worker logs the message instead of sending it). The
+Phase 1.2 conclusion stands — **no gate in this repo needs a real secret** — but
+"any dummy value works" was wrong: the value must be structurally valid.
+
+**Impact:** none beyond the one red run. **Resolution:** CLOSED (`ee9dcfb`).
+
+---
+
+## DEV.95 — Day 22 — which Chromium CI actually launches is NOT observable
+
+**Date:** 2026-09-07
+**Spec said:** Day 22 Phase 1.3 — "Verify the gating does NOT fire on CI, and
+that PDF specs exercise the same path production uses. A green CI run that
+silently tests a different binary is worse than none."
+
+**Built:** the _code-level_ half of that is proven. Both arm64 fallbacks are
+`process.arch === 'x64'` early-returns (`apps/web/playwright.config.ts:14`,
+`apps/workers/tests/setup-chromium.ts`), so on an x86-64 runner with
+`PUPPETEER_EXECUTABLE_PATH` unset neither fires, and
+`resolveLaunchConfig()` in `apps/workers/src/pdf/browser.ts` resolves
+`@sparticuz/chromium` — the production binary.
+
+**The runtime half cannot currently be confirmed, and that is the gap.**
+`browser.ts` logs **nothing** about which executable it resolved. Worse, its
+`@sparticuz` branch is wrapped in `try { … } catch { /* fall through */ }` and
+falls back to `resolveSystemChromium()`, whose Linux candidate list includes
+`/usr/bin/google-chrome` — **which is preinstalled on GitHub's ubuntu runner
+images**. So if `@sparticuz/chromium` failed to extract or returned a
+non-existent path, the PDF specs would silently launch the runner's system
+Chrome and **still go green**, which is precisely the scenario Phase 1.3 called
+out as worse than no CI.
+
+**Impact:** the Day 22 claim "PDF specs used native x86-64 `@sparticuz`
+Chromium" rests on code inference, not observed fact. Low practical risk today
+— the PDF specs and `apps/workers/tests/render.test.ts` did pass, so _a_
+Chromium worked — but the divergence would be invisible if it occurred.
+
+**Resolution:** OPEN, and largely self-closing: **F.38 (Typst migration)
+deletes this whole axis** by removing Puppeteer/Chromium from the pipeline, and
+F.32 is already parked as resolved-by-F.38. Until then, do **not** "fix" a CI
+Chromium failure by setting `PUPPETEER_EXECUTABLE_PATH` — that would make CI
+test a different binary than production by hand (recorded as a standing rule in
+`docs/RUNBOOKS.md` R22). A one-line `logger.info` of the resolved executable in
+`browser.ts` would close the observability gap, but that is production code and
+Day 22 was infrastructure-only.

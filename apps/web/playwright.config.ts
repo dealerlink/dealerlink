@@ -86,8 +86,16 @@ export default defineConfig({
   // before the flaky Windows webServer teardown) so the pass/fail outcome is
   // recoverable even when the process is force-terminated by globalTimeout.
   // `list` keeps the human-readable stream for interactive runs.
+  // CI adds an HTML report on top of the GitHub annotations so a failure can
+  // be diagnosed from the uploaded artifact rather than by re-reading raw log
+  // output (.github/workflows/verify.yml uploads both on failure). `github`
+  // alone writes no files.
   reporter: process.env.CI
-    ? 'github'
+    ? [
+        ['github'],
+        ['html', { open: 'never', outputFolder: 'playwright-report' }],
+        ['json', { outputFile: 'test-results/verify-results.json' }],
+      ]
     : [['list'], ['json', { outputFile: 'test-results/verify-results.json' }]],
   use: {
     baseURL: BASE_URL,

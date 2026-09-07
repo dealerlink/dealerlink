@@ -1,5 +1,5 @@
 {
-  "$comment": "SOURCE OF TRUTH for the Stage F task table in PROJECT_PLAN.md. Edit THIS file, then run `pnpm plan:sync`. Never hand-edit the table between the STAGE_F_TASKS markers in PROJECT_PLAN.md — `pnpm plan:check` (wired into `pnpm verify`) fails CI if they drift. Task names are verbatim from docs/STAGE_F_BUILD_v2.md 'Revised Stage F task table'.",
+  "$comment": "SOURCE OF TRUTH for the Stage F task table in PROJECT_PLAN.md. Edit THIS file, then run `pnpm plan:sync`. Never hand-edit the table between the STAGE_F_TASKS markers in PROJECT_PLAN.md — `pnpm plan:check` (wired into `pnpm verify`) fails CI if they drift. Task ids are STABLE cross-references (cited by DEVIATIONS.md and the day prompts): APPEND new ids, NEVER renumber. F.1-F.30 came verbatim from the v2 'Revised Stage F task table'; docs/STAGE_F_BUILD_v3.md removed that table, so THIS FILE is now the only copy.",
   "tasks": [
     {
       "id": "F.1",
@@ -38,10 +38,91 @@
       "notes": "Bumped drizzle-orm 0.38.4 → 0.45.2 + drizzle-kit 0.30.6 → 0.31.10 (`aa21da4`), closing F-4. Invariants PROVEN, not assumed: numeric golden byte-identical (40 money cols stay strings), pg_policies byte-identical (36 policies/31 tables), FOR UPDATE concurrency + serial-reservation tests green, drizzle-kit generated NO migration. The 0.44 DrizzleQueryError wrapping moved pg .code/.message to .cause — fixed the one reachable production path (webhook 23505 replay, `fbb5fed`) + 12 test assertions via a cause-chain helper (`934d3c9`). Test 556 → 560 (+4 pgErrorCode). See docs/DRIZZLE_UPGRADE_ANALYSIS.md, DEV.92. Advisory was never reachable (DEV.84)."
     },
     {
+      "id": "F.33",
+      "task": "CI pipeline (GitHub Actions) + branch-protection merge gate",
+      "subPhase": "SP0.5",
+      "days": "22",
+      "status": "complete",
+      "completedDate": "2026-09-07",
+      "notes": "CI EXISTS. .github/workflows/verify.yml — 3 jobs (checks / test / e2e), pinned actions, concurrency-cancel, 30 min timeouts, Playwright report + traces uploaded on failure. Each DB job gets its OWN EPHEMERAL Postgres service container (never the compose DB), migrated + seeded; separate runners remove the DEV.31/Day-20 residue hazard structurally. `test` needs the seed too (packages/db asserts on the seeded demo/sample tenants). NO GATE NEEDS A REAL SECRET. Runs verify against `next dev` — `next start` blocked on F.31 (DEV.91 §3.1). Branch protection completed by the user with required checks `checks`, `test`, `e2e` + require-up-to-date. Also: gh CLI added to the devcontainer Dockerfile (rebuild pending, NOT done), RUNBOOKS R22/R23, and BUILD_PROMPT_TEMPLATE switched to branch+PR+green-CI from Day 23 (no direct pushes to main). Two CI runs: run 1 red (DEV.94 webhook secret not valid base64 → test job; DEV.93 verify-day-c1 flake → e2e), run 2 green with only the DEV.94 fix — c1 was NOT diagnosed and is NOT fixed, tracked as F.52. DEV.93, DEV.94, DEV.95."
+    },
+    {
+      "id": "F.34",
+      "task": "Delete `docs/pilot/credentials-cheatsheet.md` (with git-history check)",
+      "subPhase": "SP0.5",
+      "days": "23",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "v3 §8 accept-and-schedule. Run `git log -p --all -- docs/pilot/` first; if any real credential was ever committed, ROTATE it — deleting the file does not remove it from history."
+    },
+    {
+      "id": "F.35",
+      "task": "Downsize production: worker instance + web DB pool + Postgres tier (all three together)",
+      "subPhase": "SP0.5",
+      "days": "23",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "COUPLED PACKAGE — the three parameters must move together or the pool caps overrun the tier connection budget. Prior values and the derivation are in docs/STAGE_D_HANDOFF.md §2 (workers basic-xs per DEV.67; web DB_POOL_MAX 10 / DB_ADMIN_POOL_MAX 5 / PGBOSS_POOL_MAX 2, DB Basic 2 GB ~50 conns per DEV.61). Record the EXACT prior values in docs/PRODUCTION_ENV.md before changing anything — F.42 restores them."
+    },
+    {
+      "id": "F.36",
+      "task": "Reconcile `.do/app.production.yaml` against the live spec (RESEND_FROM_EMAIL drift)",
+      "subPhase": "SP0.5",
+      "days": "23",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Day 22 CHECKED AND FOUND NO DRIFT on this key: committed `.do/app.production.yaml` and the live spec (`doctl apps spec get d8a25cb8-…`) both read `noreply@dealerlink.in` on web AND workers; staging matches its own spec at `onboarding@resend.dev`. The v3 §8 / work-order claim is stale. Task kept to do the FULL committed-vs-live diff across every non-SECRET key, which Day 22 did not do (guardrail: no .do/*.yaml edits)."
+    },
+    {
+      "id": "F.37",
+      "task": "Docs restructure (`git mv` into a stable layout)",
+      "subPhase": "SP0.5",
+      "days": "23",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "POST_PILOT_WORK_ORDER.md §1.1, §1.3, §1.4, §1.5. DO NOT DELETE docs/UX_FINDINGS.md — §1.1 says to and is WRONG/superseded: P-7 and P-8 are scheduled in F.3, P-10/P-11/P-12 in F.26 (SP4). Use `git mv` so history follows the file."
+    },
+    {
+      "id": "F.52",
+      "task": "e2e suite stabilisation — route warm-up pass, and review specs that override the config timeout downward (c1 sets `page.setDefaultTimeout(15_000)`)",
+      "subPhase": "SP0.5",
+      "days": "24",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Opened by Day 22, the first CI run. NOT a state bug — `verify-day-c1` failed on CI run 1 and PASSED on run 2 with NO fix applied (only the webhook secret changed), and five escalating local repros against a virgin DB could not reproduce it: alone, after day-19, with .env.local removed, on a cold .next, and in the full 65-spec run. A state bug fails identically; a timing flake does not. KNOWN-FLAKY SET (all timeouts on navigation/visibility, none an assertion that data was wrong): verify-day-c1, verify-day-19 (operator impersonation), verify-day-5, verify-day-6, verify-day-16 (accessibility). The faithful local repro run scored 61 passed / 3 flaky / 1 failed in 19.1m vs CI 19.4m, so the environments perform comparably and the instability is in the suite, not the runner. TWO PARTS: (1) a route warm-up pass so first-hit dev-server compilation (5–10 s/route, DEV.87) is not competing with test execution; (2) audit specs that TIGHTEN timeouts below the config — c1 sets page.setDefaultTimeout(15_000) against a 60 s config default while walking the heaviest cold-route path in the suite (/admin/tenants/new, /admin/tenants/[id], /change-password, three logins), and its own runtime doubled 14.2 s standalone → 28.7 s at the end of the full run. Sequenced BEFORE the Typst migration: F.38 rewrites the PDF specs and should land on a stable suite. DEV.93."
+    },
+    {
+      "id": "F.38",
+      "task": "Typst migration — replace Puppeteer/Chromium in the PDF pipeline",
+      "subPhase": "SP0.6",
+      "days": "25–28",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "v3 §5 / D-6 — BEFORE the document work, not after: SP1 authors or rewrites four document surfaces, and migrating afterwards writes all of it twice. Kills DEV.89 (arch split), relieves DEV.87 (Chromium is a large share of the verify memory peak), and makes a legal document snapshot-testable (Chromium output is not byte-stable). SUB-TASKS, in order: (1) capture reference PDFs for ALL FOUR current paths — quotation, PI, payment receipt, dispatch note — each with a branded tenant and both tax cases, BEFORE writing any Typst; (2) re-author the four templates; (3) replace the render-pdf consumer with in-process rendering; (4) snapshot tests; (5) new ADR superseding (NOT deleting) ADR-013. GUARDRAILS: rendering change only — do not change any number that appears on a document, packages/tax is untouched, pg-boss stays (only the PDF job changes shape). FALLBACK: @react-pdf/renderer keeps JSX and still removes Chromium — DECIDE BEFORE STARTING, do not switch mid-migration. Do NOT bundle the apps/workers collapse (F.50)."
+    },
+    {
+      "id": "F.5a",
+      "task": "Ship-To addresses — `dealer_addresses` schema, migration, place-of-supply rewiring",
+      "subPhase": "SP1",
+      "days": "29–31",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "v3 §4 / D-4 (~3 d). Touches ADR-012's place-of-supply derivation — the most safety-critical logic in the codebase — so it gets its own day, own commit, own tests, and a SUPERSEDING ADR. Client evidence: one dealer, multiple delivery sites is the main path in solar distribution, not an edge case. Place of supply stays derived from the Ship-To ADDRESS state."
+    },
+    {
+      "id": "F.5b",
+      "task": "Ship-To GSTIN validation (checksum + state cross-check + required-when-different)",
+      "subPhase": "SP1",
+      "days": "32–33",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "v3 §4 / §6 (~1.5 d). Mostly promotion: a correct GSTN mod-36 checksum already exists in `lib/format/index.ts`, tested, wired only to the tenant's own GSTIN. Add the embedded-state cross-check (a top IRP rejection cause), required-when Bill-To ≠ Ship-To, and a dispatch block naming the dealer + address. GSTIN must NOT override place-of-supply derivation (ADR-012). D-3: GSTN Advisory 661, effective 1 Aug 2026."
+    },
+    {
       "id": "F.3",
       "task": "Multi-rate tax summary — data layer + screens",
       "subPhase": "SP1",
-      "days": "22",
+      "days": "34",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -50,7 +131,7 @@
       "id": "F.4",
       "task": "Multi-rate tax summary — PDF + HSN/SAC table",
       "subPhase": "SP1",
-      "days": "23",
+      "days": "35",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -59,16 +140,16 @@
       "id": "F.5",
       "task": "Ship-To GSTIN capture + validation",
       "subPhase": "SP1",
-      "days": "24",
-      "status": "pending",
+      "days": "—",
+      "status": "parked",
       "completedDate": null,
-      "notes": "Day 19 audit: scope assumes a shipping-address entity that does not exist — Ship-To is a dealer. Needs an (a) keep-as-dealer / (b) new dealer_addresses decision first. 2.7 d for (a), ~5 d for (b). See docs/TAX_INVOICE_AUDIT.md §B.4."
+      "notes": "SPLIT, not scheduled as itself — superseded by F.5a (schema + place-of-supply rewiring, ~3 d) and F.5b (GSTIN validation, ~1.5 d) per docs/STAGE_F_BUILD_v3.md §4 / D-4. The Day 19 audit finding stands: Ship-To is a dealer, not an address (docs/TAX_INVOICE_AUDIT.md §B.4); D-4 took the larger dealer_addresses option because four documents snapshot the ship-to party. Id retained as a stable cross-reference."
     },
     {
       "id": "F.6",
       "task": "GST tax invoice document",
       "subPhase": "SP1",
-      "days": "25–26",
+      "days": "36–38",
       "status": "pending",
       "completedDate": null,
       "notes": "Day 19 audit VERDICT: DOES NOT EXIST. Estimated 3.5 d against 2 d allocated. Hard-blocked on F.4 — TaxSummary is single-rate today. See docs/TAX_INVOICE_AUDIT.md §A.4."
@@ -77,7 +158,7 @@
       "id": "F.7",
       "task": "Serials rendered on invoice lines",
       "subPhase": "SP1",
-      "days": "26",
+      "days": "39",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -86,7 +167,7 @@
       "id": "F.8",
       "task": "Credit note / sales return",
       "subPhase": "SP1",
-      "days": "27–28",
+      "days": "40–41",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -95,7 +176,7 @@
       "id": "F.9",
       "task": "GST report: rate-wise + HSN-wise grouping",
       "subPhase": "SP1",
-      "days": "29",
+      "days": "42",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -104,7 +185,7 @@
       "id": "F.10",
       "task": "GSTR-1 export (B2B, B2CL, CDNR, HSN)",
       "subPhase": "SP1",
-      "days": "30–31",
+      "days": "43–44",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -113,7 +194,7 @@
       "id": "F.11",
       "task": "Tally mapping configuration module",
       "subPhase": "SP1",
-      "days": "32–34",
+      "days": "45–47",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -122,7 +203,7 @@
       "id": "F.12",
       "task": "Tally export — voucher generation engine",
       "subPhase": "SP1",
-      "days": "35–36",
+      "days": "48–49",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -131,7 +212,7 @@
       "id": "F.13",
       "task": "Tally export — XML output + idempotency",
       "subPhase": "SP1",
-      "days": "37",
+      "days": "50",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -140,7 +221,7 @@
       "id": "F.14",
       "task": "Vendor bill export",
       "subPhase": "SP1",
-      "days": "38",
+      "days": "51",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -149,7 +230,7 @@
       "id": "F.15",
       "task": "Data migration importers",
       "subPhase": "SP1",
-      "days": "39–40",
+      "days": "52–53",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -158,7 +239,7 @@
       "id": "F.16",
       "task": "Opening balance import",
       "subPhase": "SP1",
-      "days": "41",
+      "days": "54",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -167,7 +248,7 @@
       "id": "F.17",
       "task": "ADR: serial capture (swap-on-scan)",
       "subPhase": "SP2",
-      "days": "42",
+      "days": "55",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -176,7 +257,7 @@
       "id": "F.18",
       "task": "Serial bulk import at procurement",
       "subPhase": "SP2",
-      "days": "43–44",
+      "days": "56–57",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -185,7 +266,7 @@
       "id": "F.19",
       "task": "`swapReservedSerial` + scan-to-assign",
       "subPhase": "SP2",
-      "days": "45–47",
+      "days": "58–60",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -194,7 +275,7 @@
       "id": "F.20",
       "task": "Serial format validation per product/tenant",
       "subPhase": "SP2",
-      "days": "47",
+      "days": "60",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -203,7 +284,7 @@
       "id": "F.21",
       "task": "Mobile-responsive / PWA",
       "subPhase": "SP2",
-      "days": "48–50",
+      "days": "61–63",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -212,7 +293,7 @@
       "id": "F.22",
       "task": "Dealer price lists",
       "subPhase": "SP2",
-      "days": "51–52",
+      "days": "64–65",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -221,7 +302,7 @@
       "id": "F.23",
       "task": "GSP provider abstraction + credential vault",
       "subPhase": "SP3",
-      "days": "53",
+      "days": "66",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -230,7 +311,7 @@
       "id": "F.24",
       "task": "E-invoice / IRN",
       "subPhase": "SP3",
-      "days": "54–57",
+      "days": "67–70",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -239,16 +320,25 @@
       "id": "F.25",
       "task": "E-way bill",
       "subPhase": "SP3",
-      "days": "58–60",
+      "days": "71–73",
       "status": "pending",
       "completedDate": null,
       "notes": null
     },
     {
+      "id": "F.42",
+      "task": "RESTORE production sizing before go-live",
+      "subPhase": "GO-LIVE GATE",
+      "days": "pre-go-live",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "HARD GATE — must not be forgotten. Reverses F.35. Restore the exact prior values recorded in docs/PRODUCTION_ENV.md by F.35: workers instance_size_slug, web DB_POOL_MAX / DB_ADMIN_POOL_MAX / PGBOSS_POOL_MAX, and the managed-Postgres tier. All three move TOGETHER (docs/STAGE_D_HANDOFF.md §2). Go-live scope per v3 §0 is SP0 + SP1 + SP2 + e-invoice + e-way bill; this gate closes last."
+    },
+    {
       "id": "F.26",
       "task": "Remaining UX defects (P-10, P-11, P-12, P-4/5/6)",
       "subPhase": "SP4",
-      "days": "61",
+      "days": "74",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -257,7 +347,7 @@
       "id": "F.27",
       "task": "`USER_MANUAL.md` sections 3–10",
       "subPhase": "SP4",
-      "days": "62–63",
+      "days": "75–76",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -294,18 +384,99 @@
       "task": "Decouple SESSION_COOKIE_DOMAIN + prod subdomain routing from NODE_ENV",
       "subPhase": "post",
       "days": "—",
-      "status": "pending",
+      "status": "deferred",
       "completedDate": null,
-      "notes": "Backlog from Day 20/21. Prod subdomain routing + cookie domain are gated on NODE_ENV, which blocks the low-memory `next start` verify path. Fix needs a DO app-spec change (env-driven, like SESSION_COOKIE_SECURE in cookie-security.ts), not just code. Low priority; not reachable-bug."
+      "notes": "Backlog from Day 20/21. Prod subdomain routing + cookie domain are gated on NODE_ENV, which blocks the low-memory `next start` verify path. Fix needs a DO app-spec change (env-driven, like SESSION_COOKIE_SECURE in cookie-security.ts), not just code. Low priority; not reachable-bug. DEFERRED (Day 22): confirmed still live — Day 22 CI therefore runs verify against `next dev`, not `next start`, exactly as local does. Not fixed today by instruction."
     },
     {
       "id": "F.32",
       "task": "@sparticuz/chromium is x86-64 only — breaks if workers run on arm64 in prod",
       "subPhase": "post",
       "days": "—",
-      "status": "pending",
+      "status": "parked",
       "completedDate": null,
-      "notes": "Backlog from Day 20/21. Devcontainer is arm64; @sparticuz/chromium ships x86-64 only. Currently harness-gated via PUPPETEER_EXECUTABLE_PATH (points at Playwright arm64 locally). Becomes a LIVE bug only if the workers component is ever scheduled on arm64 in production — DO App Platform is x86-64 today, so latent."
+      "notes": "Backlog from Day 20/21. Devcontainer is arm64; @sparticuz/chromium ships x86-64 only. Currently harness-gated via PUPPETEER_EXECUTABLE_PATH (points at Playwright arm64 locally). Becomes a LIVE bug only if the workers component is ever scheduled on arm64 in production — DO App Platform is x86-64 today, so latent. RESOLVED BY the Typst migration (F.38), not by a task of its own: removing Puppeteer/Chromium removes @sparticuz/chromium and with it the arch split (docs/STAGE_F_BUILD_v3.md §5). Day 22 confirmed the arm64 fallback does NOT fire on GitHub runners (x86-64, PUPPETEER_EXECUTABLE_PATH unset), so CI exercises the production binary."
+    },
+    {
+      "id": "F.43",
+      "task": "Vendor Lucia (remove the unmaintained auth dependency)",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED to SP4 hardening (v3 §8). Right call eventually, but it is an auth change with real blast radius, no forcing function, and it touches the force-password-rotation trapdoor (CLAUDE.md §6 / DEV.56). ESCALATE IMMEDIATELY if a CVE lands."
+    },
+    {
+      "id": "F.44",
+      "task": "F-9 — logo upload validation (size, MIME, dimensions)",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED to post go-live, but BEFORE F.45 — validation must exist before logos are accepted into object storage. Spec is CLAUDE.md §8 decision 7: max 1 MB, PNG/SVG/JPG, 400×120 px."
+    },
+    {
+      "id": "F.45",
+      "task": "DO Spaces for generated documents and logos",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED to post go-live. Blocked on F.44 (validate before storing)."
+    },
+    {
+      "id": "F.46",
+      "task": "F-5 — narrow the `email_delivery_log` UPDATE scope",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED to SP4 hardening (v3 §8)."
+    },
+    {
+      "id": "F.47",
+      "task": "DEV.79 — Better Stack log shipping",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED to post go-live. `@logtail/pino` worker-thread transport breaks under Next webpack bundling (DEV.79); logs currently go to stdout → DO Logs."
+    },
+    {
+      "id": "F.48",
+      "task": "SENTRY_RELEASE wiring (git SHA at deploy time)",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED to post go-live. The env keys already exist in .env.example; nothing injects a value. Natural home is the CI/deploy pipeline built in F.33."
+    },
+    {
+      "id": "F.49",
+      "task": "Resend inbound webhook + MX for `mail.dealerlink.in`",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED to post go-live. MX, SPF, DKIM, DMARC to Resend (CLAUDE.md §8 decision 3). The verification code path already exists (RESEND_INBOUND_WEBHOOK_SECRET); the DNS + endpoint do not."
+    },
+    {
+      "id": "F.50",
+      "task": "Collapse `apps/workers` into `apps/web`",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED — and strictly AFTER F.38. Only sound once PDF rendering is in-process and Chromium is gone. POST_PILOT_WORK_ORDER.md §5.6 proposes it; v3 §5 agrees it is correct AND correctly flagged as a SEPARATE item — do not bundle it into the Typst migration."
+    },
+    {
+      "id": "F.51",
+      "task": "E.7 retrospective — why did UMA never start?",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "DEFERRED, operator-led: NO ENGINEERING TIME. v3 §8 calls this \"the highest-value item\" in POST_PILOT_WORK_ORDER.md — the pilot produced zero usage data, and whatever stopped them is waiting for the next client. Should shape the backlog more than any technical finding."
     }
   ]
 }

@@ -38,6 +38,21 @@ RUN set -eux; \
       | tar -xz -C /usr/local/bin doctl; \
     doctl version
 
+# GitHub CLI — from GitHub's own apt repo (Debian ships no `gh` package).
+# Needed from Day 22 onward: days land via branch + PR with green CI, so
+# `gh pr create` / `gh pr checks` / `gh run watch` are part of the closeout.
+# Same keyring + signed-by pattern as the PGDG block above.
+RUN set -eux; \
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      -o /usr/share/keyrings/githubcli-archive-keyring.gpg; \
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends gh; \
+    rm -rf /var/lib/apt/lists/*; \
+    gh --version
+
 # pnpm pinned to the packageManager field in package.json
 RUN npm install -g corepack@latest \
  && corepack enable \

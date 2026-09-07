@@ -1088,3 +1088,165 @@ close the day on an ERROR.
 **Note:** this verifies the deploy _phase_, not the committed App Platform
 _spec_. A spec/YAML change still needs R18 (`pnpm sync-spec:*`) — pushing source
 does not re-read `.do/*.yaml`.
+
+---
+
+## R22 — CI: the verify workflow + branch protection
+
+**Established Stage F Day 22 (task F.33).** Before Day 22 the repo had **no CI
+at all** — no `.github/`, nothing in the history.
+
+### Why this is load-bearing
+
+Both `.do/app.yaml` (staging) and `.do/app.production.yaml` (production) carry
+`branch: main` + `deploy_on_push: true`. **A commit on `main` is a deploy to
+production.** There is no manual promotion step and no staging soak. Branch
+protection plus the status checks below is therefore the _only_ thing standing
+between an untested commit and the production app.
+
+That is also why the `push: [main]` trigger in the workflow is a **record, not
+a gate**: by the time it runs, DO has already started building. The gate is the
+`pull_request` run, which must be green _before_ the merge creates the commit
+on `main`.
+
+### The workflow
+
+`.github/workflows/verify.yml`. Three jobs, fastest feedback first:
+
+| Job      | Runs                                       | Database                     | Gated on |
+| -------- | ------------------------------------------ | ---------------------------- | -------- |
+| `checks` | `plan:check`, `typecheck`, `lint`, `build` | none                         | —        |
+| `test`   | `pnpm test` (vitest)                       | ephemeral, migrated + seeded | —        |
+| `e2e`    | `pnpm verify` (Playwright)                 | ephemeral, migrated + seeded | `checks` |
+
+**The database is an ephemeral service container, created and destroyed with
+the job.** It is never the docker-compose instance. Each DB-touching job gets
+its own, so an earlier vitest run cannot leave residue for verify to trip over
+— the Day 20 failure mode in DEV.91 (66 stray quotation rows pushing a seeded
+row off page 1) and the DEV.31 pattern generally. `pnpm db:seed` is the last
+database step before `pnpm verify`.
+
+`test` also needs the seed, not just migrations: the `packages/db` integration
+tests assert against the seeded `demo` / `sample` tenants and fail with
+`seed tenants missing — run pnpm db:seed` otherwise.
+
+**No real secret is required by any gate.** With `RESEND_API_KEY` unset the
+worker logs the message instead of sending it, and the webhook suite signs its
+own fixtures with whatever `RESEND_INBOUND_WEBHOOK_SECRET` is present. The
+database credentials in the workflow's `env:` block are the throwaway
+docker-compose dev values, mirrored so the RLS role bootstrap and the seeds
+line up. If a future test genuinely needs a real secret, add it as a GitHub
+Actions secret — **never** commit one into the workflow or an env file.
+
+### Why CI runs `next dev`, not `next start`
+
+Under `NODE_ENV=production` the session-cookie **domain** and the operator
+**subdomain routing** both switch to the production apex, which a localhost
+browser rejects — so `next start` breaks tenant routing in a test environment
+(DEV.91 §3.1). Decoupling that from `NODE_ENV` is task **F.31** and is
+deliberately not done. CI therefore runs the same faithful `next dev` path as
+local, and pays the same cold-compile cost.
+
+### Chromium on CI is the production binary
+
+`@sparticuz/chromium` ships an x86-64 binary only, which is why the arm64
+devcontainer points Puppeteer at Playwright's Chromium (DEV.89). **That
+fallback is inert on GitHub runners** — they are x86-64 and
+`PUPPETEER_EXECUTABLE_PATH` is unset, so `browser.ts` resolves `@sparticuz`,
+exactly as production does. Both gating paths for it are `process.arch === 'x64'`
+guards in `apps/web/playwright.config.ts` and
+`apps/workers/tests/setup-chromium.ts`. **Do not "fix" a Chromium failure on CI
+by setting `PUPPETEER_EXECUTABLE_PATH`** — that would silently make CI test a
+different binary than production, which is worse than no CI. (Task F.38, the
+Typst migration, removes this whole axis.)
+
+### Completing branch protection
+
+Already configured on `main` by the repo owner: require a pull request before
+merging, 0 approvals, block force pushes, restrict deletions. Status checks
+were left off because none existed. Now they do.
+
+**Settings → Branches → Branch protection rules → `main` → Edit:**
+
+1. Tick **Require status checks to pass before merging**.
+2. In the search box add these three, **exactly as spelled**:
+
+   ```
+   checks
+   test
+   e2e
+   ```
+
+   These are the `name:` values of the three jobs, which is what the PR checks
+   UI shows. If a name does not appear in the search box, GitHub has not seen
+   it yet — open or re-run a PR so the check reports once, then it becomes
+   selectable.
+
+3. Tick **Require branches to be up to date before merging** (it appears as a
+   sub-option once step 1 is on). Without it, a PR can go green against a stale
+   base and merge a combination that was never tested — which, given
+   `deploy_on_push: true`, deploys straight to production.
+4. Save.
+
+Renaming a job in `verify.yml` silently **detaches** the required check: the
+old name stays required and never reports, so PRs block forever. Rename the
+required check in the same change.
+
+### Triaging a red run
+
+- **`checks` red** — reproduce exactly with `pnpm plan:check`, `pnpm typecheck`,
+  `pnpm lint`, `pnpm build`. No database involved, so it reproduces anywhere.
+- **`test` red** — `pnpm db:migrate && pnpm db:seed && pnpm test`. Remember the
+  local dev database is shared and may hold residue that CI's fresh one does
+  not; re-seed before concluding CI is wrong.
+- **`e2e` red** — the run uploads two artifacts on failure:
+  `playwright-report-<run id>` (the HTML report) and
+  `playwright-traces-<run id>` (traces + failure screenshots). Download the
+  traces and open one with `pnpm --filter web exec playwright show-trace <file>`.
+  Traces are `retain-on-failure` and screenshots `only-on-failure`, so a green
+  run uploads nothing.
+- **Never** disable, skip or mark-as-flaky a spec to get a merge through. If a
+  spec is genuinely environment-dependent, leave it failing and record it.
+
+---
+
+## R23 — GitHub CLI (`gh`) in the devcontainer
+
+Added to `.devcontainer/Dockerfile` on Day 22 (same keyring / `signed-by` apt
+pattern as the PGDG and doctl blocks above), because from Day 23 every day
+lands via a branch and a PR.
+
+**A container rebuild is required** — `gh` is not in the running container
+until then. In VS Code: **Dev Containers: Rebuild Container**. Rebuilding
+restarts the container, which ends any Claude Code session running inside it,
+so do it between days rather than mid-day.
+
+**`gh auth login` is a one-time interactive step you run yourself.** It needs a
+browser or a device code; do not ask an agent to authenticate, and do not paste
+a token into the repo. After the rebuild:
+
+```bash
+gh auth login          # GitHub.com → SSH (the repo remote is git@github.com) → browser
+gh auth status         # confirm
+```
+
+Auth is stored in `~/.config/gh` **inside the container**, which is not one of
+the named volumes in `.devcontainer/docker-compose.yml`, so it is lost on the
+next rebuild. If that becomes annoying, add a volume next to the existing
+`claude-config` one:
+
+```yaml
+# .devcontainer/docker-compose.yml — under services.app.volumes:
+- gh-config:/home/node/.config/gh
+# ...and declare it under the top-level `volumes:` key.
+```
+
+Useful once authenticated:
+
+```bash
+gh pr create --fill --base main       # open the day's PR
+gh pr checks --watch                  # wait for checks, gh returns non-zero if any fail
+gh run watch                          # follow the newest run live
+gh run view <run-id> --log-failed     # just the failing step's log
+gh pr merge --squash                  # merge once green (this DEPLOYS — see R22)
+```

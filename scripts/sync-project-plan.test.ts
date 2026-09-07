@@ -36,7 +36,12 @@ const SCRIPT = path.join(REPO_ROOT, 'scripts', 'sync-project-plan.ts');
 const REAL_TASKS = path.join(REPO_ROOT, 'docs', 'stage-f-tasks.json');
 const REAL_PLAN = path.join(REPO_ROOT, 'PROJECT_PLAN.md');
 
-/** The 30 canonical task ids from docs/STAGE_F_BUILD_v2.md. */
+/**
+ * The 30 canonical task ids that came from the v2 plan table (removed in v3 —
+ * docs/stage-f-tasks.json is now the only copy). Ids are stable
+ * cross-references, so new tasks are APPENDED, never renumbered: this asserts
+ * F.1-F.30 all still exist, not that they are the whole list.
+ */
 const CANONICAL_IDS = Array.from({ length: 30 }, (_, i) => `F.${i + 1}`);
 
 let tasksJson: string;
@@ -86,7 +91,8 @@ describe('task source of truth', () => {
 
   it('has no duplicate ids and a known status on every task', () => {
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
-    for (const t of tasks) expect(t.status).toMatch(/^(pending|in_progress|complete)$/);
+    for (const t of tasks)
+      expect(t.status).toMatch(/^(pending|in_progress|complete|parked|deferred|blocked)$/);
   });
 
   it('rejects an unknown status', () => {

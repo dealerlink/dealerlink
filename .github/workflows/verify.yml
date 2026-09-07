@@ -1,0 +1,325 @@
+# Dealerlink CI — the merge gate.
+#
+# Established Stage F Day 22 (task F.33). Before this, the repo had NO CI at
+# all: both `.do/app.yaml` and `.do/app.production.yaml` carry
+# `deploy_on_push: true` on `main`, so every push to main deployed to staging
+# AND production having run nothing but `next build`. Branch protection plus
+# the status checks below is the only thing between an untested commit and
+# production — see docs/RUNBOOKS.md, "Branch protection + CI status checks".
+#
+# Three jobs, fastest feedback first:
+#   checks — typecheck / lint / build / plan:check. No database.
+#   test   — the vitest suites (560).
+#   e2e    — the `pnpm verify` Playwright chain (65). Gated on `checks`.
+#
+# Every DB-touching job gets its OWN EPHEMERAL Postgres service container,
+# created and destroyed with the job. Nothing here ever touches the
+# docker-compose database. A fresh DB per job is the point: half the flakiness
+# of Days 19-21 was residue in a shared dev DB (the DEV.31 pattern, and the
+# Day 20 case in DEV.91 where an earlier `pnpm test` left 66 quotation rows
+# that pushed a seeded row off page 1 of a list). Because `test` and `e2e` run
+# on separate runners against separate databases, that ordering hazard is
+# removed structurally rather than by sequencing.
+name: verify
+
+on:
+  pull_request:
+    branches: [main]
+  # A record, not a gate: `main` has already begun deploying by the time this
+  # runs. The gate is the pull_request run.
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Ephemeral CI Postgres. These credentials mirror docker-compose.yml + the
+  # committed packages/db/.env.test so migrations, the RLS role bootstrap
+  # (packages/db/src/rls/00-app-role.sql) and the seeds all line up. They are
+  # NOT secrets: the database exists for the lifetime of one job on a
+  # throwaway runner. Host is `localhost` here, not the compose service name
+  # `postgres`, because service-container ports are published to the runner.
+  #
+  # dotenv never overrides an already-set var, so these win over both
+  # `.env.local` (absent in CI) and packages/db/.env.test.
+  DATABASE_URL: postgresql://dealerlink_app:dev_app_password_change_me@localhost:5432/dealerlink_dev
+  APP_DATABASE_URL: postgresql://dealerlink_app:dev_app_password_change_me@localhost:5432/dealerlink_dev
+  DATABASE_DIRECT_URL: postgresql://dealerlink:dev_password_change_me@localhost:5432/dealerlink_dev
+  # The CI web server is plain http://localhost, so auth cookies must not be
+  # Secure or the browser drops the session and every spec fails at login.
+  # Fail-safe default stays secure (lib/auth/cookie-security.ts, DEV.91).
+  SESSION_COOKIE_SECURE: 'false'
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  # Throwaway TEST FIXTURE, not a secret — it signs and verifies fixtures the
+  # suite generates for itself, and nothing in CI talks to Resend (with no
+  # RESEND_API_KEY the worker logs the message instead of sending it).
+  #
+  # It MUST be `whsec_` + valid base64. `svix` base64-decodes the key in the
+  # Webhook constructor, so a non-base64 value throws
+  # "Base64Coder: incorrect characters for decoding" inside the suite's own
+  # sign() helper (lib/email/resend-webhook.test.ts:46) BEFORE any assertion
+  # runs — which is what turned the whole vitest job red on the first CI run.
+  # This is base64 of 24 random bytes. Do not "simplify" it to a readable
+  # string: underscores and hyphens are not valid base64.
+  RESEND_INBOUND_WEBHOOK_SECRET: whsec_aTMoWyL4NfZWLrPBiF9JF9gNfJl34AA6
+  RESEND_FROM_EMAIL: onboarding@resend.dev
+  TZ: Asia/Kolkata
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # A — static gates. No database, no server, no browser. ~3-4 min.
+  # ---------------------------------------------------------------------------
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Cheapest gate first — a drifted plan table costs 2s to catch, not 4 min.
+      - name: plan:check
+        run: pnpm plan:check
+
+      - name: typecheck
+        run: pnpm typecheck
+
+      - name: lint
+        run: pnpm lint
+
+      # The Next build cache. `next build` and `next dev` keep separate
+      # subtrees under .next/cache, so this is safe to restore in either job.
+      # Namespaced `next-` (production build) vs the e2e job's `next-dev-`.
+      - name: Restore Next build cache
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.[jt]s', 'apps/web/**/*.[jt]sx') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            next-${{ runner.os }}-
+
+      # No database: the @dealerlink/db client is a lazy proxy, so `next build`
+      # never opens a connection. Verified locally against a dead port.
+      - name: build
+        run: pnpm build
+
+  # ---------------------------------------------------------------------------
+  # B — vitest. Needs a migrated AND seeded database: packages/db integration
+  # tests assert against the seeded `demo` / `sample` tenants and fail fast
+  # with "seed tenants missing" otherwise. ~4-6 min.
+  # ---------------------------------------------------------------------------
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dealerlink
+          POSTGRES_PASSWORD: dev_password_change_me
+          POSTGRES_DB: dealerlink_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dealerlink -d dealerlink_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # docker-compose mounts this into the image's initdb hook; a service
+      # container has no such mount, so apply it explicitly. Same file, so the
+      # extension set cannot drift from local.
+      - name: Create extensions (scripts/init-db.sql)
+        run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f scripts/init-db.sql
+
+      # Also creates the dealerlink_app NOBYPASSRLS role and applies the RLS
+      # policies + audit triggers (packages/db/src/migrate.ts).
+      - name: Migrate
+        run: pnpm db:migrate
+
+      - name: Seed
+        run: pnpm db:seed
+
+      # apps/workers/tests/render.test.ts launches a real Chromium through
+      # @sparticuz/chromium. The runner is x86-64 with PUPPETEER_EXECUTABLE_PATH
+      # unset, so browser.ts resolves the SAME binary production uses — the
+      # DEV.89 arm64 fallback is inert here, by design. It needs the shared
+      # libraries apps/workers/Dockerfile installs for the same reason.
+      # `install-deps` (not `install`) — this job needs the shared libraries, not
+      # a Playwright browser. Using Playwright's own dep installer instead of a
+      # hand-written apt list keeps it correct across runner-image Ubuntu
+      # versions, where package names differ (libasound2 vs libasound2t64).
+      - name: Install Chromium runtime libraries
+        run: pnpm --filter web exec playwright install-deps chromium
+
+      - name: vitest
+        run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # C — the verify chain. Gated on `checks` so a typo does not cost ten
+  # minutes of Playwright. ~10-15 min.
+  #
+  # Runs against `next dev`, exactly as local does. NOT `next start`: under
+  # NODE_ENV=production the session-cookie domain and the operator subdomain
+  # routing both switch to the production apex, which a localhost browser
+  # rejects (DEV.91 §3.1). Decoupling that from NODE_ENV is task F.31 and is
+  # deliberately not done here.
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: checks
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dealerlink
+          POSTGRES_PASSWORD: dev_password_change_me
+          POSTGRES_DB: dealerlink_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dealerlink -d dealerlink_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(pnpm --filter web exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      # Run unconditionally, cache hit or miss. `install` is close to a no-op
+      # when the browser is already on disk, and making it conditional is
+      # exactly how a stale cache turns into a confusing "Executable doesn't
+      # exist" failure. --with-deps also covers the Chromium shared libraries
+      # the workers process needs for the PDF specs.
+      - name: Install Playwright Chromium + system deps
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      # DEV.95 — make the Chromium claim VERIFIABLE instead of inferred.
+      # browser.ts logs nothing about which executable it resolved, and its
+      # @sparticuz branch falls through on error to a system-Chromium lookup
+      # whose Linux candidates include /usr/bin/google-chrome — which IS
+      # preinstalled on GitHub runners. So a silent swap to the runner's Chrome
+      # would still go green. Print what resolveLaunchConfig() will pick.
+      # Diagnostic only: `|| true` so it can never fail the gate.
+      - name: Report the Chromium binary the PDF path will use
+        run: |
+          node -e "
+            const p = require('@sparticuz/chromium');
+            (async () => {
+              const exe = await (p.default ?? p).executablePath();
+              console.log('arch                       :', process.arch);
+              console.log('PUPPETEER_EXECUTABLE_PATH  :', process.env.PUPPETEER_EXECUTABLE_PATH ?? '(unset)');
+              console.log('@sparticuz executablePath  :', exe);
+              console.log('@sparticuz binary exists   :', require('fs').existsSync(exe));
+              console.log('/usr/bin/google-chrome     :', require('fs').existsSync('/usr/bin/google-chrome'), '(fallback if the above is false)');
+            })();
+          " || true
+        working-directory: apps/workers
+
+      - name: Create extensions (scripts/init-db.sql)
+        run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f scripts/init-db.sql
+
+      - name: Migrate
+        run: pnpm db:migrate
+
+      # Seed is the LAST database step before verify. Every day-spec asserts
+      # against a known seeded state (playwright.config.ts runs workers: 1,
+      # fullyParallel: false for that reason), so verify must see a freshly
+      # seeded database — never one an earlier suite has written to. This job
+      # runs no vitest at all, so nothing can pollute it.
+      - name: Seed
+        run: pnpm db:seed
+
+      # A SEPARATE key namespace from the `checks` job. Both write
+      # apps/web/.next/cache, but `checks` fills it with a production build and
+      # this job with `next dev` chunks — sharing one key would make the two
+      # jobs collide on save and cache the wrong artefacts for each other.
+      # Warming it is what keeps first-hit route compilation (5-10s per route)
+      # off the critical path on repeat runs.
+      - name: Restore Next dev cache
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: next-dev-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.[jt]s', 'apps/web/**/*.[jt]sx') }}
+          restore-keys: |
+            next-dev-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            next-dev-${{ runner.os }}-
+
+      # Boots `next dev` + the workers process itself (playwright.config.ts
+      # webServer) and runs plan:check first.
+      - name: verify
+        run: pnpm verify
+
+      # The whole value of CI is diagnosing what cannot be reproduced locally.
+      # trace: 'retain-on-failure' and screenshot: 'only-on-failure' are already
+      # set in playwright.config.ts; both land under test-results/.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: apps/web/playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload Playwright traces + screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-${{ github.run_id }}
+          path: apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
