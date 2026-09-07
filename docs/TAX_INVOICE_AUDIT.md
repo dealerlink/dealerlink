@@ -4,8 +4,15 @@
 > **Task:** F.2 (tax invoice existence audit) + F.5 scoping (Ship-To GSTIN)
 > **Method:** read-only static audit of the monorepo at `main`. No application
 > code was changed while auditing.
-> **Companion docs:** `CLAUDE.md` §4–§6, `docs/STAGE_F_BUILD_v2.md`,
+> **Companion docs:** `CLAUDE.md` §4–§6, `docs/STAGE_F_BUILD_v3.md`,
 > `docs/PHASE_2_PLAN_v2.md` (SP0.2, SP1.2), `docs/WORKFLOWS.md`.
+>
+> **Plan-reference note (Day 22).** `docs/STAGE_F_BUILD_v2.md` was replaced by
+> `v3`, which deliberately carries **no task table** — `docs/stage-f-tasks.json`
+> is the single source of truth for tasks, days and sequencing. The "plan
+> variance" call-outs below cite v2's day allocations as they stood on
+> 2026-09-06 and are left unedited as the record of what this audit found.
+> Check the JSON for current sequencing.
 
 ---
 

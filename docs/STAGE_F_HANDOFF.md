@@ -1,5 +1,11 @@
 # STAGE_F_HANDOFF.md — New Session Kickoff
 
+> **HISTORICAL (Day 19 kickoff).** Superseded from Day 22 onward. The plan
+> document is now `docs/STAGE_F_BUILD_v3.md`, and the task list is
+> `docs/stage-f-tasks.json` — v3 deliberately carries **no** task table, so
+> the JSON is the only copy. The v2 filenames below have been repointed to v3;
+> the surrounding prose still describes the plan as it stood on 2026-09-06.
+
 > Paste the block in section 4 into a fresh Claude Code session. Sections 1–3
 > are for you; section 5 is your verification checklist.
 
@@ -19,7 +25,7 @@ questions that determine the scope of Days 22 and 23.
 These must be in the repo, because the prompt references them:
 
 - [ ] `docs/PHASE_2_PLAN_v2.md`
-- [ ] `docs/STAGE_F_BUILD_v2.md`
+- [ ] `docs/STAGE_F_BUILD_v3.md`
 - [ ] `docs/client-evidence/` containing the five client screenshots, named
       `01-swipe-invoice.png` … `05-tally-voucher.png`
 - [ ] `docs/STAGE_F_HANDOFF.md` (this file)
@@ -50,7 +56,7 @@ Day 18 with the tag stage-b-complete. This is Day 19.
 
 Stage F is a ~96-150 dev-day phase driven by a real prospect evaluation:
 Maharudra Agencies, currently running Swipe + TallyPrime Silver. Full context
-is in docs/PHASE_2_PLAN_v2.md and docs/STAGE_F_BUILD_v2.md. Read both before
+is in docs/PHASE_2_PLAN_v2.md and docs/STAGE_F_BUILD_v3.md. Read both before
 starting, along with CLAUDE.md, PROJECT_PLAN.md, DEVIATIONS.md,
 docs/SECURITY_AUDIT.md and docs/BUILD_PROMPT_TEMPLATE.md.
 
@@ -146,7 +152,7 @@ source of truth and validate it programmatically.
      { "id": "F.1", "task": "...", "subPhase": "SP0", "days": "19",
        "status": "pending", "completedDate": null, "notes": null }
      Populate all 30 tasks (F.1 through F.30) EXACTLY as listed in the
-     revised task table in docs/STAGE_F_BUILD_v2.md. Do not paraphrase task
+     revised task table in docs/STAGE_F_BUILD_v3.md. Do not paraphrase task
      names, do not renumber, do not reorder, do not invent tasks.
 
 4.2. Create scripts/sync-project-plan.ts:
@@ -268,7 +274,7 @@ WHEN DONE
 ### PROJECT_PLAN automation — the part that matters
 
 - [ ] `docs/stage-f-tasks.json` has 30 tasks, F.1 through F.30
-- [ ] Task names match `STAGE_F_BUILD_v2.md` exactly — spot-check five
+- [ ] Task names match `STAGE_F_BUILD_v3.md` exactly — spot-check five
 - [ ] `pnpm plan:sync` twice produces zero diff on the second run
 - [ ] `pnpm plan:check` passes
 - [ ] `git diff stage-b-complete -- PROJECT_PLAN.md` shows changes **only**
