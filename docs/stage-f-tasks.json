@@ -42,9 +42,9 @@
       "task": "CI pipeline (GitHub Actions) + branch-protection merge gate",
       "subPhase": "SP0.5",
       "days": "22",
-      "status": "pending",
-      "completedDate": null,
-      "notes": "v3 §3 / D-5. Day 21 found no CI anywhere in the repo or its history: every push to `main` has deployed to BOTH DO apps (deploy_on_push: true) having run nothing but `next build`. Three jobs — checks (typecheck/lint/build/plan:check), test (vitest), e2e (verify chain) — against an EPHEMERAL Postgres service container, never the compose DB."
+      "status": "complete",
+      "completedDate": "2026-09-07",
+      "notes": "CI EXISTS. .github/workflows/verify.yml — 3 jobs (checks / test / e2e), pinned actions, concurrency-cancel, 30 min timeouts, Playwright report + traces uploaded on failure. Each DB job gets its OWN EPHEMERAL Postgres service container (never the compose DB), migrated + seeded; separate runners remove the DEV.31/Day-20 residue hazard structurally. `test` needs the seed too (packages/db asserts on the seeded demo/sample tenants). NO GATE NEEDS A REAL SECRET. Runs verify against `next dev` — `next start` blocked on F.31 (DEV.91 §3.1). Branch protection completed by the user with required checks `checks`, `test`, `e2e` + require-up-to-date. Also: gh CLI added to the devcontainer Dockerfile (rebuild pending, NOT done), RUNBOOKS R22/R23, and BUILD_PROMPT_TEMPLATE switched to branch+PR+green-CI from Day 23 (no direct pushes to main). Two CI runs: run 1 red (DEV.94 webhook secret not valid base64 → test job; DEV.93 verify-day-c1 flake → e2e), run 2 green with only the DEV.94 fix — c1 was NOT diagnosed and is NOT fixed, tracked as F.52. DEV.93, DEV.94, DEV.95."
     },
     {
       "id": "F.34",
@@ -83,10 +83,19 @@
       "notes": "POST_PILOT_WORK_ORDER.md §1.1, §1.3, §1.4, §1.5. DO NOT DELETE docs/UX_FINDINGS.md — §1.1 says to and is WRONG/superseded: P-7 and P-8 are scheduled in F.3, P-10/P-11/P-12 in F.26 (SP4). Use `git mv` so history follows the file."
     },
     {
+      "id": "F.52",
+      "task": "e2e suite stabilisation — route warm-up pass, and review specs that override the config timeout downward (c1 sets `page.setDefaultTimeout(15_000)`)",
+      "subPhase": "SP0.5",
+      "days": "24",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Opened by Day 22, the first CI run. NOT a state bug — `verify-day-c1` failed on CI run 1 and PASSED on run 2 with NO fix applied (only the webhook secret changed), and five escalating local repros against a virgin DB could not reproduce it: alone, after day-19, with .env.local removed, on a cold .next, and in the full 65-spec run. A state bug fails identically; a timing flake does not. KNOWN-FLAKY SET (all timeouts on navigation/visibility, none an assertion that data was wrong): verify-day-c1, verify-day-19 (operator impersonation), verify-day-5, verify-day-6, verify-day-16 (accessibility). The faithful local repro run scored 61 passed / 3 flaky / 1 failed in 19.1m vs CI 19.4m, so the environments perform comparably and the instability is in the suite, not the runner. TWO PARTS: (1) a route warm-up pass so first-hit dev-server compilation (5–10 s/route, DEV.87) is not competing with test execution; (2) audit specs that TIGHTEN timeouts below the config — c1 sets page.setDefaultTimeout(15_000) against a 60 s config default while walking the heaviest cold-route path in the suite (/admin/tenants/new, /admin/tenants/[id], /change-password, three logins), and its own runtime doubled 14.2 s standalone → 28.7 s at the end of the full run. Sequenced BEFORE the Typst migration: F.38 rewrites the PDF specs and should land on a stable suite. DEV.93."
+    },
+    {
       "id": "F.38",
       "task": "Typst migration — replace Puppeteer/Chromium in the PDF pipeline",
       "subPhase": "SP0.6",
-      "days": "24–27",
+      "days": "25–28",
       "status": "pending",
       "completedDate": null,
       "notes": "v3 §5 / D-6 — BEFORE the document work, not after: SP1 authors or rewrites four document surfaces, and migrating afterwards writes all of it twice. Kills DEV.89 (arch split), relieves DEV.87 (Chromium is a large share of the verify memory peak), and makes a legal document snapshot-testable (Chromium output is not byte-stable). SUB-TASKS, in order: (1) capture reference PDFs for ALL FOUR current paths — quotation, PI, payment receipt, dispatch note — each with a branded tenant and both tax cases, BEFORE writing any Typst; (2) re-author the four templates; (3) replace the render-pdf consumer with in-process rendering; (4) snapshot tests; (5) new ADR superseding (NOT deleting) ADR-013. GUARDRAILS: rendering change only — do not change any number that appears on a document, packages/tax is untouched, pg-boss stays (only the PDF job changes shape). FALLBACK: @react-pdf/renderer keeps JSX and still removes Chromium — DECIDE BEFORE STARTING, do not switch mid-migration. Do NOT bundle the apps/workers collapse (F.50)."
@@ -95,7 +104,7 @@
       "id": "F.5a",
       "task": "Ship-To addresses — `dealer_addresses` schema, migration, place-of-supply rewiring",
       "subPhase": "SP1",
-      "days": "28–30",
+      "days": "29–31",
       "status": "pending",
       "completedDate": null,
       "notes": "v3 §4 / D-4 (~3 d). Touches ADR-012's place-of-supply derivation — the most safety-critical logic in the codebase — so it gets its own day, own commit, own tests, and a SUPERSEDING ADR. Client evidence: one dealer, multiple delivery sites is the main path in solar distribution, not an edge case. Place of supply stays derived from the Ship-To ADDRESS state."
@@ -104,7 +113,7 @@
       "id": "F.5b",
       "task": "Ship-To GSTIN validation (checksum + state cross-check + required-when-different)",
       "subPhase": "SP1",
-      "days": "31–32",
+      "days": "32–33",
       "status": "pending",
       "completedDate": null,
       "notes": "v3 §4 / §6 (~1.5 d). Mostly promotion: a correct GSTN mod-36 checksum already exists in `lib/format/index.ts`, tested, wired only to the tenant's own GSTIN. Add the embedded-state cross-check (a top IRP rejection cause), required-when Bill-To ≠ Ship-To, and a dispatch block naming the dealer + address. GSTIN must NOT override place-of-supply derivation (ADR-012). D-3: GSTN Advisory 661, effective 1 Aug 2026."
@@ -113,7 +122,7 @@
       "id": "F.3",
       "task": "Multi-rate tax summary — data layer + screens",
       "subPhase": "SP1",
-      "days": "33",
+      "days": "34",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -122,7 +131,7 @@
       "id": "F.4",
       "task": "Multi-rate tax summary — PDF + HSN/SAC table",
       "subPhase": "SP1",
-      "days": "34",
+      "days": "35",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -140,7 +149,7 @@
       "id": "F.6",
       "task": "GST tax invoice document",
       "subPhase": "SP1",
-      "days": "35–37",
+      "days": "36–38",
       "status": "pending",
       "completedDate": null,
       "notes": "Day 19 audit VERDICT: DOES NOT EXIST. Estimated 3.5 d against 2 d allocated. Hard-blocked on F.4 — TaxSummary is single-rate today. See docs/TAX_INVOICE_AUDIT.md §A.4."
@@ -149,7 +158,7 @@
       "id": "F.7",
       "task": "Serials rendered on invoice lines",
       "subPhase": "SP1",
-      "days": "38",
+      "days": "39",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -158,7 +167,7 @@
       "id": "F.8",
       "task": "Credit note / sales return",
       "subPhase": "SP1",
-      "days": "39–40",
+      "days": "40–41",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -167,7 +176,7 @@
       "id": "F.9",
       "task": "GST report: rate-wise + HSN-wise grouping",
       "subPhase": "SP1",
-      "days": "41",
+      "days": "42",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -176,7 +185,7 @@
       "id": "F.10",
       "task": "GSTR-1 export (B2B, B2CL, CDNR, HSN)",
       "subPhase": "SP1",
-      "days": "42–43",
+      "days": "43–44",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -185,7 +194,7 @@
       "id": "F.11",
       "task": "Tally mapping configuration module",
       "subPhase": "SP1",
-      "days": "44–46",
+      "days": "45–47",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -194,7 +203,7 @@
       "id": "F.12",
       "task": "Tally export — voucher generation engine",
       "subPhase": "SP1",
-      "days": "47–48",
+      "days": "48–49",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -203,7 +212,7 @@
       "id": "F.13",
       "task": "Tally export — XML output + idempotency",
       "subPhase": "SP1",
-      "days": "49",
+      "days": "50",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -212,7 +221,7 @@
       "id": "F.14",
       "task": "Vendor bill export",
       "subPhase": "SP1",
-      "days": "50",
+      "days": "51",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -221,7 +230,7 @@
       "id": "F.15",
       "task": "Data migration importers",
       "subPhase": "SP1",
-      "days": "51–52",
+      "days": "52–53",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -230,7 +239,7 @@
       "id": "F.16",
       "task": "Opening balance import",
       "subPhase": "SP1",
-      "days": "53",
+      "days": "54",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -239,7 +248,7 @@
       "id": "F.17",
       "task": "ADR: serial capture (swap-on-scan)",
       "subPhase": "SP2",
-      "days": "54",
+      "days": "55",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -248,7 +257,7 @@
       "id": "F.18",
       "task": "Serial bulk import at procurement",
       "subPhase": "SP2",
-      "days": "55–56",
+      "days": "56–57",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -257,7 +266,7 @@
       "id": "F.19",
       "task": "`swapReservedSerial` + scan-to-assign",
       "subPhase": "SP2",
-      "days": "57–59",
+      "days": "58–60",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -266,7 +275,7 @@
       "id": "F.20",
       "task": "Serial format validation per product/tenant",
       "subPhase": "SP2",
-      "days": "59",
+      "days": "60",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -275,7 +284,7 @@
       "id": "F.21",
       "task": "Mobile-responsive / PWA",
       "subPhase": "SP2",
-      "days": "60–62",
+      "days": "61–63",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -284,7 +293,7 @@
       "id": "F.22",
       "task": "Dealer price lists",
       "subPhase": "SP2",
-      "days": "63–64",
+      "days": "64–65",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -293,7 +302,7 @@
       "id": "F.23",
       "task": "GSP provider abstraction + credential vault",
       "subPhase": "SP3",
-      "days": "65",
+      "days": "66",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -302,7 +311,7 @@
       "id": "F.24",
       "task": "E-invoice / IRN",
       "subPhase": "SP3",
-      "days": "66–69",
+      "days": "67–70",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -311,7 +320,7 @@
       "id": "F.25",
       "task": "E-way bill",
       "subPhase": "SP3",
-      "days": "70–72",
+      "days": "71–73",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -329,7 +338,7 @@
       "id": "F.26",
       "task": "Remaining UX defects (P-10, P-11, P-12, P-4/5/6)",
       "subPhase": "SP4",
-      "days": "73",
+      "days": "74",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -338,7 +347,7 @@
       "id": "F.27",
       "task": "`USER_MANUAL.md` sections 3–10",
       "subPhase": "SP4",
-      "days": "74–75",
+      "days": "75–76",
       "status": "pending",
       "completedDate": null,
       "notes": null

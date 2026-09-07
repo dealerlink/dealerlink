@@ -247,6 +247,28 @@ jobs:
       - name: Install Playwright Chromium + system deps
         run: pnpm --filter web exec playwright install --with-deps chromium
 
+      # DEV.95 — make the Chromium claim VERIFIABLE instead of inferred.
+      # browser.ts logs nothing about which executable it resolved, and its
+      # @sparticuz branch falls through on error to a system-Chromium lookup
+      # whose Linux candidates include /usr/bin/google-chrome — which IS
+      # preinstalled on GitHub runners. So a silent swap to the runner's Chrome
+      # would still go green. Print what resolveLaunchConfig() will pick.
+      # Diagnostic only: `|| true` so it can never fail the gate.
+      - name: Report the Chromium binary the PDF path will use
+        run: |
+          node -e "
+            const p = require('@sparticuz/chromium');
+            (async () => {
+              const exe = await (p.default ?? p).executablePath();
+              console.log('arch                       :', process.arch);
+              console.log('PUPPETEER_EXECUTABLE_PATH  :', process.env.PUPPETEER_EXECUTABLE_PATH ?? '(unset)');
+              console.log('@sparticuz executablePath  :', exe);
+              console.log('@sparticuz binary exists   :', require('fs').existsSync(exe));
+              console.log('/usr/bin/google-chrome     :', require('fs').existsSync('/usr/bin/google-chrome'), '(fallback if the above is false)');
+            })();
+          " || true
+        working-directory: apps/workers
+
       - name: Create extensions (scripts/init-db.sql)
         run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f scripts/init-db.sql
 
