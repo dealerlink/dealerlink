@@ -2409,12 +2409,17 @@ day-5 went 1.2 m → 5.6 s) — the signature of warming, not of broken state.
 flaky, and no seed step was added for c1's benefit. The finding is recorded and
 the work is scheduled.
 
-**Impact.** The e2e suite has a **known-flaky set** — `verify-day-c1`,
-`verify-day-19`, `verify-day-5`, `verify-day-6`, `verify-day-16` — that will
-produce intermittent red PRs until fixed. With branch protection now requiring
-`e2e`, a flake blocks a merge. Re-running the job is the interim workaround;
-that is a cost, not a fix, and it erodes the gate's credibility if it becomes
-routine.
+**Impact.** The e2e suite has a **known-flaky set** — six specs: `verify-day-c1`,
+`verify-day-c2`, `verify-day-19`, `verify-day-5`, `verify-day-6`,
+`verify-day-16` — that will produce intermittent red PRs until fixed.
+`verify-day-c2` was added from the Day 22 post-merge run on `main` (run
+34126383303): its "a dealer detail page renders its state as a full name" case
+flaked on the dealer-row-click navigation — `toHaveURL(/dealers/<id>)` timed out
+at 15 s (19× on `http://localhost:3000/dealers`) and passed on retry — the same
+navigation-timeout signature as the other five. With branch protection now
+requiring `e2e`, a flake blocks a merge. Re-running the job is the interim
+workaround; that is a cost, not a fix, and it erodes the gate's credibility if it
+becomes routine.
 
 **Resolution:** OPEN — tracked as **F.52** ("e2e suite stabilisation"),
 sequenced at Day 24, deliberately **BEFORE** the Typst migration (F.38) so that

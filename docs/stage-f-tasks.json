@@ -89,7 +89,7 @@
       "days": "24",
       "status": "pending",
       "completedDate": null,
-      "notes": "Opened by Day 22, the first CI run. NOT a state bug — `verify-day-c1` failed on CI run 1 and PASSED on run 2 with NO fix applied (only the webhook secret changed), and five escalating local repros against a virgin DB could not reproduce it: alone, after day-19, with .env.local removed, on a cold .next, and in the full 65-spec run. A state bug fails identically; a timing flake does not. KNOWN-FLAKY SET (all timeouts on navigation/visibility, none an assertion that data was wrong): verify-day-c1, verify-day-19 (operator impersonation), verify-day-5, verify-day-6, verify-day-16 (accessibility). The faithful local repro run scored 61 passed / 3 flaky / 1 failed in 19.1m vs CI 19.4m, so the environments perform comparably and the instability is in the suite, not the runner. TWO PARTS: (1) a route warm-up pass so first-hit dev-server compilation (5–10 s/route, DEV.87) is not competing with test execution; (2) audit specs that TIGHTEN timeouts below the config — c1 sets page.setDefaultTimeout(15_000) against a 60 s config default while walking the heaviest cold-route path in the suite (/admin/tenants/new, /admin/tenants/[id], /change-password, three logins), and its own runtime doubled 14.2 s standalone → 28.7 s at the end of the full run. Sequenced BEFORE the Typst migration: F.38 rewrites the PDF specs and should land on a stable suite. DEV.93."
+      "notes": "Opened by Day 22, the first CI run. NOT a state bug — `verify-day-c1` failed on CI run 1 and PASSED on run 2 with NO fix applied (only the webhook secret changed), and five escalating local repros against a virgin DB could not reproduce it: alone, after day-19, with .env.local removed, on a cold .next, and in the full 65-spec run. A state bug fails identically; a timing flake does not. KNOWN-FLAKY SET — six specs, all timeouts on navigation/visibility, none an assertion that data was wrong: verify-day-c1, verify-day-c2, verify-day-19 (operator impersonation), verify-day-5, verify-day-6, verify-day-16 (accessibility). verify-day-c2 added from the Day 22 post-merge run on main (run 34126383303): 'a dealer detail page renders its state as a full name' flaked on the row-click navigation — toHaveURL(/dealers/<id>) timed out at 15 s (19× on http://localhost:3000/dealers), passed on retry — same signature. The faithful local repro run scored 61 passed / 3 flaky / 1 failed in 19.1m vs CI 19.4m, so the environments perform comparably and the instability is in the suite, not the runner. TWO PARTS: (1) a route warm-up pass so first-hit dev-server compilation (5–10 s/route, DEV.87) is not competing with test execution; (2) audit specs that TIGHTEN timeouts below the config — c1 sets page.setDefaultTimeout(15_000) against a 60 s config default while walking the heaviest cold-route path in the suite (/admin/tenants/new, /admin/tenants/[id], /change-password, three logins), and its own runtime doubled 14.2 s standalone → 28.7 s at the end of the full run. Sequenced BEFORE the Typst migration: F.38 rewrites the PDF specs and should land on a stable suite. DEV.93."
     },
     {
       "id": "F.38",
@@ -477,6 +477,15 @@
       "status": "deferred",
       "completedDate": null,
       "notes": "DEFERRED, operator-led: NO ENGINEERING TIME. v3 §8 calls this \"the highest-value item\" in POST_PILOT_WORK_ORDER.md — the pilot produced zero usage data, and whatever stopped them is waiting for the next client. Should shape the backlog more than any technical finding."
+    },
+    {
+      "id": "F.53",
+      "task": "Investigate whether the DigitalOcean App Platform GitHub integration can report deployment status back to GitHub as commit statuses",
+      "subPhase": "post",
+      "days": "—",
+      "status": "deferred",
+      "completedDate": null,
+      "notes": "LOW PRIORITY, deferred. DO App Platform auto-deploys `main` but reports NOTHING back to GitHub. On the Day 22 merge commit 16b3a00 the combined commit status was `pending` with ZERO statuses and the deployments API was empty, so there is no green/red deploy signal on the commit or PR — confirming a deployment reached ACTIVE is a manual `doctl apps list-deployments <app-id>` per component (web + workers). Investigate whether DO's GitHub integration (or a small deploy-webhook → GitHub Statuses API bridge) can post per-deployment commit statuses so ACTIVE/ERROR surfaces on the merge commit. Surfaced by the Day 22 post-merge report."
     }
   ]
 }
