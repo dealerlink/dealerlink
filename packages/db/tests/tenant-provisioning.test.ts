@@ -34,6 +34,8 @@ import {
   users,
 } from '../src/schema';
 
+import { expectDbReject } from './db-error';
+
 const APP_DB_URL =
   process.env.APP_DATABASE_URL ??
   'postgresql://dealerlink_app:dev_app_password_change_me@localhost:5432/dealerlink_dev';
@@ -296,7 +298,7 @@ describe('tenant provisioning — transactional create', () => {
       adminFullName: 'A Admin',
     });
 
-    await expect(
+    await expectDbReject(
       provisionTenant({
         slug, // same slug
         legalName: 'B Pvt Ltd',
@@ -306,7 +308,8 @@ describe('tenant provisioning — transactional create', () => {
         adminEmail: `b@${slug}.test`,
         adminFullName: 'B Admin',
       }),
-    ).rejects.toThrow(/tenants_slug_uq|duplicate key|unique/i);
+      /tenants_slug_uq|duplicate key|unique/i,
+    );
   }, 30_000);
 });
 
