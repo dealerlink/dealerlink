@@ -1210,35 +1210,45 @@ required check in the same change.
 
 ---
 
-## R23 — GitHub CLI (`gh`) in the devcontainer
+## R23 — Post-rebuild CLI auth: GitHub CLI (`gh`) + `doctl` in the devcontainer
 
-Added to `.devcontainer/Dockerfile` on Day 22 (same keyring / `signed-by` apt
-pattern as the PGDG and doctl blocks above), because from Day 23 every day
-lands via a branch and a PR.
+`gh` was added to `.devcontainer/Dockerfile` on Day 22 (same keyring /
+`signed-by` apt pattern as the PGDG and doctl blocks above), because from Day 23
+every day lands via a branch and a PR.
 
 **A container rebuild is required** — `gh` is not in the running container
 until then. In VS Code: **Dev Containers: Rebuild Container**. Rebuilding
 restarts the container, which ends any Claude Code session running inside it,
 so do it between days rather than mid-day.
 
-**`gh auth login` is a one-time interactive step you run yourself.** It needs a
-browser or a device code; do not ask an agent to authenticate, and do not paste
-a token into the repo. After the rebuild:
+**`gh auth login` and `doctl auth init` are one-time interactive steps you run
+yourself.** Both need a browser / device code or a pasted token; do not ask an
+agent to authenticate, and do not paste a token into the repo. **Both CLIs lose
+their auth on every rebuild** (see the persistence note below) — so re-running
+both is the standard post-rebuild step, right after `gh auth login`:
 
 ```bash
 gh auth login          # GitHub.com → SSH (the repo remote is git@github.com) → browser
 gh auth status         # confirm
+doctl auth init        # paste a DO API token (Dashboard → API → Tokens)
+doctl account get      # confirm
 ```
 
-Auth is stored in `~/.config/gh` **inside the container**, which is not one of
-the named volumes in `.devcontainer/docker-compose.yml`, so it is lost on the
-next rebuild. If that becomes annoying, add a volume next to the existing
+`doctl` is used by `pnpm sync-spec:*` (R18) and to confirm App Platform
+deployments — e.g. `doctl apps list-deployments <app-id>` per component (web +
+workers), since DO does not report deploy status back to GitHub (F.53).
+
+Auth for both is stored under `~/.config` **inside the container**
+(`~/.config/gh`, `~/.config/doctl`), neither of which is one of the named
+volumes in `.devcontainer/docker-compose.yml`, so both are lost on the next
+rebuild. If that becomes annoying, add volumes next to the existing
 `claude-config` one:
 
 ```yaml
 # .devcontainer/docker-compose.yml — under services.app.volumes:
 - gh-config:/home/node/.config/gh
-# ...and declare it under the top-level `volumes:` key.
+- doctl-config:/home/node/.config/doctl
+# ...and declare both under the top-level `volumes:` key.
 ```
 
 Useful once authenticated:
