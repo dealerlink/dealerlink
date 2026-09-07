@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as schema from '../src/schema';
 import { tenants, users } from '../src/schema';
 
+import { errChainText } from './db-error';
+
 const APP_DB_URL =
   process.env.APP_DATABASE_URL ??
   'postgresql://dealerlink_app:dev_app_password_change_me@localhost:5432/dealerlink_dev';
@@ -66,7 +68,7 @@ describe('operator impersonation read-only enforcement', () => {
       caught = err;
     }
     expect(caught).toBeTruthy();
-    expect(String(caught)).toContain('read-only context');
+    expect(errChainText(caught)).toContain('read-only context');
   });
 
   it('UPDATE is rejected in read-only mode', async () => {
@@ -84,7 +86,7 @@ describe('operator impersonation read-only enforcement', () => {
       caught = err;
     }
     expect(caught).toBeTruthy();
-    expect(String(caught)).toContain('read-only context');
+    expect(errChainText(caught)).toContain('read-only context');
   });
 
   it('mutations resume normally when read_only is cleared', async () => {
@@ -126,7 +128,7 @@ describe('operator read-only view — belt #2: SET TRANSACTION READ ONLY', () =>
     expect(caught).toBeTruthy();
     // 25006 = read_only_sql_transaction. Proves Postgres itself refused it,
     // not the audit trigger (which was disarmed).
-    expect(String(caught)).toMatch(/read-only transaction|25006/i);
+    expect(errChainText(caught)).toMatch(/read-only transaction|25006/i);
   });
 
   it('UPDATE is rejected by the read-only transaction even with the audit trigger disarmed', async () => {
@@ -145,7 +147,7 @@ describe('operator read-only view — belt #2: SET TRANSACTION READ ONLY', () =>
       caught = err;
     }
     expect(caught).toBeTruthy();
-    expect(String(caught)).toMatch(/read-only transaction|25006/i);
+    expect(errChainText(caught)).toMatch(/read-only transaction|25006/i);
   });
 
   it('SELECT still works inside a read-only transaction', async () => {

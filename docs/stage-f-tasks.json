@@ -33,9 +33,9 @@
       "task": "ORM upgrade — drizzle-orm 0.38.4 → 0.45.x (security finding F-4)",
       "subPhase": "SP0",
       "days": "21",
-      "status": "pending",
-      "completedDate": null,
-      "notes": "Split out of F.1 on Day 19. Sequenced before any new schema work (F.6/F.8/F.11) so the ORM bump has the smallest possible surface to break. Advisory CVE-2026-39356 / GHSA-gpj5-g38j-94v9 is NOT reachable in our code — see DEVIATIONS DEV.84."
+      "status": "complete",
+      "completedDate": "2026-09-07",
+      "notes": "Bumped drizzle-orm 0.38.4 → 0.45.2 + drizzle-kit 0.30.6 → 0.31.10 (`aa21da4`), closing F-4. Invariants PROVEN, not assumed: numeric golden byte-identical (40 money cols stay strings), pg_policies byte-identical (36 policies/31 tables), FOR UPDATE concurrency + serial-reservation tests green, drizzle-kit generated NO migration. The 0.44 DrizzleQueryError wrapping moved pg .code/.message to .cause — fixed the one reachable production path (webhook 23505 replay, `fbb5fed`) + 12 test assertions via a cause-chain helper (`934d3c9`). Test 556 → 560 (+4 pgErrorCode). See docs/DRIZZLE_UPGRADE_ANALYSIS.md, DEV.92. Advisory was never reachable (DEV.84)."
     },
     {
       "id": "F.3",
@@ -288,6 +288,24 @@
       "status": "pending",
       "completedDate": null,
       "notes": null
+    },
+    {
+      "id": "F.31",
+      "task": "Decouple SESSION_COOKIE_DOMAIN + prod subdomain routing from NODE_ENV",
+      "subPhase": "post",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Backlog from Day 20/21. Prod subdomain routing + cookie domain are gated on NODE_ENV, which blocks the low-memory `next start` verify path. Fix needs a DO app-spec change (env-driven, like SESSION_COOKIE_SECURE in cookie-security.ts), not just code. Low priority; not reachable-bug."
+    },
+    {
+      "id": "F.32",
+      "task": "@sparticuz/chromium is x86-64 only — breaks if workers run on arm64 in prod",
+      "subPhase": "post",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Backlog from Day 20/21. Devcontainer is arm64; @sparticuz/chromium ships x86-64 only. Currently harness-gated via PUPPETEER_EXECUTABLE_PATH (points at Playwright arm64 locally). Becomes a LIVE bug only if the workers component is ever scheduled on arm64 in production — DO App Platform is x86-64 today, so latent."
     }
   ]
 }

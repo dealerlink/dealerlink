@@ -24,7 +24,12 @@ import { eq, like } from 'drizzle-orm';
 import { Webhook } from 'svix';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { processResendEvent, recordWebhookEvent, verifyResendWebhook } from './resend-webhook';
+import {
+  pgErrorCode,
+  processResendEvent,
+  recordWebhookEvent,
+  verifyResendWebhook,
+} from './resend-webhook';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -205,5 +210,28 @@ describe('recordWebhookEvent — replay protection', () => {
     });
     expect(first.duplicate).toBe(false);
     expect(second.duplicate).toBe(true);
+  });
+});
+
+describe('pgErrorCode — unwraps DrizzleQueryError cause chain (F.2a)', () => {
+  it('reads .code off the top-level error (bare postgres.js shape, drizzle < 0.44)', () => {
+    expect(pgErrorCode({ code: '23505', message: 'dup' })).toBe('23505');
+  });
+
+  it('reads .code off .cause when drizzle >= 0.44 wraps the driver error', () => {
+    // Shape of a DrizzleQueryError: message on top, PostgresError in `.cause`.
+    const wrapped = { message: 'Failed query: insert ...', cause: { code: '23505' } };
+    expect(pgErrorCode(wrapped)).toBe('23505');
+  });
+
+  it('walks a deeper cause chain', () => {
+    const wrapped = { message: 'a', cause: { message: 'b', cause: { code: '23514' } } };
+    expect(pgErrorCode(wrapped)).toBe('23514');
+  });
+
+  it('returns undefined when no code is present anywhere in the chain', () => {
+    expect(pgErrorCode(new Error('plain'))).toBeUndefined();
+    expect(pgErrorCode(null)).toBeUndefined();
+    expect(pgErrorCode({ cause: { cause: {} } })).toBeUndefined();
   });
 });

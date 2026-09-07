@@ -21,6 +21,8 @@ import {
 } from '../src/schema';
 import type { DrizzleTx } from '../src/with-tenant';
 
+import { expectDbReject } from './db-error';
+
 const APP_DB_URL =
   process.env.APP_DATABASE_URL ??
   'postgresql://dealerlink_app:dev_app_password_change_me@localhost:5432/dealerlink_dev';
@@ -134,7 +136,7 @@ describe('quotation schema', () => {
       tenantId: demoId,
       quoteNumber: `TEST-${Date.now()}-rate`,
     });
-    await expect(
+    await expectDbReject(
       asTenant(demoId, async (tx) => {
         await tx.insert(quotationLines).values({
           tenantId: demoId,
@@ -151,7 +153,8 @@ describe('quotation schema', () => {
           lineTotal: '100.00',
         });
       }),
-    ).rejects.toThrow(/gst_rate_chk/);
+      /gst_rate_chk/,
+    );
   });
 
   it('CHECK rejects negative quantity', async () => {
@@ -159,7 +162,7 @@ describe('quotation schema', () => {
       tenantId: demoId,
       quoteNumber: `TEST-${Date.now()}-qty`,
     });
-    await expect(
+    await expectDbReject(
       asTenant(demoId, async (tx) => {
         await tx.insert(quotationLines).values({
           tenantId: demoId,
@@ -176,7 +179,8 @@ describe('quotation schema', () => {
           lineTotal: '100.00',
         });
       }),
-    ).rejects.toThrow(/qty_chk/);
+      /qty_chk/,
+    );
   });
 
   it('UNIQUE (tenant, quote_number, revision)', async () => {
@@ -200,17 +204,18 @@ describe('quotation schema', () => {
   });
 
   it('CHECK rejects revision < 1', async () => {
-    await expect(
+    await expectDbReject(
       insertTestQuote({
         tenantId: demoId,
         quoteNumber: `BADREV-${Date.now()}`,
         revision: 0,
       }),
-    ).rejects.toThrow(/revision_chk/);
+      /revision_chk/,
+    );
   });
 
   it('CHECK rejects valid_until < quote_date', async () => {
-    await expect(
+    await expectDbReject(
       asTenant(demoId, async (tx) => {
         await tx.insert(quotations).values({
           tenantId: demoId,
@@ -231,11 +236,12 @@ describe('quotation schema', () => {
           updatedBy: demoAdminId,
         });
       }),
-    ).rejects.toThrow(/validity_chk/);
+      /validity_chk/,
+    );
   });
 
   it('CHECK rejects discount value without type', async () => {
-    await expect(
+    await expectDbReject(
       asTenant(demoId, async (tx) => {
         await tx.insert(quotations).values({
           tenantId: demoId,
@@ -257,11 +263,12 @@ describe('quotation schema', () => {
           updatedBy: demoAdminId,
         });
       }),
-    ).rejects.toThrow(/discount_value_chk/);
+      /discount_value_chk/,
+    );
   });
 
   it('CHECK rejects percent discount > 100', async () => {
-    await expect(
+    await expectDbReject(
       asTenant(demoId, async (tx) => {
         await tx.insert(quotations).values({
           tenantId: demoId,
@@ -284,7 +291,8 @@ describe('quotation schema', () => {
           updatedBy: demoAdminId,
         });
       }),
-    ).rejects.toThrow(/discount_percent_chk/);
+      /discount_percent_chk/,
+    );
   });
 });
 

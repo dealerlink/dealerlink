@@ -29,6 +29,8 @@ import {
 } from '../src/schema';
 import type { DrizzleTx } from '../src/with-tenant';
 
+import { expectDbReject } from './db-error';
+
 const APP_DB_URL =
   process.env.APP_DATABASE_URL ??
   'postgresql://dealerlink_app:dev_app_password_change_me@localhost:5432/dealerlink_dev';
@@ -320,14 +322,15 @@ describe('procurement happy path — insert procurement + items + serials', () =
 
 describe('gstin CHECK constraint (R.18)', () => {
   it('inserting a dealer with gstin = "" is rejected by the CHECK', async () => {
-    await expect(
+    await expectDbReject(
       asTenant(demoId, async (tx) =>
         tx.execute(sql`
           INSERT INTO dealers (tenant_id, dealer_code, legal_name, display_name, gstin)
           VALUES (${demoId}, 'DL-TEST-EMPTY', 'X', 'X', '')
         `),
       ),
-    ).rejects.toThrow(/dealers_gstin_not_empty_chk/);
+      /dealers_gstin_not_empty_chk/,
+    );
   });
 
   it('inserting a dealer with gstin = NULL is allowed', async () => {
