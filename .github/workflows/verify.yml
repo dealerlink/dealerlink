@@ -55,11 +55,18 @@ env:
   # Fail-safe default stays secure (lib/auth/cookie-security.ts, DEV.91).
   SESSION_COOKIE_SECURE: 'false'
   NEXT_PUBLIC_APP_URL: http://localhost:3000
-  # Dummy, non-functional values. Nothing in CI talks to Resend: with no
-  # RESEND_API_KEY the worker logs the message instead of sending it, and the
-  # webhook suite signs its own fixtures with whatever secret is present. No
-  # real secret is required to run any gate in this file.
-  RESEND_INBOUND_WEBHOOK_SECRET: whsec_ci_dummy_not_a_real_secret
+  # Throwaway TEST FIXTURE, not a secret — it signs and verifies fixtures the
+  # suite generates for itself, and nothing in CI talks to Resend (with no
+  # RESEND_API_KEY the worker logs the message instead of sending it).
+  #
+  # It MUST be `whsec_` + valid base64. `svix` base64-decodes the key in the
+  # Webhook constructor, so a non-base64 value throws
+  # "Base64Coder: incorrect characters for decoding" inside the suite's own
+  # sign() helper (lib/email/resend-webhook.test.ts:46) BEFORE any assertion
+  # runs — which is what turned the whole vitest job red on the first CI run.
+  # This is base64 of 24 random bytes. Do not "simplify" it to a readable
+  # string: underscores and hyphens are not valid base64.
+  RESEND_INBOUND_WEBHOOK_SECRET: whsec_aTMoWyL4NfZWLrPBiF9JF9gNfJl34AA6
   RESEND_FROM_EMAIL: onboarding@resend.dev
   TZ: Asia/Kolkata
 
