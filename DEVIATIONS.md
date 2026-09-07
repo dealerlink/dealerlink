@@ -2234,7 +2234,7 @@ prod/staging leave it unset → secure. Unit test (7 cases) + `verify-day-20`
   residue-generating `pnpm test` (C4)**.
 
 **Honest accounting of WHY it completes now vs Day 19:** under `next dev`
-(NODE_ENV=development) the _old_ code already produced a non-secure cookie, so
+(NODE*ENV=development) the \_old* code already produced a non-secure cookie, so
 the cookie fix is **not** what stopped the OOM. Verify completed because this
 session's container started **fresh** — swap ~46 MB vs Day 19's 1007/1023 MB
 already exhausted — so the peak stayed just under the ceiling. Peak observed:
@@ -2275,3 +2275,57 @@ Two follow-ups recorded, neither blocking: (1) raise the devcontainer memory
 allocation to ≥ 12 GB for comfortable headroom; (2) optionally migrate verify
 to `next start` by decoupling cookie-domain + operator subdomain routing from
 NODE_ENV (see the 2.5 findings above).
+
+## DEV.92 — Day 21 — F.2a: drizzle-orm 0.38.4 → 0.45.2 surfaced `DrizzleQueryError` error-wrapping (not a version-bump-only change)
+
+**Context.** F.2a was scoped as a pure ORM version bump to close F-4 (the
+`sql.identifier()`/`sql.as()` escaping advisory, not reachable in our code).
+Target chosen: **drizzle-orm 0.45.2** (lowest version clearing the advisory and
+the newest stable `0.x`) + **drizzle-kit 0.31.10** (newest kit in the 0.45
+line; kit 0.31.8 shipped in tandem with orm 0.45.0). Full change analysis in
+`docs/DRIZZLE_UPGRADE_ANALYSIS.md`.
+
+**The divergence.** The three money/tenant-critical invariants held exactly as
+predicted and were proven, not assumed:
+
+- **Numeric handling — unchanged.** Golden capture of 40 money columns across 8
+  tables (read through drizzle's typed query API) is **byte-identical** before
+  and after: every column stays `typeof string`. The 0.41 `mode:'number'`
+  option is additive; our 52 decimal/numeric columns declare no mode, so the
+  default string codec is unchanged. gstRate + all money stay strings (CLAUDE.md
+  §5 holds).
+- **RLS — unchanged.** `pg_policies` dump is byte-identical (36 policies / 31
+  tables). Our RLS is 100% hand-written SQL — zero `pgPolicy()`/`enableRLS()`
+  DSL — so drizzle-kit's policy emission cannot touch it.
+- **Row locking — unchanged.** We use raw `sql\`... FOR UPDATE\``, not the
+`.for('update')` builder, so the 0.41/0.43 "nowait"-flag fixes don't apply.
+  Concurrent-reservation, concurrent-allocation and concurrent-dispatch tests
+  are green.
+- **drizzle-kit generated NO migration** — schema unchanged, migrations dir
+  byte-identical (18 files).
+
+**What DID change (0.44.0 `DrizzleQueryError`).** From 0.44, drizzle wraps every
+driver error in `DrizzleQueryError`, moving the postgres.js `PostgresError`
+(which carries the SQLSTATE `.code`, the constraint name and any `RAISE`
+message) to `.cause`. Two consequences, both fixed same-day as separate commits:
+
+1. **Production (`fbb5fed`).** `recordWebhookEvent` detected replayed webhooks
+   by `err.code === '23505'` on the top-level error. Post-bump that code lives
+   at `err.cause.code`, so replays would throw instead of being reported as
+   duplicates. Fixed with a bounded cause-chain unwrap (`pgErrorCode`, exported
+   for unit testing) + 4 unit tests. The real-DB replay test failed pre-fix and
+   passes post-fix — this was a genuine, reachable behaviour change.
+2. **Tests (`934d3c9`).** 12 assertions in 4 db test files matched pg constraint
+   names / `read-only context` / `25006` against the top-level `err.message`
+   (via `toThrow(regexp)` / `String(err)`), which is now the generic
+   `"Failed query: …"` wrapper. Added `packages/db/tests/db-error.ts`
+   (`errChainText` + `expectDbReject`) and routed the assertions through the
+   cause chain. **No enforcement was weakened** — every constraint still fires;
+   only the message location moved.
+
+**Resolution.** CLOSED — F-4 remediated (SECURITY_AUDIT.md updated), all
+invariants proven, verify + test + typecheck + lint + build green. The bump was
+NOT the trivial one-line change the scope implied: the 0.44 error-wrapping is a
+behavioural change that reached one production path and a dozen test assertions.
+Any future code that inspects a pg error's `.code`/`.message`/constraint name
+must unwrap `.cause` (use `pgErrorCode` / `errChainText`).
