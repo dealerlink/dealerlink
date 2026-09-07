@@ -96,6 +96,7 @@ jobs:
 
       # The Next build cache. `next build` and `next dev` keep separate
       # subtrees under .next/cache, so this is safe to restore in either job.
+      # Namespaced `next-` (production build) vs the e2e job's `next-dev-`.
       - name: Restore Next build cache
         uses: actions/cache@v4
         with:
@@ -253,14 +254,20 @@ jobs:
       - name: Seed
         run: pnpm db:seed
 
+      # A SEPARATE key namespace from the `checks` job. Both write
+      # apps/web/.next/cache, but `checks` fills it with a production build and
+      # this job with `next dev` chunks — sharing one key would make the two
+      # jobs collide on save and cache the wrong artefacts for each other.
+      # Warming it is what keeps first-hit route compilation (5-10s per route)
+      # off the critical path on repeat runs.
       - name: Restore Next dev cache
         uses: actions/cache@v4
         with:
           path: apps/web/.next/cache
-          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.[jt]s', 'apps/web/**/*.[jt]sx') }}
+          key: next-dev-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.[jt]s', 'apps/web/**/*.[jt]sx') }}
           restore-keys: |
-            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
-            next-${{ runner.os }}-
+            next-dev-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            next-dev-${{ runner.os }}-
 
       # Boots `next dev` + the workers process itself (playwright.config.ts
       # webServer) and runs plan:check first.
