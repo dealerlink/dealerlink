@@ -48,7 +48,12 @@
       "Bash(pnpm plan:sync:*)",
       "Bash(pnpm --filter web exec playwright test:*)",
       "Bash(pnpm --filter web exec playwright show-trace:*)",
-      "Bash(node scripts/verify-deploy.mjs:*)"
+      "Bash(node scripts/verify-deploy.mjs:*)",
+      "Bash(doctl apps spec get:*)",
+      "Bash(doctl apps get:*)",
+      "Bash(doctl account get:*)",
+      "Bash(pnpm ls:*)",
+      "Bash(pnpm test:scripts:*)"
     ]
   }
 }

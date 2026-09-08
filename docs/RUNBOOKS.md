@@ -1369,7 +1369,13 @@ determined agent.** Three limits, all verified on Day 23 rather than assumed:
 3. **The `PROJECT_PLAN.md` deny covers the Edit and Write tools, not writes from
    a shell command.** `pnpm plan:sync` writes the file through a node script and
    is unaffected — which is exactly what we want, and is also the shape of the
-   gap.
+   gap. The same applies to the one legitimate hand-edit the closeout still
+   needs: the dated **changelog row** at the bottom of `PROJECT_PLAN.md` (step
+   C5) lives outside the `STAGE_F_TASKS` markers and is appended from the shell,
+   not with the Edit tool. That is deliberate. The deny is deliberately blunt —
+   there is no way to scope it to "the generated table only" — so it makes the
+   table untouchable and leaves the changelog to an append that is visible in
+   the diff.
 
 **The real enforcement is branch protection on `main` plus the required
 `checks` / `test` / `e2e` status checks** (R22). That is the layer that has

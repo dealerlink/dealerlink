@@ -70,6 +70,34 @@ route's **first hit compiles it** (5–10 s per dynamic route). A cold `.next` o
 a route no earlier spec has touched is the single most common source of the
 timing signature here.
 
+## When the spec does not fail at all
+
+**NOT REPRODUCED is a first-class verdict.** If the spec passes every run, say
+so and stop — do not reach for TIMING FLAKE because it is the convenient
+answer, and do not call the spec healthy either. You observed no failure, so you
+classified no failure.
+
+When you report NOT REPRODUCED you must also give:
+
+- **The leading indicator.** Per-test durations across the runs. A spec whose
+  cost collapses between run 1 and run 2 (Day 22 pattern: 18 s -> 6 s) is
+  compile-bound, which is the axis it would fail on if it ever does. Say that,
+  and label it a latent risk indicator, not a failure.
+- **Headroom.** The slowest observed step against the budget that applies to it.
+  A step at 5.7 s inside a 15 s expect budget is passing with less margin than
+  it looks.
+- **How faithfully you reproduced the failing condition.** State whether run 1
+  hit a cold or warm server and a cold or warm route, whether you ran the spec
+  standalone or inside a full suite, and whether you ran locally or under CI
+  settings. Reusing a warm dev server and running one spec standalone is the
+  condition _least_ likely to reproduce a compile-timing failure — if that is
+  what you did, say so, because it bounds the whole result.
+
+Recommend the condition that would reproduce it, but do not create that
+condition yourself unless you were asked to: restarting or cold-starting the
+dev server, clearing a cache, or running the full suite are all changes to the
+environment, and they are the main thread's call.
+
 If the evidence is mixed — say, it fails every run but always on a navigation
 timeout — say **UNDETERMINED** and lay out both readings. That is the honest
 answer and it is more useful than a confident wrong one. Do not round an
@@ -80,10 +108,11 @@ ambiguous result to "flake" because flake is the convenient verdict.
 ```
 SPEC: <path>
 RUNS: <n>
-RESULTS: run 1 <pass/fail, duration> · run 2 … · run 3 …
+RESULTS: run 1 <pass/fail, total + per-test duration> · run 2 … · run 3 …
+REPRODUCTION FIDELITY: <cold/warm server, cold/warm routes, standalone vs full suite, local vs CI>
 SPEC'S OWN TIMEOUT BUDGET: <quoted, or "uses config defaults">
 FAILURE DETAIL PER FAILING RUN: <test name, step, locator, timeout, retry outcome>
-CLASSIFICATION: TIMING FLAKE | STATE BUG | UNDETERMINED
+CLASSIFICATION: TIMING FLAKE | STATE BUG | NOT REPRODUCED | UNDETERMINED
 EVIDENCE FOR IT: <which signature elements matched, which did not>
 EVIDENCE AGAINST IT: <state it — if none, say none>
 WHAT I DID NOT TEST: <explicit>
