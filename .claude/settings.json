@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Bash(gh pr merge:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin HEAD:main:*)",
+      "Bash(git push upstream main:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(doctl apps create:*)",
+      "Bash(doctl apps update:*)",
+      "Bash(doctl apps delete:*)",
+      "Bash(doctl apps create-deployment:*)",
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Bash(rm -r:*)",
+      "Bash(rm --recursive:*)",
+      "Edit(//workspace/PROJECT_PLAN.md)",
+      "Write(//workspace/PROJECT_PLAN.md)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(gh api:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh run rerun:*)",
+      "Bash(gh run cancel:*)",
+      "Bash(pnpm db:migrate:*)",
+      "Bash(pnpm db:rollback:*)"
+    ],
+    "allow": [
+      "Bash(gh run view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run download:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(doctl apps list-deployments:*)",
+      "Bash(doctl apps list:*)",
+      "Bash(doctl auth list:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm verify:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm preflight:*)",
+      "Bash(pnpm plan:check:*)",
+      "Bash(pnpm plan:sync:*)",
+      "Bash(pnpm --filter web exec playwright test:*)",
+      "Bash(pnpm --filter web exec playwright show-trace:*)",
+      "Bash(node scripts/verify-deploy.mjs:*)"
+    ]
+  }
+}

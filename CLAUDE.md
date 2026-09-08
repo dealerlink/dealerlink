@@ -413,4 +413,107 @@ Never invent business rules. Tax calculations, stage transitions, role permissio
 
 ---
 
-_Last updated: May 2026 · Architecture v4 · Phase 1 spec_
+## 10. Agent Orchestration (Stage F Day 23)
+
+The build runs as a **main thread** plus a small roster of read-only subagents
+defined in `.claude/agents/`. The roster exists to save **context**, not to
+parallelise the build. Investigation that would otherwise fill the main thread's
+window — a codebase audit, a CI log dig, a changelog review — happens in a
+subagent's window and comes back as a written verdict.
+
+**Implementation stays on the main thread.** Five of the six agents are
+read-only; the sixth (`plan-keeper`) writes exactly one JSON file. This is
+deliberate. The correctness of this build has come from one thread holding every
+constraint at once — money read from stored columns and never recomputed,
+`gstRate` arriving from the driver as a string so any grouping must normalise to
+numeric, RLS on every table including the log tables, place of supply derived
+from Ship-To per ADR-012, `packages/tax` protected from refactor. A subagent
+writing a migration without all of that in view produces work that looks right
+and is not.
+
+The full roster, with each agent's remit and prohibitions, is documented in
+`docs/RUNBOOKS.md` (R24).
+
+### 10.1 STOP AND ASK — the main thread does not decide these alone
+
+Stop and ask the user before doing any of the following, even when the day's
+prompt seems to imply it:
+
+- **Any schema change or migration.** Including a "trivial" column add.
+- **Anything touching money columns, `packages/tax`, RLS policies, or the
+  `FOR UPDATE` locking in `confirmOrder` / `createDispatch`.** These are the
+  protected surfaces named in `docs/STAGE_F_BUILD_v3.md` §9.
+- **Writing a new ADR, or superseding an existing one.** ADR-012 (place of
+  supply) and ADR-013 (PDF queue isolation) in particular.
+- **Merging a PR, or triggering a deploy.** `main` carries
+  `deploy_on_push: true` on both DO apps, so a merge is a production deploy.
+  Merge and deploy authority belongs to the user.
+- **Any deviation from the day's stated scope**, including a "quick fix" noticed
+  in passing. Record it and ask; do not fold it in.
+- **Any decision the day prompt did not anticipate.** If you find yourself
+  choosing between two defensible options and the prompt is silent, that is the
+  signal.
+
+Finish everything that does not depend on the answer first, then ask once, with
+the options and a recommendation.
+
+### 10.2 Delegate versus do it inline
+
+**Delegate** work that:
+
+- would burn significant context that then sits in the main thread for the rest
+  of the session — CI logs, full-repo audits, changelogs, multi-file surveys;
+- returns a **verdict**: a classification, a PASS/FAIL, an EXISTS/DOES NOT
+  EXIST, a root cause;
+- is self-contained enough to be specified in one prompt.
+
+**Do inline** anything that:
+
+- writes code, a migration, a test, or a document with reasoning in it;
+- requires holding the constraints in §10 above while making a judgement;
+- is a single grep, a single file read, or a single command — delegating that
+  costs more context than it saves.
+
+One agent per question. If the answer would change what you build, get it before
+you build.
+
+### 10.3 A `verifier` FAIL stops the closeout
+
+If `verifier` returns FAIL, or FAIL (incomplete), the day does not close. Fix
+the finding, or bring it to the user; do not open or merge the PR on a FAIL.
+
+**Be honest about what this is: a convention, not an enforcement.** Nothing
+compels the main thread to obey a subagent's verdict — there is no hook, no
+gate, and no check that observes it. The enforced gates are branch protection on
+`main` and the three required status checks (`checks`, `test`, `e2e`). The
+verifier covers the things CI cannot see; its authority is that we agreed to
+respect it.
+
+### 10.4 Who writes what
+
+| Document                                                          | Written by                             | Why                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEVIATIONS.md`, ADRs, `DECISIONS.md`, `CLAUDE.md`, `RUNBOOKS.md` | **Main thread only**                   | These are decision-bearing. The reasoning has to be held by whoever made the decision. DEV.93's value is that the builder wrote down that `verify-day-c1` was **never diagnosed, only observed to pass**, and listed the mechanisms ruled out. A summarising agent writes "c1 resolved" and someone repeats three hours of investigation in November. |
+| Audit reports under `docs/`                                       | **The auditing agent**                 | The report _is_ the agent's return value. It is evidence, not a decision.                                                                                                                                                                                                                                                                             |
+| `docs/stage-f-tasks.json`                                         | **`plan-keeper`** (or the main thread) | Single source of truth for the Stage F plan. Ids are permanent cross-references: append, never renumber.                                                                                                                                                                                                                                              |
+| `PROJECT_PLAN.md`                                                 | **Generated — nobody**                 | `pnpm plan:sync` writes it, between the `STAGE_F_TASKS` markers. Never hand-edited, by any agent, ever. `pnpm plan:check` fails CI on drift.                                                                                                                                                                                                          |
+
+### 10.5 The permissions layer, honestly
+
+`.claude/settings.json` denies a short list of destructive commands to every
+agent **including the main thread**: `gh pr merge`, pushes to `main`, force
+pushes, `doctl apps create/update/delete`, recursive `rm`, and hand-editing
+`PROJECT_PLAN.md`.
+
+**This prevents accidents, not a determined agent.** Bash permission rules are
+prefix matches on the command string, and `sh -c '<command>'` routes around them
+— verified, not assumed (Day 23). Permission rules are also **global**: Claude
+Code has no syntax for scoping a rule to one named subagent, so an agent's
+narrower limits live in its own system prompt and are convention.
+
+The real enforcement is branch protection and the required status checks on
+`main`.
+
+---
+
+_Last updated: September 2026 · Architecture v4 · Phase 1 spec · §10 added Stage F Day 23_
