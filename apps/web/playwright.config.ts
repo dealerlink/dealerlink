@@ -61,17 +61,32 @@ export default defineConfig({
   // the default 30s on a cold .next. Give it headroom so the suite is
   // not flaky.
   timeout: 60_000,
-  // DEV.81 — hard cap on the whole run. On Windows, Playwright cannot reliably
-  // tear down the `pnpm --parallel … dev` webServer tree (next + tsx survive
-  // the SIGTERM to the pnpm parent), so after the last spec the run can HANG
-  // indefinitely in teardown. globalTimeout force-terminates the process so the
-  // run always ends; the json reporter below writes results at onEnd (BEFORE
-  // teardown), so a teardown-hang force-exit still leaves a complete result
-  // file to read. 20 min covers a cold full run incl. flaky retries (a clean
-  // pass is ~12-15 min on a cold .next; 15 min was proven too tight once two
-  // dev-mode flakies retried — D.3 verify cut its last spec at the cap). The
-  // hang, not the tests, is what would blow past 20 min.
-  globalTimeout: 1_200_000,
+  // DEV.81 / DEV.101 — hard cap on the whole run, sized to kill a HANG, not to
+  // bound suite runtime. On Windows, Playwright cannot reliably tear down the
+  // `pnpm --parallel … dev` webServer tree (next + tsx survive the SIGTERM to
+  // the pnpm parent), so after the last spec the run can HANG indefinitely in
+  // teardown. globalTimeout force-terminates the process so the run always
+  // ends; the json reporter below writes results at onEnd (BEFORE teardown),
+  // so a teardown-hang force-exit still leaves a complete result file to read.
+  //
+  // Raised 20 min -> 40 min on Day 23 (DEV.101), deliberately and on its own
+  // merits — NOT as a workaround for the flakes, which are F.52's problem.
+  // At 20 min the cap had stopped doing its job and started doing a different
+  // one: CI run 34223278188 went RED with `"unexpected": 0` — zero tests
+  // failed. Two known flakes retried, cost 75.5s, and the suite's own test
+  // time was 19.0 min of the 20.0 min budget, so the cap fired mid-spec and
+  // two tests never ran. Green runs were sitting at 16m25s-19m10s, and `main`
+  // itself passed at 18.2 min WITH two flakies: two retries could redden any
+  // branch. A gate that reddens when nothing broke trains people to re-run
+  // reflexively, which is how the run that matters gets missed.
+  //
+  // 40 min restores the original intent — only a hang blows past it. The
+  // 30-minute per-job timeout in .github/workflows/verify.yml still bounds a
+  // genuine hang on CI, so this does not remove that protection; it stops the
+  // two limits from fighting. F.52 owns bringing runtime back under 15 min
+  // with zero retries; this cap is not a substitute for that and must not be
+  // read as one.
+  globalTimeout: 2_400_000,
   // Cold dev-server route compilation can take 5-10s on first hit; the
   // default 5s expect timeout is too tight for that. 15s matches the
   // per-step budget the critical-path spec is written against.

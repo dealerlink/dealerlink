@@ -2902,3 +2902,82 @@ Two things for the operator to decide, **not decided here**:
 raised, to get this PR green.** The two `verify-day-c2` tests that were cut off
 never returned a verdict; whether they would have passed is **unmeasured**, not
 known — `verify-day-c2` is itself in the F.52 set.
+
+---
+
+## DEV.102 — Day 23 — RESOLVED (closes both open questions in DEV.101): `globalTimeout` 20 → 40 min, and F.52 gains measurable acceptance criteria
+
+**Date:** 2026-09-08
+**Spec said:** DEV.101 left two questions **explicitly open for the operator**
+and took neither: (1) whether F.52 should carry "restore headroom against
+`globalTimeout`" as an acceptance criterion rather than only "make the specs
+less flaky", and (2) whether the 20-minute cap is still the right number,
+judged on its own merits.
+
+**Recorded here rather than by editing DEV.101** — this file is append-only and
+historic entries are never edited; a later resolution is a new entry that
+references the original (`docs/BUILD_PROMPT_TEMPLATE.md`, "Deviations log").
+
+**Both answered by the operator. Built:**
+
+### Decision 2 — `globalTimeout` raised 20 min → 40 min, in this PR
+
+`apps/web/playwright.config.ts`: `globalTimeout: 1_200_000` → `2_400_000`.
+
+**This is not masking, and the reasoning is on its own merits, independent of
+F.52.** Zero tests failed in the run that provoked it — `"unexpected": 0`.
+DEV.81 chose 20 minutes to force-terminate a **Windows webServer teardown
+hang**, never as a bound on suite runtime, and it had drifted into acting as
+one badly: green runs at 16m25s–19m10s against a 20-minute cap, with `main`
+itself passing at 18.2 min _with two flakies_. In the operator's words: _"A gate
+that reddens when nothing broke trains people to re-run reflexively, which is
+how the run that matters gets missed."_
+
+The protection is not removed. `.github/workflows/verify.yml` sets
+`timeout-minutes: 30` on all three jobs, so a genuine hang is still bounded on
+CI. 40 minutes restores `globalTimeout` to its original job — only a hang blows
+past it — and stops the two limits fighting each other.
+
+**One honest consequence, not a reason to reconsider.** On CI the ordering is
+now inverted: the 30-minute job timeout is below the 40-minute `globalTimeout`,
+so on a CI hang GitHub kills the job first and Playwright's `onEnd` never runs
+— meaning `test-results/verify-results.json`, the artifact DEV.81 specifically
+preserved for force-exit cases, would not be written. That trade is fine and
+deliberate: on CI the console log and the uploaded report cover it, and
+`globalTimeout` still does its original job locally and on Windows, where there
+is no outer job timeout at all. Worth knowing before someone debugs a CI hang
+and wonders where the JSON went.
+
+The config comment was rewritten to carry all of this, so the next person to
+read the number learns why it is 40 and not to treat it as a substitute for
+F.52.
+
+### Decision 1 — F.52 gains measurable acceptance criteria
+
+Yes, and made measurable rather than aspirational. F.52's notes now carry three
+criteria:
+
+1. the six known flakes **classified** (timing vs state), each with evidence;
+2. **e2e completes under 15 minutes with ZERO retries**;
+3. no spec skipped, disabled, `fixme`-d, or given a longer timeout to get there.
+
+**The second is the point.** Without it F.52 ships "fewer flakes" while runtime
+stays at 19 minutes and the gate is straight back where it was — which is
+exactly the failure DEV.101 documented. The third exists so criterion 2 cannot
+be met by weakening what is tested; note that the raised `globalTimeout` gives
+F.52 room to work but explicitly does **not** satisfy criterion 2, which is
+measured against actual runtime, not against the cap.
+
+**Scope note.** Day 23 was declared agent-infrastructure-only — "If you find
+yourself editing a schema file, an app route or a spec, stop." Editing
+`apps/web/playwright.config.ts` is outside that. It was done on the operator's
+explicit instruction, given after DEV.101 was raised, with the direction "raise
+globalTimeout to 40 minutes, now, in this PR". It touches no application code,
+no schema and no spec — only the harness cap — and `packages/tax`, RLS, money
+columns and the `FOR UPDATE` locking were not approached.
+
+**Impact:** the merge gate stops reddening on runs where nothing failed, and
+F.52 now has a criterion that can be checked rather than asserted.
+
+**Resolution:** CLOSED. Both DEV.101 questions are answered and implemented.
+The underlying flakiness is untouched and remains F.52's, Day 24.
