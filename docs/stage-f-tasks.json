@@ -47,6 +47,15 @@
       "notes": "CI EXISTS. .github/workflows/verify.yml — 3 jobs (checks / test / e2e), pinned actions, concurrency-cancel, 30 min timeouts, Playwright report + traces uploaded on failure. Each DB job gets its OWN EPHEMERAL Postgres service container (never the compose DB), migrated + seeded; separate runners remove the DEV.31/Day-20 residue hazard structurally. `test` needs the seed too (packages/db asserts on the seeded demo/sample tenants). NO GATE NEEDS A REAL SECRET. Runs verify against `next dev` — `next start` blocked on F.31 (DEV.91 §3.1). Branch protection completed by the user with required checks `checks`, `test`, `e2e` + require-up-to-date. Also: gh CLI added to the devcontainer Dockerfile (rebuild pending, NOT done), RUNBOOKS R22/R23, and BUILD_PROMPT_TEMPLATE switched to branch+PR+green-CI from Day 23 (no direct pushes to main). Two CI runs: run 1 red (DEV.94 webhook secret not valid base64 → test job; DEV.93 verify-day-c1 flake → e2e), run 2 green with only the DEV.94 fix — c1 was NOT diagnosed and is NOT fixed, tracked as F.52. DEV.93, DEV.94, DEV.95."
     },
     {
+      "id": "F.54",
+      "task": "Subagent roster + orchestration rules (`.claude/agents/`, `.claude/settings.json`, CLAUDE.md §10, RUNBOOKS R24)",
+      "subPhase": "SP0.5",
+      "days": "23",
+      "status": "complete",
+      "completedDate": "2026-09-08",
+      "notes": "Process infrastructure only — no schema, routes, specs or product code. Six agents in `.claude/agents/`: ci-investigator, code-auditor, flake-triager, verifier, doc-auditor (all read-only) and plan-keeper (writes only this file). Gain is CONTEXT, not parallelism; implementation stays on the main thread. `.claude/settings.json` denies gh pr merge / pushes to main / force pushes / doctl apps create-update-delete / recursive rm / Edit+Write on the generated PROJECT_PLAN.md to EVERY agent including the main thread; six denials verified firing. HONEST LIMITS, verified not assumed: `sh -c` routes around a Bash deny, and permission rules cannot be scoped to one named subagent, so plan-keeper's single-file limit is its prompt (DEV.97). `.claude/agents/*.md` does NOT hot-reload — every smoke test ran via a proxy adopting the agent's prompt, so the prompts are proven and the frontmatter wiring is not (DEV.96). Smoke tests: ci-investigator found the DEV.94 base64 webhook-secret failure unaided plus a second independent cause; code-auditor returned tax-invoice DOES NOT EXIST from code alone; verifier correctly FAILED a dirty tree; flake-triager returned NOT REPRODUCED (3/3 green) not the expected timing verdict — prompt tightened and re-tested (DEV.98). Day 23 displaced F.34–F.37 to Day 25 with a +1 cascade through the tail (DEV.99). CLAUDE.md §10, RUNBOOKS R24. DEV.96–99."
+    },
+    {
       "id": "F.52",
       "task": "e2e suite stabilisation — route warm-up pass, and review specs that override the config timeout downward (c1 sets `page.setDefaultTimeout(15_000)`)",
       "subPhase": "SP0.5",

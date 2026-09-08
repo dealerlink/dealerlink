@@ -2503,3 +2503,295 @@ test a different binary than production by hand (recorded as a standing rule in
 `docs/RUNBOOKS.md` R22). A one-line `logger.info` of the resolved executable in
 `browser.ts` would close the observability gap, but that is production code and
 Day 22 was infrastructure-only.
+
+---
+
+## DEV.96 — Day 23 — `.claude/agents/*.md` does not hot-reload; every smoke test ran through a proxy
+
+**Date:** 2026-09-08
+**Spec said:** Day 23 Phase 4 — "Each agent gets one real invocation. Report what
+came back."
+
+**Built:** the six agent definitions, and six smoke tests — but **not one of them
+was a real invocation of the agent as an agent.**
+
+Claude Code builds its subagent registry when the session starts. Creating
+`.claude/agents/<name>.md` mid-session does not register it; the invocation fails
+with `Agent type 'ci-investigator' not found. Available agents: claude,
+claude-code-guide, Explore, general-purpose, Plan, statusline-setup`. Retrying
+does not help — there is no rescan. `.claude/settings.json` behaves the opposite
+way and is live on the very next tool call (proven repeatedly in Phase 2.4), so
+the two halves of this day's configuration have different reload semantics.
+
+Every smoke test was therefore run as: a `general-purpose` agent instructed to
+read `.claude/agents/<name>.md`, adopt everything below the frontmatter as its
+system prompt, and confine itself to the tools named in the `tools:` key.
+
+**Why:** the alternative was to restart the session, which ends the build day's
+context. The proxy tests the thing most likely to be wrong — the prompt — at the
+cost of not testing the wiring.
+
+**Impact — be precise about what is and is not proven.**
+
+PROVEN by the smoke tests: the prompt text produces the intended behaviour.
+Every agent returned its specified output format, stayed inside its remit,
+reported what it could not determine, and recommended rather than acted.
+
+NOT PROVEN, and outstanding until the next session:
+
+- that the YAML frontmatter parses and the agent registers at all;
+- that `tools:` actually confines the agent — the proxy had every tool and obeyed
+  the restriction only because it was told to. `code-auditor`'s run reported
+  `Grep`/`Glob` unavailable and fell back to read-only Bash, which is itself
+  evidence the proxy's tool surface is not the agent's;
+- that the `description` field auto-delegates neither too eagerly nor not at all.
+  Description narrowness was the day's main design lever and it was not exercised
+  even once.
+
+**Resolution:** OPEN. First action of the next session, before any Day 24 work:
+invoke each of the six by name on a trivial question and confirm it registers and
+that its tool set is enforced. Recorded as a standing note in
+`docs/RUNBOOKS.md` R24 ("Reloading after a change").
+
+---
+
+## DEV.97 — Day 23 — the permissions layer is global and prefix-matched; two limits verified, not assumed
+
+**Date:** 2026-09-08
+**Spec said:** Day 23 Phase 2.3 — "Constrain plan-keeper's Edit to
+`docs/stage-f-tasks.json` specifically. Frontmatter restricts WHICH tools an
+agent has, not what it does with them, so path scoping has to happen in
+permissions." Phase 2.4 — "Verify each restriction actually fires."
+
+**Built:** the deny list and the allow list, and six denials tested firing. But
+**2.3 as written is not implementable**, and the reason matters.
+
+**Claude Code has no syntax for scoping a permission rule to one named
+subagent.** `permissions` in `.claude/settings.json` applies to every agent and
+to the main thread. A rule narrow enough to confine `plan-keeper` to one file
+(`deny: Edit(/docs/**)` + `allow: Edit(/docs/stage-f-tasks.json)`) would also
+have blocked the main thread from editing `docs/RUNBOOKS.md` — which this very
+day required. Deny beats allow unconditionally, so there is no carve-out.
+
+What was built instead:
+
+- `plan-keeper`'s single-file limit lives in its **system prompt**. That is
+  convention, and is recorded as such.
+- The one global rule with real blast-radius value was added and verified:
+  `Edit`/`Write` on `PROJECT_PLAN.md` is denied to **everyone**, main thread
+  included. It is a generated file; nobody should ever hand-edit it. Confirmed
+  firing (`File is in a directory that is denied by your permission settings`),
+  and confirmed **not** over-broad — `Edit` on another `/workspace` file in the
+  same run succeeded.
+- `pnpm plan:sync` still writes `PROJECT_PLAN.md` normally. The deny covers the
+  Edit and Write **tools**, not a file write performed by a shell command. That
+  is the behaviour we want and also the shape of the hole.
+
+**The second limit: `sh -c` routes around a Bash deny.** Tested directly rather
+than reasoned about:
+
+```
+rm -rf /tmp/claude-permission-probe-nonexistent-path
+  -> Permission to use Bash with command ... has been denied.
+sh -c 'rm -rf /tmp/claude-permission-probe-nonexistent-path'
+  -> ran.
+```
+
+Bash rules are prefix matches on the command string. Any wrapper, alias, script
+file or alternative spelling (`rm -r -f`, a `--force` variant) has the same
+effect.
+
+**Denials verified firing** (harmless `--help` / `--dry-run` / nonexistent-path
+probes chosen so a non-firing rule would be safe): `gh pr merge`,
+`git push --force`, `git push origin main`, `doctl apps update`, `rm -rf`, and
+`Edit(PROJECT_PLAN.md)`. `rm -fr`, `rm -r`, `rm --recursive`,
+`git push -f`, `git push --force-with-lease`, `git push origin HEAD:main`,
+`git push upstream main`, `doctl apps create`, `doctl apps delete` and
+`doctl apps create-deployment` are written by the same pattern as verified
+siblings but were **not individually tested**.
+
+**Impact:** the permissions layer prevents accidents. It is not a boundary. The
+enforced gate remains branch protection on `main` plus the required `checks` /
+`test` / `e2e` status checks (R22). Written up honestly in `docs/RUNBOOKS.md`
+R24 and `CLAUDE.md` §10.5 rather than presented as a security control.
+
+**Resolution:** CLOSED as designed. 2.3 is satisfied in substance (nothing but
+`plan-keeper` and the main thread can reach the plan, and neither can hand-edit
+the generated table) and explicitly not in the letter.
+
+---
+
+## DEV.98 — Day 23 — the `flake-triager` smoke test did not reproduce a failure
+
+**Date:** 2026-09-08
+**Spec said:** Day 23 Phase 4.3 — "flake-triager: run verify-day-c2 three times
+and classify. **Expect a timing classification.**"
+
+**Built:** three sequential runs of `verify-day-c2.spec.ts` against the running
+dev server. **All three passed** — 3/3 tests green, zero retries consumed, zero
+flaky. The agent returned **NOT REPRODUCED**, not TIMING FLAKE.
+
+That is the correct answer, and it is the answer the roster was designed to
+produce: the agent declined to classify a failure it never observed. It did
+report the leading indicator — the same three tests ran 18.4 s on run 1 and
+5.6 s on run 3, a ~3.2× collapse that is the `next dev` first-hit
+route-compilation signature — and labelled it a latent risk indicator rather
+than evidence of a flake. It also volunteered that the spec sets **no** timeout
+of its own (unlike `verify-day-c1`, whose `page.setDefaultTimeout(15_000)` is
+the tightest budget in the suite) and that a warm server running one spec
+standalone is the condition _least_ likely to reproduce a compile-timing
+failure.
+
+**Why the expectation missed:** `verify-day-c2` entered the F.52 flake set from
+**CI run 34126383303**, where it flaked at the tail of a full 65-check suite on
+a cold runner. Reproducing that needs the full-suite position and the cold
+cache, not the spec in isolation.
+
+**Built (second pass):** the prompt was tightened rather than the result
+accepted as-is. `NOT REPRODUCED` is now a first-class verdict with three
+mandatory fields — the duration-collapse indicator, the slowest step against its
+budget, and an explicit **REPRODUCTION FIDELITY** line (cold/warm server,
+cold/warm routes, standalone vs full suite, local vs CI) that bounds the whole
+result.
+
+Re-tested after the change, and the re-test earned its keep. The second pass ran
+5.7 s / 5.7 s / 5.8 s — **flat**, with the run-1 collapse gone, because the first
+smoke test had already warmed every route this spec touches. The tightened prompt
+caught exactly that: it reported the compile-collapse signature as ABSENT and
+added, unprompted, that this is _"not evidence the spec is compile-insensitive;
+it is evidence I never put it in a position to show it"_, then named the two
+conditions that would (cold `.next`, and the spec inside a full `pnpm verify`)
+without creating either. The first pass would have reported the collapse as a
+latent indicator and stopped there.
+
+**Impact:** the smoke test exercised the agent's refusal-to-guess path, not its
+classification path. **The TIMING-FLAKE-versus-STATE-BUG discrimination
+described in DEV.93 remains untested against a real failure.** It gets its first
+genuine exercise on F.52 (Day 24), which is the right place for it.
+
+**Resolution:** CLOSED for Day 23; the classification path is carried into F.52
+as an open question, not a proven capability.
+
+---
+
+## DEV.99 — Day 23 — Day 23 was re-scoped to agent infrastructure; F.34–F.37 and the whole tail moved one day
+
+**Date:** 2026-09-08
+**Spec said:** `docs/stage-f-tasks.json` allocated Day 23 to F.34–F.37 (delete
+the pilot credentials cheatsheet, downsize production, reconcile
+`.do/app.production.yaml` against live, docs restructure). The Day 23 prompt
+allocated the day to subagent infrastructure and forbade all other work: "TODAY
+IS AGENT INFRASTRUCTURE ONLY."
+
+**Built:** the roster, and a full day-number cascade. New task **F.54** takes
+Day 23. **F.52** (e2e stabilisation) stays Day 24 and is next. **F.34–F.37**
+move to Day 25, and every dated task after them shifts by **+1**: F.38 25–28 →
+26–29, F.5a 29–31 → 30–32, F.5b 32–33 → 33–34, F.3 34 → 35, F.4 35 → 36, F.6
+36–38 → 37–39, F.7 39 → 40, F.8 40–41 → 41–42, F.9 42 → 43, F.10 43–44 → 44–45,
+F.11 45–47 → 46–48, F.12 48–49 → 49–50, F.13 50 → 51, F.14 51 → 52, F.15 52–53 →
+53–54, F.16 54 → 55, F.17 55 → 56, F.18 56–57 → 57–58, F.19 58–60 → 59–61, F.20
+60 → 61, F.21 61–63 → 62–64, F.22 64–65 → 65–66, F.23 66 → 67, F.24 67–70 →
+68–71, F.25 71–73 → 72–74, F.26 74 → 75, F.27 75–76 → 76–77. Undated tasks
+(`—`, `pre-go-live`) are untouched.
+
+**No id was renumbered and no id was reused.** Ids are cross-referenced from
+this file, from `docs/STAGE_F_BUILD_v3.md` and from the day prompts; only the
+`days` field moved, plus array position, which carries sequencing.
+
+**Why:** the operator's call, taken over two lighter alternatives (double-book
+Day 25, or leave two different days labelled 23). Their reasoning, recorded
+because it is the standing rule and not a one-off: _"a double-booked day or two
+days numbered 23 is a document that disagrees with reality, and doc drift has
+already cost this project real time twice. Not worth introducing a third
+instance in the file everything else is generated from."_
+
+**Impact:** go-live moves out by one day. The cascade landed as **its own
+commit**, separate from the agent work, so it is reviewable on its own.
+Confirmed after the edit: `pnpm plan:sync` run twice produced no diff on the
+second run, `pnpm plan:check` passed, and the `PROJECT_PLAN.md` diff stayed
+inside the `STAGE_F_TASKS` markers with Stage A–E byte-identical.
+
+**Resolution:** CLOSED.
+
+---
+
+## DEV.100 — Day 23 — the first `doc-auditor` run found 11 live drift items; none were fixed today
+
+**Date:** 2026-09-08
+**Spec said:** Day 23 Phase 4.5 — "doc-auditor: run a full drift check. Report
+whatever it finds — this is its first run and there may be real drift." Also:
+"TODAY IS AGENT INFRASTRUCTURE ONLY."
+
+**Built:** the audit ran and is saved as `docs/DOC_AUDIT_2026-09-08.md`. **Nothing
+it found was fixed.** The agent's own prompt forbids it from fixing drift, and
+the day forbids everything else, so the report is the deliverable and the fixes
+are the next session's decision.
+
+**What it found.** Eleven items a reader would act on today and be wrong. The
+three that cost the most:
+
+1. **`docs/STRUCTURE.md` describes a tree that no longer exists** — and
+   `CLAUDE.md:11` sends every new session to it first. It claims
+   `.github/workflows/ci.yml` + `deploy.yml` (there is only `verify.yml`),
+   `app/api/trpc/[trpc]/` and `lib/trpc/` (tRPC was removed Day 5, ADR-011), and
+   a `packages/db/schema/logs/` directory that does not exist. It does not
+   mention `apps/web/lib/queries/`, the pattern that replaced tRPC. Untouched
+   since Stage A.
+2. **Three pilot-facing docs tell tenants their bank details print on tax
+   invoices** — `PILOT_GETTING_STARTED.md:135`, `PILOT_ONBOARDING_PRODUCTION.md:59`,
+   `RUNBOOKS.md:21` — a document that DOES NOT EXIST and is ~30 days out (F.6,
+   days 37–39). `SECURITY_AUDIT.md:831` logged this on Day 19. Worse, F.2b's
+   task notes claim "bank-details copy corrected to the 4 docs it prints on",
+   but `21a0fa6` touched only the admin UI strings and `RUNBOOKS.md` — none of
+   the three pilot docs. **A closed task carries a claim that is not true**, which
+   is the exact failure mode this agent exists to catch.
+3. **`CLAUDE.md` §3's locked-stack table names five picks that are installed
+   nowhere** — TanStack Table, TanStack Virtual, TanStack Query, Tremor, and the
+   Resend SDK + `react-email` (email goes over raw HTTPS;
+   `resend-client.ts:4` says so). `README.md:58` repeats two of them. A session
+   building a table would import a package that is not there.
+
+Also: `CLAUDE.md:3` still reads "Stage C COMPLETE … Next: Stage D" and
+contradicts line 519 in the same file; §7 still specifies tRPC in three places
+after §3 records its removal; `docs/TESTING.md:8` names `testcontainers-postgres`,
+never installed; `docs/LOGGING.md` lists two log tables (`email_log`,
+`document_log`) that do not exist and `CLAUDE.md:89`'s "6 log tables" inherits
+the overcount; §8's DO Spaces logo storage is unwired (F.45 deferred); the
+"~$40/month" cost target is 2.4× under `COSTS.md`'s invoice-reconciled ~$96;
+and `CLAUDE.md:153` states production workers are `basic-xxs` when
+`doctl apps spec get` says `basic-xs` — **the precise fact F.35 turns on**.
+
+**The most valuable finding is a task that can be cancelled.** `.do/app.yaml`
+and `.do/app.production.yaml` were diffed against both live specs: env key names
+byte-identical in order, every non-SECRET value matching, including
+`RESEND_FROM_EMAIL: noreply@dealerlink.in` on web and workers. **F.36's premise
+— a `RESEND_FROM_EMAIL` drift between the committed spec and live config — is
+phantom, and the wider diff F.36 was reserved for is clean.** F.36 looks
+closeable on evidence rather than executable. That is an operator decision, not
+one taken here.
+
+**And a clean bill where it mattered.** `docs/SECURITY_AUDIT.md` has **no
+stale-open findings** — all nine of F-1…F-9 were re-checked against code and
+every disposition holds. That is the specific failure that produced a wrong Day
+19 plan, and it has not recurred. Test counts also verified exact: 560 vitest
+(51+68+172+203+40+26) and 65 verify checks, matching every document that quotes
+them.
+
+**Impact:** the drift is now written down instead of being rediscovered one
+session at a time. **It is still live** — nothing in the repo is more correct
+today than it was this morning.
+
+**Resolution:** OPEN. Not scheduled. The fixes are cheap (documentation edits,
+no code) but they are decision-bearing — `CLAUDE.md`, `RUNBOOKS.md` and the
+pilot docs are main-thread-only per §10.4 — and they were not in this day's
+scope. Bring them to the operator before Day 24 and let them decide whether
+that is a task of its own or folded into F.37 (docs restructure, now Day 25).
+
+**One incidental finding from the `code-auditor` smoke test, recorded here so it
+is not lost:** `packages/tax/src/types.ts:7` declares
+`GstRate = 0 | 5 | 12 | 18 | 28` — **omitting 3**, which `CLAUDE.md` §5 lists as
+allowed and which migration `0017_friendly_logan.sql` added to the
+`*_gst_rate_chk` constraints on all four tables. The database will accept a 3%
+rate the type union will not. Not investigated, not fixed — `packages/tax` is
+protected and this day was infrastructure-only. Worth a look before F.3/F.4
+(multi-rate tax summary, days 35–36).
