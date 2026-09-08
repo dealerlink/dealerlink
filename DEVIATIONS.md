@@ -2795,3 +2795,110 @@ allowed and which migration `0017_friendly_logan.sql` added to the
 rate the type union will not. Not investigated, not fixed — `packages/tax` is
 protected and this day was infrastructure-only. Worth a look before F.3/F.4
 (multi-rate tax summary, days 35–36).
+
+---
+
+## DEV.101 — Day 23 — PR #3's `e2e` job went red with ZERO failing tests: the 20-minute `globalTimeout` has no headroom left
+
+**Date:** 2026-09-08
+**Spec said:** Day 23 closeout — "Land via PR with green CI." Day 22 (R22)
+established that all three checks must be green before a merge, and that
+re-running a job is "an interim workaround; that is a cost, not a fix".
+
+**Built:** nothing. This is a finding about the gate itself, recorded before it
+is misdiagnosed on Day 24.
+
+**What happened.** CI run `34223278188` on PR #3: `checks` green (2m13s),
+`test` green (1m14s), **`e2e` red (21m7s)**. The obvious reading — "the day-23
+branch broke the e2e suite" — is wrong on the evidence.
+
+**No test failed.** `verify-results.json` records `"unexpected": 0`. The run
+ended:
+
+```
+Timed out waiting 1200s for the test suite to run
+  2 flaky
+  2 did not run
+  61 passed (20.0m)
+```
+
+Playwright exits non-zero when tests did not run, so the job is red because the
+**clock expired**, not because anything was wrong.
+
+The chain: two specs from the known F.52 set flaked on their first attempt and
+passed on retry — `verify-day-19` operator-impersonation (failed 38.6 s, passed
+30.8 s) and `verify-day-c1` force-password-change (failed 36.9 s, passed
+67.2 s). Those two wasted first attempts cost **75.5 s**, and the suite's own
+test time was **19.0 min of a 20.0 min budget**. The 75 s _was_ the entire
+margin. The cap fired during `verify-day-c2`'s second test, Playwright tore down
+the `next dev` webServer mid-navigation (`ERR_CONNECTION_REFUSED` on
+`/dealers`), and the last two `verify-day-c2` tests were recorded as "did not
+run".
+
+Both flaky failures are navigation timeouts with no assertion about wrong data —
+`verify-day-c1.spec.ts:60` a 15 s `page.goto` timeout on `/admin/tenants/new`,
+and `verify-day-19.spec.ts:208` a `toHaveURL` that saw
+`http://localhost:3000/admin/tenants` 19 times. That is DEV.93's signature
+exactly, down to the same received string.
+
+**The branch is innocent, and the evidence is affirmative rather than merely
+absent.** The diff against `main` is `.claude/`, `CLAUDE.md`, `DEVIATIONS.md`,
+`PROJECT_PLAN.md` and `docs/` only — no `apps/web`, no specs, no
+`pnpm-lock.yaml`. The Next dev-cache key hashes exactly `pnpm-lock.yaml` +
+`apps/web/**/*.[jt]s(x)`, and this run's key is **byte-identical** to the last
+green `main` run and hit on the primary key, so no cold-compile penalty was
+introduced. `pnpm verify` runs `plan:check` first — the one executable surface
+the branch touched — and it passed at 55 tasks.
+
+**THE FINDING THAT IS ACTUALLY NEW: the headroom is gone.** The flakes are old
+news; the budget is not. `verify` step durations on recent runs:
+
+| Run             | Branch                  | verify step | Result                         |
+| --------------- | ----------------------- | ----------- | ------------------------------ |
+| 34117570146     | day-22-ci-pipeline      | 16m25s      | green                          |
+| 34129967604     | day-22-followup         | 17m53s      | green                          |
+| 34134354351     | **main**                | 18m14s      | green — 63 passed, **2 flaky** |
+| 34124099864     | day-22-ci-pipeline      | 18m38s      | green                          |
+| 34126383303     | **main**                | 19m10s      | green                          |
+| **34223278188** | **day-23-agent-roster** | **20m03s**  | **RED at the cap**             |
+
+Every green run sits at 82–96% of the 20-minute budget, and `main` itself
+passed at 18.2 min _with two flakies_. **Two retries is now enough to turn any
+branch red, `main` included.** This is not a Day 23 problem — the merge gate is
+roughly one flaky retry from red at all times, and it will keep producing red
+runs in which nothing failed.
+
+Note also that `globalTimeout: 1_200_000` was not sized as a runtime bound. Its
+stated purpose (DEV.81) is to force-terminate a **Windows webServer teardown
+hang** so the run always ends. It is now acting as a suite-runtime cap it was
+never chosen to be. Its own comment already predicted this: _"15 min was proven
+too tight once two dev-mode flakies retried."_
+
+**Impact:** a red gate that says nothing about correctness, on a repo where a
+merge to `main` is a production deploy. The credibility cost is the real one —
+R22 warns that routine re-running "erodes the gate's credibility", and a gate
+that goes red with `unexpected: 0` erodes it faster.
+
+**Resolution:** OPEN, and it lands on **F.52 (Day 24, next)**, which is already
+scoped at exactly the two causes: a route warm-up pass so first-hit compilation
+is not competing with test execution, and an audit of specs that tighten
+timeouts below the config default (`verify-day-c1` sets
+`page.setDefaultTimeout(15_000)` against a 60 s config default while walking the
+heaviest cold-route path in the suite, and **both** of this run's failures were
+15 s timeouts).
+
+Two things for the operator to decide, **not decided here**:
+
+1. Whether F.52 should carry **"restore headroom against `globalTimeout`"** as
+   an explicit acceptance criterion rather than only "make the specs less
+   flaky". Fixing flakiness without recovering the ~1 min of margin leaves the
+   gate one bad runner away from red.
+2. Whether the 20-minute cap is still the right number, judged on its own
+   merits. Raising it _instead of_ F.52 would be masking; raising it _alongside_
+   F.52 addresses a genuinely separate problem, since the cap was chosen to kill
+   a teardown hang, not to bound runtime.
+
+**No spec was skipped, disabled, `fixme`-d or retried harder, and no timeout was
+raised, to get this PR green.** The two `verify-day-c2` tests that were cut off
+never returned a verdict; whether they would have passed is **unmeasured**, not
+known — `verify-day-c2` is itself in the F.52 set.
