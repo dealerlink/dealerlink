@@ -2981,3 +2981,98 @@ F.52 now has a criterion that can be checked rather than asserted.
 
 **Resolution:** CLOSED. Both DEV.101 questions are answered and implemented.
 The underlying flakiness is untouched and remains F.52's, Day 24.
+
+## DEV.103 — Day 23 — the merge gate was validated end-to-end; `e2e` is structurally incapable of blocking a merge when it does not run
+
+**Date:** 2026-09-09
+**Spec said:** R22 (Day 22) declared the gate configured and load-bearing —
+"Branch protection plus the status checks below is the _only_ thing standing
+between an untested commit and the production app." It was never observed
+refusing anything.
+
+**Built:** nothing shipped. This is a finding about the gate, produced by a
+deliberate test of it, recorded before someone assumes either half of it.
+
+### Why it was tested
+
+Three PRs of evidence and none of it load-bearing: #1 and #2 were green, and
+#3's red `e2e` (DEV.101) was diagnosed and fixed rather than pushed against the
+gate. So we knew CI **reported** results. We did not know branch protection
+**refused** a merge on a red run. A gate nobody has seen fire is not a gate.
+
+### The test
+
+Throwaway branch `chore/gate-validation`, PR #4, one file
+(`apps/web/lib/gate-validation-throwaway.ts`) tripping two `error`-level rules
+from `apps/web/.eslintrc.json` — `no-explicit-any` and `no-unused-vars` — and
+containing no type error, so `typecheck` passed and `lint` was what failed. No
+spec, schema, app route, `packages/tax` file or anything under `.claude/` was
+touched. `checks` went red in 58 s on exactly those two errors and nothing
+else. PR closed unmerged, branch deleted from origin and locally; the file
+never existed on `main`.
+
+### The gate blocked — verbatim
+
+```
+{"mergeStateStatus":"BLOCKED","mergeable":"MERGEABLE","statusCheckRollup":[
+ {"name":"checks","status":"COMPLETED","conclusion":"FAILURE"},
+ {"name":"test","status":"COMPLETED","conclusion":"SUCCESS"},
+ {"name":"e2e","status":"COMPLETED","conclusion":"SKIPPED"}]}
+```
+
+`BLOCKED`, not `CLEAN` and not `UNSTABLE`. `UNSTABLE` would have meant the
+checks are reported but not **required** — a gate that looks right and does
+nothing. The `mergeable: MERGEABLE` alongside it is the useful pairing: there
+is no merge conflict, so the refusal comes purely from the status-check
+requirement. Ruleset detail is in R22.
+
+### THE FINDING: `e2e` reported `SKIPPED`, and GitHub counts that as satisfied
+
+`e2e` has `needs: checks`. When `checks` died, `e2e` never ran and posted
+`conclusion: SKIPPED`. **GitHub treats a skipped required check as satisfied,
+not as failing.** It did not matter here — `checks` FAILURE blocked on its own
+— but the general property is:
+
+> **`e2e` cannot block a merge in any scenario where it does not run.**
+> The gate's browser coverage is conditional on `checks` passing first.
+
+**The dependency itself is correct and is not being changed.** There is no
+value in booting Chromium against a build that does not compile, and `e2e` is
+the most expensive job by an order of magnitude (~15–20 min against 1–3 min).
+`needs: checks` is the right shape. This is a documented property of the gate,
+not a defect to fix.
+
+### Residual risk — the part worth actually worrying about
+
+The safe case is the one we observed: `checks` fails, `e2e` skips, the failure
+blocks. The unsafe case is **`e2e` skipping while `checks` passes** — then all
+three required contexts are satisfied, `mergeStateStatus` goes `CLEAN`, and a
+merge lands with **zero browser coverage** and deploys to staging and
+production on push. Ways that could arise, none of them present today:
+
+- a `paths:` / `paths-ignore:` filter added to the workflow or the job that
+  excludes `e2e` for some diffs;
+- the `concurrency` group cancelling an in-flight `e2e` — `verify.yml` sets
+  `cancel-in-progress: true`, and a cancelled job posts a conclusion that is
+  not `success`, so this one is likely to block rather than pass, but it has
+  not been observed and should not be assumed either way;
+- any change to `needs:`, an `if:` condition, or a matrix that makes `e2e`
+  conditional;
+- renaming the job, which per R22 detaches the required check entirely — the
+  old name stays required and never reports. That failure mode blocks forever
+  rather than letting things through, which is the safe direction, but it is
+  the same class of mistake.
+
+**What would close it:** a required check that fails when `e2e` did not run —
+either a final `gate` job with `if: always()` that asserts every upstream
+result is `success`, or making `e2e` independent of `checks` and paying the
+wasted minutes. Both are real changes to the workflow and to what the gate
+costs, so neither is being made unilaterally. Recorded for the operator.
+
+**Impact:** none today. The gate is proven to refuse a red run, and all three
+checks are genuinely required with no bypass. The single conditional edge is
+now written down instead of being discovered by a bad merge.
+
+**Resolution:** OPEN as a known property. No fix is proposed; the
+`gate`-job option above is the one to reach for if `e2e` is ever made
+conditional for any reason.

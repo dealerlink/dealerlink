@@ -1160,37 +1160,101 @@ by setting `PUPPETEER_EXECUTABLE_PATH`** — that would silently make CI test a
 different binary than production, which is worse than no CI. (Task F.38, the
 Typst migration, removes this whole axis.)
 
-### Completing branch protection
+### The gate as actually configured — and it is a RULESET, not classic branch protection
 
-Already configured on `main` by the repo owner: require a pull request before
-merging, 0 approvals, block force pushes, restrict deletions. Status checks
-were left off because none existed. Now they do.
+**Validated end-to-end on 2026-09-09 (DEV.103).** Before that date the gate had
+never been observed refusing anything: PRs #1 and #2 were green, and #3's red
+`e2e` was fixed rather than pushed against the gate. PR #4 was a throwaway
+branch carrying a deliberate lint error; `checks` went red and GitHub returned
+`mergeStateStatus: BLOCKED` / `mergeable: MERGEABLE` — no conflict, refused
+purely on the status checks. `BLOCKED`, not `UNSTABLE`. The gate is real.
 
-**Settings → Branches → Branch protection rules → `main` → Edit:**
+#### ⚠ `GET /repos/dealerlink/dealerlink/branches/main/protection` returns 404
 
-1. Tick **Require status checks to pass before merging**.
-2. In the search box add these three, **exactly as spelled**:
+```
+{"message":"Branch not protected","status":"404"}
+```
 
-   ```
-   checks
-   test
-   e2e
-   ```
+**That 404 is not a missing gate.** `main` is protected by a **repository
+ruleset**, and the classic branch-protection endpoint does not see rulesets at
+all. Anyone who runs that call, reads "Branch not protected" and concludes the
+gate is gone will be wrong, and may go and "restore" a second, conflicting
+layer of protection. Query rulesets instead:
 
-   These are the `name:` values of the three jobs, which is what the PR checks
-   UI shows. If a name does not appear in the search box, GitHub has not seen
-   it yet — open or re-run a PR so the check reports once, then it becomes
-   selectable.
+```bash
+gh api repos/dealerlink/dealerlink/rules/branches/main     # effective rules on main
+gh api repos/dealerlink/dealerlink/rulesets                # list
+gh api repos/dealerlink/dealerlink/rulesets/22424469       # full detail + bypass actors
+```
 
-3. Tick **Require branches to be up to date before merging** (it appears as a
-   sub-option once step 1 is on). Without it, a PR can go green against a stale
-   base and merge a combination that was never tested — which, given
-   `deploy_on_push: true`, deploys straight to production.
-4. Save.
+#### Ruleset `PR Main` — id `22424469`
 
-Renaming a job in `verify.yml` silently **detaches** the required check: the
-old name stays required and never reports, so PRs block forever. Rename the
-required check in the same change.
+| Property                  | Value                                           |
+| ------------------------- | ----------------------------------------------- |
+| `enforcement`             | `active`                                        |
+| `target` / `conditions`   | branch, `ref_name.include: ["~DEFAULT_BRANCH"]` |
+| `bypass_actors`           | **`[]` — empty**                                |
+| `current_user_can_bypass` | **`never`**, even for a repo admin              |
+
+Rules in force:
+
+| Rule                     | Parameters that matter                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `required_status_checks` | `e2e`, `test`, `checks` — **all three required**, each pinned to `integration_id: 15368` (GitHub Actions)          |
+|                          | `strict_required_status_checks_policy: true` → **"require branches to be up to date before merging" IS in effect** |
+|                          | `do_not_enforce_on_create: false`                                                                                  |
+| `pull_request`           | `required_approving_review_count: 0` — a PR is required, an approval is not                                        |
+| `deletion`               | `main` cannot be deleted                                                                                           |
+| `non_fast_forward`       | `main` cannot be force-pushed                                                                                      |
+
+The `integration_id: 15368` pin matters: the required context is bound to
+GitHub Actions specifically, so a same-named check from another app cannot
+satisfy it.
+
+`bypass_actors: []` with `current_user_can_bypass: never` is the strongest part
+of the configuration — the repo owner holds `admin` and still cannot merge past
+a red run. Do not add a bypass actor "temporarily"; given
+`deploy_on_push: true`, a bypassed merge is an untested production deploy.
+
+#### A skipped required check counts as SATISFIED — see DEV.103
+
+`e2e` has `needs: checks`. When `checks` fails, `e2e` never runs and posts
+`conclusion: SKIPPED`, and **GitHub treats a skipped required check as
+satisfied, not as failing.** So:
+
+> **`e2e` cannot block a merge in any scenario where it does not run.**
+
+This is safe in the observed case — `checks` failing blocks on its own — and
+the `needs: checks` dependency is deliberate and correct, since there is no
+value in booting Chromium against a build that does not compile. It is a
+documented property of the gate, not a defect.
+
+The risk is the inverse case: **`e2e` skipping while `checks` passes** would
+leave all three contexts satisfied, `mergeStateStatus` `CLEAN`, and a merge
+landing with zero browser coverage straight into a production deploy. Nothing
+today produces that. Before adding a `paths:` filter, an `if:` condition, a
+matrix, or any other change that could make `e2e` conditional, read DEV.103 —
+closing it needs a final `gate` job with `if: always()` asserting every
+upstream result is `success`.
+
+#### Renaming a job detaches its required check
+
+The required contexts are matched **by name**. Renaming a job in `verify.yml`
+leaves the old name required and never reported, so PRs block forever. Rename
+the required check in the ruleset in the same change.
+
+#### If the ruleset ever has to be rebuilt
+
+**Settings → Rules → Rulesets → New branch ruleset**, target the default
+branch, enforcement Active, then: require a pull request (0 approvals);
+require status checks `checks`, `test`, `e2e` spelled **exactly** as the
+`name:` values in `verify.yml`; tick **Require branches to be up to date before
+merging** (without it a PR can go green against a stale base and merge a
+combination that was never tested — which, given `deploy_on_push: true`,
+deploys straight to production); restrict deletions; block force pushes; leave
+bypass actors empty. If a check name does not appear in the picker, GitHub has
+not seen it report yet — open a PR so it reports once, then it becomes
+selectable.
 
 ### Triaging a red run
 
