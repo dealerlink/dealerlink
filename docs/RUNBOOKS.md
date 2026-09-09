@@ -1260,3 +1260,136 @@ gh run watch                          # follow the newest run live
 gh run view <run-id> --log-failed     # just the failing step's log
 gh pr merge --squash                  # merge once green (this DEPLOYS — see R22)
 ```
+
+---
+
+## R24 — The subagent roster (`.claude/agents/`)
+
+**Established Stage F Day 23.** Six project subagents live in
+`.claude/agents/*.md`, with shared permission rules in `.claude/settings.json`.
+Both are committed. `.claude/settings.local.json` is gitignored and is your own
+per-machine file — nothing here touches it.
+
+### Why the roster exists
+
+**To save context, not to parallelise the build.** The Day 19 codebase audit,
+the Day 22 CI log digs and the drizzle changelog review each burned a large
+amount of the main thread's window and then sat there for the rest of the
+session. Those investigations move out; the verdict comes back.
+
+**Five of the six agents are read-only.** Only `plan-keeper` writes, and only to
+`docs/stage-f-tasks.json`. Implementation stays on the main thread, because this
+build's correctness comes from one thread holding every constraint at once —
+money read from stored columns, `gstRate` arriving as a string so grouping must
+normalise to numeric, RLS on every table, place of supply derived from Ship-To
+per ADR-012, `packages/tax` protected. A subagent writing a migration without
+all of that in view produces work that looks right and is not.
+
+Every agent's prompt requires it to return a **written report**, to **not act on
+its findings**, and to **say plainly when it cannot determine something** rather
+than infer. That last rule is why Day 19 and Day 22 went well: the agent said "I
+cannot read this" instead of guessing.
+
+### The six
+
+| Agent             | Tools                | Invoke it when                                                                 | It must never                                                                                  |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `ci-investigator` | Bash, Read, Grep     | one named, completed Actions run needs a root cause                            | fix, re-run, cancel, merge, push, or change a repo setting                                     |
+| `code-auditor`    | Read, Grep, Glob     | you need "does X exist, where, what is missing" before planning work on X      | edit anything; give a verdict other than EXISTS / DOES NOT EXIST / PARTIAL / UNDETERMINED      |
+| `flake-triager`   | Bash, Read           | one named spec has failed and timing-vs-state is genuinely unknown             | edit a spec or config, raise a timeout, add a wait, skip, or mark anything flaky               |
+| `verifier`        | Bash, Read           | the day is closing, before the PR is opened or merged                          | fix what it finds, commit, merge, or deploy                                                    |
+| `doc-auditor`     | Read, Grep, Bash(ro) | at a sub-phase boundary, or before planning from a document                    | fix drift; run anything that writes, migrates, seeds or deploys; print a secret value          |
+| `plan-keeper`     | Read, Edit, Bash     | a Stage F task needs its status, days or notes changed, or a new task appended | edit any file but `docs/stage-f-tasks.json`; hand-edit `PROJECT_PLAN.md`; commit; renumber ids |
+
+Descriptions are written **narrow on purpose**. Auto-delegation fires on the
+`description` field, so a vague one ("checks whether things exist") triggers
+constantly and costs context instead of saving it. If an agent starts firing
+when it should not, tighten its description before anything else.
+
+There is deliberately **no doc-writer agent** and **no agent that writes code,
+migrations or tests**. `USER_MANUAL.md` work (F.27) is ~35 days out; an agent
+shaped now against a task that does not exist yet would be shaped wrong.
+
+### Invoking one
+
+Ask for it by name — "use `code-auditor` to check whether …". One agent per
+question. Give it the question, the constraints, and anything it must not read.
+Its report is its return value; it does not save a file unless the invocation
+says to.
+
+### Reloading after a change
+
+**`.claude/settings.json` takes effect immediately** — a permission edit is live
+on the next tool call, verified on Day 23.
+
+**`.claude/agents/*.md` does NOT.** The agent registry is built when the session
+starts. A newly added or renamed agent is not invocable until the session
+restarts; the error is `Agent type '<name>' not found`. Edits to an existing
+agent's prompt are subject to the same caveat — assume a restart is needed. Plan
+roster changes for a session boundary, the same way `docs/RUNBOOKS.md` R23 plans
+a devcontainer rebuild for a day boundary.
+
+### The permissions layer — what it is, and what it is not
+
+`.claude/settings.json` denies these to **every agent, including the main
+thread**:
+
+```
+gh pr merge · git push origin main · git push --force / -f / --force-with-lease
+doctl apps create / update / delete / create-deployment
+rm -r / -rf / -fr / --recursive   ·   Edit+Write on PROJECT_PLAN.md
+```
+
+`git push` (any other form), `gh api`, `gh workflow run`, `gh run rerun/cancel`,
+`pnpm db:migrate` and `pnpm db:rollback` are set to **ask**, so they prompt
+rather than run. Read commands the agents need — `gh run view/list/download`,
+`gh pr view/list/checks`, `doctl apps list-deployments`, `pnpm test`,
+`pnpm verify`, `pnpm plan:check`, `playwright test`, `node
+scripts/verify-deploy.mjs` — are allow-listed.
+
+**Merge and deploy authority stays with the operator.** A merge to `main` is a
+production deploy on both DO apps (`deploy_on_push: true`), so no agent, and not
+the main thread, merges a PR.
+
+**Now the honest part. This layer prevents accidents. It does not stop a
+determined agent.** Three limits, all verified on Day 23 rather than assumed:
+
+1. **Bash rules are prefix matches on the command string, and `sh -c` routes
+   around them.** `rm -rf <path>` is denied; `sh -c 'rm -rf <path>'` ran. Any
+   wrapper, alias, script file or unusual spelling (`rm -r -f`,
+   `git push --f\orce`) has the same effect. Treat the deny list as a guard
+   rail, not a wall.
+2. **Permission rules are global.** Claude Code has no syntax for scoping a rule
+   to one named subagent — settings apply to every agent and to the main thread.
+   So `plan-keeper`'s "edit only `docs/stage-f-tasks.json`" is enforced by its
+   **system prompt**, which is convention, plus the one global rule that
+   genuinely protects the blast radius: `Edit`/`Write` on `PROJECT_PLAN.md` is
+   denied to everyone. Frontmatter `tools:` restricts _which tools_ an agent
+   has, never what it does with them.
+3. **The `PROJECT_PLAN.md` deny covers the Edit and Write tools, not writes from
+   a shell command.** `pnpm plan:sync` writes the file through a node script and
+   is unaffected — which is exactly what we want, and is also the shape of the
+   gap. The same applies to the one legitimate hand-edit the closeout still
+   needs: the dated **changelog row** at the bottom of `PROJECT_PLAN.md` (step
+   C5) lives outside the `STAGE_F_TASKS` markers and is appended from the shell,
+   not with the Edit tool. That is deliberate. The deny is deliberately blunt —
+   there is no way to scope it to "the generated table only" — so it makes the
+   table untouchable and leaves the changelog to an append that is visible in
+   the diff.
+
+**The real enforcement is branch protection on `main` plus the required
+`checks` / `test` / `e2e` status checks** (R22). That is the layer that has
+teeth. `.claude/settings.json` is there so a wrong tool call fails loudly
+instead of quietly deploying.
+
+### A `verifier` FAIL stops the closeout — by agreement
+
+If `verifier` returns FAIL or FAIL (incomplete), do not open or merge the PR.
+Nothing enforces this: there is no hook and no check that observes a subagent's
+verdict. It is a convention we keep because the verifier covers precisely the
+things CI cannot see — `plan:sync` idempotency, marker containment,
+`DEVIATIONS.md` being append-only, and both DO apps actually reaching ACTIVE.
+
+See `CLAUDE.md` §10 for the orchestration rules themselves: when the main thread
+must stop and ask, when to delegate versus do it inline, and who writes which
+document.

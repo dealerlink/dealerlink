@@ -47,40 +47,13 @@
       "notes": "CI EXISTS. .github/workflows/verify.yml — 3 jobs (checks / test / e2e), pinned actions, concurrency-cancel, 30 min timeouts, Playwright report + traces uploaded on failure. Each DB job gets its OWN EPHEMERAL Postgres service container (never the compose DB), migrated + seeded; separate runners remove the DEV.31/Day-20 residue hazard structurally. `test` needs the seed too (packages/db asserts on the seeded demo/sample tenants). NO GATE NEEDS A REAL SECRET. Runs verify against `next dev` — `next start` blocked on F.31 (DEV.91 §3.1). Branch protection completed by the user with required checks `checks`, `test`, `e2e` + require-up-to-date. Also: gh CLI added to the devcontainer Dockerfile (rebuild pending, NOT done), RUNBOOKS R22/R23, and BUILD_PROMPT_TEMPLATE switched to branch+PR+green-CI from Day 23 (no direct pushes to main). Two CI runs: run 1 red (DEV.94 webhook secret not valid base64 → test job; DEV.93 verify-day-c1 flake → e2e), run 2 green with only the DEV.94 fix — c1 was NOT diagnosed and is NOT fixed, tracked as F.52. DEV.93, DEV.94, DEV.95."
     },
     {
-      "id": "F.34",
-      "task": "Delete `docs/pilot/credentials-cheatsheet.md` (with git-history check)",
+      "id": "F.54",
+      "task": "Subagent roster + orchestration rules (`.claude/agents/`, `.claude/settings.json`, CLAUDE.md §10, RUNBOOKS R24)",
       "subPhase": "SP0.5",
       "days": "23",
-      "status": "pending",
-      "completedDate": null,
-      "notes": "v3 §8 accept-and-schedule. Run `git log -p --all -- docs/pilot/` first; if any real credential was ever committed, ROTATE it — deleting the file does not remove it from history."
-    },
-    {
-      "id": "F.35",
-      "task": "Downsize production: worker instance + web DB pool + Postgres tier (all three together)",
-      "subPhase": "SP0.5",
-      "days": "23",
-      "status": "pending",
-      "completedDate": null,
-      "notes": "COUPLED PACKAGE — the three parameters must move together or the pool caps overrun the tier connection budget. Prior values and the derivation are in docs/STAGE_D_HANDOFF.md §2 (workers basic-xs per DEV.67; web DB_POOL_MAX 10 / DB_ADMIN_POOL_MAX 5 / PGBOSS_POOL_MAX 2, DB Basic 2 GB ~50 conns per DEV.61). Record the EXACT prior values in docs/PRODUCTION_ENV.md before changing anything — F.42 restores them."
-    },
-    {
-      "id": "F.36",
-      "task": "Reconcile `.do/app.production.yaml` against the live spec (RESEND_FROM_EMAIL drift)",
-      "subPhase": "SP0.5",
-      "days": "23",
-      "status": "pending",
-      "completedDate": null,
-      "notes": "Day 22 CHECKED AND FOUND NO DRIFT on this key: committed `.do/app.production.yaml` and the live spec (`doctl apps spec get d8a25cb8-…`) both read `noreply@dealerlink.in` on web AND workers; staging matches its own spec at `onboarding@resend.dev`. The v3 §8 / work-order claim is stale. Task kept to do the FULL committed-vs-live diff across every non-SECRET key, which Day 22 did not do (guardrail: no .do/*.yaml edits)."
-    },
-    {
-      "id": "F.37",
-      "task": "Docs restructure (`git mv` into a stable layout)",
-      "subPhase": "SP0.5",
-      "days": "23",
-      "status": "pending",
-      "completedDate": null,
-      "notes": "POST_PILOT_WORK_ORDER.md §1.1, §1.3, §1.4, §1.5. DO NOT DELETE docs/UX_FINDINGS.md — §1.1 says to and is WRONG/superseded: P-7 and P-8 are scheduled in F.3, P-10/P-11/P-12 in F.26 (SP4). Use `git mv` so history follows the file."
+      "status": "complete",
+      "completedDate": "2026-09-08",
+      "notes": "Process infrastructure only — no schema, routes, specs or product code. Six agents in `.claude/agents/`: ci-investigator, code-auditor, flake-triager, verifier, doc-auditor (all read-only) and plan-keeper (writes only this file). Gain is CONTEXT, not parallelism; implementation stays on the main thread. `.claude/settings.json` denies gh pr merge / pushes to main / force pushes / doctl apps create-update-delete / recursive rm / Edit+Write on the generated PROJECT_PLAN.md to EVERY agent including the main thread; six denials verified firing. HONEST LIMITS, verified not assumed: `sh -c` routes around a Bash deny, and permission rules cannot be scoped to one named subagent, so plan-keeper's single-file limit is its prompt (DEV.97). `.claude/agents/*.md` does NOT hot-reload — every smoke test ran via a proxy adopting the agent's prompt, so the prompts are proven and the frontmatter wiring is not (DEV.96). Smoke tests: ci-investigator found the DEV.94 base64 webhook-secret failure unaided plus a second independent cause; code-auditor returned tax-invoice DOES NOT EXIST from code alone; verifier correctly FAILED a dirty tree; flake-triager returned NOT REPRODUCED (3/3 green) not the expected timing verdict — prompt tightened and re-tested (DEV.98). Day 23 displaced F.34–F.37 to Day 25 with a +1 cascade through the tail (DEV.99). CLAUDE.md §10, RUNBOOKS R24. DEV.96–99."
     },
     {
       "id": "F.52",
@@ -89,13 +62,49 @@
       "days": "24",
       "status": "pending",
       "completedDate": null,
-      "notes": "Opened by Day 22, the first CI run. NOT a state bug — `verify-day-c1` failed on CI run 1 and PASSED on run 2 with NO fix applied (only the webhook secret changed), and five escalating local repros against a virgin DB could not reproduce it: alone, after day-19, with .env.local removed, on a cold .next, and in the full 65-spec run. A state bug fails identically; a timing flake does not. KNOWN-FLAKY SET — six specs, all timeouts on navigation/visibility, none an assertion that data was wrong: verify-day-c1, verify-day-c2, verify-day-19 (operator impersonation), verify-day-5, verify-day-6, verify-day-16 (accessibility). verify-day-c2 added from the Day 22 post-merge run on main (run 34126383303): 'a dealer detail page renders its state as a full name' flaked on the row-click navigation — toHaveURL(/dealers/<id>) timed out at 15 s (19× on http://localhost:3000/dealers), passed on retry — same signature. The faithful local repro run scored 61 passed / 3 flaky / 1 failed in 19.1m vs CI 19.4m, so the environments perform comparably and the instability is in the suite, not the runner. TWO PARTS: (1) a route warm-up pass so first-hit dev-server compilation (5–10 s/route, DEV.87) is not competing with test execution; (2) audit specs that TIGHTEN timeouts below the config — c1 sets page.setDefaultTimeout(15_000) against a 60 s config default while walking the heaviest cold-route path in the suite (/admin/tenants/new, /admin/tenants/[id], /change-password, three logins), and its own runtime doubled 14.2 s standalone → 28.7 s at the end of the full run. Sequenced BEFORE the Typst migration: F.38 rewrites the PDF specs and should land on a stable suite. DEV.93."
+      "notes": "Opened by Day 22, the first CI run. NOT a state bug — `verify-day-c1` failed on CI run 1 and PASSED on run 2 with NO fix applied (only the webhook secret changed), and five escalating local repros against a virgin DB could not reproduce it: alone, after day-19, with .env.local removed, on a cold .next, and in the full 65-spec run. A state bug fails identically; a timing flake does not. KNOWN-FLAKY SET — six specs, all timeouts on navigation/visibility, none an assertion that data was wrong: verify-day-c1, verify-day-c2, verify-day-19 (operator impersonation), verify-day-5, verify-day-6, verify-day-16 (accessibility). verify-day-c2 added from the Day 22 post-merge run on main (run 34126383303): 'a dealer detail page renders its state as a full name' flaked on the row-click navigation — toHaveURL(/dealers/<id>) timed out at 15 s (19× on http://localhost:3000/dealers), passed on retry — same signature. The faithful local repro run scored 61 passed / 3 flaky / 1 failed in 19.1m vs CI 19.4m, so the environments perform comparably and the instability is in the suite, not the runner. TWO PARTS: (1) a route warm-up pass so first-hit dev-server compilation (5–10 s/route, DEV.87) is not competing with test execution; (2) audit specs that TIGHTEN timeouts below the config — c1 sets page.setDefaultTimeout(15_000) against a 60 s config default while walking the heaviest cold-route path in the suite (/admin/tenants/new, /admin/tenants/[id], /change-password, three logins), and its own runtime doubled 14.2 s standalone → 28.7 s at the end of the full run. Sequenced BEFORE the Typst migration: F.38 rewrites the PDF specs and should land on a stable suite. DEV.93. DEV.101 — CI run 34223278188 (PR #3) went red on `e2e` with `\"unexpected\": 0`: NO test failed. Two known-flake retries (verify-day-19 38.6 s, verify-day-c1 36.9 s) burned 75.5 s, and the suite's own test time was 19.0 min of the 20.0 min `globalTimeout`, so the cap fired mid-run and 2 verify-day-c2 tests never ran. Recent green runs sit at 16m25s–19m10s against that 20 min cap and `main` itself passes at 18.2 min WITH 2 flakies — so two retries can now redden any branch including `main`. Both failures were 15 s navigation timeouts, and `verify-day-c1` sets `page.setDefaultTimeout(15_000)` against a 60 s config default. OPEN FOR THE OPERATOR, not decided: (a) whether \"restore headroom against `globalTimeout`\" becomes an explicit acceptance criterion here, and (b) whether the 20 min cap is still right — it was sized in DEV.81 to kill a Windows teardown hang, not to bound suite runtime. ACCEPTANCE CRITERIA (operator-set, Day 23, DEV.102 — measurable, not aspirational): (1) the six known flakes CLASSIFIED timing-vs-state, each with evidence; (2) e2e completes UNDER 15 MINUTES with ZERO retries; (3) no spec skipped, disabled, `fixme`-d, or given a longer timeout to get there. Criterion 2 is the point — without it F.52 ships \"fewer flakes\" while runtime stays at ~19 min and the gate is straight back where it was. Criterion 3 exists so criterion 2 cannot be met by weakening what is tested. NOTE: `globalTimeout` was raised 20 → 40 min on Day 23 (DEV.102) on its own merits and gives F.52 room to work, but does NOT satisfy criterion 2 — that is measured against actual runtime, not against the cap."
+    },
+    {
+      "id": "F.34",
+      "task": "Delete `docs/pilot/credentials-cheatsheet.md` (with git-history check)",
+      "subPhase": "SP0.5",
+      "days": "25",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "v3 §8 accept-and-schedule. Run `git log -p --all -- docs/pilot/` first; if any real credential was ever committed, ROTATE it — deleting the file does not remove it from history."
+    },
+    {
+      "id": "F.35",
+      "task": "Downsize production: worker instance + web DB pool + Postgres tier (all three together)",
+      "subPhase": "SP0.5",
+      "days": "25",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "COUPLED PACKAGE — the three parameters must move together or the pool caps overrun the tier connection budget. Prior values and the derivation are in docs/STAGE_D_HANDOFF.md §2 (workers basic-xs per DEV.67; web DB_POOL_MAX 10 / DB_ADMIN_POOL_MAX 5 / PGBOSS_POOL_MAX 2, DB Basic 2 GB ~50 conns per DEV.61). Record the EXACT prior values in docs/PRODUCTION_ENV.md before changing anything — F.42 restores them."
+    },
+    {
+      "id": "F.36",
+      "task": "Reconcile `.do/app.production.yaml` against the live spec (RESEND_FROM_EMAIL drift)",
+      "subPhase": "SP0.5",
+      "days": "25",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Day 22 CHECKED AND FOUND NO DRIFT on this key: committed `.do/app.production.yaml` and the live spec (`doctl apps spec get d8a25cb8-…`) both read `noreply@dealerlink.in` on web AND workers; staging matches its own spec at `onboarding@resend.dev`. The v3 §8 / work-order claim is stale. Task kept to do the FULL committed-vs-live diff across every non-SECRET key, which Day 22 did not do (guardrail: no .do/*.yaml edits)."
+    },
+    {
+      "id": "F.37",
+      "task": "Docs restructure (`git mv` into a stable layout)",
+      "subPhase": "SP0.5",
+      "days": "25",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "POST_PILOT_WORK_ORDER.md §1.1, §1.3, §1.4, §1.5. DO NOT DELETE docs/UX_FINDINGS.md — §1.1 says to and is WRONG/superseded: P-7 and P-8 are scheduled in F.3, P-10/P-11/P-12 in F.26 (SP4). Use `git mv` so history follows the file."
     },
     {
       "id": "F.38",
       "task": "Typst migration — replace Puppeteer/Chromium in the PDF pipeline",
       "subPhase": "SP0.6",
-      "days": "25–28",
+      "days": "26–29",
       "status": "pending",
       "completedDate": null,
       "notes": "v3 §5 / D-6 — BEFORE the document work, not after: SP1 authors or rewrites four document surfaces, and migrating afterwards writes all of it twice. Kills DEV.89 (arch split), relieves DEV.87 (Chromium is a large share of the verify memory peak), and makes a legal document snapshot-testable (Chromium output is not byte-stable). SUB-TASKS, in order: (1) capture reference PDFs for ALL FOUR current paths — quotation, PI, payment receipt, dispatch note — each with a branded tenant and both tax cases, BEFORE writing any Typst; (2) re-author the four templates; (3) replace the render-pdf consumer with in-process rendering; (4) snapshot tests; (5) new ADR superseding (NOT deleting) ADR-013. GUARDRAILS: rendering change only — do not change any number that appears on a document, packages/tax is untouched, pg-boss stays (only the PDF job changes shape). FALLBACK: @react-pdf/renderer keeps JSX and still removes Chromium — DECIDE BEFORE STARTING, do not switch mid-migration. Do NOT bundle the apps/workers collapse (F.50)."
@@ -104,7 +113,7 @@
       "id": "F.5a",
       "task": "Ship-To addresses — `dealer_addresses` schema, migration, place-of-supply rewiring",
       "subPhase": "SP1",
-      "days": "29–31",
+      "days": "30–32",
       "status": "pending",
       "completedDate": null,
       "notes": "v3 §4 / D-4 (~3 d). Touches ADR-012's place-of-supply derivation — the most safety-critical logic in the codebase — so it gets its own day, own commit, own tests, and a SUPERSEDING ADR. Client evidence: one dealer, multiple delivery sites is the main path in solar distribution, not an edge case. Place of supply stays derived from the Ship-To ADDRESS state."
@@ -113,7 +122,7 @@
       "id": "F.5b",
       "task": "Ship-To GSTIN validation (checksum + state cross-check + required-when-different)",
       "subPhase": "SP1",
-      "days": "32–33",
+      "days": "33–34",
       "status": "pending",
       "completedDate": null,
       "notes": "v3 §4 / §6 (~1.5 d). Mostly promotion: a correct GSTN mod-36 checksum already exists in `lib/format/index.ts`, tested, wired only to the tenant's own GSTIN. Add the embedded-state cross-check (a top IRP rejection cause), required-when Bill-To ≠ Ship-To, and a dispatch block naming the dealer + address. GSTIN must NOT override place-of-supply derivation (ADR-012). D-3: GSTN Advisory 661, effective 1 Aug 2026."
@@ -122,7 +131,7 @@
       "id": "F.3",
       "task": "Multi-rate tax summary — data layer + screens",
       "subPhase": "SP1",
-      "days": "34",
+      "days": "35",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -131,7 +140,7 @@
       "id": "F.4",
       "task": "Multi-rate tax summary — PDF + HSN/SAC table",
       "subPhase": "SP1",
-      "days": "35",
+      "days": "36",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -149,7 +158,7 @@
       "id": "F.6",
       "task": "GST tax invoice document",
       "subPhase": "SP1",
-      "days": "36–38",
+      "days": "37–39",
       "status": "pending",
       "completedDate": null,
       "notes": "Day 19 audit VERDICT: DOES NOT EXIST. Estimated 3.5 d against 2 d allocated. Hard-blocked on F.4 — TaxSummary is single-rate today. See docs/TAX_INVOICE_AUDIT.md §A.4."
@@ -158,7 +167,7 @@
       "id": "F.7",
       "task": "Serials rendered on invoice lines",
       "subPhase": "SP1",
-      "days": "39",
+      "days": "40",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -167,7 +176,7 @@
       "id": "F.8",
       "task": "Credit note / sales return",
       "subPhase": "SP1",
-      "days": "40–41",
+      "days": "41–42",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -176,7 +185,7 @@
       "id": "F.9",
       "task": "GST report: rate-wise + HSN-wise grouping",
       "subPhase": "SP1",
-      "days": "42",
+      "days": "43",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -185,7 +194,7 @@
       "id": "F.10",
       "task": "GSTR-1 export (B2B, B2CL, CDNR, HSN)",
       "subPhase": "SP1",
-      "days": "43–44",
+      "days": "44–45",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -194,7 +203,7 @@
       "id": "F.11",
       "task": "Tally mapping configuration module",
       "subPhase": "SP1",
-      "days": "45–47",
+      "days": "46–48",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -203,7 +212,7 @@
       "id": "F.12",
       "task": "Tally export — voucher generation engine",
       "subPhase": "SP1",
-      "days": "48–49",
+      "days": "49–50",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -212,7 +221,7 @@
       "id": "F.13",
       "task": "Tally export — XML output + idempotency",
       "subPhase": "SP1",
-      "days": "50",
+      "days": "51",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -221,7 +230,7 @@
       "id": "F.14",
       "task": "Vendor bill export",
       "subPhase": "SP1",
-      "days": "51",
+      "days": "52",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -230,7 +239,7 @@
       "id": "F.15",
       "task": "Data migration importers",
       "subPhase": "SP1",
-      "days": "52–53",
+      "days": "53–54",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -239,7 +248,7 @@
       "id": "F.16",
       "task": "Opening balance import",
       "subPhase": "SP1",
-      "days": "54",
+      "days": "55",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -248,7 +257,7 @@
       "id": "F.17",
       "task": "ADR: serial capture (swap-on-scan)",
       "subPhase": "SP2",
-      "days": "55",
+      "days": "56",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -257,7 +266,7 @@
       "id": "F.18",
       "task": "Serial bulk import at procurement",
       "subPhase": "SP2",
-      "days": "56–57",
+      "days": "57–58",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -266,7 +275,7 @@
       "id": "F.19",
       "task": "`swapReservedSerial` + scan-to-assign",
       "subPhase": "SP2",
-      "days": "58–60",
+      "days": "59–61",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -275,7 +284,7 @@
       "id": "F.20",
       "task": "Serial format validation per product/tenant",
       "subPhase": "SP2",
-      "days": "60",
+      "days": "61",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -284,7 +293,7 @@
       "id": "F.21",
       "task": "Mobile-responsive / PWA",
       "subPhase": "SP2",
-      "days": "61–63",
+      "days": "62–64",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -293,7 +302,7 @@
       "id": "F.22",
       "task": "Dealer price lists",
       "subPhase": "SP2",
-      "days": "64–65",
+      "days": "65–66",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -302,7 +311,7 @@
       "id": "F.23",
       "task": "GSP provider abstraction + credential vault",
       "subPhase": "SP3",
-      "days": "66",
+      "days": "67",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -311,7 +320,7 @@
       "id": "F.24",
       "task": "E-invoice / IRN",
       "subPhase": "SP3",
-      "days": "67–70",
+      "days": "68–71",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -320,7 +329,7 @@
       "id": "F.25",
       "task": "E-way bill",
       "subPhase": "SP3",
-      "days": "71–73",
+      "days": "72–74",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -338,7 +347,7 @@
       "id": "F.26",
       "task": "Remaining UX defects (P-10, P-11, P-12, P-4/5/6)",
       "subPhase": "SP4",
-      "days": "74",
+      "days": "75",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -347,7 +356,7 @@
       "id": "F.27",
       "task": "`USER_MANUAL.md` sections 3–10",
       "subPhase": "SP4",
-      "days": "75–76",
+      "days": "76–77",
       "status": "pending",
       "completedDate": null,
       "notes": null
