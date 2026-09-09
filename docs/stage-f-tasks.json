@@ -87,9 +87,9 @@
       "task": "Reconcile `.do/app.production.yaml` against the live spec (RESEND_FROM_EMAIL drift)",
       "subPhase": "SP0.5",
       "days": "25",
-      "status": "pending",
-      "completedDate": null,
-      "notes": "Day 22 CHECKED AND FOUND NO DRIFT on this key: committed `.do/app.production.yaml` and the live spec (`doctl apps spec get d8a25cb8-…`) both read `noreply@dealerlink.in` on web AND workers; staging matches its own spec at `onboarding@resend.dev`. The v3 §8 / work-order claim is stale. Task kept to do the FULL committed-vs-live diff across every non-SECRET key, which Day 22 did not do (guardrail: no .do/*.yaml edits)."
+      "status": "complete",
+      "completedDate": "2026-09-09",
+      "notes": "Day 22 CHECKED AND FOUND NO DRIFT on this key: committed `.do/app.production.yaml` and the live spec (`doctl apps spec get d8a25cb8-…`) both read `noreply@dealerlink.in` on web AND workers; staging matches its own spec at `onboarding@resend.dev`. The v3 §8 / work-order claim is stale. Task kept to do the FULL committed-vs-live diff across every non-SECRET key, which Day 22 did not do (guardrail: no .do/*.yaml edits). CLOSED Day 24 (F.52 day) with the full diff the task was kept open for. doc-auditor ran `doctl apps spec get` for BOTH apps and compared every env key against the committed YAML, per component: production web 21/21 keys, production workers 16/16, staging web 21/21, staging workers 15/15 — no key present on one side only, key order identical, and ZERO non-SECRET value differences. SECRET-typed entries compared on name/type/scope only (live values are encrypted EV[...] blobs). RESEND_FROM_EMAIL explicitly: prod web and prod workers both `noreply@dealerlink.in` committed AND live; staging web and staging workers both `onboarding@resend.dev` committed AND live. The drift was real once and was closed by commits e7b60a9 and e77f99e; nothing reopened it. The v3 §8 / work-order claim is stale and is now retired on evidence. NOTE FOR A FUTURE READER: the task TITLE still says 'RESEND_FROM_EMAIL drift' and that title was always the misleading part — the notes, not the title, carry the finding. Sizing, github/deploy_on_push, health check, http_port, run_command, build_command, dockerfile_path, source_dir, region, databases and domains all matched too; the only live-side additions are the platform-generated `ingress:` block and `features: [buildpack-stack=ubuntu-22]`."
     },
     {
       "id": "F.37",
@@ -495,6 +495,60 @@
       "status": "deferred",
       "completedDate": null,
       "notes": "LOW PRIORITY, deferred. DO App Platform auto-deploys `main` but reports NOTHING back to GitHub. On the Day 22 merge commit 16b3a00 the combined commit status was `pending` with ZERO statuses and the deployments API was empty, so there is no green/red deploy signal on the commit or PR — confirming a deployment reached ACTIVE is a manual `doctl apps list-deployments <app-id>` per component (web + workers). Investigate whether DO's GitHub integration (or a small deploy-webhook → GitHub Statuses API bridge) can post per-deployment commit statuses so ACTIVE/ERROR surfaces on the merge commit. Surfaced by the Day 22 post-merge report."
+    },
+    {
+      "id": "F.55",
+      "task": "packages/tax `GstRate` union omits 3% — type-versus-runtime mismatch on a protected surface",
+      "subPhase": "SP1",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "`packages/tax/src/types.ts:7` declares `export type GstRate = 0 | 5 | 12 | 18 | 28;` — no 3. The database disagrees: `products_gst_rate_chk`, `quotation_lines_gst_rate_chk`, `performa_invoice_lines_gst_rate_chk` and `order_lines_gst_rate_chk` all read `IN (0, 3, 5, 12, 18, 28)` (packages/db/src/schema/product.ts:72, quotation.ts:171, performa-invoice.ts:175, order.ts:172), and CLAUDE.md §5 states the allowed rates as `0, 3, 5, 12, 18, 28`. So a 3% row is legal in Postgres, legal per the spec, and unrepresentable in the tax engine's own type. The doc comment above the union also cites the wrong section — it says 'per CLAUDE.md §6' where the rates live in §5. WHY THIS MATTERS AND WHY IT IS NOT A ONE-LINE FIX: F.3 (multi-rate tax summary, days 35) groups and keys by rate, and CLAUDE.md §5 already warns that `gst_rate` arrives from the driver as a STRING ('18' vs '18.00'), so grouping must normalise to a number first. A union that silently excludes 3 is the second half of that trap — a 3% group would be dropped or mistyped rather than double-counted, which is harder to notice. `packages/tax` is a PROTECTED SURFACE under CLAUDE.md §10.1 and docs/STAGE_F_BUILD_v3.md §9: widening the union changes the exhaustiveness of every `switch` and every `Record<GstRate, …>` that consumes it, so this needs its own scoped change with the tax suite re-run, not a drive-by edit. Raised Day 24 during F.52; deliberately NOT fixed that day. Sequence it BEFORE F.3."
+    },
+    {
+      "id": "F.56",
+      "task": "CLAUDE.md accuracy pass — stack table, stage header, tRPC residue, Spaces claim, cost target",
+      "subPhase": "SP0.5",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "Triage of docs/DOC_AUDIT_2026-09-08.md, findings 3, 4, 5, 8 and 9, plus the CLAUDE.md half of finding 11. (3) §3's locked-stack table names five picks installed nowhere. (4) CLAUDE.md:3 is four stages behind and contradicts line 519 of the same file. (5) tRPC is still specified in three places after §3 records its removal (ADR-011). (8) §8 states logos are stored in DO Spaces; Spaces is not wired up. (9) CLAUDE.md:62's cost target is 2.4x off the invoice-reconciled figure in COSTS.md. Grouped by DOCUMENT rather than filed one-per-finding because they are one editing pass over one file and splitting them would produce five conflicting diffs against the same lines. MAIN-THREAD WORK: CLAUDE.md is decision-bearing under CLAUDE.md §10.4 and must not be handed to a summarising agent. Finding 10 of the same audit (CLAUDE.md:153 worker instance size) was fixed separately on Day 24 and is NOT part of this task."
+    },
+    {
+      "id": "F.57",
+      "task": "docs/STRUCTURE.md rewrite — it describes a monorepo tree that no longer exists",
+      "subPhase": "SP0.5",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "docs/DOC_AUDIT_2026-09-08.md finding 1. CLAUDE.md:11 sends every new session to this file first, and it has not been touched since Stage A. It names `.github/workflows/ci.yml` and `deploy.yml` (only `verify.yml` exists, Day 22 f667c68); `app/api/trpc/[trpc]/` and `lib/trpc/` (tRPC removed Day 5, ADR-011); two Resend webhook routes where there is one (`apps/web/app/api/webhooks/resend/`); `packages/db/schema/…` with an `email.ts` and a `logs/` subdirectory (the real path is `packages/db/src/schema/`, flat, with `email-delivery-log.ts` and `generated-document.ts`); and it omits `apps/web/lib/queries/` entirely — the ten-file pattern CLAUDE.md:123 names as tRPC's replacement. WORST CASE IF ACTED ON, and the reason this is not cosmetic: a session navigating by this doc CREATES `ci.yml`/`deploy.yml` alongside the real `verify.yml` and breaks the merge gate."
+    },
+    {
+      "id": "F.58",
+      "task": "Three pilot-facing docs promise bank details on a tax invoice that does not exist — and F.2b's completion claim is false",
+      "subPhase": "SP0.5",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "docs/DOC_AUDIT_2026-09-08.md finding 2. docs/PILOT_GETTING_STARTED.md:135, docs/PILOT_ONBOARDING_PRODUCTION.md:59 and docs/RUNBOOKS.md:21 all tell a pilot tenant to enter bank details before issuing a tax invoice. There is no tax invoice: docs/TAX_INVOICE_AUDIT.md:21 reads 'VERDICT: DOES NOT EXIST' and apps/workers/src/jobs/render-pdf.ts throws on `documentType: 'invoice'`. docs/SECURITY_AUDIT.md:831-837 logged this on Day 19 and said it should be corrected with F.6, but F.6's notes carry no such item and F.6 is pending at days 37-39. TWO SEPARATE PROBLEMS, DO NOT FIX ONLY THE FIRST: (a) the pilot copy misleads a live tenant into waiting ~30 days for a screen that has not shipped; (b) F.2b is marked `complete` with the note 'bank-details copy corrected to the 4 docs it prints on', but `git show 21a0fa6 --stat` shows that commit touched only the admin UI strings under apps/web/app/admin/tenants/ (2 lines each) and docs/RUNBOOKS.md (+43 lines, unrelated) — none of the three pilot docs. So the plan currently asserts a fix that was never made, which is the more dangerous half: a future session verifying F.2b finds the claim false and re-opens a closed day. Whoever takes this must decide what F.2b's notes should say and correct them; that is a plan-integrity decision for the main thread, not a mechanical edit."
+    },
+    {
+      "id": "F.59",
+      "task": "docs/TESTING.md and docs/LOGGING.md name things that do not exist (a test dependency, two log tables)",
+      "subPhase": "SP0.5",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "docs/DOC_AUDIT_2026-09-08.md findings 6 and 7. (6) docs/TESTING.md:8 names a test dependency that was never installed. (7) docs/LOGGING.md describes six Postgres log tables, two of which do not exist. Grouped because both are 'this doc names a thing that is not there' in the testing/observability reference pair, and both need the same treatment: check each claim against the schema and the lockfile, then either build the missing thing or correct the doc — and that choice is a decision, not a transcription. LOGGING.md in particular is cited by CLAUDE.md §4 as the authority on the logging surface, and CLAUDE.md's RLS rule ('this applies to log tables too') is written against that list, so a wrong table list has a security-shaped reading."
+    },
+    {
+      "id": "F.60",
+      "task": "Smaller broken cross-references from the Day 23 doc audit",
+      "subPhase": "SP0.5",
+      "days": "—",
+      "status": "pending",
+      "completedDate": null,
+      "notes": "docs/DOC_AUDIT_2026-09-08.md finding 11 ('Smaller broken references', :156-175), excluding the CLAUDE.md items which are folded into F.56. Low individual cost, but they are the residue that makes a reader stop trusting the doc set. Also carries a SECOND, INDEPENDENT confirmation from Day 24: docs/PDF_PIPELINE.md:114 describes the production worker as `basic-xxs` (512 MB) and hangs a '~3-5 s steady-state render' expectation on it. Production workers are `basic-xs` (1 GB) — .do/app.production.yaml:145 and the live spec both — and docs/PRODUCTION_ENV.md:151 measures the real thing at ~2-3 s. That is the same wrong fact as audit finding 10 in a second file; finding 10's copy in CLAUDE.md:153 was fixed on Day 24 and this one deliberately was NOT, because it was outside that day's stated scope."
     }
   ]
 }

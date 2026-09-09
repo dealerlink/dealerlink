@@ -80,13 +80,36 @@ export default defineConfig({
   // branch. A gate that reddens when nothing broke trains people to re-run
   // reflexively, which is how the run that matters gets missed.
   //
-  // 40 min restores the original intent — only a hang blows past it. The
-  // 30-minute per-job timeout in .github/workflows/verify.yml still bounds a
-  // genuine hang on CI, so this does not remove that protection; it stops the
-  // two limits from fighting. F.52 owns bringing runtime back under 15 min
-  // with zero retries; this cap is not a substitute for that and must not be
-  // read as one.
-  globalTimeout: 2_400_000,
+  // DEV.104 / F.52 — 40 min -> 25 min, to resolve an ORDERING BUG, not to
+  // bound runtime. At 40 min this cap sat ABOVE the 30-minute
+  // `timeout-minutes` on the e2e job, so on a genuine CI hang GitHub killed
+  // the job first and Playwright's onEnd never ran — meaning
+  // test-results/verify-results.json, the artifact DEV.81 exists to preserve,
+  // was missing in exactly the case it was written for. The two limits must be
+  // strictly ordered, and Playwright's must fire first.
+  //
+  // The pair is now: globalTimeout 25 min < e2e timeout-minutes 40 min. The 15
+  // minutes between them is not slack for the suite — it is the room the JOB
+  // needs after the cap fires: ~1 min of pre-verify setup (install, browser
+  // install, migrate, seed), plus the failure-path artifact uploads that only
+  // run once Playwright has exited.
+  //
+  // Why 25 and not 20: DEV.101 is the cautionary tale. A 20 min cap against a
+  // 19.0 min suite fired mid-run and reddened a branch on which NO test failed
+  // (`"unexpected": 0`). A cap must never be close enough to real runtime to
+  // do that. 25 min sits ~50% above the measured runtime and ~65% above the
+  // 15-minute target, and only a hang reaches it.
+  globalTimeout: 1_500_000,
+  // F.52 — the route warm-up pass. Requests every route the suite will visit
+  // once, concurrently, BEFORE the first test, so `next dev`'s first-hit
+  // compilation (8-16s per route on CI) is paid off the test clock instead of
+  // by whichever spec happens to touch the route first. See
+  // tests/e2e/global-setup.ts for the full rationale and the safety argument.
+  //
+  // Only meaningful against a local dev server. A remote staging/prod smoke
+  // target is already built, and the seeded credentials the warm-up signs in
+  // with do not exist there.
+  ...(IS_REMOTE ? {} : { globalSetup: './tests/e2e/global-setup.ts' }),
   // Cold dev-server route compilation can take 5-10s on first hit; the
   // default 5s expect timeout is too tight for that. 15s matches the
   // per-step budget the critical-path spec is written against.
@@ -147,6 +170,36 @@ export default defineConfig({
             // fail-safe default stays secure. Set here (not just in .env.local)
             // so verify is reproducible from a clean checkout.
             SESSION_COOKIE_SECURE: 'false',
+            // DEV.106 — raise the dev server's heap ceiling so it does not
+            // RESTART ITSELF in the middle of the run.
+            //
+            // Node's default limit here is ~2 GB. Compiling the ~40 routes
+            // this suite visits takes `next dev` past its comfort threshold,
+            // at which point Next prints
+            //
+            //     ⚠ Server is approaching the used memory threshold, restarting...
+            //
+            // and restarts. Whatever request is in flight dies with
+            // ERR_CONNECTION_REFUSED, which is how this surfaces: a spec fails
+            // on a connection error rather than on anything it asserted.
+            //
+            // THIS IS A LOCAL-ONLY FAILURE MODE. Do not read it as the cause of
+            // the CI flakes. All four CI runs examined on Day 24 (34375881563,
+            // 34309474851, 34327213279, 34223278188) contain ZERO restart
+            // markers — one `▲ Next.js`, one `Ready in`, one
+            // `Compiling /instrumentation` each, i.e. a single dev-server
+            // lifetime per run. On CI the repeated compilation is
+            // on-demand-entries EVICTION instead, which is what the
+            // `onDemandEntries` block in next.config.mjs addresses. The two
+            // mechanisms look alike in a log and are not the same thing.
+            //
+            // This is a ceiling, not an allocation: the process still uses what
+            // it uses. Sized against the container, which has ~11.9 GB total
+            // (`memory.max` is unset, MemTotal 12232784 kB), shared with the
+            // workers process, Chromium and the Playwright runner. Not raised
+            // further, because DEV.87/91's OOM is what put `workers: 1` in this
+            // file and that lesson stands.
+            NODE_OPTIONS: '--max-old-space-size=6144',
             // arm64 devcontainer: give the workers process a runnable Chromium
             // for the PDF specs (DEV.89). Undefined on x64 → spread drops it.
             ...(puppeteerExecutable ? { PUPPETEER_EXECUTABLE_PATH: puppeteerExecutable } : {}),
