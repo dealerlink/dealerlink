@@ -3580,6 +3580,40 @@ wrapper get through. Untested. The doc now says so explicitly rather than
 asserting either way. This also refines, without contradicting, DEV.97: the deny
 is broader than "Edit/Write only", and it is still not a wall.
 
+**THIS BRANCH FAILS THE AMENDED RULE, BY CONSTRUCTION, AND THAT IS NOT A
+MISTAKE.** `verifier` was re-run against the amended text and returned FAIL
+again — correctly, and for a sharper reason than the first time. The amendment
+above is written in the past tense ("the section WAS deleted"), and the
+tightening argument depends on the deletion already being in the diff base. It
+is not: `git show main:PROJECT_PLAN.md` still has `## Changelog` at line 446. So
+the deletion sits inside the very diff the rule instructs the verifier to
+compute, and removing the exception did not move it out of scope — it removed
+the only clause under which it could have been read as permitted.
+
+**The bind, stated plainly: the rule cannot be satisfied by the branch that
+performs the deletion.** It becomes satisfiable the moment that branch is on
+`main`, and every branch after this one passes it unqualified. There is exactly
+one branch in this project's history for which this check must fail.
+
+**Resolved as an OPERATOR OVERRULE, not a rule change.** The two alternatives
+were both worse. Relaxing the rule now would undo the tightening it exists to
+deliver. Declaring the deletion out of scope is precisely the softening the
+verifier is instructed to refuse — and it refused it, twice, with a ready-made
+excuse available both times. So the rule stays strict, the FAIL stays on the
+record, and a human overrode it once, knowingly, for one branch. A gate that can
+be argued out of a finding is not a gate; a gate a human consciously overrides
+once, in writing, still is.
+
+**Everything else in that run PASSED, and the FAIL is precisely one item.** The
+verifier confirmed Stage 0 and Stages A–E byte-identical (md5
+`1418ba7d745ee7f8a4594bc6d09335b9` on both sides), and further that the
+post-marker region OTHER than the changelog is byte-identical too (md5
+`626691854ba38868168b3ae12b9c8a2d` on both), so Phase 2 Deferred Features,
+Progress Summary, Critical Path Items and Risks & Open Items are untouched and
+the sole out-of-marker change is the 43-line removal at `main:446-488`. Markers
+intact, `plan:sync` idempotent, `DEVIATIONS.md` append-only (`205 0`), working
+tree clean.
+
 **Process note, one line as the operator asked.** PR #7 was opened before
 `verifier` ran, so CLAUDE.md §10.3's "do not open the PR on a FAIL" was violated
 by sequencing rather than by choice — the FAIL was not yet known. Fixed
