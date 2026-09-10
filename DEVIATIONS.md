@@ -3380,3 +3380,119 @@ project. Filed as its own task rather than done here.
 **What would close it:** make the three specs create the rows they mutate instead
 of selecting a seeded `.first()`, then re-measure. That is real work and is its
 own day.
+
+---
+
+## DEV.109 — Day 24 follow-up — two agents are granted fewer tools than their frontmatter declares; `Grep` is dropped whenever `Bash` is present
+
+**Date:** 2026-09-10
+
+DEV.107 recorded, as an unresolved oddity, that `doc-auditor` enumerated its
+tools as "exactly two — `Read` and `Bash`" while its frontmatter declares
+`tools: Read, Grep, Bash`. The operator asked for that to be checked before the
+agent's findings get relied on. All six were re-probed by name. The agent was
+honest; the declaration is wrong.
+
+| agent             | frontmatter declares | harness actually grants |                                                                              |
+| ----------------- | -------------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| `code-auditor`    | `Read, Grep, Glob`   | `Read, Grep, Glob`      | match                                                                        |
+| `doc-auditor`     | `Read, Grep, Bash`   | `Read, Bash`            | **Grep dropped**                                                             |
+| `ci-investigator` | `Bash, Read, Grep`   | `Bash, Read`            | **Grep dropped**                                                             |
+| `flake-triager`   | `Bash, Read`         | `Bash, Read`            | match                                                                        |
+| `verifier`        | `Bash, Read`         | `Bash, Read`            | match                                                                        |
+| `plan-keeper`     | `Read, Edit, Bash`   | `Read, Edit, Bash`      | match (observed in use — it read, edited and ran commands in one invocation) |
+
+**The pattern is exact: the only two agents that lose a tool are the only two
+that declare `Grep` ALONGSIDE `Bash`.** `code-auditor` declares `Grep` _without_
+`Bash` and receives it. That makes a `Bash`-and-`Grep` interaction the obvious
+hypothesis, on 2/2 mismatches and a 1/1 contrast — but it is a hypothesis from
+six data points, not a diagnosis. Not chased further: it is tool plumbing with
+no product impact, and it can be picked up from here if it ever matters.
+
+**Absent, not refused — and the distinction is load-bearing.** Every probed
+agent reported the same mechanism unprompted: the tool does not appear in the
+function schema it was handed, so no call is ever emitted and nothing reaches a
+permission check. That means the frontmatter `tools:` list is a **genuine
+capability boundary**, structurally stronger than `.claude/settings.json`, which
+CLAUDE.md §10.5 correctly describes as accident-prevention that a determined
+agent can route around. The two mechanisms are not interchangeable and an audit
+should not treat them as such. (`verifier` made the corollary point about
+itself: its declared toolset matches, but `Bash` is a general-purpose grant, so
+"verifier is read-only" is enforced by its prompt, not by its tools.)
+
+**Impact: none functional.** Both affected agents have `Bash`, and both prompts
+already route search through read-only `grep`. `doc-auditor` completed a full
+committed-vs-live infrastructure audit on Day 24 without `Grep`, and
+`ci-investigator` diagnosed four CI runs without it. Nothing either produced is
+in question.
+
+**Resolution: DOCUMENTED, NOT FIXED — deliberately.** Editing the two
+frontmatters to match observed behaviour would hard-code a workaround for what
+may be a harness bug and would erase the evidence if it is later fixed. The
+declarations are left as written. A pointer note was added to the top of
+`.claude/agents/doc-auditor.md` itself, because that agent's whole job is
+checking documents against reality and a file in its own directory asserting
+something false about it is precisely the drift it exists to catch. The same
+note was not added to `ci-investigator.md`; if this is revisited, it should be.
+
+**One loose thread, found by `flake-triager` while probing itself:** its own
+prompt says of a spec's timeout budget "grep it and quote it", which reads as
+though it expects a `Grep` tool it does not have. Satisfiable through `Bash`
+and left alone.
+
+---
+
+## DEV.110 — Day 24 follow-up — the `PROJECT_PLAN.md` changelog was DELETED rather than given an exception to §10.4
+
+**Date:** 2026-09-10
+
+The Day 24 closeout raised that no changelog row had been appended for the day,
+and that the file's own instruction at what was line 448 said to append one on
+every status change. That instruction is unsatisfiable: CLAUDE.md §10.4 states
+`PROJECT_PLAN.md` is "**Generated — nobody**… Never hand-edited, by any agent,
+ever", and `.claude/settings.json` denies `Edit` and `Write` on it. The
+changelog sat OUTSIDE the `STAGE_F_TASKS` markers, so `pnpm plan:sync` never
+wrote it — meaning the section could only ever be maintained by the exact hand
+edit the rule forbids.
+
+**Resolved by deleting the section, not by carving an exception.** The operator's
+reasoning, recorded because it is the part worth keeping: generated content plus
+manual edits is the drift pattern that has already cost this project time twice.
+The changelog was also **redundant** — `docs/stage-f-tasks.json` already carries
+`completedDate` and `notes` per task, and is the generated table's source — and
+**de facto abandoned**, since Days 21 and 22 have no entry at all. Two records of
+the same facts is the problem, not the solution.
+
+**Who did it, and why that matters.** The deletion was performed **by the
+operator, by hand.** The main thread could have reached the file through `Bash`
+(`sed`/`node`), which the deny list does not cover — that is exactly the bypass
+DEV.97 documents — and deliberately did not. A denied tool call is the user
+having declined that class of action; reaching the same effect by another route
+is retrying a declined call, not adjusting to it. So the guardrail behaved as
+designed: it refused the hand-edit tools, `pnpm plan:sync` continued to write the
+file normally, and **the generator remains the only sanctioned writer.**
+
+**Verified after the deletion:** the section is gone; the Risks & Open Items
+table is intact; the `---` separator and the closing footer line both survive;
+the `STAGE_F_TASKS` markers are untouched; `pnpm plan:check` passes at 63 tasks;
+and `pnpm plan:sync` run twice is a no-op the second time, with an identical
+md5 across both runs.
+
+**One residue, reported not fixed:** `PROJECT_PLAN.md:3` still tells the reader
+to "Append a dated entry to the changelog at the bottom", which now points at
+nothing. It is outside the markers, so it is the operator's edit to make, and it
+is flagged rather than silently left — a dangling instruction is the same class
+of drift this deletion was meant to end.
+
+**Also corrected in this pass (DEV.107 / F.52 follow-up):** `completedDate` is
+now defined as the **commit date**, not the session date. F.36 and F.52 were both
+stamped `2026-09-09` by a session whose commits are all dated `2026-09-10`; both
+were corrected. The rule is written into `.claude/agents/plan-keeper.md` so it
+stops being a per-day judgement call — a session-start date is unverifiable by
+construction, and `doc-auditor` checks documents against a reality that, for a
+date, means something a reader can confirm with `git show`.
+
+**And:** `verify-day-5` and `verify-day-16` were **reclassified, not delisted**
+(F.62). Delisting would record them as fixed; they were never demonstrated
+broken. They are held in an explicit "watch — never evidenced" state so that if
+either ever fails it registers as new signal rather than a known-flake shrug.

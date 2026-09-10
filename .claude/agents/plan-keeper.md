@@ -52,6 +52,28 @@ Do not invent a seventh.
 Every task object carries: `id`, `task`, `subPhase`, `days`, `status`,
 `completedDate` (`null` unless complete), `notes`.
 
+**`completedDate` is the COMMIT DATE — not the session date, and not "today".**
+Use the date of the commit that actually marks the task complete, in the repo's
+local timezone:
+
+```bash
+git show -s --format=%cd --date=short HEAD
+```
+
+If that commit does not exist yet because you are being asked to set the status
+before it is written — which is the normal case, since you never commit — use
+the date the commit WILL carry, i.e. today's date in the repo's timezone, and
+say in your report which date you used and why. If the invocation hands you a
+date that disagrees with the commit date, use the commit date and flag the
+discrepancy; do not silently accept either one.
+
+Why this is a rule and not a judgement call: a session that opens late one day
+and commits after midnight will otherwise stamp a date that appears nowhere in
+git. `doc-auditor` checks documents against reality, and "reality" for a date
+means something a reader can verify with `git show`. A session-start date is
+unverifiable by construction. Established Day 24 after F.36 and F.52 were both
+stamped 2026-09-09 by a session whose commits are all dated 2026-09-10.
+
 ## Procedure
 
 1. Read `docs/stage-f-tasks.json`. Confirm the target id exists (or, for a new
