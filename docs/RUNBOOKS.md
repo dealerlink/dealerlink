@@ -1430,16 +1430,27 @@ determined agent.** Three limits, all verified on Day 23 rather than assumed:
    genuinely protects the blast radius: `Edit`/`Write` on `PROJECT_PLAN.md` is
    denied to everyone. Frontmatter `tools:` restricts _which tools_ an agent
    has, never what it does with them.
-3. **The `PROJECT_PLAN.md` deny covers the Edit and Write tools, not writes from
-   a shell command.** `pnpm plan:sync` writes the file through a node script and
-   is unaffected — which is exactly what we want, and is also the shape of the
-   gap. The same applies to the one legitimate hand-edit the closeout still
-   needs: the dated **changelog row** at the bottom of `PROJECT_PLAN.md` (step
-   C5) lives outside the `STAGE_F_TASKS` markers and is appended from the shell,
-   not with the Edit tool. That is deliberate. The deny is deliberately blunt —
-   there is no way to scope it to "the generated table only" — so it makes the
-   table untouchable and leaves the changelog to an append that is visible in
-   the diff.
+3. **The `PROJECT_PLAN.md` deny is PATH-based, and broader than "Edit and Write
+   only" — but it is not airtight.** State only what has been observed, because
+   this was described wrongly once already. Observed on Day 24: the `Edit` tool
+   is hard-denied on that path (`File is in a directory that is denied by your
+permission settings` — a hard deny, not a prompt); and **at least some Bash
+   invocations naming the path are also blocked, in either direction** — a
+   read-only `cp` with `PROJECT_PLAN.md` as the SOURCE was refused, so the
+   matcher keys on the path appearing in the command, not on the write target.
+   NOT observed, and therefore not claimed: whether `sed -i`, a heredoc redirect
+   or an `sh -c` wrapper get through. **Untested. Do not assume they are
+   blocked, and do not assume they are not.** The earlier text here said the
+   deny "covers the Edit and Write tools, not writes from a shell command",
+   which is wrong.
+
+   `pnpm plan:sync` writes the file through a node script and is unaffected.
+   That is exactly what we want: **the generator is the only sanctioned writer.**
+   As of Day 24 there is no longer any legitimate hand-edit of this file at all —
+   the `## Changelog` section that was the sole exception has been deleted
+   (DEV.110), so the deny no longer needs to tolerate one. The rule is now
+   unqualified, which makes the blunt path match a better fit than it was, not a
+   worse one.
 
 **The real enforcement is branch protection on `main` plus the required
 `checks` / `test` / `e2e` status checks** (R22). That is the layer that has

@@ -57,11 +57,26 @@ Diff the branch against `main`:
 git diff main...HEAD -- PROJECT_PLAN.md
 ```
 
-Every changed line inside the generated table must lie between
-`<!-- STAGE_F_TASKS:START -->` and `<!-- STAGE_F_TASKS:END -->`. Changes outside
-the markers are permitted **only** for an appended changelog row at the bottom.
-Any other change outside the markers — in particular any edit to the Stage A–E
-tables — is a FAIL. State the line numbers.
+Every changed line must lie between `<!-- STAGE_F_TASKS:START -->` and
+`<!-- STAGE_F_TASKS:END -->`. **No change outside the markers is permitted. Full
+stop.** Any change outside them — in particular any edit to the Stage 0 or
+Stage A–E tables — is a FAIL. State the line numbers.
+
+This rule used to carry one exception, for "an appended changelog row at the
+bottom". **That exception is gone, and its removal TIGHTENED this check rather
+than loosening it.** The `## Changelog` section was deleted from
+`PROJECT_PLAN.md` on Day 24 (DEV.110): it sat outside the markers, so
+`plan:sync` never wrote it, which meant the only way to maintain it was the hand
+edit CLAUDE.md §10.4 forbids and `.claude/settings.json` denies. It was also
+redundant — `docs/stage-f-tasks.json` already carries `completedDate` and
+`notes` per task. With the section gone there is no longer any legitimate
+hand-edit of this file at all, so the rule no longer needs a carve-out and this
+check is now unqualified.
+
+The section **must not return**, and you are not the only thing enforcing that:
+`scripts/sync-project-plan.test.ts` asserts the real `PROJECT_PLAN.md` does not
+contain `## Changelog`, so a reappearance fails the `test` job in CI as well. If
+you see one, FAIL and say so.
 
 ### 3. DEVIATIONS.md
 

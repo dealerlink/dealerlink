@@ -48,14 +48,34 @@ C5. Update PROJECT_PLAN.md:
       add notes summary
     - Stage F (GENERATED — see below): edit docs/stage-f-tasks.json, then
       run `pnpm plan:sync`. NEVER hand-edit the Stage F table.
-    - append a changelog row at the bottom with the commit SHA
-      (the changelog is outside the markers, so it is a normal edit)
+    - there is NO changelog row to append. The `## Changelog` section was
+      DELETED on Day 24 (DEV.110) and must not return: it sat outside the
+      markers, so plan:sync never wrote it, which made it maintainable only by
+      the hand edit CLAUDE.md §10.4 forbids — and it duplicated the
+      completedDate + notes that docs/stage-f-tasks.json already carries.
+      scripts/sync-project-plan.test.ts now fails the `test` job if it
+      reappears. Nothing outside the STAGE_F_TASKS markers should change.
 C6. Append the day's deviations to /DEVIATIONS.md
     (append-only; never edit historic entries; if a deviation is
      resolved later, write a new RESOLVED entry referencing the original)
 C7. git switch -c day-<N>-<slug>
     git add -A && git commit -m "feat(<scope>): day N — <summary>"
     git push -u origin day-<N>-<slug>
+C7a. RUN THE `verifier` SUBAGENT — BEFORE opening the PR, not after.
+    It runs the closeout checks CI cannot see: plan:sync idempotency,
+    PROJECT_PLAN.md marker containment with Stage 0/A–E byte-identical,
+    DEVIATIONS.md append-only, and the DO deploy phase. Tell it nothing about
+    what the day intended — it must not be given a reason to soften a finding.
+
+    A FAIL STOPS THE DAY (CLAUDE.md §10.3). Fix the finding or bring it to the
+    operator; do not open the PR on a FAIL.
+
+    The ordering is structural, not a matter of remembering: on Day 24 the PR
+    was opened first and the verifier then returned a FAIL, so the sequence was
+    violated by accident rather than by choice. Running it first makes that
+    impossible. It is cheap — it opens no PR, triggers no CI and costs one
+    agent invocation.
+
 C8. OPEN A PR AND WAIT FOR GREEN CI. No direct pushes to main (Day 22 on).
         gh pr create --fill --base main
         gh pr checks --watch        # non-zero exit if any check fails

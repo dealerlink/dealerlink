@@ -3380,3 +3380,339 @@ project. Filed as its own task rather than done here.
 **What would close it:** make the three specs create the rows they mutate instead
 of selecting a seeded `.first()`, then re-measure. That is real work and is its
 own day.
+
+---
+
+## DEV.109 — Day 24 follow-up — two agents are granted fewer tools than their frontmatter declares; `Grep` is dropped whenever `Bash` is present
+
+**Date:** 2026-09-10
+
+DEV.107 recorded, as an unresolved oddity, that `doc-auditor` enumerated its
+tools as "exactly two — `Read` and `Bash`" while its frontmatter declares
+`tools: Read, Grep, Bash`. The operator asked for that to be checked before the
+agent's findings get relied on. All six were re-probed by name. The agent was
+honest; the declaration is wrong.
+
+| agent             | frontmatter declares | harness actually grants |                                                                              |
+| ----------------- | -------------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| `code-auditor`    | `Read, Grep, Glob`   | `Read, Grep, Glob`      | match                                                                        |
+| `doc-auditor`     | `Read, Grep, Bash`   | `Read, Bash`            | **Grep dropped**                                                             |
+| `ci-investigator` | `Bash, Read, Grep`   | `Bash, Read`            | **Grep dropped**                                                             |
+| `flake-triager`   | `Bash, Read`         | `Bash, Read`            | match                                                                        |
+| `verifier`        | `Bash, Read`         | `Bash, Read`            | match                                                                        |
+| `plan-keeper`     | `Read, Edit, Bash`   | `Read, Edit, Bash`      | match (observed in use — it read, edited and ran commands in one invocation) |
+
+**The pattern is exact: the only two agents that lose a tool are the only two
+that declare `Grep` ALONGSIDE `Bash`.** `code-auditor` declares `Grep` _without_
+`Bash` and receives it. That makes a `Bash`-and-`Grep` interaction the obvious
+hypothesis, on 2/2 mismatches and a 1/1 contrast — but it is a hypothesis from
+six data points, not a diagnosis. Not chased further: it is tool plumbing with
+no product impact, and it can be picked up from here if it ever matters.
+
+**Absent, not refused — and the distinction is load-bearing.** Every probed
+agent reported the same mechanism unprompted: the tool does not appear in the
+function schema it was handed, so no call is ever emitted and nothing reaches a
+permission check. That means the frontmatter `tools:` list is a **genuine
+capability boundary**, structurally stronger than `.claude/settings.json`, which
+CLAUDE.md §10.5 correctly describes as accident-prevention that a determined
+agent can route around. The two mechanisms are not interchangeable and an audit
+should not treat them as such. (`verifier` made the corollary point about
+itself: its declared toolset matches, but `Bash` is a general-purpose grant, so
+"verifier is read-only" is enforced by its prompt, not by its tools.)
+
+**Impact: none functional.** Both affected agents have `Bash`, and both prompts
+already route search through read-only `grep`. `doc-auditor` completed a full
+committed-vs-live infrastructure audit on Day 24 without `Grep`, and
+`ci-investigator` diagnosed four CI runs without it. Nothing either produced is
+in question.
+
+**Resolution: DOCUMENTED, NOT FIXED — deliberately.** Editing the two
+frontmatters to match observed behaviour would hard-code a workaround for what
+may be a harness bug and would erase the evidence if it is later fixed. The
+declarations are left as written. A pointer note was added to the top of
+`.claude/agents/doc-auditor.md` itself, because that agent's whole job is
+checking documents against reality and a file in its own directory asserting
+something false about it is precisely the drift it exists to catch. The same
+note was not added to `ci-investigator.md`; if this is revisited, it should be.
+
+**One loose thread, found by `flake-triager` while probing itself:** its own
+prompt says of a spec's timeout budget "grep it and quote it", which reads as
+though it expects a `Grep` tool it does not have. Satisfiable through `Bash`
+and left alone.
+
+---
+
+## DEV.110 — Day 24 follow-up — the `PROJECT_PLAN.md` changelog was DELETED rather than given an exception to §10.4
+
+**Date:** 2026-09-10
+
+The Day 24 closeout raised that no changelog row had been appended for the day,
+and that the file's own instruction at what was line 448 said to append one on
+every status change. That instruction is unsatisfiable: CLAUDE.md §10.4 states
+`PROJECT_PLAN.md` is "**Generated — nobody**… Never hand-edited, by any agent,
+ever", and `.claude/settings.json` denies `Edit` and `Write` on it. The
+changelog sat OUTSIDE the `STAGE_F_TASKS` markers, so `pnpm plan:sync` never
+wrote it — meaning the section could only ever be maintained by the exact hand
+edit the rule forbids.
+
+**Resolved by deleting the section, not by carving an exception.** The operator's
+reasoning, recorded because it is the part worth keeping: generated content plus
+manual edits is the drift pattern that has already cost this project time twice.
+The changelog was also **redundant** — `docs/stage-f-tasks.json` already carries
+`completedDate` and `notes` per task, and is the generated table's source — and
+**de facto abandoned**, since Days 21 and 22 have no entry at all. Two records of
+the same facts is the problem, not the solution.
+
+**Who did it, and why that matters.** The deletion was performed **by the
+operator, by hand.** The main thread could have reached the file through `Bash`
+(`sed`/`node`), which the deny list does not cover — that is exactly the bypass
+DEV.97 documents — and deliberately did not. A denied tool call is the user
+having declined that class of action; reaching the same effect by another route
+is retrying a declined call, not adjusting to it. So the guardrail behaved as
+designed: it refused the hand-edit tools, `pnpm plan:sync` continued to write the
+file normally, and **the generator remains the only sanctioned writer.**
+
+**Verified after the deletion:** the section is gone; the Risks & Open Items
+table is intact; the `---` separator and the closing footer line both survive;
+the `STAGE_F_TASKS` markers are untouched; `pnpm plan:check` passes at 63 tasks;
+and `pnpm plan:sync` run twice is a no-op the second time, with an identical
+md5 across both runs.
+
+**The deletion had a second enforcer, found by CI.** `pnpm test:scripts`
+went red on `AssertionError: expected '# PROJECT_PLAN.md — Dealerlink Phase …'
+to contain '## Changelog'` — `scripts/sync-project-plan.test.ts:281` listed
+`## Changelog` among the headings the real file must still contain, inside a
+test named "still contains every Stage A-E heading", which it is not. So a test
+was holding in place a section that only a forbidden hand edit could maintain.
+That is the duplication argument making itself: the stale assertion was removed,
+and a replacement now asserts the section stays GONE, so it cannot quietly
+return.
+
+**One residue, reported not fixed:** `PROJECT_PLAN.md:3` still tells the reader
+to "Append a dated entry to the changelog at the bottom", which now points at
+nothing. It is outside the markers, so it is the operator's edit to make, and it
+is flagged rather than silently left — a dangling instruction is the same class
+of drift this deletion was meant to end.
+
+**Also corrected in this pass (DEV.107 / F.52 follow-up):** `completedDate` is
+now defined as the **commit date**, not the session date. F.36 and F.52 were both
+stamped `2026-09-09` by a session whose commits are all dated `2026-09-10`; both
+were corrected. The rule is written into `.claude/agents/plan-keeper.md` so it
+stops being a per-day judgement call — a session-start date is unverifiable by
+construction, and `doc-auditor` checks documents against a reality that, for a
+date, means something a reader can confirm with `git show`.
+
+**And:** `verify-day-5` and `verify-day-16` were **reclassified, not delisted**
+(F.62). Delisting would record them as fixed; they were never demonstrated
+broken. They are held in an explicit "watch — never evidenced" state so that if
+either ever fails it registers as new signal rather than a known-flake shrug.
+
+---
+
+## DEV.111 — Day 24 follow-up — the verifier's own pass condition was amended; this is a TIGHTENING, not a relaxation
+
+**Date:** 2026-09-10
+
+**Read this before reading the diff, because the diff is easy to misread.** A
+cold reading of "amended the verifier's own pass condition, then re-ran the
+verifier, then landed the PR" describes a gate being weakened to accommodate a
+violation. That is the opposite of what happened, and the distinction is the
+entire point of this entry.
+
+**What actually happened.** After the `## Changelog` section was deleted from
+`PROJECT_PLAN.md` (DEV.110), `verifier` returned **FAIL** on PR #7. The finding
+was correct and was accepted as correct. `.claude/agents/verifier.md:62` read:
+
+> Changes outside the markers are permitted **only** for an appended changelog
+> row at the bottom.
+
+A wholesale deletion of that section is not an appended row, so by the letter of
+the rule it was a FAIL. The verifier explicitly declined to soften it on the
+grounds of operator intent, DEV.110's reasoning, or the `settings.json` denial —
+which is exactly the behaviour its prompt asks for, and it is worth recording
+that the agent held the line when there was a ready-made excuse not to.
+
+**Why amending the rule is a tightening.** The rule previously carried **one
+carve-out**: a single category of hand-edit to a generated file was permitted.
+That carve-out existed solely to accommodate the changelog row. The changelog no
+longer exists. So the amendment does not admit the deletion as a new exception —
+**it removes the only exception the rule ever had.**
+
+|                                            | before                          | after                                |
+| ------------------------------------------ | ------------------------------- | ------------------------------------ |
+| changes permitted outside the markers      | one (an appended changelog row) | **none**                             |
+| legitimate hand-edits of `PROJECT_PLAN.md` | one                             | **zero**                             |
+| enforcement                                | `verifier` only                 | `verifier` **and** the `test` CI job |
+
+The last row matters: `scripts/sync-project-plan.test.ts` now asserts the real
+`PROJECT_PLAN.md` does **not** contain `## Changelog`, so a reappearance fails
+CI as well as the closeout. The rule went from "one exception, checked by a
+convention" to "no exceptions, checked by a convention **and** a required status
+check". Strictly more constrained on every axis.
+
+**What was NOT done, and would have been the weakening version:** adding an
+exception for "a deleted changelog section", or narrowing the check to the
+Stage 0/A–E tables, or telling the verifier to ignore extra-marker changes. Any
+of those would have left the file hand-editable. None was done. The Stage 0 and
+Stage A–E byte-identity assertion is untouched, and the verifier confirmed it
+held throughout — md5 `1418ba7d…` on both sides of the diff.
+
+**Files amended:**
+
+- `.claude/agents/verifier.md` — "no change outside the markers is permitted,
+  full stop", plus the reasoning above and a note that the section must not
+  return and that CI now enforces it too.
+- `docs/RUNBOOKS.md` — the "one legitimate hand-edit the closeout still needs"
+  paragraph deleted; it described a thing that no longer exists.
+- `docs/BUILD_PROMPT_TEMPLATE.md` C5 — the instruction to append a changelog row
+  removed for the same reason.
+
+**Correction folded in, to `docs/RUNBOOKS.md`'s description of the deny rule.**
+It said the `PROJECT_PLAN.md` deny "covers the Edit and Write tools, not writes
+from a shell command". **That is wrong.** Observed on Day 24: the `Edit` tool is
+hard-denied on that path (`File is in a directory that is denied by your
+permission settings` — a hard deny, not a prompt), **and at least some Bash
+invocations naming the path are blocked in either direction** — `verifier` had a
+read-only `cp` refused with `PROJECT_PLAN.md` as the SOURCE, so the matcher keys
+on the path appearing in the command, not on the write target. **Not observed
+and therefore not claimed:** whether `sed -i`, a heredoc redirect or an `sh -c`
+wrapper get through. Untested. The doc now says so explicitly rather than
+asserting either way. This also refines, without contradicting, DEV.97: the deny
+is broader than "Edit/Write only", and it is still not a wall.
+
+**THIS BRANCH FAILS THE AMENDED RULE, BY CONSTRUCTION, AND THAT IS NOT A
+MISTAKE.** `verifier` was re-run against the amended text and returned FAIL
+again — correctly, and for a sharper reason than the first time. The amendment
+above is written in the past tense ("the section WAS deleted"), and the
+tightening argument depends on the deletion already being in the diff base. It
+is not: `git show main:PROJECT_PLAN.md` still has `## Changelog` at line 446. So
+the deletion sits inside the very diff the rule instructs the verifier to
+compute, and removing the exception did not move it out of scope — it removed
+the only clause under which it could have been read as permitted.
+
+**The bind, stated plainly: the rule cannot be satisfied by the branch that
+performs the deletion.** It becomes satisfiable the moment that branch is on
+`main`, and every branch after this one passes it unqualified. There is exactly
+one branch in this project's history for which this check must fail.
+
+**Resolved as an OPERATOR OVERRULE, not a rule change.** The two alternatives
+were both worse. Relaxing the rule now would undo the tightening it exists to
+deliver. Declaring the deletion out of scope is precisely the softening the
+verifier is instructed to refuse — and it refused it, twice, with a ready-made
+excuse available both times. So the rule stays strict, the FAIL stays on the
+record, and a human overrode it once, knowingly, for one branch. A gate that can
+be argued out of a finding is not a gate; a gate a human consciously overrides
+once, in writing, still is.
+
+**Everything else in that run PASSED, and the FAIL is precisely one item.** The
+verifier confirmed Stage 0 and Stages A–E byte-identical (md5
+`1418ba7d745ee7f8a4594bc6d09335b9` on both sides), and further that the
+post-marker region OTHER than the changelog is byte-identical too (md5
+`626691854ba38868168b3ae12b9c8a2d` on both), so Phase 2 Deferred Features,
+Progress Summary, Critical Path Items and Risks & Open Items are untouched and
+the sole out-of-marker change is the 43-line removal at `main:446-488`. Markers
+intact, `plan:sync` idempotent, `DEVIATIONS.md` append-only (`205 0`), working
+tree clean.
+
+**Process note, one line as the operator asked.** PR #7 was opened before
+`verifier` ran, so CLAUDE.md §10.3's "do not open the PR on a FAIL" was violated
+by sequencing rather than by choice — the FAIL was not yet known. Fixed
+structurally rather than by remembering: `docs/BUILD_PROMPT_TEMPLATE.md` gains
+step **C7a**, which runs `verifier` BEFORE C8 opens the PR.
+
+---
+
+## DEV.112 — Day 24 follow-up — OPERATOR OVERRULE of a `verifier` FAIL, once, for PR #7 only
+
+**Date:** 2026-09-10
+**Scope:** PR #7 (`day-24-followup`, head `793bdd2`) and nothing else.
+
+This is the first and, on the reasoning below, the only time a `verifier` FAIL
+has been overruled in this project. It is recorded as its own entry so that
+anyone later searching for "was a verifier FAIL ever overridden" finds the
+answer, the ground, and the limit, rather than a silent merge.
+
+### 1. The FAIL was CORRECT. It was not a false positive.
+
+`verifier` returned FAIL on `PROJECT_PLAN.md` marker containment, twice — once
+against the pre-amendment rule and once against the amended rule. Both times the
+finding was right, and the second was sharper than anything the main thread had
+worked out:
+
+`.claude/agents/verifier.md` now reads "**No change outside the markers is
+permitted. Full stop.**" The amendment's justifying text is written in the past
+tense — "the section **was** deleted" — and the argument that removing the
+exception is a tightening depends on the deletion already sitting in the diff
+base. It does not. `git show main:PROJECT_PLAN.md` still has `## Changelog` at
+line 446. So the 43-line deletion at `main:446-488` falls inside the very diff
+the rule instructs the verifier to compute, entirely after the `END` marker at
+`main:367`. Under the rule as written, that is a FAIL. It was a FAIL. Nothing
+here disputes that.
+
+### 2. The verifier twice declined to soften on available grounds, and was right both times.
+
+On the first run it was told the deletion was deliberate, operator-performed,
+and forced by `.claude/settings.json` denying `Edit`/`Write` on the file. It
+recorded the FAIL anyway, stating explicitly that operator intent, DEV.110's
+reasoning and the settings denial were **not** grounds to soften it — "that is
+the one thing my remit forbids".
+
+On the second run it was told its own rule file had been amended, and it read
+the amended text off disk and applied it. It could have taken the amendment as
+licence. Instead it worked out — unprompted — that the amendment presupposes a
+deletion already on `main`, checked `main` to confirm the section is still
+there, and failed it again on the sharper ground. It then named both escape
+routes and rejected both: relaxing the rule would undo the tightening, and
+declaring the deletion out of scope would be the softening it is instructed to
+refuse.
+
+**This is the behaviour the roster exists for, and it is worth stating plainly
+because the roster is a convention with no enforcement behind it (CLAUDE.md
+§10.3).** An agent that folds when handed a good reason is worse than no agent,
+because it manufactures confidence. This one did not fold with a ready-made
+excuse in hand, twice, and it improved the analysis of the human who was
+overruling it.
+
+### 3. The overrule is scoped to PR #7 only, on the ground of UNSATISFIABILITY, and sets no precedent.
+
+The ground is narrow and mechanical: **the rule cannot be satisfied by the
+branch that performs the deletion, and is satisfied by every branch after it.**
+The section must leave the repository somehow; the only diff in which its
+removal can appear is the one that removes it. Exactly one commit in this
+repository's history must fail this check, and this is that commit.
+
+**What this overrule explicitly does NOT establish.** It is not a precedent for
+overruling a `verifier` FAIL because the change was intended, because the
+operator approved it, because CI is green, because the finding is inconvenient,
+because the day is late, or because the reasoning is documented elsewhere. None
+of those was the ground. The ground was that the check is mathematically
+unsatisfiable for this one diff and self-correcting immediately afterwards. A
+future FAIL that does not meet that specific bar does not close, and the correct
+response to it remains: fix the finding, or bring it to the operator.
+
+### 4. After this merges, the rule is unqualified.
+
+Once the deletion is in the diff base, `## Changelog` is absent from `main` and
+from every branch cut from it, so no future diff contains an extra-marker
+change on its account. From the next branch onward, **every branch must pass
+marker containment with no exception of any kind.** The rule now has zero
+carve-outs — it previously had one, for an appended changelog row — and it is
+enforced twice over: by `verifier` at closeout, and by
+`scripts/sync-project-plan.test.ts`, which asserts the real `PROJECT_PLAN.md`
+does not contain `## Changelog` and therefore fails the required `test` status
+check if the section ever returns.
+
+### The proof obligation this entry carries
+
+The overrule claims the rule is about satisfiability, not that the rule is
+wrong. That claim is falsifiable, and it is tested: `verifier` is to be re-run
+against `main` after the merge, with the deletion in the diff base. If marker
+containment passes clean there, the claim holds. **The result of that run is
+appended below and is the evidence for everything above.**
+
+Everything else in the pre-merge run passed: Stage 0 and Stages A–E
+byte-identical (md5 `1418ba7d745ee7f8a4594bc6d09335b9` both sides), the
+post-marker region other than the changelog byte-identical (md5
+`626691854ba38868168b3ae12b9c8a2d` both sides), markers intact, `plan:sync`
+idempotent, `DEVIATIONS.md` append-only, working tree clean, CI green on all
+three required checks with e2e at `65 passed (9.5m)` and zero retries.
