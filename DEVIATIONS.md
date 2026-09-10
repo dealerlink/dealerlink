@@ -3619,3 +3619,100 @@ tree clean.
 by sequencing rather than by choice — the FAIL was not yet known. Fixed
 structurally rather than by remembering: `docs/BUILD_PROMPT_TEMPLATE.md` gains
 step **C7a**, which runs `verifier` BEFORE C8 opens the PR.
+
+---
+
+## DEV.112 — Day 24 follow-up — OPERATOR OVERRULE of a `verifier` FAIL, once, for PR #7 only
+
+**Date:** 2026-09-10
+**Scope:** PR #7 (`day-24-followup`, head `793bdd2`) and nothing else.
+
+This is the first and, on the reasoning below, the only time a `verifier` FAIL
+has been overruled in this project. It is recorded as its own entry so that
+anyone later searching for "was a verifier FAIL ever overridden" finds the
+answer, the ground, and the limit, rather than a silent merge.
+
+### 1. The FAIL was CORRECT. It was not a false positive.
+
+`verifier` returned FAIL on `PROJECT_PLAN.md` marker containment, twice — once
+against the pre-amendment rule and once against the amended rule. Both times the
+finding was right, and the second was sharper than anything the main thread had
+worked out:
+
+`.claude/agents/verifier.md` now reads "**No change outside the markers is
+permitted. Full stop.**" The amendment's justifying text is written in the past
+tense — "the section **was** deleted" — and the argument that removing the
+exception is a tightening depends on the deletion already sitting in the diff
+base. It does not. `git show main:PROJECT_PLAN.md` still has `## Changelog` at
+line 446. So the 43-line deletion at `main:446-488` falls inside the very diff
+the rule instructs the verifier to compute, entirely after the `END` marker at
+`main:367`. Under the rule as written, that is a FAIL. It was a FAIL. Nothing
+here disputes that.
+
+### 2. The verifier twice declined to soften on available grounds, and was right both times.
+
+On the first run it was told the deletion was deliberate, operator-performed,
+and forced by `.claude/settings.json` denying `Edit`/`Write` on the file. It
+recorded the FAIL anyway, stating explicitly that operator intent, DEV.110's
+reasoning and the settings denial were **not** grounds to soften it — "that is
+the one thing my remit forbids".
+
+On the second run it was told its own rule file had been amended, and it read
+the amended text off disk and applied it. It could have taken the amendment as
+licence. Instead it worked out — unprompted — that the amendment presupposes a
+deletion already on `main`, checked `main` to confirm the section is still
+there, and failed it again on the sharper ground. It then named both escape
+routes and rejected both: relaxing the rule would undo the tightening, and
+declaring the deletion out of scope would be the softening it is instructed to
+refuse.
+
+**This is the behaviour the roster exists for, and it is worth stating plainly
+because the roster is a convention with no enforcement behind it (CLAUDE.md
+§10.3).** An agent that folds when handed a good reason is worse than no agent,
+because it manufactures confidence. This one did not fold with a ready-made
+excuse in hand, twice, and it improved the analysis of the human who was
+overruling it.
+
+### 3. The overrule is scoped to PR #7 only, on the ground of UNSATISFIABILITY, and sets no precedent.
+
+The ground is narrow and mechanical: **the rule cannot be satisfied by the
+branch that performs the deletion, and is satisfied by every branch after it.**
+The section must leave the repository somehow; the only diff in which its
+removal can appear is the one that removes it. Exactly one commit in this
+repository's history must fail this check, and this is that commit.
+
+**What this overrule explicitly does NOT establish.** It is not a precedent for
+overruling a `verifier` FAIL because the change was intended, because the
+operator approved it, because CI is green, because the finding is inconvenient,
+because the day is late, or because the reasoning is documented elsewhere. None
+of those was the ground. The ground was that the check is mathematically
+unsatisfiable for this one diff and self-correcting immediately afterwards. A
+future FAIL that does not meet that specific bar does not close, and the correct
+response to it remains: fix the finding, or bring it to the operator.
+
+### 4. After this merges, the rule is unqualified.
+
+Once the deletion is in the diff base, `## Changelog` is absent from `main` and
+from every branch cut from it, so no future diff contains an extra-marker
+change on its account. From the next branch onward, **every branch must pass
+marker containment with no exception of any kind.** The rule now has zero
+carve-outs — it previously had one, for an appended changelog row — and it is
+enforced twice over: by `verifier` at closeout, and by
+`scripts/sync-project-plan.test.ts`, which asserts the real `PROJECT_PLAN.md`
+does not contain `## Changelog` and therefore fails the required `test` status
+check if the section ever returns.
+
+### The proof obligation this entry carries
+
+The overrule claims the rule is about satisfiability, not that the rule is
+wrong. That claim is falsifiable, and it is tested: `verifier` is to be re-run
+against `main` after the merge, with the deletion in the diff base. If marker
+containment passes clean there, the claim holds. **The result of that run is
+appended below and is the evidence for everything above.**
+
+Everything else in the pre-merge run passed: Stage 0 and Stages A–E
+byte-identical (md5 `1418ba7d745ee7f8a4594bc6d09335b9` both sides), the
+post-marker region other than the changelog byte-identical (md5
+`626691854ba38868168b3ae12b9c8a2d` both sides), markers intact, `plan:sync`
+idempotent, `DEVIATIONS.md` append-only, working tree clean, CI green on all
+three required checks with e2e at `65 passed (9.5m)` and zero retries.
