@@ -3478,6 +3478,16 @@ the `STAGE_F_TASKS` markers are untouched; `pnpm plan:check` passes at 63 tasks;
 and `pnpm plan:sync` run twice is a no-op the second time, with an identical
 md5 across both runs.
 
+**The deletion had a second enforcer, found by CI.** `pnpm test:scripts`
+went red on `AssertionError: expected '# PROJECT_PLAN.md — Dealerlink Phase …'
+to contain '## Changelog'` — `scripts/sync-project-plan.test.ts:281` listed
+`## Changelog` among the headings the real file must still contain, inside a
+test named "still contains every Stage A-E heading", which it is not. So a test
+was holding in place a section that only a forbidden hand edit could maintain.
+That is the duplication argument making itself: the stale assertion was removed,
+and a replacement now asserts the section stays GONE, so it cannot quietly
+return.
+
 **One residue, reported not fixed:** `PROJECT_PLAN.md:3` still tells the reader
 to "Append a dated entry to the changelog at the bottom", which now points at
 nothing. It is outside the markers, so it is the operator's edit to make, and it

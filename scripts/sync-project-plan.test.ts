@@ -278,9 +278,24 @@ describe('the live PROJECT_PLAN.md', () => {
       '## Stage C — Internal Validation (Week 5)',
       '## Stage D — Production Infrastructure',
       '## Stage E — Launch & Onboarding',
-      '## Changelog',
     ]) {
       expect(plan).toContain(heading);
     }
+  });
+
+  // DEV.110 — the Changelog section was DELETED on Day 24, and this asserts it
+  // stays deleted. It sat OUTSIDE the STAGE_F_TASKS markers, so `plan:sync`
+  // never wrote it: the only way to maintain it was the hand edit CLAUDE.md
+  // §10.4 forbids and `.claude/settings.json` denies. It was also redundant —
+  // `docs/stage-f-tasks.json` already carries `completedDate` and `notes` per
+  // task — and two records of the same facts is the drift pattern that has
+  // already cost this project time twice.
+  //
+  // Note this heading is still used as arbitrary trailing content by the
+  // synthetic splice fixtures above; that is unrelated and deliberate. This
+  // assertion is about the REAL file only.
+  it('does not contain a Changelog section — deleted Day 24, must not return', async () => {
+    const plan = await readFile(REAL_PLAN, 'utf8');
+    expect(plan).not.toContain('## Changelog');
   });
 });
