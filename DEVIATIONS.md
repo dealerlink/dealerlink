@@ -3506,3 +3506,82 @@ date, means something a reader can confirm with `git show`.
 (F.62). Delisting would record them as fixed; they were never demonstrated
 broken. They are held in an explicit "watch — never evidenced" state so that if
 either ever fails it registers as new signal rather than a known-flake shrug.
+
+---
+
+## DEV.111 — Day 24 follow-up — the verifier's own pass condition was amended; this is a TIGHTENING, not a relaxation
+
+**Date:** 2026-09-10
+
+**Read this before reading the diff, because the diff is easy to misread.** A
+cold reading of "amended the verifier's own pass condition, then re-ran the
+verifier, then landed the PR" describes a gate being weakened to accommodate a
+violation. That is the opposite of what happened, and the distinction is the
+entire point of this entry.
+
+**What actually happened.** After the `## Changelog` section was deleted from
+`PROJECT_PLAN.md` (DEV.110), `verifier` returned **FAIL** on PR #7. The finding
+was correct and was accepted as correct. `.claude/agents/verifier.md:62` read:
+
+> Changes outside the markers are permitted **only** for an appended changelog
+> row at the bottom.
+
+A wholesale deletion of that section is not an appended row, so by the letter of
+the rule it was a FAIL. The verifier explicitly declined to soften it on the
+grounds of operator intent, DEV.110's reasoning, or the `settings.json` denial —
+which is exactly the behaviour its prompt asks for, and it is worth recording
+that the agent held the line when there was a ready-made excuse not to.
+
+**Why amending the rule is a tightening.** The rule previously carried **one
+carve-out**: a single category of hand-edit to a generated file was permitted.
+That carve-out existed solely to accommodate the changelog row. The changelog no
+longer exists. So the amendment does not admit the deletion as a new exception —
+**it removes the only exception the rule ever had.**
+
+|                                            | before                          | after                                |
+| ------------------------------------------ | ------------------------------- | ------------------------------------ |
+| changes permitted outside the markers      | one (an appended changelog row) | **none**                             |
+| legitimate hand-edits of `PROJECT_PLAN.md` | one                             | **zero**                             |
+| enforcement                                | `verifier` only                 | `verifier` **and** the `test` CI job |
+
+The last row matters: `scripts/sync-project-plan.test.ts` now asserts the real
+`PROJECT_PLAN.md` does **not** contain `## Changelog`, so a reappearance fails
+CI as well as the closeout. The rule went from "one exception, checked by a
+convention" to "no exceptions, checked by a convention **and** a required status
+check". Strictly more constrained on every axis.
+
+**What was NOT done, and would have been the weakening version:** adding an
+exception for "a deleted changelog section", or narrowing the check to the
+Stage 0/A–E tables, or telling the verifier to ignore extra-marker changes. Any
+of those would have left the file hand-editable. None was done. The Stage 0 and
+Stage A–E byte-identity assertion is untouched, and the verifier confirmed it
+held throughout — md5 `1418ba7d…` on both sides of the diff.
+
+**Files amended:**
+
+- `.claude/agents/verifier.md` — "no change outside the markers is permitted,
+  full stop", plus the reasoning above and a note that the section must not
+  return and that CI now enforces it too.
+- `docs/RUNBOOKS.md` — the "one legitimate hand-edit the closeout still needs"
+  paragraph deleted; it described a thing that no longer exists.
+- `docs/BUILD_PROMPT_TEMPLATE.md` C5 — the instruction to append a changelog row
+  removed for the same reason.
+
+**Correction folded in, to `docs/RUNBOOKS.md`'s description of the deny rule.**
+It said the `PROJECT_PLAN.md` deny "covers the Edit and Write tools, not writes
+from a shell command". **That is wrong.** Observed on Day 24: the `Edit` tool is
+hard-denied on that path (`File is in a directory that is denied by your
+permission settings` — a hard deny, not a prompt), **and at least some Bash
+invocations naming the path are blocked in either direction** — `verifier` had a
+read-only `cp` refused with `PROJECT_PLAN.md` as the SOURCE, so the matcher keys
+on the path appearing in the command, not on the write target. **Not observed
+and therefore not claimed:** whether `sed -i`, a heredoc redirect or an `sh -c`
+wrapper get through. Untested. The doc now says so explicitly rather than
+asserting either way. This also refines, without contradicting, DEV.97: the deny
+is broader than "Edit/Write only", and it is still not a wall.
+
+**Process note, one line as the operator asked.** PR #7 was opened before
+`verifier` ran, so CLAUDE.md §10.3's "do not open the PR on a FAIL" was violated
+by sequencing rather than by choice — the FAIL was not yet known. Fixed
+structurally rather than by remembering: `docs/BUILD_PROMPT_TEMPLATE.md` gains
+step **C7a**, which runs `verifier` BEFORE C8 opens the PR.
