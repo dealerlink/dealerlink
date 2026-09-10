@@ -51,7 +51,15 @@ test.describe('Stage C Day C.1 — force-password-change (DEV.56)', () => {
   test.setTimeout(5 * 60_000);
 
   test('a provisioned admin is forced to rotate before reaching the app', async ({ page }) => {
-    page.setDefaultTimeout(15_000);
+    // F.52 — the spec-local `page.setDefaultTimeout(<N>)` that used to sit here
+    // was REMOVED, not raised. It capped every action and navigation in this
+    // test below the config's own budget while this spec walked the coldest
+    // route path in the suite, so the run's most expensive first-hit compiles
+    // were charged against its tightest budget. It carried no comment and no
+    // stated reason. Actions are now bounded by this test's own
+    // `test.setTimeout` above, which is the budget that was actually reasoned
+    // about. Nothing here waits longer than before on a healthy run; the
+    // warm-up pass in tests/e2e/global-setup.ts is what removed the wait.
 
     // ── Provision a fresh tenant + admin as operator ─────────────────────
     let tempPassword = '';

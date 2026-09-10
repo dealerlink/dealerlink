@@ -198,7 +198,19 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # DEV.104 / F.52 — 30 -> 40, ABOVE playwright.config.ts's globalTimeout
+    # (25 min). The two caps were inverted: globalTimeout was 40 and this was
+    # 30, so on a genuine hang GitHub killed the job first, Playwright's onEnd
+    # never ran, and test-results/verify-results.json — the artifact DEV.81
+    # exists to preserve — was never written. It failed in exactly the case it
+    # was built for. Playwright's cap must fire first and this one is the
+    # backstop, so the ordering is now globalTimeout 25 < timeout-minutes 40.
+    # The gap covers this job's non-Playwright work: ~1 min of install /
+    # browser install / migrate / seed before `verify`, plus the failure-path
+    # artifact uploads that only run after Playwright exits. Do not lower this
+    # below globalTimeout + a few minutes without changing globalTimeout too —
+    # the two numbers are a pair.
+    timeout-minutes: 40
     needs: checks
 
     services:

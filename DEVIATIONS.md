@@ -3076,3 +3076,307 @@ now written down instead of being discovered by a bad merge.
 **Resolution:** OPEN as a known property. No fix is proposed; the
 `gate`-job option above is the one to reach for if `e2e` is ever made
 conditional for any reason.
+
+---
+
+## DEV.104 — Day 24 — the `globalTimeout` / job-timeout inversion, resolved by ordering the pair
+
+**Date:** 2026-09-09
+**Spec said:** Day 24 Phase 4 — resolve the inversion; "do not leave it in place."
+
+**The bug:** `playwright.config.ts` set `globalTimeout: 2_400_000` (40 min) while
+`.github/workflows/verify.yml` set `timeout-minutes: 30` on the `e2e` job. On a
+genuine hang GitHub therefore killed the job at 30 minutes, ten minutes BEFORE
+Playwright's own cap would have fired. Playwright's `onEnd` never ran, so
+`test-results/verify-results.json` was never written — the artifact DEV.81
+exists specifically to preserve, missing in exactly the case it was built for.
+
+**Fixed by:** `globalTimeout` 40 min -> **25 min**, and the `e2e` job's
+`timeout-minutes` 30 -> **40**.
+
+**Why both numbers moved, rather than one.** Raising only the job timeout would
+have worked, and was the cheaper edit. It was rejected because the 40-minute cap
+had stopped bounding anything: it was set on Day 23 (DEV.101/102) as breathing
+room for F.52, and F.52 has now done its work — the suite runs in 6.9 min. A cap
+at 40 min against a 7-minute suite is not a hang detector, it is 40 minutes of
+runner time spent before anyone finds out. Lowering only the config would have
+left a 25/30 pair with just 5 minutes between them, which is not enough for the
+job's own non-Playwright work.
+
+**The ordering rule, so this does not regress:** `globalTimeout` must fire
+first, and the gap to `timeout-minutes` must cover everything the JOB does
+outside Playwright — measured at ~62s of pre-`verify` setup (install, Playwright
+browser install, migrate, seed) on CI run 34375881563, plus the failure-path
+artifact uploads that only run after Playwright exits. 25 and 40 leaves 15
+minutes for ~2 minutes of work. The two numbers are a pair and carry comments in
+both files saying so.
+
+**Why 25 and not 20:** DEV.101. A 20-minute cap against a 19.0-minute suite
+fired mid-run and reddened a branch on which no test failed (`"unexpected": 0`).
+25 min sits ~3.6x the measured 6.9-minute runtime.
+
+---
+
+## DEV.105 — Day 24 — the known-flaky six were on-demand-entries EVICTION, not first-hit compilation; suite 18.8 min -> 6.9 min
+
+**Date:** 2026-09-09
+**Spec said:** Day 24 Phase 2 — "the likely cause is route compilation competing
+with test execution on a cold Next dev server… implement a ROUTE WARM-UP PASS."
+
+**The premise was half right, and the half that was wrong is the half that
+mattered.** Compilation was indeed competing with test execution. But it was not
+FIRST-hit compilation, and a warm-up pass alone therefore could not fix it.
+
+`next dev` keeps a small buffer of compiled route entries and evicts the rest —
+the defaults are `pagesBufferLength: 5` and `maxInactiveAge: 60s`. This suite
+visits ~40 routes over what was then a 16-19 minute run. With a five-entry
+buffer, almost every route is evicted and recompiled several times per run.
+Measured locally in one run: `/login` compiled 5x, `/dashboard` 5x,
+`/dealers/[id]` 4x, `/quotations/[id]` 4x. `ci-investigator` found the same
+shape on CI run 34375881563 — `/dealers` and `/dealers/[id]` 3x each, with
+module counts VARYING between compiles (`/dealers`: 5464 -> 4307 -> 4429), which
+is eviction and rebuild rather than a restart. That also disposes of the reading
+that a green run's late cold compiles meant the server had restarted: it had
+not. There is exactly one `▲ Next.js`, one `Ready in` and one
+`Compiling /instrumentation` in each of the four CI runs examined.
+
+**Each of those recompiles costs 8-16s on CI and lands on whichever test touches
+the route next.** That is the entire known-flaky six. `flake-triager` established
+the mechanism positively for `verify-day-6`: the click at line 53 is an RSC SOFT
+navigation, so `page.locator('h1')` keeps resolving against the same DOM until
+the transition commits; while `/inventory/procurements/[id]` compiles, the
+assertion polls the LIST page's `<h1>Procurements</h1>`. Nineteen locator
+resolutions across 15s is what a compile longer than the `expect` budget looks
+like. There is no prefetch in dev, so the click is the route's first hit.
+
+**Fix, in two coupled parts.** `onDemandEntries: { maxInactiveAge: 1h,
+pagesBufferLength: 100 }` in `apps/web/next.config.mjs` so routes compile once
+per dev-server lifetime, plus the mandated warm-up pass in
+`apps/web/tests/e2e/global-setup.ts` so that single compile happens before the
+first test. Neither is worth much alone and the file comments say so.
+
+**MEASURED, because the operator required it before keeping anything.** Full
+suite, `workers: 1`, virgin database each time:
+
+| #   | configuration                                                   | wall         | result                             | peak RSS    | compiles                          |
+| --- | --------------------------------------------------------------- | ------------ | ---------------------------------- | ----------- | --------------------------------- |
+| a   | baseline — no warm-up, no `onDemandEntries`, default ~2 GB heap | 18.8 min     | 63 passed / 1 flaky / **1 failed** | not sampled | `/dealers` 4x, `/dashboard` 4x    |
+| b   | warm-up only, 4 GB heap                                         | **21.3 min** | 62 passed / 2 flaky / **1 failed** | 4790 MB     | `/login` 5x, `/dashboard` 5x      |
+| c   | `onDemandEntries` only, 4 GB heap                               | 20.8 min     | 61 passed / 3 flaky                | 5094 MB     | (2 server restarts — see DEV.106) |
+| c'  | `onDemandEntries` only, 6 GB heap                               | 9.4 min      | **65 passed, 0 flaky**             | 5932 MB     | 44, every route exactly once      |
+| c"  | repeat of c'                                                    | 9.3 min      | **65 passed, 0 flaky**             | 5960 MB     | 44                                |
+| d   | **both**, 6 GB heap                                             | **6.9 min**  | **65 passed, 0 flaky**             | 4352 MB     | 17, **all before the first test** |
+
+**Row (b) is the important one and it is recorded deliberately.** The warm-up
+pass, implemented exactly as the day prompt specified and shipped on its own,
+made the suite SLOWER — 21.3 min against an 18.8 min baseline. It paid ~2.6 min
+of its own cost and then eviction discarded the result. Had that been landed
+without measuring, F.52 would have shipped a regression while reporting a fix.
+
+**Why the warm-up was kept rather than dropped.** The operator's instruction was
+to prefer (c) alone if it got most of the benefit, and to drop Phase 2.2 rather
+than keep a change that was not earning its place. It earns it. (c) was re-run
+with the disk-cache ordering advantage reversed and came back at 561s / 44
+compiles — indistinguishable from its first run, so (d)'s margin is not a cache
+artefact. The decisive difference is not the 150s: in (d) **all 17 compiles
+complete during the warm-up and ZERO occur during the test phase**, whereas (c)
+still runs 44 compiles inside test budgets. Locally those fit; on CI, where a
+compile is 8-16s against a 15s `expect` budget, they are the failure. (d) also
+peaks 1.6 GB lower, because compilation no longer overlaps Chromium.
+
+**Scope — a deliberate call, recorded rather than left implicit.** Day 24 was
+"test infrastructure only", and `next.config.mjs` is a product config file. The
+operator ruled, and this entry records the reasoning: `onDemandEntries` is read
+ONLY by `next dev`; `next build` and `next start` ignore it, so it cannot reach
+production. It is test infrastructure that happens to live in a product config
+file — a filing problem, not a scope violation. The block carries a comment
+saying exactly that.
+
+**Confidence, stated honestly.** Runtime and the compile counts are solid: five
+full-suite runs, two of them a repeat of the same configuration agreeing to
+within 4 seconds. Flake elimination is NOT proven — three consecutive clean runs
+is three runs, and the flakes being chased reproduced roughly once per run
+before. The mechanism is understood and the mechanism is removed, which is a
+better argument than the green runs are, but the honest claim is "the cause is
+gone", not "the suite is proven stable."
+
+---
+
+## DEV.106 — Day 24 — a LOCAL-ONLY dev-server memory restart, and why it is not the CI flake
+
+**Date:** 2026-09-09
+
+**Observed:** in a local full-suite run the web dev server printed
+
+```
+⚠ Server is approaching the used memory threshold, restarting...
+```
+
+and restarted mid-suite. The in-flight request died with
+`net::ERR_CONNECTION_REFUSED` — that was the `verify-day-6` failure in the
+baseline run — and every route compiled so far was discarded, so the specs after
+it paid cold-compile costs again.
+
+**It does not happen on CI.** `ci-investigator` searched the complete logs of
+four runs (34375881563, 34309474851, 34327213279, 34223278188) for
+`approaching`, `memory threshold`, `restarting`, `heap out of memory`,
+`JavaScript heap`, `ERR_CONNECTION_REFUSED` and `ECONNREFUSED`: **zero hits in
+all four.** Each run shows a single dev-server lifetime.
+
+**This matters for Phase 1 and is called out so it does not contaminate F.52's
+notes.** The local `verify-day-6` failure (`ERR_CONNECTION_REFUSED`, server
+gone) and the CI `verify-day-6` failure (`toContainText(/PROC-/)` receiving
+`"Procurements"`, server up and serving) are DIFFERENT failure modes on the same
+spec. A local run reproducing the first is not reproducing the second. Any
+`NOT REPRODUCED` verdict from a local run under the restart condition means
+"the local instrument was measuring something else", not "the CI flake did not
+recur."
+
+**Fixed by:** `NODE_OPTIONS: '--max-old-space-size=6144'` on the Playwright
+`webServer.env`. Node's default ceiling here is ~2 GB.
+
+**Sized against the configuration actually kept**, per the operator's condition:
+config (d) — warm-up plus `onDemandEntries` — peaks at **4352 MB** RSS, and
+produced zero restarts across its run. 4096 was tried first and was NOT enough:
+it still restarted, at a 4790-5094 MB peak, because `onDemandEntries` retains
+every compiled route and the warm-up front-loads the work.
+
+**The container allocation was checked and is correct.** `memory.max` is unset
+(no cgroup limit) and `MemTotal` is 12232784 kB — **11.9 GiB**, so the >=12 GB
+Docker Desktop increase requested after Day 20 WAS applied. The earlier "~9 GB"
+figure in this session was `available` at a moment when a dev server was already
+running, not the ceiling. The heap flag is therefore not compensating for a
+missed allocation; it is compensating for Node's own 2 GB default.
+
+---
+
+## DEV.107 — Day 24 — RESOLVES DEV.96: all six agents load by name and `tools:` confinement is real
+
+**Date:** 2026-09-09
+**Resolves:** DEV.96 (Day 23).
+
+DEV.96 recorded that every Day 23 smoke test ran through a `general-purpose`
+proxy, because `.claude/agents/*.md` does not hot-reload, and listed three things
+that remained unproven. All three were tested this session, in a new session
+where the registry had been rebuilt.
+
+**Registration — PROVEN.** All six invoke by name: `ci-investigator`,
+`code-auditor`, `doc-auditor`, `flake-triager`, `plan-keeper`, `verifier`. No
+`Agent type not found`. The frontmatter parses; the reload caveat in
+`docs/RUNBOOKS.md` R24 is correct as written — a session boundary is what makes
+a roster change live.
+
+**`tools:` confinement — PROVEN, and it is enforcement, not obedience.** Each
+agent was asked, as an explicit harness check, to attempt one tool outside its
+declared set and report verbatim what happened. Every one reported the same
+distinction unprompted: the tool is **absent from its toolset**, so no call is
+emitted and nothing reaches a permission check — "unavailable, not refused".
+`code-auditor` (`Read, Grep, Glob`) could not issue Bash. `ci-investigator`
+(`Bash, Read`) could not issue Write. `doc-auditor` (`Read, Grep, Bash`) could
+not issue Edit or Write. This is the opposite of the Day 23 proxy, which had
+every tool and merely obeyed an instruction. Two of them also declined to
+simulate the probe through Bash on the grounds that it would return a false PASS
+for the wiring being tested, which is the behaviour the prompts ask for.
+
+**One discrepancy, recorded not resolved:** `doc-auditor` enumerated its tools as
+"exactly two — `Read` and `Bash`", though its frontmatter declares
+`Read, Grep, Bash`. It completed a substantial audit without Grep. Not chased
+today; noted so a future session does not read the frontmatter as authoritative
+about what an agent actually receives.
+
+**Behavioural confinement — PROVEN on the one agent that can write.**
+`plan-keeper` was deliberately asked, inside an otherwise legitimate seven-edit
+invocation, to also fix a line in `CLAUDE.md`. It refused, citing its own hard
+limit, completed the other work, and listed the refusal under `NOT DONE`. It
+also caught a genuine error in the invocation — it was told "last used id is
+F.53" (read from the last ARRAY ELEMENT) when the highest id is in fact F.54 at
+array index 5 — and stopped rather than inventing ids, which is exactly the
+standing rule. It further flagged that `days: null` is rejected by the sync
+script and that the file's convention is `"—"`, calling that out rather than
+substituting silently. Three separate correct refusals in one invocation.
+
+**Auto-delegation (DEV.96's third item) — NOT TESTED, and the framing needs
+correcting.** There is no independent dispatcher to observe. In this harness the
+main thread selects the agent, so "auto-delegation" is the main thread reading
+`description` fields and choosing — which cannot be tested by the main thread
+without grading its own homework. The descriptions were narrow enough that every
+selection this session was unambiguous, and no agent was invoked that then
+reported the task was outside its remit. That is weak positive evidence, not a
+test, and it is recorded as such rather than claimed as a pass.
+
+**Value delivered, since the roster's purpose is context:** `ci-investigator`
+overturned this thread's working hypothesis twice — first that the CI cold
+compiles implied a server restart (they were evictions), then that the local
+memory restart explained the CI flakes (it does not occur on CI at all). Both
+corrections arrived before any code was written against the wrong theory.
+
+---
+
+## DEV.108 — Day 24 — CI parallelism NOT raised: the specs are interdependent, with file:line evidence
+
+**Date:** 2026-09-09
+**Spec said:** Day 24 Phase 3 — try `workers: 2` on CI, then 3; but 3.3, "CRITICAL —
+check for spec interdependence before raising workers", and 3.4, "If specs are
+interdependent, REPORT IT rather than raising workers."
+
+**Verdict: interdependent. `workers` stays 1. Not raised, not measured at 2 or 3.**
+
+`fullyParallel` is `false`, so raising workers parallelises across FILES while
+keeping tests within a file serial. Every worker shares one database.
+
+**Parallel-SAFE, checked and cleared:**
+
+- The two tenant-provisioning specs do not collide. `verify-day-c1.spec.ts:24`
+  and `operator-onboarding.spec.ts:41` each derive slug, GSTIN, PAN and admin
+  email from `Date.now()` at module load, and their PAN prefixes differ
+  (`AABCR` vs `AABCA`, `verify-day-c1.spec.ts:46` /
+  `operator-onboarding.spec.ts:64`), so they cannot produce the same GSTIN even
+  within one millisecond.
+- `verify-day-19`'s rate-limit probe is keyed per worker PROCESS —
+  `PROBE_EMAIL = f19-e2e-${process.pid}-${Date.now()}@demo.test`
+  (`verify-day-19.spec.ts:43`) — and its exact-count assertion
+  (`toBe(LOGIN_RATE_LIMIT_MAX)`, :133) reads only its own key.
+- Operator impersonation is COOKIE-scoped, not server-state —
+  `IMPERSONATION_COOKIE = 'dealerlink_impersonation'`
+  (`apps/web/lib/tenant/context.ts:16`) — so concurrent impersonation across
+  browser contexts cannot interfere.
+- Document numbering is atomic by design (`document_counters`, CLAUDE.md §4.3).
+
+**Parallel-UNSAFE — three specs mutate shared SEEDED rows selected by
+`.first()`, and `critical-path.spec.ts` competes for the same rows:**
+
+1. `verify-day-13.spec.ts:60-68` takes the FIRST dispatchable order matching
+   `ORD-\d{4}-` and consumes it. The pattern was chosen (per its own comment) to
+   dodge DB-test residue — but `critical-path.spec.ts:320` creates a real order
+   through the live counter, which matches `ORD-2026-…` too. Concurrently, day-13
+   can take critical-path's order out from under it.
+2. `verify-day-13.spec.ts:87+` flips the FIRST in-transit dispatch to
+   `delivered`. `critical-path.spec.ts:412-416` marks its OWN dispatch delivered
+   at step 22 — but its dispatch is in-transit and is a candidate for day-13's
+   `.first()`.
+3. `verify-day-12.spec.ts:58+` takes the FIRST `pending_verification` payment and
+   allocates it. `critical-path.spec.ts:343-347` records a payment that lands in
+   exactly that state. This is the most likely collision of the three.
+
+This is the DEV.31 residue pattern, except between two specs running at the same
+time rather than between two suites running in sequence. The resulting failure
+would be non-deterministic and would look exactly like a flake — which is the
+specific outcome F.52 exists to remove. A parallelism increase that introduces a
+new class of flake is a net loss.
+
+**Memory is the second, independent reason, and the operator asked for it to be
+flagged before raising workers.** The kept configuration peaks at **4352 MB** RSS
+for ONE worker on a container with 11.9 GiB total, and that is with
+`onDemandEntries` deliberately retaining every compiled route. A second worker
+adds another Chromium plus concurrent compilation against the same retained
+route set. DEV.87/91 is what put `workers: 1` in this file in the first place.
+
+**Note the ground has moved.** Phase 3's premise was that `workers: 1` costs
+runtime worth reclaiming. It no longer does: the suite runs in 6.9 minutes at one
+worker, against a 15-minute target. Parallelism was the lever for a problem that
+has been solved another way, and the cost of pulling it is a test-isolation
+project. Filed as its own task rather than done here.
+
+**What would close it:** make the three specs create the rows they mutate instead
+of selecting a seeded `.first()`, then re-measure. That is real work and is its
+own day.

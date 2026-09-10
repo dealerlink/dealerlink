@@ -51,7 +51,10 @@ const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // Minimal Permissions-Policy: deny the high-risk device APIs we never use.
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
+  },
 ];
 
 /** @type {import('next').NextConfig} */
@@ -80,6 +83,39 @@ const nextConfig = {
         hostname: '*.digitaloceanspaces.com',
       },
     ],
+  },
+  // ── e2e test infrastructure, filed here because Next gives it nowhere else ──
+  //
+  // DEV.105 / F.52. `onDemandEntries` is read ONLY by `next dev`. `next build`
+  // and `next start` ignore it entirely, so nothing here can reach production —
+  // it is test infrastructure that happens to live in a product config file,
+  // which is a filing problem rather than a scope one. Recorded as a deliberate
+  // scope call in DEVIATIONS.md rather than left implicit.
+  //
+  // WHAT IT FIXES. In dev, Next keeps a small buffer of compiled route entries
+  // and evicts the rest; the defaults are `pagesBufferLength: 5` and
+  // `maxInactiveAge: 60s`. The verify suite visits ~40 routes over ~16-19
+  // minutes, so with a 5-entry buffer almost every route is evicted and
+  // recompiled several times in a single run. Measured, one local run:
+  // `/login` compiled 5x, `/dashboard` 5x, `/dealers/[id]` 4x,
+  // `/quotations/[id]` 4x. CI run 34375881563 shows the same shape —
+  // `/dealers` and `/dealers/[id]` compiled 3x each, with module counts
+  // varying between compiles, which is eviction and rebuild rather than a
+  // server restart.
+  //
+  // Each of those recompiles costs 8-16s on CI and lands on whichever test
+  // touches the route next. That is the whole of the known-flaky six: a first
+  // hit longer than the 15s `expect` budget, asserted against a page that has
+  // not committed its navigation yet. It is also why a one-shot warm-up pass
+  // could not fix this on its own — eviction simply discarded the warm-up.
+  //
+  // The values below are sized to outlast a suite run, not tuned: a buffer
+  // comfortably larger than the route count, and an inactivity window longer
+  // than the longest run. The intent is that every route compiles exactly once
+  // per dev-server lifetime.
+  onDemandEntries: {
+    maxInactiveAge: 60 * 60 * 1000,
+    pagesBufferLength: 100,
   },
   experimental: {
     typedRoutes: false,
