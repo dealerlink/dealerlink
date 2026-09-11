@@ -4135,3 +4135,86 @@ there:
 One correction to the recorded claim while confirming it: `render-pdf.ts:54-65`
 is a **negative allow-list** of four implemented types, so `'invoice'` throws **by
 omission** rather than via an explicit `case 'invoice': throw`.
+
+---
+
+## DEV.118 — Day 24 follow-up — CORRECTS DEV.117: the broken instrument is the Claude Code `grep` shim (ugrep), not GNU grep
+
+**Date:** 2026-09-11
+**Corrects:** DEV.117. Caught by `verifier` as a FAIL **before the PR opened** — the
+first time the C7a ordering rule added earlier the same day paid for itself.
+
+### What DEV.117 got right, and it is most of it
+
+The NUL byte is real and everything said about it stands: **offset 9441, line 264**,
+the deliberate documented sentinel in `outsideMarkers()`, present in the committed
+blob since `e3e3afe`. The **blast radius is correct** and was re-confirmed
+independently across all **666** tracked files — exactly **11** contain a NUL: four
+PDFs, one `.docx`, five PNGs, and `scripts/sync-project-plan.ts`. F.65's priority
+and the agent-prompt mitigation both rest on that, and it holds.
+
+### What it got wrong: the name of the failing tool
+
+**It is not GNU grep.** In a Claude Code session, `grep` is a **shell function shim**
+installed by the harness and backed by **ugrep 7.8.4**. That shim is what exits 1
+with no output. Real GNU grep 3.8 at `/usr/bin/grep` handles the same file and
+pattern **correctly**.
+
+Measured, `scripts/sync-project-plan.ts`, pattern `MARKER_START`, true count 4:
+
+| instrument                        | result                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------- |
+| `node` (authoritative)            | 4                                                                               |
+| bare `grep -c` (ugrep shim)       | **exit 1, no output** ← the trap                                                |
+| `grep -ac`                        | 4                                                                               |
+| `/usr/bin/grep -c` (GNU grep 3.8) | **4, exit 0**                                                                   |
+| `/usr/bin/grep -n`                | prints `binary file matches`, exit 0                                            |
+| `git grep -c`                     | 4, lists lines                                                                  |
+| `rg -c`                           | 4, but `rg -n` prints `binary file matches` and lists **no lines** without `-a` |
+| `LC_ALL=C grep -c`                | exit 1, no output                                                               |
+
+### The evidence was already in DEV.117 and I missed what it meant
+
+DEV.117 recorded, as part of the symptom, "no `Binary file matches` line". **That
+absence was the proof it was not GNU grep** — GNU grep _does_ print that line, as
+the table above shows. The entry contained its own refutation and the inference was
+not drawn. Recording that plainly because it is the instructive part: the
+misdiagnosis was not caused by missing data.
+
+### Why this is not a pedantic correction
+
+1. **The failure is session-scoped to the harness shim, so it does not exist in
+   CI**, which has no shim. DEV.117 and the prompts described it as a repo-and-binary
+   property, which overstates where it applies.
+2. **A future agent would reasonably discount the warning.** Test `/usr/bin/grep`,
+   see the correct count and exit 0, conclude the guidance is stale. A warning that
+   fails its own obvious verification gets ignored, and then the real trap is live
+   again.
+3. **It misdirects remediation toward the NUL** — which is deliberate, documented
+   and correct — instead of toward instrument choice, which is the thing actually
+   under anyone's control.
+
+### Fixed in the same pass
+
+All four agent prompts were rewritten with the correct attribution, the measured
+table above, and two explicit warnings: that the property is **session-scoped and
+absent from CI**, and that **`/usr/bin/grep` behaving correctly does not make the
+guidance stale**. The search-instrument block is byte-identical across the three
+Bash-holding agents (`doc-auditor`, `ci-investigator`, `flake-triager`) and
+`code-auditor` retains the inverse note, since its ripgrep-backed `Grep` tool was
+never affected and it has no Bash to reach the broken path.
+
+**A second defect was found and fixed with it:** the prompts' step 2 recommended
+`rg -n`, which lists no lines on a NUL-bearing file. Corrected to **`rg -na`**.
+The recommendation intended as a mitigation would itself have failed on the one
+file the section is about.
+
+`code-auditor`'s note now also asks for **affirmative enumeration** where it is
+available — "X is absent from this list I read in full" is evidence a
+silently-failing search cannot fake, which a bare empty result is not. That is the
+method the tax-invoice re-audit used, and it is why that verdict is trustworthy
+regardless of which grep was in play.
+
+**Unchanged:** the one-line sentinel fix remains the real elimination of the fault
+at source, still not done, still needing an operator call, still sequenced into
+F.37/F.63 which rewrites that script anyway.
