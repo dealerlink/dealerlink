@@ -3795,6 +3795,30 @@ this repository's history must fail this check, and this is that commit" is true
 of history to date, but reads as though the condition cannot recur. **It can, and
 on the queued work it will.**
 
+**The untested boundary case was then tested by this branch's own second commit,
+and it passes too.** `verifier` noted the first measurement did not probe the
+boundary: markers untouched, changed lines 16 clear of START and 84 clear of END,
+line count 16→16 with no net shift. It named a task **append** as the different
+diff shape, because appending shifts every later line number including END's.
+Filing F.63-F.65 is exactly that, so the measurement was repeated on it:
+
+|                           | first instance (`9d6112e`) | boundary instance (`baa0f8f`)  |
+| ------------------------- | -------------------------- | ------------------------------ |
+| hunks (`-U0`)             | 1                          | 2                              |
+| changed envelope          | 269-284                    | 269-287 and 369                |
+| markers                   | 253 / 368                  | 253 / **371** (END shifted +3) |
+| contained strictly inside | yes                        | **yes**                        |
+
+Line 369 is the generated `**Stage F status: 8/66 complete**` summary, inside the
+markers by design. **Measure with `-U0`.** The default-context header for the
+second hunk reads `@@ -366,7 +369,7 @@`, whose envelope 369-375 appears to run
+four lines past END at 371 — that is context, not change, and reading it as change
+would produce a false FAIL. The true changed line is 369 alone.
+
+So satisfiability now holds across both diff shapes `plan:sync` can produce: a
+same-length edit and an append that moves the END marker. Still only the
+`plan:sync`-generated class; still nothing about a legitimate out-of-marker change.
+
 ### The structural gap — OPEN, and not fixed here
 
 `PROJECT_PLAN.md` carries Stage 0 and Stages A-E, plus headings, outside the
