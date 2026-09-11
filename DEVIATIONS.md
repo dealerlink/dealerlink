@@ -3819,6 +3819,24 @@ So satisfiability now holds across both diff shapes `plan:sync` can produce: a
 same-length edit and an append that moves the END marker. Still only the
 `plan:sync`-generated class; still nothing about a legitimate out-of-marker change.
 
+**And the guard added on Day 24 tripped on itself, which is worth recording
+because the fix is a real sharpening rather than a workaround.** The assertion
+installed with DEV.110 was `expect(plan).not.toContain('## Changelog')`. F.63's and
+F.65's notes DISCUSS the banned section — F.65 exists partly to remove a dead
+`'## Changelog'` anchor from `scripts/sync-project-plan.ts` — and task notes render
+into the generated table, so the substring duly appeared in `PROJECT_PLAN.md` at
+lines 285 and 287 as prose, and the `test` job went red.
+
+Nothing was wrong with the document. **A substring guard on a document that
+contains prose about itself is self-tripping by construction.** What is banned is a
+Changelog _section_, and in Markdown that is a heading at the start of a line, so
+the assertion is now `not.toMatch(/^##\s+Changelog\s*$/m)`. Checked against five
+cases before landing: a real heading and a heading with trailing whitespace both
+match; a mention inside a table cell, a mention mid-sentence, and a deeper `###`
+heading all correctly do not. The guard is strictly more precise than before — it
+still fails if the section returns, and no longer fails when someone writes about
+it.
+
 ### The structural gap — OPEN, and not fixed here
 
 `PROJECT_PLAN.md` carries Stage 0 and Stages A-E, plus headings, outside the
