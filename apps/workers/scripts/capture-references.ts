@@ -92,6 +92,9 @@ async function main(): Promise<void> {
         sizeBytes: out.buffer.length,
         productionFilename: out.filename,
         ok: true,
+        renderedBy: process.env.PUPPETEER_EXECUTABLE_PATH ?? '@sparticuz/chromium (default)',
+        arch: process.arch,
+        capturedAt: new Date().toISOString(),
       });
       console.log(`OK   ${c.label.padEnd(36)} ${String(out.buffer.length).padStart(8)} bytes`);
     } catch (err) {
@@ -100,10 +103,33 @@ async function main(): Promise<void> {
     }
   }
 
-  writeFileSync(
-    path.join(OUT, 'capture-results.json'),
-    `${JSON.stringify({ renderedBy: process.env.PUPPETEER_EXECUTABLE_PATH ?? '@sparticuz/chromium (default)', arch: process.arch, results }, null, 2)}\n`,
+  // MERGE by label rather than overwrite. The first version of this script
+  // rewrote the file wholesale per run, so a one-document smoke run silently
+  // clobbered the full-matrix provenance record — and that clobbered version got
+  // committed. The README makes provenance load-bearing for diagnosing a Day 26
+  // mismatch, so a partial record is worse than none.
+  //
+  // Merging is the correct behaviour rather than a guard against operator
+  // sloppiness: branded and unbranded cases need DIFFERENT fixture state in the
+  // database and therefore cannot share a single run, so a complete record is
+  // necessarily assembled from several.
+  const resultsPath = path.join(OUT, 'capture-results.json');
+  const byLabel = new Map<string, Record<string, unknown>>();
+  if (existsSync(resultsPath)) {
+    try {
+      const prev = JSON.parse(readFileSync(resultsPath, 'utf8')) as {
+        results?: Record<string, unknown>[];
+      };
+      for (const r of prev.results ?? []) byLabel.set(String(r.label), r);
+    } catch {
+      // A corrupt or older-shaped file is replaced rather than trusted.
+    }
+  }
+  for (const r of results) byLabel.set(String(r.label), r);
+  const merged = [...byLabel.values()].sort((a, b) =>
+    String(a.label).localeCompare(String(b.label)),
   );
+  writeFileSync(resultsPath, `${JSON.stringify({ results: merged }, null, 2)}\n`);
   console.log(`\ncaptured ${results.filter((r) => r.ok).length}/${cases.length}`);
 }
 

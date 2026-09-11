@@ -176,3 +176,44 @@ Chromium situation it replaces.
 
 Two things to settle first, both cheap: install `xz-utils` in the devcontainer,
 and check byte-determinism across arm64 and x86-64.
+
+---
+
+# Addendum — cross-architecture determinism, answered
+
+**Question:** does Typst produce byte-identical output for the same input on arm64
+and x86-64 with `SOURCE_DATE_EPOCH` pinned?
+
+**Answer: YES. Byte-identical.** Verified as a standing CI check rather than a
+one-off measurement — `apps/workers/scripts/typst-determinism/` plus the
+`typst-determinism` job in `.github/workflows/verify.yml`.
+
+|                        |                                                                    |
+| ---------------------- | ------------------------------------------------------------------ |
+| arm64 (devcontainer)   | `06713a310aa01b092a8c5e4d067aa3050123fc03b4d87a2c831c1e3048a404d5` |
+| x86-64 (GitHub runner) | **same hash — job PASS in 6s**                                     |
+| fixture                | 2 pages, 300 unique serials, 3 ₹ glyphs, repeating table header    |
+| local reproducibility  | 1 distinct hash across 3 arm64 renders                             |
+
+**Why this was worth answering before Day 26 rather than on Day 27.** References
+are captured in the arm64 devcontainer; CI snapshot tests run on x86-64 runners.
+Had the two disagreed, every snapshot test would have failed on its first run with
+no useful signal, and the remedy would not have been in the test harness — it
+would have been that **references must be produced in CI rather than locally**,
+which changes Day 25's output, not Day 27's. That risk is now closed: local
+capture is sound.
+
+The fixture is deliberately non-trivial, because a minimal document could be
+byte-stable while a realistic one is not. It exercises the rupee sign and Indian
+digit grouping, `counter(page)` in a footer, a table with a repeating header
+spanning a page break, and a 300-entry serial list.
+
+**Two pins, both load-bearing**, and the check exists partly to keep them honest:
+Typst `0.15.1` and `SOURCE_DATE_EPOCH=1700000000`. A Typst upgrade may legitimately
+change layout and therefore the hash — re-record from **arm64**, never from the CI
+side, which would make the check tautological.
+
+**What this still does not cover:** determinism across Typst _versions_ (by
+design — a version bump is expected to change the hash), and determinism of the
+real templates, which do not exist yet. It covers the axis that would have
+invalidated the approach.

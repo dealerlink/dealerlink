@@ -48,31 +48,70 @@ eliminating that.
 
 ## Coverage against the Day 25 matrix
 
-| Matrix case                            | Covered             | Where                                                                                                                                          |
-| -------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| (a) intra-state — CGST + SGST          | ✅                  | `quotation__QT-2026-0001__intra__1line`, `quotation__QT-2026-0010__intra__2line`, `performa_invoice__PI-2026-0001__intra__2line`               |
-| (a) inter-state — IGST                 | ✅                  | `quotation__QT-2026-0006__inter__3line`, `performa_invoice__PI-2026-0002__inter__1line`, `quotation__QT-2026-0001__inter-sample-tenant__1line` |
-| (b) tenant **without** custom branding | ✅                  | all of them — see gap below                                                                                                                    |
-| (b) tenant **with** logo               | ❌ **NOT CAPTURED** | neither seeded tenant has a `logo_url`                                                                                                         |
-| (c) single-line document               | ✅                  | `quotation__QT-2026-0001__intra__1line`, `performa_invoice__PI-2026-0002__inter__1line`                                                        |
-| (c) multi-page document                | ✅                  | `dispatch__DSP-REF-0500__500serials` (2 pages)                                                                                                 |
-| (d) **hard case** — 26 serials         | ✅                  | `dispatch__DSP-REF-0026__26serials`                                                                                                            |
-| (d) **hard case** — 500 serials        | ✅                  | `dispatch__DSP-REF-0500__500serials`                                                                                                           |
-| (e) total requiring round-off          | ❌ **NOT CAPTURED** | no seeded document produces a round-off line                                                                                                   |
-| all four render paths                  | ✅                  | quotation, performa invoice, payment receipt, dispatch note                                                                                    |
+| Matrix case                             | Covered                                            | Where                                                                                                                                          |
+| --------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) intra-state — CGST + SGST           | ✅                                                 | `quotation__QT-2026-0001__intra__1line`, `quotation__QT-2026-0010__intra__2line`, `performa_invoice__PI-2026-0001__intra__2line`               |
+| (a) inter-state — IGST                  | ✅                                                 | `quotation__QT-2026-0006__inter__3line`, `performa_invoice__PI-2026-0002__inter__1line`, `quotation__QT-2026-0001__inter-sample-tenant__1line` |
+| (b) tenant **without** custom branding  | ✅                                                 | the 10 unprefixed references                                                                                                                   |
+| (b) tenant **with** logo + bank details | ✅                                                 | the 4 `BRANDED__*` references                                                                                                                  |
+| (c) single-line document                | ✅                                                 | `quotation__QT-2026-0001__intra__1line`, `performa_invoice__PI-2026-0002__inter__1line`                                                        |
+| (c) multi-page document                 | ✅                                                 | `dispatch__DSP-REF-0500__500serials` (2 pages)                                                                                                 |
+| (d) **hard case** — 26 serials          | ✅                                                 | `dispatch__DSP-REF-0026__26serials`                                                                                                            |
+| (d) **hard case** — 500 serials         | ✅                                                 | `dispatch__DSP-REF-0500__500serials`                                                                                                           |
+| (e) total requiring round-off           | ⛔ **NOT CAPTURABLE — the feature does not exist** | see below                                                                                                                                      |
+| all four render paths                   | ✅                                                 | quotation, performa invoice, payment receipt, dispatch note — branded **and** unbranded                                                        |
 
-**Two gaps, stated rather than papered over.** Both are matrix cells the seeded
-data does not produce, and both need a decision before Day 26 leans on them:
+### (b) Branding — captured, and verified to have actually rendered
 
-- **Branded tenant.** `tenant_settings.logo_url` is NULL on both `demo` and
-  `sample`, so every reference here is the unbranded path. Bank details ARE
-  present and DO render. Closing this needs a logo set on a tenant and a
-  re-capture; it is the one visual surface the Day 26 sign-off gate most needs.
-- **Round-off.** No captured document renders a round-off line. Either the seed
-  produces no total that needs one, or the templates do not emit the line —
-  **that distinction is not yet established and should not be assumed.** The
-  round-off rule is CLAUDE.md §5 ("applied at grand total, not per line"), so it
-  matters; F.38's guardrail is that no number on any document may change.
+`apps/workers/scripts/branded-tenant-fixture.sql` sets a deterministic inline SVG
+logo on the `demo` tenant; `sample` is left unbranded so both paths are covered.
+Bank details are already seeded on both tenants and were not modified.
+
+**The logo was verified to render, not assumed.** Byte size barely moves
+(199,357 branded vs 199,243 unbranded), which looks suspicious until you check
+why: the SVG is drawn as **vector text and shapes, not an image XObject** — both
+files contain zero `/Subtype /Image`. The proof is in the extracted text:
+
+|           | first characters extracted                                       |
+| --------- | ---------------------------------------------------------------- |
+| branded   | `DEMO SOLARDistributors Pvt LtdDemo Solar Distributors Pvt Ltd…` |
+| unbranded | `Demo Solar DistributorsDemo Solar Distributors Pvt Ltd…`        |
+
+The branded file carries the logo's own text; the unbranded one carries the
+`logo-fallback` div with the tenant display name (`Header.tsx:38-41`). Different
+code path, confirmed from the output rather than from the fixture having run.
+
+A useful consequence for Day 26: because the logo renders as text, it is
+**checkable by extraction** and not only by eye.
+
+### (e) Round-off — established, not written off
+
+**It cannot be captured, because there is nothing to render. This is neither a
+seed gap nor a template bug: the feature is not implemented in Phase 1, and that
+was a deliberate, documented decision.**
+
+`packages/tax/src/round.ts` states it directly:
+
+> CLAUDE.md §6 says "Round-off: applied at grand total, not per line". That rule
+> concerns a _different_ quantity: the optional whole-rupee "Round Off"
+> adjustment line that nudges the grand total to a round figure (±0.99 paise).
+> That is a separate, document-level line item — it is **NOT modelled by this
+> engine** (the quotation schema has no round-off column in Phase 1) […] If/when
+> a round-off line is introduced, it is computed once on `totalAmount`.
+
+Corroborated three ways: `packages/tax` exposes no round-off field on its output
+type and performs only line-level `round2`; `TaxSummary.tsx` renders exactly
+Subtotal → (discount) → IGST _or_ CGST+SGST → Grand Total, with **no round-off
+row**; and neither `quotations` nor `performa_invoices` has a round-off column.
+
+So there is no divergence to chase. **What this does mean for Day 26: the
+sign-off gate cannot approve round-off behaviour, because none exists.** When the
+round-off line is introduced, a reference for it has to be captured at that
+point — do not treat this matrix as having covered it.
+
+_(One piece of doc drift noticed in passing and not fixed: `round.ts` cites
+"CLAUDE.md §6" but the round-off rule now lives at §5, line 258. The section
+numbering shifted under it.)_
 
 ## The long-serial fixtures
 
@@ -101,8 +140,9 @@ summary / totals / amount-in-words text. **Those values are the acceptance
 target, independent of pixel layout** — Day 26 should match the numbers and the
 text, then the Day 26 sign-off gate covers the visual.
 
-Note `₹` appears **1–2 times per document** in the Chromium baseline and survives
-extraction. Typst must match that; the spike confirms it can (`docs/TYPST_SPIKE.md`).
+Note `₹` appears **0–2 times per document** in the Chromium baseline and survives
+extraction — dispatch notes carry no currency at all, which is itself a thing
+Day 26 must not "fix". Typst must match that; the spike confirms it can (`docs/TYPST_SPIKE.md`).
 
 ## Known limitation of the capture script
 
