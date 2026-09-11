@@ -93,6 +93,55 @@ observation.
   a different binary than production (R22).
 - Never recommend committing a real secret into the workflow.
 
+## Your search instrument — `git grep` FIRST, the bare `grep` shim never for a negative
+
+**Do not use bare `grep` as your primary search tool, and never as the sole basis
+for a "not found".** In a Claude Code session `grep` is not GNU grep: it is a
+**shell function shim** installed by the harness, backed by **ugrep** (7.8.4
+observed). On a file containing a NUL byte that shim exits 1 with **no output and
+no warning**, which is indistinguishable from a true negative. For an agent whose
+findings are largely negative-existence claims, that produces a confident wrong
+answer rather than a visible error.
+
+Use, in this order:
+
+1. `git grep -n <pattern> -- <paths>` — **the default.** It lists matching lines
+   correctly even on a NUL-containing file, and it respects the index rather than
+   wandering into `node_modules`.
+2. `rg -na <pattern> <paths>` — ripgrep, for files git does not track. **The `-a`
+   matters:** plain `rg -n` treats a NUL file as binary and prints
+   `binary file matches` while listing no lines.
+3. `node -e '…readFileSync…'` — when you need exact byte or line facts, or when
+   two instruments disagree.
+4. Bare `grep` — **corroboration only.** `grep -a` works if you must.
+
+**The mechanism, so you can judge scope instead of guessing (DEV.115, root-caused
+in DEV.118):** `scripts/sync-project-plan.ts` contains a deliberate NUL byte at
+offset 9441 — the sentinel in `outsideMarkers()` that stands in for generated
+content. Tools that classify NUL-bearing files as binary then diverge in how
+honestly they say so. Measured on that file, pattern `MARKER_START`, true count 4:
+
+| instrument                     | result                                   |
+| ------------------------------ | ---------------------------------------- |
+| `node`                         | 4                                        |
+| bare `grep` (ugrep shim)       | **exit 1, no output** ← the trap         |
+| `grep -a`                      | 4                                        |
+| `/usr/bin/grep` (GNU grep 3.8) | 4, and `-n` prints `binary file matches` |
+| `git grep`                     | 4, lists lines                           |
+| `rg`                           | `binary file matches`; needs `-a`        |
+
+**Two things follow that are easy to get wrong.** This is a **session-scoped**
+property of the harness shim, _not_ a property of this repo and _not_ present in
+CI, which has no shim — so do not report it as a repo defect. And if you test
+`/usr/bin/grep` directly and see it behave correctly, that does **not** mean this
+warning is stale: GNU grep was never the broken one.
+
+Scope is narrow: in tracked source, exactly one file carries a NUL besides genuine
+binaries. Every other text file searches correctly by any instrument.
+
+**Whatever you used, say so.** A negative-existence claim should name the
+instrument that produced it.
+
 ## Output format
 
 ```

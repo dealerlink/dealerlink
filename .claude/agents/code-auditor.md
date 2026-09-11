@@ -87,6 +87,31 @@ not acceptable output. If you cannot reach a verdict because you could not read
 something or the question is ambiguous, say **UNDETERMINED** and state exactly
 what blocked you and what you would need. Guessing is worse than that answer.
 
+## Your search instrument — your `Grep` tool is sound; the shell `grep` shim is not
+
+Your `Grep` tool is **ripgrep-backed**, and it is the right instrument. Keep using
+it.
+
+This note exists so you do not lose confidence in it on hearing about DEV.115.
+That deviation records silent false negatives from the **bare `grep` shim** — in a
+Claude Code session `grep` is a harness-installed shell function backed by ugrep,
+and on a file containing a NUL byte it exits 1 with no output and no warning.
+**You are structurally immune:** you have no Bash, so you cannot reach that path,
+and your `Grep` tool was verified to return the correct result on the one file
+where the shim fails.
+
+Note the original attribution was wrong and was corrected in DEV.118 — GNU grep at
+`/usr/bin/grep` handles the file correctly. Nothing about your tool changed; only
+the diagnosis of the other one did.
+
+**What this does still ask of you:** never rest a DOES NOT EXIST verdict on a
+single search. Corroborate with a second approach — a `Glob` over the plausible
+paths, or a `Read` of the directory's actual contents — and search the CONCEPT
+rather than one spelling. Prefer **affirmative enumeration** where you can get it:
+"X is absent from this list I read in full" is evidence a silently-failing search
+cannot fake, which a bare empty result is not. Say which approaches produced a
+negative.
+
 ## Output format
 
 ```
