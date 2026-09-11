@@ -3954,3 +3954,74 @@ grep`.** Tracked as F.65.
 the creation path never runs — but it is a live reference to a now-banned section
 that would quietly re-anchor insertion if the section ever returned. Folded into
 F.65.
+
+---
+
+## DEV.116 — Day 24 follow-up — F.63 DECIDED: eliminate the hybrid. `PROJECT_PLAN.md` becomes entirely generated, and DEV.112 overclaimed
+
+**Date:** 2026-09-11
+**Closes:** the open operator decision recorded in DEV.113.
+**Corrects:** DEV.112.
+
+DEV.113 left F.63 open, because amending a gate's pass condition a second time is
+not a main-thread call. It is now decided, and the decision rejects the
+recommendation the main thread carried into it.
+
+**DEV.112 overclaimed, and this is the correction.** It said "Exactly one commit in
+this repository's history must fail this check, and this is that commit." That is
+false going forward. **Any** legitimate out-of-marker change fails the rule, and
+the queued work already contains one: `POST_PILOT_WORK_ORDER.md` §1.5 wants
+`PROJECT_PLAN.md` updated to record that Stage E never completed and that UMA is on
+hold. That is a real, specific, currently-impossible edit — not a hypothetical, and
+not a second exceptional case. DEV.112's narrow ground was sound for the commit it
+covered; its claim about the future was not.
+
+**The decision: ELIMINATE THE HYBRID. Do not sanction a permitted-edit path.**
+`verifier`'s recommendation — make an out-of-marker edit satisfiable but expensive
+and visible, via a tagged commit plus a DEVIATIONS entry — was rejected, on the
+ground that it reintroduces exactly the drift the deny rule exists to prevent, and
+that routine overrule turns CLAUDE.md §10.3 into a formality. The verifier's own
+"longer-run alternative" was chosen instead, and its one objection to that — that
+it would make the historical Stage A–E tables JSON-editable — is answered by moving
+the narrative to a plain markdown file rather than into JSON.
+
+So `PROJECT_PLAN.md` becomes **entirely generated**: the narrative (Stage 0,
+Stages A–E, Risks & Open Items) moves to a normally-editable file where ordinary
+rules apply and no deny is needed; `scripts/sync-project-plan.ts` renders the whole
+document from `docs/stage-f-tasks.json` plus a small committed header template; the
+verifier rule becomes "no hand edits at all" rather than "none outside the markers",
+which is trivially satisfiable forever with no region left to argue about; and the
+`Edit`/`Write` deny becomes unqualified and correct rather than a blunt instrument
+with a known dead zone.
+
+**It also closes the Changelog guard's form-specificity structurally.** The
+line-anchored `not.toMatch(/^##\s+Changelog\s*$/m)` would not catch
+`### Changelog` or `## Changelog — restored`. Widening the regex was the obvious
+fix and is not needed: **a fully generated file cannot acquire a section by hand.**
+
+**Folded into F.37**, same PR, because F.37 already restructures the same documents
+with `git mv`; splitting would mean restructuring them twice. **Cost, stated in the
+task rather than discovered later: roughly a day, and `sync-project-plan.ts` ends up
+owning more than the task table** — it becomes the renderer for the whole document,
+which is more surface in one script. Smaller than living with a file that
+structurally cannot be maintained.
+
+**Two ordering hazards recorded in F.37, because getting them wrong fails the PR
+that fixes the problem:** `scripts/sync-project-plan.test.ts` currently pins the
+Stage 0/A–E heading list and the Changelog guard, and both must move with the
+content rather than be deleted; and `.claude/agents/verifier.md`'s containment check
+plus CLAUDE.md §10.4 both describe the marker-bounded world and must be rewritten in
+the same change, or the closeout gate fails the very PR that removes the gate's
+dead zone.
+
+**Two priority directions set at the same time.** F.64: implement an **allow-list**
+of permitted git operations for `plan-keeper`, not a deny-list — `git reset` was
+missing from exactly such a list and that gap is the whole of DEV.114. A
+prohibition list will always have gaps; state positively what may run and forbid
+the rest by default. F.65: keep the grep fault **above cosmetic**. `code-auditor`
+and `doc-auditor` both reason from grep as their primary instrument, and a silent
+false negative there produces a confident wrong answer rather than a visible
+failure — every EXISTS / DOES NOT EXIST verdict in the Stage F record inherits that
+risk. Visible failures are cheap; confidently wrong verdicts get built on.
+
+**Not built. F.63 and F.37 are updated in the plan only.**
