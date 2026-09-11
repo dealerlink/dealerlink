@@ -204,8 +204,9 @@ which changes Day 25's output, not Day 27's. That risk is now closed: local
 capture is sound.
 
 The fixture is deliberately non-trivial, because a minimal document could be
-byte-stable while a realistic one is not. It exercises the rupee sign and Indian
-digit grouping, `counter(page)` in a footer, a table with a repeating header
+byte-stable while a realistic one is not. It exercises the rupee sign
+(the U+20B9 glyph itself — the amount is a literal, so no grouping logic is
+exercised), `counter(page)` in a footer, a table with a repeating header
 spanning a page break, and a 300-entry serial list.
 
 **Two pins, both load-bearing**, and the check exists partly to keep them honest:

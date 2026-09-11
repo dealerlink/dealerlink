@@ -8,13 +8,18 @@
 //
 // Deliberately exercises the features the real documents depend on, because a
 // trivial document could be byte-stable while a realistic one is not:
-//   - the rupee sign (U+20B9) and Indian digit grouping
+//   - the rupee sign (U+20B9) — the glyph only; the amount is a literal, so no
+//     grouping logic is exercised here
 //   - counter(page) in a footer, across a forced page break
 //   - a table with a repeating header, spanning pages
 //   - a long generated serial list, the highest-risk layout in the document set
 //
-// DO NOT EDIT without re-recording expected-sha256.txt on BOTH architectures.
-// Any change to this file changes the hash.
+// DO NOT EDIT without re-recording expected-sha256.txt. Any change to this file
+// changes the hash — that is the point of the check.
+//
+// Re-record on arm64 ONLY, from the devcontainer. Never from the CI side: CI is
+// the side being tested, so a hash recorded there makes the comparison
+// tautological. See README.md and Stage F task F.66.
 
 #set page(
   width: 210mm, height: 297mm, margin: 15mm,

@@ -18,8 +18,9 @@ PDF hashed. `expected-sha256.txt` holds the hash recorded on **arm64**, and the
 compares. A mismatch fails the job with both hashes printed.
 
 The fixture is not a trivial document, deliberately — a minimal one could be
-byte-stable while a realistic one is not. It exercises the rupee sign and Indian
-digit grouping, `counter(page)` in a footer, a table with a repeating header
+byte-stable while a realistic one is not. It exercises the rupee sign
+(the U+20B9 glyph itself — the amount is a literal, so no grouping logic is
+exercised), `counter(page)` in a footer, a table with a repeating header
 spanning a page break, and a 300-entry serial list (the highest-risk layout in
 the real document set).
 
