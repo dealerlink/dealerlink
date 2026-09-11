@@ -294,8 +294,18 @@ describe('the live PROJECT_PLAN.md', () => {
   // Note this heading is still used as arbitrary trailing content by the
   // synthetic splice fixtures above; that is unrelated and deliberate. This
   // assertion is about the REAL file only.
+  //
+  // LINE-ANCHORED, and it has to be. The first version of this test used
+  // `not.toContain('## Changelog')`, which tripped on itself: a Stage F task
+  // note that merely DISCUSSES the banned section renders into the generated
+  // table, and the substring then appears in `PROJECT_PLAN.md` as prose rather
+  // than as a heading. F.63's and F.65's notes did exactly that and turned the
+  // `test` job red. A substring guard on a document that contains prose about
+  // itself is self-tripping by construction. What is actually banned is a
+  // Changelog SECTION, and in Markdown that is a heading at the start of a
+  // line — so that, and only that, is what this matches.
   it('does not contain a Changelog section — deleted Day 24, must not return', async () => {
     const plan = await readFile(REAL_PLAN, 'utf8');
-    expect(plan).not.toContain('## Changelog');
+    expect(plan).not.toMatch(/^##\s+Changelog\s*$/m);
   });
 });
