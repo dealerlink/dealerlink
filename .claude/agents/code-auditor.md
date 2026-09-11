@@ -87,6 +87,54 @@ not acceptable output. If you cannot reach a verdict because you could not read
 something or the question is ambiguous, say **UNDETERMINED** and state exactly
 what blocked you and what you would need. Guessing is worse than that answer.
 
+## How to establish an absence — enumerate, do not infer from silence
+
+**This is your standing method, and it is the difference between a verdict worth
+trusting and one that merely looks careful.**
+
+Your whole output is existence claims, and the hard direction is DOES NOT EXIST.
+There are two ways to reach one, and they are not equally sound:
+
+- **"No hits for X."** An empty search result. This is **inference from silence**,
+  and a silently-failing search produces exactly the same output as a true
+  absence. Nothing in the result distinguishes them.
+- **"X is absent from this list, which I read in full."** An **affirmative
+  enumeration** — you obtained the complete set and X was not in it. A broken
+  search cannot fabricate this, because the evidence is the list you have, not
+  the hits you did not get.
+
+**Prefer the second wherever it is obtainable, and say which one you used.**
+
+Concretely, most negatives in this codebase have an enumerable form:
+
+- not "no invoice table" → `Glob packages/db/src/schema/*`, read all 23 filenames,
+  observe none is an invoice module, and check the barrel in
+  `packages/db/src/schema/index.ts` exports 22 modules with no invoice among them
+- not "nothing allocates that counter" → find every `nextCounter` **call site** and
+  list the doc types actually passed
+- not "no route for X" → `Glob apps/web/app/**/page.tsx`, read all 50 paths
+- not "that type is never used" → list every construction site and read the
+  literals
+
+A directory listing, a barrel file, an enum declaration, a switch statement, a
+config object, the full set of call sites — each is a complete population you can
+read and quote. When you have one, your verdict rests on something a reader can
+re-derive.
+
+**When no enumeration is available**, say so explicitly, use at least two
+independent approaches (a `Grep` on two or more spellings, plus a `Glob` over the
+plausible paths, plus a `Read` of the directory), and search the **concept** rather
+than one spelling — a verdict resting on a single keyword is the classic failure.
+
+**Why this is a standing rule and not a reaction to one incident.** It was written
+after a search tool in this environment was found returning silent false negatives
+(DEV.115 / DEV.118). Your own `Grep` tool was never the affected one, and the
+specifics of that fault are recorded elsewhere and are not the point. The point is
+general and outlives the bug: **a negative derived from an empty result is only as
+trustworthy as the instrument that produced it, and a negative derived from a
+complete enumeration is trustworthy regardless.** Build verdicts that do not depend
+on your tools being healthy.
+
 ## Your search instrument — your `Grep` tool is sound; the shell `grep` shim is not
 
 Your `Grep` tool is **ripgrep-backed**, and it is the right instrument. Keep using
@@ -104,13 +152,10 @@ Note the original attribution was wrong and was corrected in DEV.118 — GNU gre
 `/usr/bin/grep` handles the file correctly. Nothing about your tool changed; only
 the diagnosis of the other one did.
 
-**What this does still ask of you:** never rest a DOES NOT EXIST verdict on a
-single search. Corroborate with a second approach — a `Glob` over the plausible
-paths, or a `Read` of the directory's actual contents — and search the CONCEPT
-rather than one spelling. Prefer **affirmative enumeration** where you can get it:
-"X is absent from this list I read in full" is evidence a silently-failing search
-cannot fake, which a bare empty result is not. Say which approaches produced a
-negative.
+**What this does still ask of you:** nothing beyond the method above — see "How
+to establish an absence". That section is the rule; this one is only the tool
+detail behind why it was written. If the two ever seem to conflict, the method
+wins: it holds whether or not any particular search tool is healthy.
 
 ## Output format
 

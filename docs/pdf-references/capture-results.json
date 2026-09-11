@@ -1,0 +1,139 @@
+{
+  "renderedBy": "/usr/bin/chromium",
+  "arch": "arm64",
+  "results": [
+    {
+      "label": "quotation__QT-2026-0001__intra__1line",
+      "type": "quotation",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "b8e410a9-179d-4d5a-abde-3966ddd2e40d",
+      "documentNumber": "QT-2026-0001",
+      "covers": [
+        "intra-state CGST+SGST",
+        "single line item",
+        "unbranded tenant (no logo_url; bank details present)"
+      ],
+      "sizeBytes": 199145,
+      "productionFilename": "QT-2026-0001.pdf",
+      "ok": true
+    },
+    {
+      "label": "quotation__QT-2026-0006__inter__3line",
+      "type": "quotation",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "c0053010-0ae9-41a8-bcb2-bf8051ece808",
+      "documentNumber": "QT-2026-0006",
+      "covers": [
+        "inter-state IGST",
+        "multi line item",
+        "unbranded tenant (no logo_url; bank details present)"
+      ],
+      "sizeBytes": 214209,
+      "productionFilename": "QT-2026-0006.pdf",
+      "ok": true
+    },
+    {
+      "label": "quotation__QT-2026-0010__intra__2line",
+      "type": "quotation",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "c1595e2f-cdfc-4e5b-ac74-e9c913c1fc13",
+      "documentNumber": "QT-2026-0010",
+      "covers": ["intra-state CGST+SGST", "unbranded tenant (no logo_url; bank details present)"],
+      "sizeBytes": 209607,
+      "productionFilename": "QT-2026-0010-rev3.pdf",
+      "ok": true
+    },
+    {
+      "label": "performa_invoice__PI-2026-0001__intra__2line",
+      "type": "performa_invoice",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "8947d676-5a97-4142-972c-a5f8271a2e01",
+      "documentNumber": "PI-2026-0001",
+      "covers": ["intra-state CGST+SGST", "unbranded tenant (no logo_url; bank details present)"],
+      "sizeBytes": 212337,
+      "productionFilename": "PI-2026-0001.pdf",
+      "ok": true
+    },
+    {
+      "label": "performa_invoice__PI-2026-0002__inter__1line",
+      "type": "performa_invoice",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "1e0617f7-0ee9-400a-8991-134f6e9c694e",
+      "documentNumber": "PI-2026-0002",
+      "covers": [
+        "inter-state IGST",
+        "single line item",
+        "unbranded tenant (no logo_url; bank details present)"
+      ],
+      "sizeBytes": 207855,
+      "productionFilename": "PI-2026-0002.pdf",
+      "ok": true
+    },
+    {
+      "label": "payment_receipt__PAY-2026-0007__verified",
+      "type": "payment_receipt",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "85f33b93-3897-4f50-ace8-98d62b89dd02",
+      "documentNumber": "PAY-2026-0007",
+      "covers": ["unbranded tenant (no logo_url; bank details present)"],
+      "sizeBytes": 180784,
+      "productionFilename": "PAY-2026-0007.pdf",
+      "ok": true
+    },
+    {
+      "label": "dispatch__DSP-2026-0005__in_transit__8line",
+      "type": "dispatch",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "dc8a27cb-9176-4639-8dec-f2e169b1762e",
+      "documentNumber": "DSP-2026-0005",
+      "covers": ["unbranded tenant (no logo_url; bank details present)"],
+      "sizeBytes": 216633,
+      "productionFilename": "DSP-2026-0005.pdf",
+      "ok": true
+    },
+    {
+      "label": "quotation__QT-2026-0001__inter-sample-tenant__1line",
+      "type": "quotation",
+      "tenantId": "7fb8896a-a1d7-4bdf-8ae7-1bb4216283bc",
+      "documentId": "15b5b789-b23d-45a0-8464-01489f2710d4",
+      "documentNumber": "QT-2026-0001",
+      "covers": [
+        "inter-state IGST",
+        "second tenant (sample, KA)",
+        "single line item",
+        "unbranded tenant (no logo_url; bank details present)"
+      ],
+      "sizeBytes": 197783,
+      "productionFilename": "QT-2026-0001.pdf",
+      "ok": true
+    },
+    {
+      "label": "dispatch__DSP-REF-0026__26serials",
+      "type": "dispatch",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "5a3b37f6-ef16-4f31-902a-a3aa991a5bde",
+      "documentNumber": "DSP-REF-0026",
+      "covers": [
+        "HARD CASE: 26 serials under one line item",
+        "unbranded tenant (no logo_url; bank details present)"
+      ],
+      "sizeBytes": 214138,
+      "productionFilename": "DSP-REF-0026.pdf",
+      "ok": true
+    },
+    {
+      "label": "dispatch__DSP-REF-0500__500serials",
+      "type": "dispatch",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "documentId": "a15d4946-3c92-41c1-8ed3-c899bf16ea80",
+      "documentNumber": "DSP-REF-0500",
+      "covers": [
+        "HARD CASE: 500 serials under one line item",
+        "unbranded tenant (no logo_url; bank details present)"
+      ],
+      "sizeBytes": 369165,
+      "productionFilename": "DSP-REF-0500.pdf",
+      "ok": true
+    }
+  ]
+}
