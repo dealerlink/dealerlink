@@ -4025,3 +4025,113 @@ failure — every EXISTS / DOES NOT EXIST verdict in the Stage F record inherits
 risk. Visible failures are cheap; confidently wrong verdicts get built on.
 
 **Not built. F.63 and F.37 are updated in the plan only.**
+
+---
+
+## DEV.117 — Day 24 follow-up — DEV.115 ROOT-CAUSED: a deliberate NUL sentinel, one file, and the tax-invoice verdict re-verified
+
+**Date:** 2026-09-11
+**Root-causes:** DEV.115, which recorded the symptom and explicitly declined to guess at a cause.
+
+### The cause: a NUL byte, and it is ours
+
+`scripts/sync-project-plan.ts` contains a literal NUL at **offset 9441, line 264**,
+inside the template literal in `outsideMarkers()`:
+
+```ts
+return `${plan.slice(0, pos.start)}\0${plan.slice(pos.end + MARKER_END.length)}`;
+```
+
+It is **deliberate and documented** — the function's own docstring calls it "a
+sentinel standing in for the generated content", and comparing outside-markers
+before and after is precisely how `verifier` proves the script touched nothing
+else. The logic is correct and the NUL never reaches disk.
+
+**GNU grep treats any file containing a NUL byte as BINARY and suppresses
+matches.** That is the whole of the observed behaviour: exit 1, no output, no
+warning, no "Binary file matches" line. Four instruments on the same file and
+pattern:
+
+| instrument              | result                          |
+| ----------------------- | ------------------------------- |
+| `node` (authoritative)  | 4 occurrences of `MARKER_START` |
+| `grep -c`               | **exit 1, no output**           |
+| `grep -ac` (force text) | 4                               |
+| `git grep -c`           | 4                               |
+| `rg -c` (ripgrep)       | 4                               |
+
+`LC_ALL=C` changed nothing, which rules out the locale / invalid-multibyte theory
+that would otherwise have been the obvious guess.
+
+### The blast radius is one file, and that is the reassuring part
+
+A sweep of **every git-tracked file** for NUL bytes returns exactly this script
+plus genuine binaries — two PDFs, the .docx, five PNGs, two sample PDFs. Every
+other text file in the repo greps correctly, which matches `verifier`'s earlier
+observation that grep agreed with `node` on `PROJECT_PLAN.md`, `DEVIATIONS.md`
+and the test file.
+
+So DEV.115's framing — "grep is unreliable in this sandbox", "selective by path",
+"the worst failure mode available" — was **right about the symptom and too broad
+about the scope.** No Stage F conclusion is at risk unless it grepped _this one
+script_, and the audits were about app routes, schemas, CI logs and specs. This
+entry narrows DEV.115 rather than contradicting it: the fault was real, the
+instrument did fail silently, and the reachable damage was far smaller than it
+looked.
+
+### `code-auditor` was never affected, which inverts the expected mitigation
+
+The fault is in the GNU `grep` **binary invoked through a shell**.
+`code-auditor`'s dedicated `Grep` tool is **ripgrep-backed**, verified correct on
+this very file, and it has no Bash — so it cannot reach the broken path even by
+accident. The agent whose entire output is negative-existence claims was the one
+agent structurally immune.
+
+The agents actually exposed are the ones holding `Bash` whose prompts told them
+to `grep`: `doc-auditor`, `ci-investigator`, `flake-triager`.
+
+**Mitigation shipped, not noted.** Those three now carry an explicit
+search-instrument section: `git grep` first, `rg` second, `node -e` third, and
+plain `grep` as **corroboration only, never the sole basis for a negative** — with
+`-a` if used at all. `doc-auditor`'s Permitted Bash list was updated to match, and
+the cross-reference in its own header note was corrected with it. `code-auditor`
+got the opposite instruction: keep using its `Grep` tool, it is sound, and the
+standing requirement is simply never to rest a DOES NOT EXIST on a single search.
+
+**The remaining one-line fix is NOT done and needs an operator decision**, because
+it edits the script the plan gate depends on: change the sentinel from `\0` to any
+non-NUL improbable value. Any sentinel works — it is only ever compared against
+itself — and it removes the fault at source. **Sequencing:** F.37/F.63 is about to
+rewrite this script wholesale, so the cheapest moment is inside that change.
+Recorded in F.65 with the `INSERT_BEFORE_HEADINGS` residue.
+
+### The conclusion that mattered was re-verified anyway
+
+Day 19's `docs/TAX_INVOICE_AUDIT.md:21` verdict of **DOES NOT EXIST** is the
+foundation of F.6's scope, so it was re-derived from scratch rather than trusted.
+**It holds**, and the re-audit is methodologically stronger than the original: it
+rests on **affirmative enumerations** — the complete list of `nextCounter` call
+sites, of `documentType:` literals, of `prefixes[...]` read keys, plus full
+directory listings (50 pages, 23 schema files, 21 RLS policies, 18 migrations, 19
+worker files). "`invoice` is absent from this list I read in full" is a claim a
+silently-failing search cannot fake, which is the property the re-run existed to
+obtain.
+
+**Two findings Day 19 missed, both of which change F.6's scope** and are recorded
+there:
+
+1. **A live, role-gated, persisting UI control already names a tax invoice.**
+   `apps/web/app/admin/tenants/[id]/tenant-detail-sections.tsx:817` renders an
+   editable "Tax invoice" prefix input, and saving it really persists through
+   `updateTenantDocPrefixes`. What it writes is a prefix string **no numbering
+   code reads** — an operator can configure the prefix of a document that cannot
+   be created. It is the most likely reason for someone to believe the feature
+   exists.
+2. **The placeholder is load-bearing.** `docPrefixesSchema`
+   (`apps/web/lib/admin/schemas.ts:70`) makes the `invoice` key **required** for
+   any doc-prefix update, so it cannot simply be deleted during F.6 without
+   touching that schema and the admin form together.
+
+One correction to the recorded claim while confirming it: `render-pdf.ts:54-65`
+is a **negative allow-list** of four implemented types, so `'invoice'` throws **by
+omission** rather than via an explicit `case 'invoice': throw`.

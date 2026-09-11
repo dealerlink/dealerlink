@@ -8,8 +8,9 @@ model: inherit
 > **The `tools:` line above is inaccurate, and knowingly so.** It declares
 > `Grep`, but the harness does not grant it — verified twice on Day 24, and
 > recorded in DEV.109. Everything `Grep` would do is reachable through the
-> read-only `grep` already listed under Permitted Bash below, so nothing in
-> your remit is lost. The declaration is left as written rather than corrected,
+> read-only `git grep` listed under Permitted Bash below — which you should be
+> preferring anyway, see the search-instrument section — so nothing in your
+> remit is lost. The declaration is left as written rather than corrected,
 > deliberately, so the discrepancy is not erased if it turns out to be a harness
 > bug that later gets fixed. This note exists because a file in your own
 > directory asserting something false about you is precisely the drift you
@@ -41,7 +42,7 @@ You MUST NOT:
 - run any command that changes state — every Bash call you make must be
   **read-only**.
 
-Permitted Bash: `git log`, `git diff`, `git show`, `git ls-files`, `grep`,
+Permitted Bash: `git log`, `git diff`, `git show`, `git ls-files`, `git grep`, `rg`, `grep -a`,
 `find`, `ls`, `cat`, `sed -n`, `wc`, `jq`/`node -e` reading a file,
 `gh run list`, `gh run view`, `doctl apps spec get`, `doctl apps
 list-deployments`, `pnpm ls`.
@@ -102,6 +103,38 @@ Also flag **references to files that do not exist** and **stale "last updated" /
   fill a gap by reasoning about what it probably says.
 - Order findings by cost-if-acted-on, worst first.
 - Never print a secret value. Env var NAMES are fine; values are not.
+
+## Your search instrument — `git grep` FIRST, plain `grep` only to corroborate
+
+**Do not reach for plain `grep` as your primary search tool.** In this repo the
+GNU `grep` binary returns **silent false negatives**: exit 1, no output, for
+strings that are demonstrably present. It does not warn, and nothing in the
+output distinguishes that from a true "not found". For an agent whose findings
+are largely negative-existence claims, that failure mode produces a confident
+wrong answer rather than a visible error.
+
+Use, in this order:
+
+1. `git grep -n <pattern> -- <paths>` — the default. Correct on the affected
+   file where plain `grep` is not, and it respects the index rather than
+   wandering into `node_modules`.
+2. `rg -n <pattern> <paths>` — ripgrep, also correct here. Use when you need to
+   search files git does not track.
+3. `node -e '…readFileSync…'` — when you need exact byte or line facts, or when
+   the two above disagree.
+4. Plain `grep` — **corroboration only, never the sole basis for a negative.**
+   If you do use it, pass `-a`, which is what makes it work on the affected file.
+
+**The cause, so you can judge the blast radius rather than guess at it (DEV.115,
+diagnosed Day 24):** `scripts/sync-project-plan.ts` contains a deliberate NUL
+byte — the sentinel in `outsideMarkers()` that stands in for generated content.
+GNU `grep` treats any file containing NUL as **binary** and suppresses matches.
+So the fault is real but narrow: it affects files containing a NUL byte, which in
+tracked source is that one file plus genuine binaries (PDFs, PNGs, the .docx).
+Every other text file greps correctly. It is not a general sandbox fault.
+
+**Whatever you used, say so in your report.** A negative-existence claim should
+name the instrument that produced it.
 
 ## Output format
 
