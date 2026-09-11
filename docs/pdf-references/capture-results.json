@@ -1,0 +1,16 @@
+{
+  "renderedBy": "/usr/bin/chromium",
+  "arch": "arm64",
+  "results": [
+    {
+      "label": "smoke",
+      "type": "quotation",
+      "documentId": "b8e410a9-179d-4d5a-abde-3966ddd2e40d",
+      "tenantId": "d1ed724d-bdb0-498b-a458-21549017a343",
+      "covers": [],
+      "sizeBytes": 198931,
+      "productionFilename": "QT-2026-0001.pdf",
+      "ok": true
+    }
+  ]
+}
