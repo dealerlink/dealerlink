@@ -22,18 +22,29 @@ data.
 
 ### WHICH BINARY RENDERED THESE — read this before trusting a diff
 
-**These were rendered by the arm64 Chromium that Playwright installs
-(`~/.cache/ms-playwright/chromium-1217/chrome-linux/chrome`), not by the
-`@sparticuz/chromium` binary production uses.** That is forced by DEV.89: on this
-arm64 devcontainer the `@sparticuz` binary is x86-64 and cannot launch. The exact
-path and `process.arch` are recorded per-run in `capture-results.json`.
+**These were rendered by the SYSTEM Chromium — `/usr/bin/chromium`, Chromium
+152.0.7977.75 on Debian 12 — not by the `@sparticuz/chromium` binary production
+uses, and not by the Chromium that Playwright installs.**
 
-For the purpose these serve — _is the Typst output correct?_ — this is fine:
-a reference only needs to be right, not to have been produced by the production
-binary. But **if a Day 26 Typst render disagrees with a reference, the reference
-itself is a suspect**, and the first question to ask is whether the two Chromium
-builds lay the document out identically. Do not treat a mismatch as a Typst bug
-without eliminating that.
+The reason is worth knowing, because it will happen to anyone who re-runs this:
+this devcontainer pre-sets `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium` in the
+shell environment. `browser.ts` treats that override as authoritative (it "always
+wins"), and the capture script correctly defers to it rather than second-guessing
+an explicit setting. The DEV.89 arm64 fallback in the script is therefore inert
+here — it only engages when nothing else has chosen a binary.
+
+The exact path and `process.arch` are recorded per-run in
+`capture-results.json`, which is written by the script rather than by hand. **If
+that file and this README ever disagree, believe the file** — it has been wrong
+in the other direction once already, and the machine-written record was the one
+telling the truth.
+
+For the purpose these serve — _is the Typst output correct?_ — the binary does
+not need to be production's; a reference only needs to be right. But **if a Day 26
+Typst render disagrees with a reference, the reference is a suspect too**, and the
+first question is whether system Chromium 152 and production's `@sparticuz` build
+lay the document out identically. Do not book a mismatch as a Typst bug without
+eliminating that.
 
 ## Coverage against the Day 25 matrix
 

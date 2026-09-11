@@ -38,16 +38,23 @@ page 2: "Second page contentPage 2 of 3"
 page 3: "Third page contentPage 3 of 3"
 ```
 
-**DEV.37 is superseded by this.** That deviation records that "Page X of Y" was
+**This removes the constraint that forced DEV.37 — but DEV.37 is NOT superseded yet, and must not be written up as such until F.38 actually lands.** Chromium is still the pipeline; this is a spike with an open provisioning blocker. That deviation records that "Page X of Y" was
 implemented through Chromium's `footerTemplate` because it was _the only
 mechanism that could count pages_. Typst counts pages natively in the document
-language, so Day 26 can put the footer in the template where the rest of the
-layout lives, and `renderPdfFromHtml`'s `footerTemplate` parameter has no Typst
-equivalent to carry forward.
+language, so IF F.38 lands, Day 26 can put the footer in the template where the
+rest of the layout lives, and `renderPdfFromHtml`'s `footerTemplate` parameter has
+no Typst equivalent to carry forward. The supersession entry belongs to the day
+the pipeline changes, not to this one.
 
-> The Day 25 plan cites "DEV.38" for this. **DEV.38 is a Day 8 seed cross-tenant
-> dealer bug.** The page-footer deviation is **DEV.37**. Corrected here so the
-> citation does not propagate.
+> The Day 25 plan cites "DEV.38" for this, at `docs/F38_TYPST_PLAN.md` lines 42,
+> 77 and 123. The page-footer deviation is **DEV.37**. And DEV.38 is stranger
+> than a mis-citation: **it has no entry in `DEVIATIONS.md` at all** — the ids
+> 38, 41 and 42 are gaps — although it is referenced as real from
+> `PROJECT_PLAN.md:90`, `BUILD_PROMPTS.md:2972` and
+> `packages/db/src/seeds/day8.ts:309,535`, which describe it as a Day 8 seed
+> cross-tenant dealer bug. So the entry was never written. Flagged, not fixed:
+> writing a missing historical deviation is not this day's work, and a new entry
+> must NOT be numbered 38.
 
 ## 2.3 Byte determinism — PASS, _conditionally_, and the condition is mandatory
 
