@@ -4515,3 +4515,72 @@ The general lesson is the one worth carrying: **a badge reports what a system di
 not what you assumed it meant.** MERGED answers "did this PR merge into its
 base?", and the question that mattered was "is this commit on `main`?" — a
 different question with a different instrument, `git merge-base --is-ancestor`.
+
+## DEV.124 — "Automatically delete head branches" was OFF during the stacked-PR trap; enabling it closes one half and demonstrably not the other
+
+**Date:** 2026-09-13
+**Context:** DEV.123 recorded two compounding mechanisms behind PRs #16 and #17
+merging without CI and without reaching `main`. The operator proposed that
+GitHub's **Automatically delete head branches** setting closes both, on the
+reasoning that merging the lower PR would delete its head branch, retarget the
+stacked PR to `main`, and give it a full CI run before it could merge.
+**Directed to verify rather than assume, and the verification changed the
+answer twice.**
+
+**First reading, and it was wrong.** `gh api repos/...` returned
+`delete_branch_on_merge: true`, and every merged head branch in the repository
+still existed — back to `day-22-ci-pipeline`. I reported that the setting was
+already on and had never fired. **That was a reading of the present used as
+evidence about the past.** The setting had been enabled between PR #18's merge
+and PR #19's, while the proposal was being considered.
+
+The discriminator is #18's head branch, `f67-land-on-main`. Nothing ever
+targeted it, so nothing could have suppressed its deletion, and it survived its
+merge — the setting was not in effect then. `stacked-pr-trap`, #19's head, was
+deleted on merge minutes later. Same repository, same merge method, opposite
+outcome, one changed setting between them.
+
+**Then the probe, which settled both halves properly.** PR #20 was opened
+against `stacked-pr-trap` — the head branch of #19 — purely to observe what
+happened when #19 merged. Result:
+
+|                               | Outcome                                              |
+| ----------------------------- | ---------------------------------------------------- |
+| Was the head branch deleted?  | **Yes** — `stacked-pr-trap` gone from the remote     |
+| Did the stacked PR retarget?  | **Yes** — #20 moved from `stacked-pr-trap` to `main` |
+| Did the retargeted PR get CI? | **No** — `gh pr checks 20` → "no checks reported"    |
+
+**So the retargeting half is closed by the setting, and the CI half is not.**
+
+The second result was independently confirmed before the probe ran, by a
+separate throwaway (PR #21): a PR opened against a non-`main` base, then
+retargeted to `main` by hand with `gh pr edit --base main`. Five minutes later:
+zero workflow runs, and the PR reading `mergeable=MERGEABLE state=BLOCKED
+checks=0`.
+
+The cause is in the trigger. `verify.yml` declares
+`on: pull_request: branches: [main]` with **no `types:`**, so it uses the
+default `[opened, synchronize, reopened]`. A base change is
+`pull_request.edited`, which is not in that set. A retargeted PR therefore
+arrives at `main` unchecked and blocked on required statuses that cannot arrive
+until someone pushes a commit.
+
+**Impact:** none — this was scoping work, not a production issue. What it
+changes is **F.69's scope**: it stays, and it widens `branches:` rather than
+adding `edited` to `types:`. Widening checks the code **before** it enters the
+intermediate branch, which is where the unchecked merge actually happens;
+`edited` would only check it after it had been carried upward, and fires on
+every title and body edit besides. Auto-delete is a genuine complement, now
+enabled and now demonstrably working — but a complement, not a substitute.
+
+**Permanent fix:** F.69 for the CI half. The setting, now on, for the
+retargeting half. R22 keeps the operational rule regardless, because a
+convention that only matters when a setting is misconfigured is exactly the
+convention worth keeping.
+
+**The methodological point, which is the durable part:** the first answer was
+wrong in a way that looked rigorous — a real API call, a real branch listing, a
+plausible mechanism connecting them. What it lacked was a control. `f67-land-on-main`
+was the control, and it was already in the data. **When a setting's current value
+is used to explain past behaviour, find the case the explanation forbids before
+believing it.**
