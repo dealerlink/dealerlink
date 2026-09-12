@@ -1,8 +1,48 @@
 [
   {
+    "file": "BRANDED__dispatch__DSP-2026-0005.pdf",
+    "pages": 1,
+    "sizeBytes": 217626,
+    "rupeeGlyphs": 0,
+    "taxSummary": null,
+    "grandTotal": "Total units dispatched 8AC K N O W L E D G M E N T O F R E C E I",
+    "roundOff": null,
+    "amountInWords": null
+  },
+  {
+    "file": "BRANDED__payment_receipt__PAY-2026-0007.pdf",
+    "pages": 1,
+    "sizeBytes": 180993,
+    "rupeeGlyphs": 2,
+    "taxSummary": null,
+    "grandTotal": "Total Allocated 40,000.00Advance balance — ₹60,000.00 of this pay",
+    "roundOff": null,
+    "amountInWords": "Rupees One Lakh Only"
+  },
+  {
+    "file": "BRANDED__performa_invoice__PI-2026-0001.pdf",
+    "pages": 1,
+    "sizeBytes": 212549,
+    "rupeeGlyphs": 1,
+    "taxSummary": "CGST + SGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300150 Nos 11,400.00 1,71,000.00 15,",
+    "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300150 Nos 11,4",
+    "roundOff": null,
+    "amountInWords": "Rupees Twenty One Lakh Forty Six Thousand Three Hundred Two Only"
+  },
+  {
+    "file": "BRANDED__quotation__QT-2026-0001.pdf",
+    "pages": 1,
+    "sizeBytes": 199357,
+    "rupeeGlyphs": 1,
+    "taxSummary": "CGST + SGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300100 Nos 11,700.00 0.00 11,70,000.",
+    "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300100 Nos 11,7",
+    "roundOff": null,
+    "amountInWords": "Rupees Thirteen Lakh Eighty Thousand Six Hundred Only"
+  },
+  {
     "file": "dispatch__DSP-2026-0005__in_transit__8line.pdf",
     "pages": 1,
-    "sizeBytes": 216633,
+    "sizeBytes": 216885,
     "rupeeGlyphs": 0,
     "taxSummary": null,
     "grandTotal": "Total units dispatched 8AC K N O W L E D G M E N T O F R E C E I",
@@ -12,7 +52,7 @@
   {
     "file": "dispatch__DSP-REF-0026__26serials.pdf",
     "pages": 1,
-    "sizeBytes": 214138,
+    "sizeBytes": 216701,
     "rupeeGlyphs": 0,
     "taxSummary": null,
     "grandTotal": "Total units dispatched 26AC K N O W L E D G M E N T O F R E C E I",
@@ -22,7 +62,7 @@
   {
     "file": "dispatch__DSP-REF-0500__500serials.pdf",
     "pages": 2,
-    "sizeBytes": 369165,
+    "sizeBytes": 371942,
     "rupeeGlyphs": 0,
     "taxSummary": null,
     "grandTotal": "Total units dispatched 500Dispatch DSP-REF-0500 · Generated 11-Se",
@@ -32,7 +72,7 @@
   {
     "file": "payment_receipt__PAY-2026-0007__verified.pdf",
     "pages": 1,
-    "sizeBytes": 180784,
+    "sizeBytes": 180889,
     "rupeeGlyphs": 2,
     "taxSummary": null,
     "grandTotal": "Total Allocated 40,000.00Advance balance — ₹60,000.00 of this pay",
@@ -42,7 +82,7 @@
   {
     "file": "performa_invoice__PI-2026-0001__intra__2line.pdf",
     "pages": 1,
-    "sizeBytes": 212337,
+    "sizeBytes": 212436,
     "rupeeGlyphs": 1,
     "taxSummary": "CGST + SGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300150 Nos 11,400.00 1,71,000.00 15,",
     "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300150 Nos 11,4",
@@ -52,7 +92,7 @@
   {
     "file": "performa_invoice__PI-2026-0002__inter__1line.pdf",
     "pages": 1,
-    "sizeBytes": 207855,
+    "sizeBytes": 207954,
     "rupeeGlyphs": 1,
     "taxSummary": "IGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300120 Nos 11,600.00 0.00 13,92,000.00 18%",
     "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300120 Nos 11,6",
@@ -62,7 +102,7 @@
   {
     "file": "quotation__QT-2026-0001__inter-sample-tenant__1line.pdf",
     "pages": 1,
-    "sizeBytes": 197783,
+    "sizeBytes": 197880,
     "rupeeGlyphs": 1,
     "taxSummary": "IGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300100 Nos 11,700.00 0.00 11,70,000.00 18%",
     "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300100 Nos 11,7",
@@ -72,7 +112,7 @@
   {
     "file": "quotation__QT-2026-0001__intra__1line.pdf",
     "pages": 1,
-    "sizeBytes": 199145,
+    "sizeBytes": 199243,
     "rupeeGlyphs": 1,
     "taxSummary": "CGST + SGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300100 Nos 11,700.00 0.00 11,70,000.",
     "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300100 Nos 11,7",
@@ -82,7 +122,7 @@
   {
     "file": "quotation__QT-2026-0006__inter__3line.pdf",
     "pages": 1,
-    "sizeBytes": 214209,
+    "sizeBytes": 214306,
     "rupeeGlyphs": 1,
     "taxSummary": "IGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300200 Nos 11,700.00 1,75,500.00 21,64,500.",
     "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300200 Nos 11,7",
@@ -92,7 +132,7 @@
   {
     "file": "quotation__QT-2026-0010__intra__2line.pdf",
     "pages": 1,
-    "sizeBytes": 209607,
+    "sizeBytes": 209706,
     "rupeeGlyphs": 1,
     "taxSummary": "CGST + SGST# DESCRIPTION QTY UNIT PRICE DISCOUNT TAXABLE VALUE GST GST AMOUNT TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300150 Nos 11,400.00 1,71,000.00 15,",
     "grandTotal": "TOTAL1 Premier 450W BifacialPRE-450-BI · HSN 85414300150 Nos 11,4",

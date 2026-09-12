@@ -186,6 +186,64 @@ jobs:
         run: pnpm test
 
   # ---------------------------------------------------------------------------
+  # B2 — Typst cross-architecture byte determinism (F.38 / F.66).
+  #
+  # References for the PDF migration are captured in the devcontainer, which is
+  # arm64. This job runs on x86-64. If Typst's output is architecture-dependent,
+  # a locally-captured reference can never match a CI render, every snapshot test
+  # fails on its first run with no useful signal, and the fix is that references
+  # must be produced in CI rather than locally — a change to how Day 25 works,
+  # not to how Day 27 tests.
+  #
+  # Cheap (~20s, no database, no browser) and it answers the one question most
+  # likely to invalidate the migration's premise. See
+  # apps/workers/scripts/typst-determinism/README.md.
+  # ---------------------------------------------------------------------------
+  typst-determinism:
+    name: typst-determinism
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Both pins are load-bearing. Unpinned, SOURCE_DATE_EPOCH lets the
+      # creation timestamp AND the DocumentID derived from it change on every
+      # render (88 differing metadata bytes). A different Typst version may
+      # legitimately change layout, which would change the hash with nothing
+      # actually wrong.
+      TYPST_VERSION: '0.15.1'
+      SOURCE_DATE_EPOCH: '1700000000'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Typst ${{ env.TYPST_VERSION }} (x86-64, static musl)
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/typst.tar.xz \
+            "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz"
+          tar -xJf /tmp/typst.tar.xz -C /tmp
+          /tmp/typst-x86_64-unknown-linux-musl/typst --version
+
+      - name: Render the fixture and compare against the arm64 hash
+        working-directory: apps/workers/scripts/typst-determinism
+        run: |
+          set -euo pipefail
+          /tmp/typst-x86_64-unknown-linux-musl/typst compile fixture.typ /tmp/fixture.pdf
+          ACTUAL="$(sha256sum /tmp/fixture.pdf | awk '{print $1}')"
+          EXPECTED="$(awk '{print $1}' expected-sha256.txt)"
+          echo "arch     : $(uname -m)"
+          echo "expected : $EXPECTED  (recorded on arm64)"
+          echo "actual   : $ACTUAL  (this x86-64 runner)"
+          echo "bytes    : $(stat -c%s /tmp/fixture.pdf)"
+          if [ "$ACTUAL" = "$EXPECTED" ]; then
+            echo "MATCH — Typst output is byte-identical across arm64 and x86-64."
+          else
+            echo "MISMATCH — Typst output is architecture-dependent."
+            echo "References captured in the arm64 devcontainer cannot be compared"
+            echo "against x86-64 CI renders. See F.66: references would have to be"
+            echo "produced in CI instead. Do NOT re-record the hash to make this pass."
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
   # C — the verify chain. Gated on `checks` so a typo does not cost ten
   # minutes of Playwright. ~10-15 min.
   #
