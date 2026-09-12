@@ -221,18 +221,33 @@ reference, so they are UNRESOLVED rather than classified away.
 ### A. Serial numbers on `DSP-2026-0005` differ from the reference
 
 **Reference:** `DSP13-0d0f-0019` … `DSP13-0d0f-0026`.
-**Render:** `DSP13-2b5c-0019` … `DSP13-2b5c-0026`.
+**Render at the Day 26 gate:** `DSP13-2b5c-0019` … `DSP13-2b5c-0026`.
+**Render now, after the F.67 seed fix:** `DSP13-demo-0019` … `DSP13-demo-0026`.
 
-The day-13 seed builds serial numbers with a **random per-run fragment**. The
-database has been reseeded since Day 25, so that fragment changed. Count,
-ordering, formatting, chip layout and the `Total units dispatched` figure are all
-identical — only the random middle group differs.
+The day-13 seed built serial numbers with a **random per-run fragment** — a slice
+of the tenant's `defaultRandom()` uuid — so every reseed renamed every serial.
+Count, ordering, formatting, chip layout and the `Total units dispatched` figure
+were identical throughout; only that group moved.
 
-**What blocks it:** re-recording the reference would close it, and the day's
-guardrail forbids that ("do not re-record a reference to make a diff look
-better"). Changing the seed to a fixed fragment is a seed change outside Day 26's
-scope. **Recommendation:** leave it; when Day 27 adds snapshot tests, pin the
-fragment in the seed first, or assert on serial _shape_ rather than literal.
+**The seed is now fixed** (F.67, DEV.121): the fragment is the tenant slug, and
+it is stable across reseeds. The operator directed the fix be made there rather
+than by excluding the field from the snapshot — "a snapshot that skips the serial
+fragment leaves the product's core data permanently untested".
+
+**What is still unresolved:** the Day 25 reference carries `0d0f`, a fragment
+derived from a tenant uuid that no longer exists. No seed can reproduce it, so
+this reference and its render will never agree on the serial line until the
+reference is re-captured — and re-capturing is the operator's call, not a
+judgement to be made inside a diff report.
+
+Fixing the serials also exposed that they were the smallest of three wall-clock
+inputs. `created_at` is `defaultNow()`, so a reseeded document's Generated
+footer moves; and every seeded date comes from `Date.now()` through
+`isoDaysAgo(n)` — 19 call sites across 7 seed files — so a reference captured on
+one day and a render made on the next differ on the face of the document with an
+untouched template. **That, not the serials, is what decides whether Day 27's
+snapshots can byte-compare against these captures at all.** Both are recorded
+against F.67 as an open decision.
 
 ### B. Reference PDFs are not reproducible by document id
 

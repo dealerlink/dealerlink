@@ -17,7 +17,7 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os';
 import path from 'node:path';
 
-import { adminDb, withTenant, closeDbConnection } from '@dealerlink/db';
+import { withTenant, closeDbConnection } from '@dealerlink/db';
 import { config as loadEnv } from 'dotenv';
 import { sql } from 'drizzle-orm';
 
@@ -26,6 +26,8 @@ import { loadDispatchNotePdfData } from '../src/templates/dispatch-note';
 import { loadPaymentReceiptPdfData } from '../src/templates/payment-receipt';
 import { loadPerformaInvoicePdfData } from '../src/templates/performa-invoice';
 import { loadQuotationPdfData } from '../src/templates/quotation';
+
+import { resolveDocument, SOURCE_TABLE, type DocumentCase, type Kind } from './resolve-document';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 loadEnv({ path: path.join(repoRoot, '.env.local') });
@@ -107,15 +109,6 @@ function toViewModel(value: unknown, key?: string): unknown {
   return value;
 }
 
-type Kind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch';
-/** Source table each document type lives in, for the fallback below. */
-const SOURCE_TABLE: Record<Kind, string> = {
-  quotation: 'quotations',
-  performa_invoice: 'performa_invoices',
-  payment_receipt: 'payments',
-  dispatch: 'dispatches',
-};
-
 /**
  * Resolve the document's "generated at" — KEYED TO THE DOCUMENT, not to this
  * render.
@@ -163,64 +156,6 @@ async function resolveGeneratedAt(
       'no generated_documents row and no source created_at. Refusing to fall back to ' +
       'wall-clock, which is the bug this resolution exists to remove.',
   );
-}
-
-/**
- * A case names the document by its NUMBER, not by its uuid.
- *
- * Day 25's manifests carried uuids, and by Day 26 every one of them resolved to
- * "not found": `pnpm db:seed` truncates and re-inserts, so every id in the
- * database — tenants included — is new on each seed. The document NUMBERS and
- * every rendered value are stable across a reseed (verified: QT-2026-0001 still
- * totals 13,80,600.00), so the number is the durable handle and the id is not.
- * docs/pdf-references/README.md is corrected to say so.
- */
-type Case = {
-  label: string;
-  type: Kind;
-  tenantSlug: string;
-  documentNumber: string;
-  /** Render with the branded-tenant fixture's logo. See resolveLogo(). */
-  branded?: boolean;
-};
-
-/** Column holding the human document number, per type. */
-const NUMBER_COLUMN: Record<Kind, string> = {
-  quotation: 'quote_number',
-  performa_invoice: 'pi_number',
-  payment_receipt: 'payment_number',
-  dispatch: 'dispatch_number',
-};
-
-/**
- * Resolve `(tenant slug, document number)` to the ids this seed happens to have
- * given them.
- *
- * Quotations are the one type where a number is not unique: the seed builds a
- * revision chain, so QT-2026-0010 exists three times (revisions 1 and 2
- * superseded, 3 draft). The Day 25 reference rendered "QUOTATION REV 3", so the
- * highest revision is the right row — and picking it explicitly is what stops a
- * future reseed silently diffing against revision 1. Any other type resolving to
- * more than one row is an error rather than a coin toss.
- */
-async function resolveCase(c: Case): Promise<{ tenantId: string; documentId: string }> {
-  const table = SOURCE_TABLE[c.type];
-  const col = NUMBER_COLUMN[c.type];
-  const order = c.type === 'quotation' ? sql.raw('order by d.revision desc') : sql.raw('');
-  const rows = (await adminDb.execute(sql`
-    select d.id::text as document_id, d.tenant_id::text as tenant_id
-    from ${sql.raw(table)} d
-    join tenants t on t.id = d.tenant_id
-    where t.slug = ${c.tenantSlug} and d.${sql.raw(col)} = ${c.documentNumber}
-    ${order}
-  `)) as Array<{ document_id: string; tenant_id: string }>;
-  if (rows.length === 0) {
-    throw new Error(`no ${c.type} ${c.documentNumber} for tenant '${c.tenantSlug}' — reseed?`);
-  }
-  if (rows.length > 1 && c.type !== 'quotation') {
-    throw new Error(`${rows.length} rows for ${c.type} ${c.documentNumber} — ambiguous`);
-  }
-  return { tenantId: rows[0]!.tenant_id, documentId: rows[0]!.document_id };
 }
 
 const loaders = {
@@ -275,7 +210,7 @@ async function main(): Promise<void> {
   const mi = process.argv.indexOf('--manifest');
   const oi = process.argv.indexOf('--out');
   if (mi === -1 || oi === -1) throw new Error('--manifest and --out are required');
-  const cases: Case[] = JSON.parse(readFileSync(process.argv[mi + 1]!, 'utf8'));
+  const cases: DocumentCase[] = JSON.parse(readFileSync(process.argv[mi + 1]!, 'utf8'));
   const outDir = path.resolve(process.argv[oi + 1]!);
   mkdirSync(outDir, { recursive: true });
 
@@ -288,7 +223,7 @@ async function main(): Promise<void> {
       rmSync(work, { recursive: true, force: true });
       mkdirSync(work, { recursive: true });
 
-      const { tenantId, documentId } = await resolveCase(c);
+      const { tenantId, documentId } = await resolveDocument(c);
       const data = await withTenant(tenantId, async (tx) => {
         const load = loaders[c.type] as (
           tx: unknown,

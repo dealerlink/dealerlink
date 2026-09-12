@@ -144,6 +144,7 @@ interface SeedResult {
 async function seedTenant(
   db: ReturnType<typeof drizzle>,
   tenantId: string,
+  tenantSlug: string,
   actorId: string,
   fy: number,
 ): Promise<SeedResult> {
@@ -183,7 +184,22 @@ async function seedTenant(
       await tx.insert(inventoryItems).values({
         tenantId,
         productId: product!.id,
-        serialNumber: `${SERIAL_PREFIX}-${tenantId.slice(0, 4)}-${String(i + 1).padStart(4, '0')}`,
+        // The middle group is the tenant SLUG, not a slice of its uuid.
+        //
+        // It was `tenantId.slice(0, 4)`, and tenant ids are defaultRandom() —
+        // so every `pnpm db:seed` produced different serial numbers for the
+        // same document. The Day 25 reference dispatch note shows
+        // DSP13-0d0f-0019; the same document re-rendered on Day 26 showed
+        // DSP13-2b5c-0019 (F.67, DEV.119). A snapshot test cannot assert on a
+        // value the seed re-randomises, and a snapshot that skips the serial
+        // column leaves the field a dispatch note exists to carry permanently
+        // untested. Slugs are stable across a reseed; uuids are not.
+        //
+        // Uniqueness is unaffected either way: the constraint is
+        // UNIQUE (tenant_id, serial_number), so the tenant discriminator was
+        // never load-bearing — it is there to keep the two tenants' serials
+        // visually distinct in a shared dev database.
+        serialNumber: `${SERIAL_PREFIX}-${tenantSlug}-${String(i + 1).padStart(4, '0')}`,
         status: 'in_stock',
         warehouseCode: 'WH-MAIN',
       });
@@ -360,7 +376,7 @@ async function main() {
       console.log('  · (no dispatch/admin user — skipping)');
       continue;
     }
-    const r = await seedTenant(db, t.id, actorId, fy);
+    const r = await seedTenant(db, t.id, t.slug, actorId, fy);
     console.log(
       `  · ${r.dispatches} dispatches (${r.delivered} delivered, ${r.returned} returned, ` +
         `${r.inTransit} in-transit, ${r.partial} partial)`,

@@ -24,6 +24,8 @@ import { buildPaymentReceiptHtml } from '../src/templates/payment-receipt';
 import { buildPerformaInvoiceHtml } from '../src/templates/performa-invoice';
 import { buildQuotationHtml } from '../src/templates/quotation';
 
+import { resolveDocument, type DocumentCase } from './resolve-document';
+
 const repoRoot = path.resolve(__dirname, '../../..');
 loadEnv({ path: path.join(repoRoot, '.env.local') });
 loadEnv({ path: path.join(repoRoot, '.env') });
@@ -48,8 +50,14 @@ function findPlaywrightChromium(): string | undefined {
   return undefined;
 }
 
-type Kind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch';
-type Case = { label: string; type: Kind; tenantId: string; documentId: string; covers: string[] };
+/**
+ * A case names its document by NUMBER, not by uuid — see resolve-document.ts.
+ * This script originally took `tenantId` and `documentId` straight from the
+ * manifest, which is how Day 25's manifests came to name ids that no longer
+ * exist (DEV.119). Re-capturing a reference must address the same document the
+ * Typst render does, or the diff is between two different documents.
+ */
+type Case = DocumentCase;
 
 const builders = {
   quotation: buildQuotationHtml,
@@ -72,13 +80,14 @@ async function main(): Promise<void> {
   const results: Record<string, unknown>[] = [];
   for (const c of cases) {
     try {
-      const out = await withTenant(c.tenantId, async (tx) => {
+      const { tenantId, documentId } = await resolveDocument(c);
+      const out = await withTenant(tenantId, async (tx) => {
         const build = builders[c.type] as (
           tx: unknown,
           tenantId: string,
           documentId: string,
         ) => Promise<{ html: string; footerTemplate?: string; filename: string }>;
-        const built = await build(tx, c.tenantId, c.documentId);
+        const built = await build(tx, tenantId, documentId);
         const buffer = await renderPdfFromHtml(built.html, {
           format: 'A4',
           margin: { top: '14mm', bottom: '20mm' },
@@ -89,6 +98,8 @@ async function main(): Promise<void> {
       writeFileSync(path.join(OUT, `${c.label}.pdf`), out.buffer);
       results.push({
         ...c,
+        tenantId,
+        documentId,
         sizeBytes: out.buffer.length,
         productionFilename: out.filename,
         ok: true,
