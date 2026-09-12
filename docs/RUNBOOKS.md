@@ -1272,6 +1272,54 @@ selectable.
 - **Never** disable, skip or mark-as-flaky a spec to get a merge through. If a
   spec is genuinely environment-dependent, leave it failing and record it.
 
+### Stacked PRs: the trap that reports success three ways (DEV.123)
+
+**Avoid stacked PRs.** A PR based on another PR's branch, rather than on `main`,
+sits in a blind spot where three separate signals all read correct while the work
+has neither been checked nor landed.
+
+Two mechanisms, independent, and they compound:
+
+1. **GitHub retargets a stacked PR when the branch below it is DELETED — not when
+   it is merged.** Merge #16 into #15's branch and then merge #15 without
+   deleting its branch, and #16 keeps pointing at a branch that is now history.
+   Merging #16 then merges it into _that_, not into `main`. The badge says
+   MERGED and is telling the truth about a base you stopped caring about.
+2. **`verify.yml` triggers on `pull_request: branches: [main]` only**, so a PR
+   into any other branch runs **no CI whatsoever** — not a failure, not a skip,
+   no checks at all. `gh pr checks <n>` prints "no checks reported", which reads
+   like a queue that has not started rather than a gate that does not exist.
+
+The result is a PR that is merged, unchecked, and absent from `main`, with
+nothing on its page that looks wrong. It happened here to PRs #16 and #17 on
+2026-09-12 and cost a recovery PR.
+
+**Of the two halves, the missing CI is the dangerous one.** Retargeting is
+recoverable — the commits survive on their branch, which is how #18 rescued them.
+Unchecked code merged into an intermediate branch is carried upward by the next
+merge in the stack with no gate at any point.
+
+**If a stack is genuinely unavoidable:**
+
+- **Delete each branch immediately on merge, before merging the next.** That is
+  what triggers the retarget of the PR above it.
+- **Verify the commits actually landed.** The MERGED badge answers "did this PR
+  merge into its base?" The question that matters is "is this commit on `main`?",
+  and it has its own instrument:
+
+  ```bash
+  git fetch origin
+  git log origin/main --oneline | head        # what main actually has
+  git merge-base --is-ancestor <sha> origin/main && echo "on main" || echo "NOT on main"
+  ```
+
+- **Expect no CI**, and say so out loud rather than waiting for a tick that
+  cannot appear. The full suite only runs once the PR's base becomes `main`.
+
+**F.69** widens the workflow trigger to pull requests into any branch, which
+removes half of this structurally. The retargeting half stays a convention:
+nothing in GitHub can be configured to prevent it.
+
 ---
 
 ## R23 — Post-rebuild CLI auth: GitHub CLI (`gh`) + `doctl` in the devcontainer
