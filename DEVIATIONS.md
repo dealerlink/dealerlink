@@ -4320,3 +4320,62 @@ typesetting system is not a set of numbers to copy, it is a box model to
 reproduce**, and the parts that bit hardest here were the ones CSS does
 implicitly — half-leading, em-relative spacing, flex stretch — none of which
 announce themselves in the source being copied.
+
+## DEV.121 — F.67 — the seed's serial fragment was one of three wall-clock values; fixing it exposed the other two, which block Day 27's snapshot tests
+
+**Date:** 2026-09-12
+**Spec said:** `docs/F38_TYPST_PLAN.md`, Day 27 — "Add snapshot tests for all
+four documents against the Day 25 references — the capability that justified this
+choice." Byte-stable output is the load-bearing claim of the whole Typst
+migration.
+**Found:** Day 26's diff surfaced one non-reproducible value — inventory serial
+numbers, built in `packages/db/src/seeds/day13.ts` as
+`DSP13-${tenantId.slice(0, 4)}-0001` over a `defaultRandom()` tenant id, so every
+`pnpm db:seed` renamed every serial on every dispatch note. The operator directed
+the fix be made in the seed rather than by excluding the field from the snapshot:
+
+> A snapshot that skips the serial fragment leaves the product's core data
+> permanently untested. Deterministic seed data is the fix.
+
+Fixing it showed the serials were the _smallest_ of three wall-clock inputs, and
+the other two touch every document rather than one field:
+
+1. **`created_at` is `defaultNow()`.** The "Generated" footer resolves from it
+   when no `generated_documents` row exists, so a reseeded document's footer
+   moves — measured at `10:59:36` and then `11:00:05` across two consecutive
+   reseeds of the same document.
+2. **Every seeded date is computed from `Date.now()`** via `isoDaysAgo(n)` —
+   19 call sites across 7 seed files (`day6`, `day7`, `day8`, `day11`, `day12`,
+   `day13`, `smoke-auth`). Quote dates, validity dates, dispatch dates and
+   payment dates all shift by one day, every day. A reference captured on
+   11 September and a render made on 12 September differ on the face of the
+   document even with an untouched template.
+
+**Resolution:** The serial fragment is now the tenant **slug** —
+`DSP13-demo-0019`, `DSP13-sample-0019` — verified stable across two consecutive
+reseeds. Uniqueness was never at stake: the constraint is
+`UNIQUE (tenant_id, serial_number)`, so the discriminator is cosmetic, present
+only to keep two tenants' serials visually distinct in a shared dev database. No
+test asserted on a serial literal; that was established by enumerating every
+`DSP13-` occurrence in the repository rather than by a clean grep.
+
+(1) and (2) are **not** fixed here and are recorded against F.67 as an open
+operator decision, because both are changes to shared fixtures: either the seeds
+take a pinned clock — which alters data that dashboards and e2e specs may rely on
+being recent — or the snapshots compare against golden files regenerated when the
+tests are written, with the Day 25 captures kept as the visual contract only.
+
+**Impact:** Day 26 is unaffected: all 138 money figures still extract identically
+after the reseed, and the 14 renders are still byte-identical run-to-run. What
+changes is Day 27's premise. **A snapshot test that byte-compares a freshly
+rendered document against a Day 25 capture cannot pass** — not because of the
+serials, which are fixed, but because the document's dates and its footer are
+functions of when the database was seeded. That was going to be discovered while
+writing the tests; it is cheaper here.
+
+**Permanent fix:** F.67 carries the open decision and the sequencing constraint —
+it must be settled before F.38 sub-task (4), not after the tests are written. The
+narrower lesson is worth keeping separately: **"deterministic" is a property of
+the whole input, not of the renderer.** Day 25 proved Typst byte-stable and Day 26
+proved it again on real documents; neither could reveal that the data underneath
+was not.
