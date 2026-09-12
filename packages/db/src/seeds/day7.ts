@@ -27,6 +27,8 @@ import {
   users,
 } from '../schema';
 
+import { daysAgo, daysAhead } from './clock';
+
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -164,7 +166,7 @@ async function seedTenant(
         let activityDaysAgo = (seed * 3) % 30;
         const isStalled = createdCount % 7 === 6;
         if (isStalled) activityDaysAgo = 18 + (seed % 12);
-        const lastActivityAt = new Date(Date.now() - activityDaysAgo * 86400_000);
+        const lastActivityAt = daysAgo(activityDaysAgo);
         const createdAt = new Date(lastActivityAt.getTime() - 86400_000 * 5);
 
         const estValue = 250_000 + ((seed * 91_739) % 4_000_000);
@@ -188,7 +190,7 @@ async function seedTenant(
                           : status === 'won'
                             ? 100
                             : 0;
-        const expectedClose = new Date(Date.now() + (15 + (seed % 60)) * 86400_000);
+        const expectedClose = daysAhead(15 + (seed % 60));
 
         const assignedTo = salesId ?? adminId ?? null;
         if (!assignedTo) continue;

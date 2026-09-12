@@ -44,6 +44,8 @@ import {
 } from '../schema';
 import type { DrizzleTx } from '../with-tenant';
 
+import { isoDaysAgo, seedNow } from './clock';
+
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -58,9 +60,7 @@ const PI_TAG = 'day13-seed-pi';
 const PRODUCT_SKU = 'DSP13-PANEL';
 const SERIAL_PREFIX = 'DSP13';
 
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-}
+// isoDaysAgo now comes from the pinned seed clock — see clock.ts.
 
 function fiscalYearOf(d: Date): number {
   const m = d.getUTCMonth();
@@ -356,7 +356,7 @@ async function main() {
   await client.unsafe(`DELETE FROM products WHERE sku = '${PRODUCT_SKU}';`);
   await client.unsafe(`DELETE FROM document_counters WHERE doc_type = 'dispatch';`);
 
-  const fy = fiscalYearOf(new Date());
+  const fy = fiscalYearOf(seedNow());
   const tenantRows = await db.select().from(tenants);
   for (const t of tenantRows) {
     if (t.status !== 'active') continue;

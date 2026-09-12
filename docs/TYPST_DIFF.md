@@ -18,11 +18,11 @@ image per page, with the extracted text of both underneath. Open it in a browser
 
 ## Result
 
-|                   | Count |
-| ----------------- | ----- |
-| **INTENTIONAL**   | 6     |
-| **UNINTENTIONAL** | 0     |
-| **UNRESOLVED**    | 2     |
+|                   | Count                           |
+| ----------------- | ------------------------------- |
+| **INTENTIONAL**   | 6                               |
+| **UNINTENTIONAL** | 1 — found after the gate, fixed |
+| **UNRESOLVED**    | 1                               |
 
 Both UNRESOLVED items are properties of the **seed data**, not of either
 renderer, and neither can be closed by changing a template. They are described in
@@ -78,13 +78,17 @@ value keyed to the document:
 
 If both are absent it **throws** rather than silently falling back to wall-clock.
 
-**(2) is what fired here.** The dev database has no `generated_documents` rows
+**(2) is what fires here.** The dev database has no `generated_documents` rows
 for these documents — capture deliberately does not write one — so every value
-above came from the source row's `created_at`. That is why the seeded documents
-read 23:01 (seeded at 17:31 UTC) and the two fixture dispatches read today: the
-fixture rows were created today. Both are stable per document, which is the
-property that matters. Determinism is the consequence of the fix, not the reason
-for it.
+comes from the source row's `created_at`.
+
+Since F.67 Part 2 pinned the seed clock, that `created_at` is itself derived from
+the document's own business date, so the footer now reads **the date printed on
+the face of the document**: `Quotation QT-2026-0010 · Generated 11-Sept-2026
+15:30 IST` on a quotation dated 11-Sept. It is stable across reseeds, and it no
+longer contradicts the document it sits under. The reference, by contrast, shows
+the wall-clock instant of the Day 25 capture run — 11-Sept-2026 23:00 IST on
+every one of the 14, whatever the document is dated.
 
 The label wording is unchanged. **This difference is visible in the footer of
 every case in the artifact** and is the one the operator was asked to look at.
@@ -145,9 +149,30 @@ file alone is not misled.)_
 
 ## UNINTENTIONAL
 
-**None.** Everything found during authoring was fixed rather than classified.
-For the record, because several were close calls that would have shipped as
-"cosmetic" differences:
+### The revision badge — missed at the gate, found afterwards
+
+`Header.tsx:62` renders a `REV n` badge beside the document title when a
+quotation's revision is greater than 1. **No Typst template rendered it**, and
+the Day 26 report said "0 UNINTENTIONAL" because I did not notice.
+
+Two things made it invisible. Only one of the 14 cases is a revision at all —
+QT-2026-0010 is REV 3 — so it appears once in the whole corpus. And **the eye does
+not notice an element that is absent**: every side-by-side check asked whether
+what was drawn looked right, and nothing was drawn.
+
+It was found by diffing the extracted text of reference against render character
+by character, which is a check the artifact does not perform and the reviewer
+cannot perform by looking. `QT-2026-0010`'s body text is now character-identical
+to its capture — 1085 characters on both sides.
+
+**The lesson is about method, not about a badge:** a visual diff can only find
+differences in things that exist in both documents. Missing elements need a
+textual comparison, and that comparison should have been part of the gate rather
+than something run later while answering a different question.
+
+Everything else found during authoring was fixed rather than classified. For the
+record, because several were close calls that would have shipped as "cosmetic"
+differences:
 
 | Found                                                                                                                                    | Cause                                                                               | Fix                                                                       |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -214,62 +239,57 @@ the reference's does.
 
 ## UNRESOLVED
 
-Both are seed-data properties. Neither is a template defect, and neither can be
-fixed by changing a template — but both mean a rendered value differs from the
-reference, so they are UNRESOLVED rather than classified away.
+One item, and it is now a question about what Day 27's snapshot tests compare
+against rather than about the templates. The two items listed at the Day 26 gate
+— the randomised serial fragment, and the references not being reproducible by
+document id — have both been fixed at the source (F.67; DEV.119, DEV.121,
+DEV.122). What survives is the consequence.
 
-### A. Serial numbers on `DSP-2026-0005` differ from the reference
+### The Day 25 captures cannot be the snapshot baseline
 
-**Reference:** `DSP13-0d0f-0019` … `DSP13-0d0f-0026`.
-**Render at the Day 26 gate:** `DSP13-2b5c-0019` … `DSP13-2b5c-0026`.
-**Render now, after the F.67 seed fix:** `DSP13-demo-0019` … `DSP13-demo-0026`.
+**They do survive as the visual sign-off record and as a content contract.**
+After the seed clock was pinned, a freshly seeded database renders:
 
-The day-13 seed built serial numbers with a **random per-run fragment** — a slice
-of the tenant's `defaultRandom()` uuid — so every reseed renamed every serial.
-Count, ordering, formatting, chip layout and the `Total units dispatched` figure
-were identical throughout; only that group moved.
+| Compared against the Day 25 capture | Result                                               |
+| ----------------------------------- | ---------------------------------------------------- |
+| Money figures                       | **138/138 identical**                                |
+| Document numbers                    | **0/14 differ**                                      |
+| Dates on the face of the document   | **0/14 differ** — verified per text item by position |
+| Body text, character for character  | **11/14 identical**                                  |
+| Running footer                      | **0/14 identical**                                   |
 
-**The seed is now fixed** (F.67, DEV.121): the fragment is the tenant slug, and
-it is stable across reseeds. The operator directed the fix be made there rather
-than by excluding the field from the snapshot — "a snapshot that skips the serial
-fragment leaves the product's core data permanently untested".
+And the same 14 documents rendered from **two independent full reseeds** are
+**14/14 byte-identical** — the property Day 27 needs, and one that did not hold
+before this work.
 
-**What is still unresolved:** the Day 25 reference carries `0d0f`, a fragment
-derived from a tenant uuid that no longer exists. No seed can reproduce it, so
-this reference and its render will never agree on the serial line until the
-reference is re-captured — and re-capturing is the operator's call, not a
-judgement to be made inside a diff report.
+The three body differences, each traced to its cause:
 
-Fixing the serials also exposed that they were the smallest of three wall-clock
-inputs. `created_at` is `defaultNow()`, so a reseeded document's Generated
-footer moves; and every seeded date comes from `Date.now()` through
-`isoDaysAgo(n)` — 19 call sites across 7 seed files — so a reference captured on
-one day and a render made on the next differ on the face of the document with an
-untouched template. **That, not the serials, is what decides whether Day 27's
-snapshots can byte-compare against these captures at all.** Both are recorded
-against F.67 as an open decision.
+| Case                                              | Difference                                             | Why it cannot be closed here                                                                               |
+| ------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `dispatch__DSP-2026-0005` (branded and unbranded) | `DSP13-0d0f-0019` vs `DSP13-demo-0019`                 | The capture's fragment came from a tenant uuid that no longer exists. No seed can reproduce it.            |
+| `dispatch__DSP-REF-0500`                          | The same 500 serials, split 224+276 instead of 217+283 | The page break falls one chip row later. The text is identical; its order across the page boundary is not. |
 
-### B. Reference PDFs are not reproducible by document id
+The footer differs on all 14 by design: the reference shows the wall-clock
+instant of the capture run — 23:00 IST on every document, whatever it is dated —
+where the render shows the document's own date. That is INTENTIONAL item 1,
+approved at the Day 26 gate.
 
-Day 25's manifests addressed documents by uuid, and by Day 26 **every one of
-those ids resolved to "not found"** — `pnpm db:seed` truncates and re-inserts, so
-ids, including tenant ids, are new on every seed. `docs/pdf-references/README.md`
-claims the references are reproducible from a named seed and commit; that is true
-of their _content_ and false of their _addressing_.
+**So: re-capture at Day 27.** The captures stay as the visual sign-off record,
+which is what they were commissioned as, and the snapshot baseline is re-captured
+against the pinned seed from the same Chromium pipeline, before the cutover
+removes it. Two reasons this is the right way round rather than a concession:
 
-Corrected: the matrix at `apps/workers/scripts/typst-matrix.json` addresses each
-case by `(tenant slug, document number)`, which is stable; the README now says so.
-One further consequence was found and fixed — `long-serial-fixture.sql` picked its
-order line with `ORDER BY ol.order_id`, a random uuid, so a reseed silently moved
-the 26- and 500-serial fixtures onto a different order and product. It is now
-pinned to `ORD-2026-0019` and raises if that order is absent.
+- A baseline that disagrees with a correct render in two fields teaches the next
+  reader to expect failures, and a suite with expected failures is not a suite.
+- Re-capture is cheap **now** and was not an option on Day 25: the harness
+  resolves by document number rather than uuid, the seed is deterministic, and
+  `capture-references.ts` shares that resolver — so a re-capture is one command
+  and produces a corpus a byte-comparison can hold to.
 
-**What blocks it:** the _existing_ reference files were captured under the old
-seed, so anything the seed randomises (item A above) cannot be reproduced now.
-The addressing problem is fixed going forward; the already-captured randomness is
-not recoverable without re-capturing, which the guardrail forbids.
-
----
+Re-capturing here is a deliberate, operator-directed act, not a diff being tidied
+away. The F.38 guardrail forbids re-recording a reference **to make a diff look
+better**; this is re-recording because the inputs were deliberately made
+reproducible. The existing corpus is preserved in git history either way.
 
 ## Notes for Day 27
 
