@@ -17,8 +17,9 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os';
 import path from 'node:path';
 
-import { withTenant, closeDbConnection } from '@dealerlink/db';
+import { adminDb, withTenant, closeDbConnection } from '@dealerlink/db';
 import { config as loadEnv } from 'dotenv';
+import { sql } from 'drizzle-orm';
 
 import { formatDocDate, formatGeneratedAt, formatMoney } from '../src/lib/format';
 import { loadDispatchNotePdfData } from '../src/templates/dispatch-note';
@@ -78,6 +79,7 @@ const DATE_KEYS = new Set([
   'receiptDate',
   'depositedDate',
   'dispatchDate',
+  'orderDate',
   'expectedDeliveryDate',
   'ewayBillDate',
   'piDate',
@@ -106,7 +108,120 @@ function toViewModel(value: unknown, key?: string): unknown {
 }
 
 type Kind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch';
-type Case = { label: string; type: Kind; tenantId: string; documentId: string };
+/** Source table each document type lives in, for the fallback below. */
+const SOURCE_TABLE: Record<Kind, string> = {
+  quotation: 'quotations',
+  performa_invoice: 'performa_invoices',
+  payment_receipt: 'payments',
+  dispatch: 'dispatches',
+};
+
+/**
+ * Resolve the document's "generated at" — KEYED TO THE DOCUMENT, not to this
+ * render.
+ *
+ * The loaders currently set `generatedAt: new Date()`, so the footer claims a
+ * document was generated whenever it was last rendered. That is a CORRECTNESS
+ * bug before it is a determinism one: a PDF re-fetched three weeks after issue
+ * says it was generated today. Determinism is the consequence of fixing it.
+ *
+ * Resolution order — both terms stable per document, neither wall-clock:
+ *   1. the EARLIEST `generated_documents.generated_at` for this document, so
+ *      the first render establishes the value and every later render
+ *      reproduces it;
+ *   2. failing that, the source row's own `created_at`.
+ *
+ * (2) is the case worth being explicit about: a document rendered before any
+ * `generated_documents` row exists is exactly where a wall-clock value could
+ * sneak back in. It cannot here — `created_at` is written once when the
+ * document is created and never moves, so a first render and a render after
+ * the row appears agree. If BOTH are absent the render fails loudly rather
+ * than silently substituting `new Date()`.
+ */
+async function resolveGeneratedAt(
+  tx: { execute: (q: unknown) => Promise<unknown> },
+  type: Kind,
+  documentId: string,
+): Promise<Date> {
+  const first = (await tx.execute(sql`
+    select min(generated_at) as at
+    from generated_documents
+    where document_type = ${type}::generated_document_type
+      and document_id = ${documentId}
+  `)) as Array<{ at: Date | string | null }>;
+  const fromGenerated = first[0]?.at ?? null;
+  if (fromGenerated) return new Date(fromGenerated);
+
+  const src = (await tx.execute(
+    sql`select created_at as at from ${sql.raw(SOURCE_TABLE[type])} where id = ${documentId}`,
+  )) as Array<{ at: Date | string | null }>;
+  const fromSource = src[0]?.at ?? null;
+  if (fromSource) return new Date(fromSource);
+
+  throw new Error(
+    `render-typst: cannot resolve a stable generatedAt for ${type} ${documentId} — ` +
+      'no generated_documents row and no source created_at. Refusing to fall back to ' +
+      'wall-clock, which is the bug this resolution exists to remove.',
+  );
+}
+
+/**
+ * A case names the document by its NUMBER, not by its uuid.
+ *
+ * Day 25's manifests carried uuids, and by Day 26 every one of them resolved to
+ * "not found": `pnpm db:seed` truncates and re-inserts, so every id in the
+ * database — tenants included — is new on each seed. The document NUMBERS and
+ * every rendered value are stable across a reseed (verified: QT-2026-0001 still
+ * totals 13,80,600.00), so the number is the durable handle and the id is not.
+ * docs/pdf-references/README.md is corrected to say so.
+ */
+type Case = {
+  label: string;
+  type: Kind;
+  tenantSlug: string;
+  documentNumber: string;
+  /** Render with the branded-tenant fixture's logo. See resolveLogo(). */
+  branded?: boolean;
+};
+
+/** Column holding the human document number, per type. */
+const NUMBER_COLUMN: Record<Kind, string> = {
+  quotation: 'quote_number',
+  performa_invoice: 'pi_number',
+  payment_receipt: 'payment_number',
+  dispatch: 'dispatch_number',
+};
+
+/**
+ * Resolve `(tenant slug, document number)` to the ids this seed happens to have
+ * given them.
+ *
+ * Quotations are the one type where a number is not unique: the seed builds a
+ * revision chain, so QT-2026-0010 exists three times (revisions 1 and 2
+ * superseded, 3 draft). The Day 25 reference rendered "QUOTATION REV 3", so the
+ * highest revision is the right row — and picking it explicitly is what stops a
+ * future reseed silently diffing against revision 1. Any other type resolving to
+ * more than one row is an error rather than a coin toss.
+ */
+async function resolveCase(c: Case): Promise<{ tenantId: string; documentId: string }> {
+  const table = SOURCE_TABLE[c.type];
+  const col = NUMBER_COLUMN[c.type];
+  const order = c.type === 'quotation' ? sql.raw('order by d.revision desc') : sql.raw('');
+  const rows = (await adminDb.execute(sql`
+    select d.id::text as document_id, d.tenant_id::text as tenant_id
+    from ${sql.raw(table)} d
+    join tenants t on t.id = d.tenant_id
+    where t.slug = ${c.tenantSlug} and d.${sql.raw(col)} = ${c.documentNumber}
+    ${order}
+  `)) as Array<{ document_id: string; tenant_id: string }>;
+  if (rows.length === 0) {
+    throw new Error(`no ${c.type} ${c.documentNumber} for tenant '${c.tenantSlug}' — reseed?`);
+  }
+  if (rows.length > 1 && c.type !== 'quotation') {
+    throw new Error(`${rows.length} rows for ${c.type} ${c.documentNumber} — ambiguous`);
+  }
+  return { tenantId: rows[0]!.tenant_id, documentId: rows[0]!.document_id };
+}
 
 const loaders = {
   quotation: loadQuotationPdfData,
@@ -125,6 +240,25 @@ const templateFor: Record<Kind, string> = {
   payment_receipt: 'payment-receipt.typ',
   dispatch: 'dispatch-note.typ',
 };
+
+/**
+ * The branded cases' logo, read from the fixture SQL that produced the branded
+ * REFERENCES — one source of truth, and no database mutation.
+ *
+ * Capture deliberately does not mutate tenant data, and rendering should not
+ * either; toggling `tenant_settings.logo_url` between a branded and an
+ * unbranded run also makes the 14 cases un-renderable in one pass. Since Day 25
+ * established that branded and unbranded are the SAME document differing only in
+ * the logo, supplying it per case reproduces exactly that relationship, and the
+ * unbranded cases render with the logo forced off regardless of the row's
+ * current state — so a leftover fixture cannot silently brand ten references.
+ */
+function fixtureLogo(): string {
+  const sqlText = readFileSync(path.join(__dirname, 'branded-tenant-fixture.sql'), 'utf8');
+  const m = /'(data:image\/[^']+)'/.exec(sqlText);
+  if (!m) throw new Error('branded-tenant-fixture.sql no longer contains a data: URI logo');
+  return m[1]!;
+}
 
 /** Turn a `data:` URI into a file Typst's `image()` can read. */
 function writeLogo(dir: string, logoUrl: string | null): void {
@@ -154,13 +288,26 @@ async function main(): Promise<void> {
       rmSync(work, { recursive: true, force: true });
       mkdirSync(work, { recursive: true });
 
-      const data = await withTenant(c.tenantId, async (tx) => {
+      const { tenantId, documentId } = await resolveCase(c);
+      const data = await withTenant(tenantId, async (tx) => {
         const load = loaders[c.type] as (
           tx: unknown,
           tenantId: string,
           documentId: string,
         ) => Promise<unknown>;
-        return load(tx, c.tenantId, c.documentId);
+        const loaded = (await load(tx, tenantId, documentId)) as Record<string, unknown>;
+        // Override the loader's wall-clock value. Done HERE rather than in the
+        // loader because the loaders are shared with the HTML path, and Day 26's
+        // guardrail is explicit that the existing pipeline must not change —
+        // changing it would also invalidate the references being diffed against.
+        // Day 27 moves this into the renderer proper (F.66), at which point the
+        // HTML path retires and the loader can own it.
+        loaded['generatedAt'] = await resolveGeneratedAt(
+          tx as unknown as { execute: (q: unknown) => Promise<unknown> },
+          c.type,
+          documentId,
+        );
+        return loaded;
       });
 
       const vm = toViewModel(data) as Record<string, unknown>;
@@ -169,11 +316,45 @@ async function main(): Promise<void> {
       // template, because arithmetic in a template is what CLAUDE.md rules out.
       const allocs = (data as { allocations?: { amount: number }[] }).allocations;
       if (allocs) vm['allocatedTotal'] = formatMoney(allocs.reduce((t, a) => t + a.amount, 0));
+
+      // Line-items column totals and the halved rate label. The HTML derives
+      // these at render time (LineItemsTable reduces over the rows; TaxSummary
+      // halves gstRateLabel for the CGST/SGST captions). Derived HERE for the
+      // same reason as the allocation total: a template must not do arithmetic.
+      const lines = (
+        data as {
+          lines?: {
+            quantity: number;
+            taxableValue: number;
+            gstAmount: number;
+            lineTotal: number;
+          }[];
+        }
+      ).lines;
+      if (lines) {
+        vm['totalQuantity'] = lines.reduce((t, l) => t + l.quantity, 0);
+        vm['totalTaxable'] = formatMoney(lines.reduce((t, l) => t + l.taxableValue, 0));
+        vm['totalGstAmount'] = formatMoney(lines.reduce((t, l) => t + l.gstAmount, 0));
+        vm['totalLineAmount'] = formatMoney(lines.reduce((t, l) => t + l.lineTotal, 0));
+      }
+      // The running page footer names the document in TITLE case — 'Quotation
+      // QT-…', not 'QUOTATION QT-…' — because buildFooterTemplate() writes a
+      // literal rather than reusing the heading. Supplied here so the templates
+      // do not have to case-convert a heading back.
+      vm['footerLabel'] = {
+        quotation: 'Quotation',
+        performa_invoice: 'Performa Invoice',
+        payment_receipt: 'Receipt',
+        dispatch: 'Dispatch',
+      }[c.type];
+      const rateLabel = (data as { gstRateLabel?: string | null }).gstRateLabel ?? null;
+      vm['halfRateLabel'] = rateLabel != null ? `${Number(rateLabel) / 2}%` : '';
+      vm['fullRateLabel'] = rateLabel != null ? `${rateLabel}%` : '';
+      const logoUrl = c.branded ? fixtureLogo() : null;
+      const billFrom = vm['billFrom'] as Record<string, unknown> | undefined;
+      if (billFrom) billFrom['logoUrl'] = logoUrl;
+      writeLogo(work, logoUrl);
       writeFileSync(path.join(work, 'data.json'), JSON.stringify(vm, null, 2));
-      writeLogo(
-        work,
-        (data as { billFrom?: { logoUrl: string | null } }).billFrom?.logoUrl ?? null,
-      );
 
       // Typst resolves `json("data.json")` and `#import "_lib/..."` relative to
       // the SOURCE FILE, not the working directory. So the templates are copied
@@ -188,7 +369,7 @@ async function main(): Promise<void> {
         stdio: 'pipe',
       });
       const bytes = readFileSync(pdf).length;
-      results.push({ ...c, ok: true, sizeBytes: bytes });
+      results.push({ ...c, tenantId, documentId, ok: true, sizeBytes: bytes });
       console.log(`OK   ${c.label.padEnd(46)} ${String(bytes).padStart(8)} bytes`);
     } catch (err) {
       const e = err as { stderr?: Buffer; message?: string };

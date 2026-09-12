@@ -12,10 +12,10 @@
 #import "_lib/chrome.typ": *
 
 #let data = json("data.json")
-#let logo = if data.billFrom.logoUrl != none { "logo.svg" } else { none }
+#let logo = if data.billFrom.logoUrl != none { "/logo.svg" } else { none }
 
 #show: doc-shell.with(
-  doc-id: "Receipt " + data.receiptNumber + " · Generated " + data.generatedAt,
+  doc-id: data.footerLabel + " " + data.receiptNumber + " · Generated " + data.generatedAt,
 )
 
 #doc-header(
@@ -25,35 +25,40 @@
   rows: (("Receipt No.", data.receiptNumber), ("Date", data.receiptDate)),
 )
 
-#grid(
-  columns: (1fr, 1fr),
-  column-gutter: 11pt,
-  card[
+#card-row((
+  [
     #caps-label("Received From")
-    #v(4pt)
+    #v(px(4))
     #party-body(data.receivedFrom)
   ],
-  card[
+  [
     #caps-label("Receipt Status")
-    #v(4pt)
-    #text(size: 10pt, weight: "bold", font: mono-font, data.status.replace("_", " "))
+    #v(px(4))
+    #text(size: px(10.5), weight: 700, font: mono-font, data.status.replace("_", " "))
     #linebreak()
-    #text(size: 8pt, fill: muted, "Received on " + data.receiptDate)
+    #text(size: px(9), fill: ink-2)[Received on #text(font: mono-font, data.receiptDate)]
   ],
-)
+))
 
-#v(11pt)
+#v(px(16))
 
 // Headline amount — the one place a receipt shows ₹, in the heavy-bordered card.
-#card(heavy: true)[
+#card(heavy: true, fill-col: tile, pad-x: 16, pad-y: 14)[
+  // Paragraph spacing is zeroed inside this card and the three CSS margins
+  // written out instead. `par.spacing` is relative to the paragraph's OWN em,
+  // and the amount is 30px — so the shared 0.72em put ~16pt above and below it
+  // where the stylesheet asks for 3px and 4px, pushing everything below the
+  // card 20pt down the page. `.amount-value` also sets line-height 1.1, not
+  // the document's 1.45.
+  #set par(spacing: 0pt)
   #caps-label("Amount Received")
-  #v(5pt)
-  #text(size: 21pt, weight: "bold", fill: accent, font: mono-font, "₹" + data.amount)
-  #v(2pt)
-  #text(size: 8.5pt, data.amountInWords)
+  #v(px(3))
+  #text(size: px(30), weight: 700, fill: accent, font: mono-font, tracking: px(-30 * 0.01), "₹" + data.amount)
+  #v(px(4))
+  #text(size: px(9.5), weight: 600, fill: ink-2, data.amountInWords)
 ]
 
-#v(9pt)
+#v(px(14))
 
 #meta-row((
   ("Method", data.method, false),
@@ -62,7 +67,7 @@
   ..(if data.depositedDate != none { (("Deposited On", data.depositedDate, true),) } else { () }),
 ))
 
-#v(11pt)
+#v(px(16))
 
 #if data.allocations.len() > 0 [
   #data-table(
@@ -70,16 +75,18 @@
     aligns: (left, left, right),
     header: ("Allocated Against", "Document No.", "Amount"),
     rows: data.allocations.map(a => (
-      text(size: 8.5pt, a.documentLabel),
-      text(size: 8.5pt, font: mono-font, a.documentNumber),
+      text(size: px(9), a.documentLabel),
+      text(size: px(9), font: mono-font, a.documentNumber),
       money(a.amount),
     )),
-    // The allocated total is read from the loader, not summed here. The HTML
-    // template reduces over the rows at render time; doing that in a template
-    // is the arithmetic CLAUDE.md rules out, so the loader's value is used.
-    total-row: ("Total Allocated", money(data.allocatedTotal)),
+    // Mirrors the HTML tfoot. The allocated total is derived in the harness,
+    // not summed here — arithmetic in a template is what CLAUDE.md rules out.
+    total-cells: (
+      table.cell(colspan: 2, align(left, text(size: px(9), weight: 700, "Total Allocated"))),
+      text(size: px(9), weight: 700, font: mono-font, data.allocatedTotal),
+    ),
   )
-  #v(9pt)
+  #v(px(12))
 ]
 
 #if data.unallocatedAmountRaw > 0 [
@@ -87,24 +94,7 @@
     Advance balance — ₹#data.unallocatedAmount of this payment is unallocated and
     held as credit against future orders.
   ]
-  #v(11pt)
+  #v(px(4))
 ]
 
-#if data.bank != none [
-  #caps-label("Bank Details")
-  #v(4pt)
-  #card[
-    #grid(
-      columns: (auto, auto, auto, 1fr),
-      column-gutter: 16pt,
-      ..(
-        (("Bank", data.bank.name, false), ("Account No.", data.bank.accountNumber, true), ("IFSC", data.bank.ifsc, true))
-        + (if data.bank.branch != none { (("Branch", data.bank.branch, false),) } else { () })
-      ).map(it => [
-        #caps-label(it.at(0))
-        #v(3pt)
-        #text(size: 8.5pt, weight: "medium", font: (if it.at(2) { mono-font } else { body-font }), it.at(1))
-      ])
-    )
-  ]
-]
+#footer-block(terms: none, bank: data.bank)

@@ -154,3 +154,32 @@ for capture tooling. It is lint-clean (`pnpm exec eslint`) and is exercised by
 being run, but a type error in it would not be caught by CI. If this script
 grows, give it its own `tsconfig.json` with `noEmit` rather than widening the
 build's `rootDir`.
+
+## Addressing a reference — by document NUMBER, never by id (Day 26)
+
+**These references are reproducible by CONTENT and not by ID.** Day 25's capture
+manifests named each document by uuid; by Day 26 every one of those ids resolved
+to "not found". `pnpm db:seed` truncates and re-inserts, so every id in the
+database — tenant ids included — is new on each seed. What is stable is the
+document number and every rendered value: `QT-2026-0001` still totals
+`13,80,600.00` after a reseed.
+
+So the Day 26 matrix, `apps/workers/scripts/typst-matrix.json`, addresses each
+case by `(tenant slug, document number)` and resolves the ids at run time. Two
+things that costs, both handled there rather than left as traps:
+
+- **`QT-2026-0010` is not unique.** The seed builds a revision chain, so it
+  exists three times (revisions 1 and 2 superseded, 3 draft). The reference
+  renders "QUOTATION REV 3", so the resolver takes the highest revision
+  explicitly; any other type resolving to more than one row is an error.
+- **`long-serial-fixture.sql` picked its order line with `ORDER BY ol.order_id`**
+  — a random uuid. A reseed silently moved the 26- and 500-serial fixtures onto a
+  different order and product, so the Day 26 render showed `ORD-2026-0004` /
+  `PRE-450-BI` against a reference showing `ORD-2026-0019` / `DSP13-PANEL`. It is
+  now pinned to `ORD-2026-0019` and raises if that order is absent.
+
+One thing this does **not** fix: the day-13 seed builds serial numbers with a
+random per-run fragment (`DSP13-0d0f-0019` then, `DSP13-2b5c-0019` now), so the
+serials on `DSP-2026-0005` cannot be reproduced. Recorded as UNRESOLVED item A in
+`docs/TYPST_DIFF.md`; re-recording the reference to hide it is exactly what the
+F.38 guardrail forbids.

@@ -17,12 +17,23 @@ BEGIN;
 
 CREATE TEMP TABLE ctx ON COMMIT DROP AS
 WITH t AS (SELECT id FROM tenants WHERE slug = 'demo'),
+     -- PINNED to a document NUMBER, not to a uuid ordering.
+     --
+     -- This originally read `ORDER BY ol.order_id, ol.line_number LIMIT 1`, and
+     -- order_id is a random uuid: every `pnpm db:seed` reshuffled which order
+     -- line the fixture attached to. The Day 25 references therefore show
+     -- ORD-2026-0019 / DSP13-PANEL, while a Day 26 rebuild of the same fixture
+     -- produced ORD-2026-0004 / PRE-450-BI — a content difference that would
+     -- have been read as a template bug at the sign-off gate. Order numbers are
+     -- stable across a reseed; uuids are not.
      ol AS (
        SELECT ol.id AS order_line_id, ol.order_id, ol.product_id, p.sku, p.name AS pname
        FROM order_lines ol
+       JOIN orders o ON o.id = ol.order_id
        JOIN products p ON p.id = ol.product_id
        WHERE ol.tenant_id = (SELECT id FROM t)
-       ORDER BY ol.order_id, ol.line_number
+         AND o.order_number = 'ORD-2026-0019'
+       ORDER BY ol.line_number
        LIMIT 1
      )
 SELECT (SELECT id FROM t)                                                           AS tenant_id,
@@ -30,6 +41,15 @@ SELECT (SELECT id FROM t)                                                       
        (SELECT d.id FROM dealers d WHERE d.tenant_id = (SELECT id FROM t) ORDER BY d.dealer_code LIMIT 1) AS dealer_id,
        (SELECT u.id FROM users u WHERE u.tenant_id = (SELECT id FROM t) ORDER BY u.email LIMIT 1)         AS user_id
 FROM ol;
+
+-- A missing pin must stop the run: without ctx every INSERT below is a no-op
+-- over an empty relation, and the fixture would report success having built
+-- nothing.
+DO $$ BEGIN
+  IF (SELECT count(*) FROM ctx) <> 1 THEN
+    RAISE EXCEPTION 'long-serial-fixture: ORD-2026-0019 line 1 not found for tenant demo — has the seed changed?';
+  END IF;
+END $$;
 
 -- Remove any previous run of this fixture (serials first: FK to dispatch).
 DELETE FROM dispatch_serials WHERE dispatch_id IN (SELECT id FROM dispatches WHERE dispatch_number LIKE 'DSP-REF-%');
