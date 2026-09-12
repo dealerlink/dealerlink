@@ -4449,3 +4449,69 @@ comparison belongs in the gate, not in the follow-up that happened to run one.
 point of use. `docs/TYPST_DIFF.md` carries the corrected counts and the evidence
 that the Day 25 captures survive as the visual record but cannot be the snapshot
 baseline.
+
+## DEV.123 — a stacked PR can report MERGED, have run zero CI, and never have reached `main` — all three at once, none of them visibly wrong
+
+**Date:** 2026-09-12
+**Spec said:** `docs/RUNBOOKS.md` R22 — branch protection on `main` plus three
+required status checks (`checks`, `test`, `e2e`) is "the only thing between an
+untested commit and production", since both apps carry `deploy_on_push: true`.
+**Found:** PRs #15, #16 and #17 were stacked — #16 based on #15's branch, #17 on
+#16's — and merged in that order inside about two minutes. Afterwards all three
+showed **MERGED**. Only #15's content was on `main`.
+
+```
+#15  base main                        → reached main      ✅
+#16  base day-26-typst-templates      → merged into a branch that was
+                                        already merged to main a minute earlier
+#17  base f67-deterministic-serials   → merged into the branch below that
+```
+
+Each badge was truthful: each PR merged into _its own base_. None of those bases
+was `main`.
+
+**Two independent mechanisms, and they compound:**
+
+1. **GitHub retargets a stacked PR when the branch below it is DELETED, not when
+   it is merged.** The retarget is a side effect of branch deletion. Merged
+   back-to-back with deletion deferred, #16 and #17 kept pointing at branches
+   that were by then historical.
+2. **`verify.yml` triggers on `pull_request: branches: [main]` only.** A PR into
+   any other branch runs **no CI at all** — not a failure, not a skip: no checks
+   exist. `gh pr checks 16` says "no checks reported", which reads like a
+   pending queue rather than a structural gap.
+
+Either alone is survivable. Together they produce a PR that is green-looking,
+unchecked, merged, and absent from `main` — with nothing on the PR page
+indicating any of it.
+
+**Why it was caught:** not by the PR pages, which all looked correct, but because
+the next step needed `main`'s state and checked it — `git merge-base --is-ancestor`
+for each commit against `origin/main` returned NOT ON MAIN for the F.67 work.
+The **retargeting** half is recoverable: the commits still existed on their
+branches, so PR #18 landed them with one clean merge and a full CI run. The
+**no-CI** half is the dangerous one — unchecked code merged into an intermediate
+branch is carried upward by the next merge in the stack with no gate anywhere
+along the way.
+
+**Impact:** none shipped. For roughly twenty minutes `main` carried the Day 26
+Typst templates without the deterministic seed they were verified against — a
+render from `main` in that window would have produced randomised serials and
+wall-clock dates, the exact conditions DEV.121 records as making snapshot tests
+impossible. Both apps deployed that intermediate `main` (`040fdf8`), which was
+harmless because the templates are not yet wired into the render pipeline.
+Corrected by PR #18; both apps are now ACTIVE on `92dfcdf`, confirmed by
+deployment cause rather than by phase.
+
+**Resolution:** the operational rule is in R22 — avoid stacked PRs; where
+unavoidable, delete each branch immediately on merge, before merging the next,
+and confirm with `git log origin/main --oneline` that the commits actually
+landed rather than trusting the MERGED badge.
+**Permanent fix:** **F.69** widens `verify.yml` to run on pull requests into any
+branch, which removes the more dangerous half structurally. The retargeting half
+stays a convention, because nothing in GitHub can be configured to prevent it.
+
+The general lesson is the one worth carrying: **a badge reports what a system did,
+not what you assumed it meant.** MERGED answers "did this PR merge into its
+base?", and the question that mattered was "is this commit on `main`?" — a
+different question with a different instrument, `git merge-base --is-ancestor`.
