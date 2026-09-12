@@ -38,6 +38,8 @@ import {
   users,
 } from '../schema';
 
+import { daysAgo, seedNow } from './clock';
+
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -285,7 +287,7 @@ async function seedTenant(
           : null;
       const totals = computeTotals({ lines, discount, tenantState, placeOfSupply });
 
-      const piDate = new Date(Date.now() - plan.daysAgo * 86_400_000);
+      const piDate = daysAgo(plan.daysAgo);
       const validUntil = new Date(piDate.getTime() + plan.validityDays * 86_400_000);
       const seq = await nextCounter(tx, tenantId, 'performa_invoice', fy);
       const piNumber = `PI-${fy}-${String(seq).padStart(4, '0')}`;
@@ -551,7 +553,7 @@ async function main() {
     `DELETE FROM document_counters WHERE doc_type IN ('performa_invoice', 'order');`,
   );
 
-  const fy = fiscalYearOf(new Date());
+  const fy = fiscalYearOf(seedNow());
   const tenantRows = await db.select().from(tenants);
   for (const t of tenantRows) {
     if (t.status !== 'active') continue;

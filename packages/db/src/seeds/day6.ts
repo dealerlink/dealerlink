@@ -29,6 +29,8 @@ import {
   users,
 } from '../schema';
 
+import { seedNow } from './clock';
+
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -95,7 +97,7 @@ async function seedTenant(
       `);
       const seq = Number((result as unknown as { last_value: string | number }[])[0]!.last_value);
       const num = `PROC-${fiscalYear}-${String(seq).padStart(4, '0')}`;
-      const dt = new Date();
+      const dt = seedNow();
       dt.setDate(dt.getDate() - i * 30);
       const dateStr = dt.toISOString().slice(0, 10);
 
@@ -156,7 +158,7 @@ async function seedTenant(
       const status = statusMix[i]!;
       const reservedDealer =
         status === 'reserved' && deals.length > 0 ? deals[i % deals.length]!.id : null;
-      const procDate = new Date();
+      const procDate = seedNow();
       procDate.setDate(procDate.getDate() - (i % 180));
 
       const purchasePrice = prod.defaultPurchasePrice ?? '0';
@@ -172,9 +174,9 @@ async function seedTenant(
         procurementDate: procDate.toISOString().slice(0, 10),
         purchasePrice,
         reservedForDealerId: reservedDealer,
-        reservedAt: status === 'reserved' ? new Date() : null,
-        dispatchedAt: status === 'dispatched' || status === 'delivered' ? new Date() : null,
-        deliveredAt: status === 'delivered' ? new Date() : null,
+        reservedAt: status === 'reserved' ? seedNow() : null,
+        dispatchedAt: status === 'dispatched' || status === 'delivered' ? seedNow() : null,
+        deliveredAt: status === 'delivered' ? seedNow() : null,
         deliveredTo: status === 'delivered' ? 'Demo Site' : null,
         createdBy: adminId,
         updatedBy: adminId,

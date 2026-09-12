@@ -262,7 +262,7 @@
 // branded and unbranded references share a documentId so the logo is the only
 // delta. That property is what makes the visual diff reviewable, so it is
 // preserved here.
-#let doc-header(bill-from: none, title: "", rows: (), logo: none) = {
+#let doc-header(bill-from: none, title: "", rows: (), logo: none, revision: 1) = {
   grid(
     columns: (1fr, auto),
     align: (left + top, right + top),
@@ -287,6 +287,20 @@
     ],
     [
       #text(size: px(26), weight: 700, fill: accent, tracking: px(26 * 0.04), upper(title))
+      // `.rev-badge` — Header.tsx:62 shows it only for revision > 1. Missed in
+      // the first pass because only one of the 14 reference cases is a revision
+      // (QT-2026-0010 is REV 3), and the eye does not notice an element that is
+      // absent. It was found by diffing extracted text character by character.
+      #if revision > 1 {
+        h(px(6))
+        box(
+          fill: accent,
+          radius: px(3),
+          inset: (x: px(6), y: px(1)),
+          outset: (y: px(1)),
+          text(size: px(8), weight: 600, fill: white, tracking: px(8 * 0.04), "REV " + str(revision)),
+        )
+      }
       #v(px(10))
       #table(
         columns: (auto, auto),

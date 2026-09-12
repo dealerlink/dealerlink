@@ -40,6 +40,8 @@ import {
   users,
 } from '../schema';
 
+import { isoDaysAgo, seedNow, seedNowMs } from './clock';
+
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -57,9 +59,7 @@ function fiscalYearOf(d: Date): number {
   return m >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
 }
 
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-}
+// isoDaysAgo now comes from the pinned seed clock — see clock.ts.
 
 type Tx = Parameters<Parameters<ReturnType<typeof drizzle>['transaction']>[0]>[0];
 
@@ -250,7 +250,7 @@ async function seedTenant(
       refunded?: { reason: string };
     }): Promise<string> {
       const seq = await nextCounter(tx, tenantId, 'payment', fy);
-      const now = Date.now();
+      const now = seedNowMs();
       const [p] = await tx
         .insert(payments)
         .values({
@@ -425,7 +425,7 @@ async function main() {
   await client.unsafe(`DELETE FROM performa_invoices WHERE notes = '${PI_TAG}';`);
   await client.unsafe(`DELETE FROM document_counters WHERE doc_type = 'payment';`);
 
-  const fy = fiscalYearOf(new Date());
+  const fy = fiscalYearOf(seedNow());
   const tenantRows = await db.select().from(tenants);
   for (const t of tenantRows) {
     if (t.status !== 'active') continue;

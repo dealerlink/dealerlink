@@ -29,6 +29,8 @@ import {
   users,
 } from '../schema';
 
+import { daysAgo, isoDaysAgo, seedNow } from './clock';
+
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -382,7 +384,7 @@ async function seedTenant(
       );
       const quoteNumber = `QT-${fiscalYear}-${String(seq).padStart(4, '0')}`;
 
-      const quoteDate = new Date(Date.now() - plan.daysAgo * 86_400_000);
+      const quoteDate = daysAgo(plan.daysAgo);
       const validUntil = new Date(quoteDate.getTime() + plan.validityDays * 86_400_000);
 
       const dealId =
@@ -567,7 +569,7 @@ async function seedTenant(
             preparedBy: actorId,
             tenantStateAtIssue: parent.tenantStateAtIssue,
             placeOfSupply: parent.placeOfSupply,
-            quoteDate: new Date().toISOString().slice(0, 10),
+            quoteDate: isoDaysAgo(0),
             validUntil: parent.validUntil,
             currency: parent.currency,
             discountType: parent.discountType,
@@ -641,7 +643,7 @@ async function main() {
   `);
   await client.unsafe(`DELETE FROM document_counters WHERE doc_type = 'quotation';`);
 
-  const fiscalYear = fiscalYearOf(new Date());
+  const fiscalYear = fiscalYearOf(seedNow());
   const tenantRows = await db.select().from(tenants);
   for (const t of tenantRows) {
     if (t.status !== 'active') continue;

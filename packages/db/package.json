@@ -13,7 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:rollback": "drizzle-kit drop",
-    "db:seed": "tsx src/seeds/index.ts && tsx src/seeds/day5.ts && tsx src/seeds/day6.ts && tsx src/seeds/day7.ts && tsx src/seeds/day8.ts && tsx src/seeds/day11.ts && tsx src/seeds/day12.ts && tsx src/seeds/day13.ts",
+    "db:seed": "tsx src/seeds/index.ts && tsx src/seeds/day5.ts && tsx src/seeds/day6.ts && tsx src/seeds/day7.ts && tsx src/seeds/day8.ts && tsx src/seeds/day11.ts && tsx src/seeds/day12.ts && tsx src/seeds/day13.ts && tsx src/seeds/pin-created-at.ts",
     "db:seed:base": "tsx src/seeds/index.ts",
     "db:seed:day5": "tsx src/seeds/day5.ts",
     "db:seed:day6": "tsx src/seeds/day6.ts",
@@ -22,6 +22,7 @@
     "db:seed:day11": "tsx src/seeds/day11.ts",
     "db:seed:day12": "tsx src/seeds/day12.ts",
     "db:seed:day13": "tsx src/seeds/day13.ts",
+    "db:seed:pin-clock": "tsx src/seeds/pin-created-at.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
