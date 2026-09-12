@@ -1468,3 +1468,86 @@ things CI cannot see — `plan:sync` idempotency, marker containment,
 See `CLAUDE.md` §10 for the orchestration rules themselves: when the main thread
 must stop and ask, when to delegate versus do it inline, and who writes which
 document.
+
+---
+
+## R25 — Rebuilding the Typst/Chromium comparison artifact (F.38 Day 26)
+
+`docs/typst-comparison/index.html` is the operator sign-off artifact: each
+Chromium reference and its Typst render, side by side at the same DPI, with the
+extracted text of both underneath. This is how to regenerate it.
+
+### Why the rasteriser is not a workspace dependency
+
+Nothing in the product rasterises a PDF. Adding `pdfjs-dist` and
+`@napi-rs/canvas` — the second a native binary — to `apps/workers` to build a
+review artifact would put two packages in the lockfile, in CI, and in the
+production image for something only ever run by hand. So the comparison script
+resolves them from a scratch directory instead, and this runbook is what makes
+that reproducible rather than undocumented.
+
+```bash
+mkdir -p /tmp/pdf-tools && cd /tmp/pdf-tools \
+  && npm install --no-save pdfjs-dist@4.10.38 @napi-rs/canvas@0.1.65
+```
+
+`compare-typst.mjs` reads `PDF_TOOLS_DIR` (default `/tmp/pdf-tools`). Pin both
+versions: the artifact's page geometry comes from pdfjs's viewport maths, so an
+upgrade can move every image without any template changing.
+
+### Full rebuild, from a clean dev database
+
+```bash
+# 1. Fixtures. The 26- and 500-serial dispatches do not exist in the seed, and
+#    the branded logo is applied by the render harness per case (it does NOT
+#    need to be in the database — see fixtureLogo() in render-typst.ts).
+psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 \
+  -f apps/workers/scripts/long-serial-fixture.sql
+
+# 2. Render all 14 cases through the Typst templates.
+cd apps/workers && pnpm exec tsx scripts/render-typst.ts \
+  --manifest scripts/typst-matrix.json --out /tmp/typst-out
+
+# 3. Build the side-by-side page.
+cd "$REPO_ROOT" && node apps/workers/scripts/compare-typst.mjs \
+  --refs docs/pdf-references --renders /tmp/typst-out --out docs/typst-comparison
+```
+
+Step 2 needs the Typst binary. `TYPST_BIN` overrides the path; the default is
+the arm64 build Day 25 unpacked under `/tmp/typst-spike/`. `SOURCE_DATE_EPOCH`
+is pinned inside the script — do not set it in the environment and expect that to
+matter, and do not unset it expecting determinism to survive.
+
+### What to check in the rebuilt artifact
+
+The per-case table at the top of each section answers the five Day 26 checks —
+₹ extraction, Indian grouping at lakh scale, `Page X of Y`, logo versus fallback,
+state names versus codes — and flags a cell red when the Typst side disagrees
+with the reference. Page counts must match. Then read the images.
+
+Two mechanical checks the page does not run, worth running after any template
+change:
+
+```bash
+# Every money figure on every document, reference versus render.
+node apps/workers/scripts/compare-figures.mjs /tmp/typst-out
+
+# Byte-determinism: render twice into different directories and compare.
+```
+
+### These two scripts are outside CI's lint and typecheck surface
+
+`compare-typst.mjs` and `compare-figures.mjs` are `.mjs`, and `eslint .` as the
+workers package runs it does not pick up that extension — the same gap
+`capture-references.ts` has with `pnpm typecheck` (see
+docs/pdf-references/README.md). They are review tooling, run by hand, and a
+fault in them is visible immediately in the artifact they produce. Do not
+fix this by widening the lint or build surface for tooling; if either script
+grows into something the product depends on, move it into `src/` first.
+
+### Do not re-record a reference to close a difference
+
+The references are the contract. If a reference looks wrong, say so and stop —
+that is an F.38 guardrail, not a preference. `docs/TYPST_DIFF.md` is where a
+difference gets classified; `docs/pdf-references/README.md` explains why a
+reference is a suspect too when the two disagree.

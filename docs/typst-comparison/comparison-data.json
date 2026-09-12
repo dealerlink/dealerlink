@@ -1,0 +1,366 @@
+[
+  {
+    "label": "quotation__QT-2026-0001__intra__1line",
+    "type": "quotation",
+    "ref": {
+      "pages": 1,
+      "bytes": 199243,
+      "rupee": 1,
+      "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 85519,
+      "rupee": 1,
+      "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "quotation__QT-2026-0006__inter__3line",
+    "type": "quotation",
+    "ref": {
+      "pages": 1,
+      "bytes": 214306,
+      "rupee": 1,
+      "lakhSamples": ["1,75,500.00", "21,64,500.00", "3,89,610.00", "25,54,110.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 91451,
+      "rupee": 1,
+      "lakhSamples": ["1,75,500.00", "21,64,500.00", "3,89,610.00", "25,54,110.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "quotation__QT-2026-0010__intra__2line",
+    "type": "quotation",
+    "ref": {
+      "pages": 1,
+      "bytes": 209706,
+      "rupee": 1,
+      "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 89025,
+      "rupee": 1,
+      "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "quotation__QT-2026-0001__inter-sample-tenant__1line",
+    "type": "quotation",
+    "ref": {
+      "pages": 1,
+      "bytes": 197880,
+      "rupee": 1,
+      "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 84976,
+      "rupee": 1,
+      "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "performa_invoice__PI-2026-0001__intra__2line",
+    "type": "performa_invoice",
+    "ref": {
+      "pages": 1,
+      "bytes": 212436,
+      "rupee": 1,
+      "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 89166,
+      "rupee": 1,
+      "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "performa_invoice__PI-2026-0002__inter__1line",
+    "type": "performa_invoice",
+    "ref": {
+      "pages": 1,
+      "bytes": 207954,
+      "rupee": 1,
+      "lakhSamples": ["13,92,000.00", "2,50,560.00", "16,42,560.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 85631,
+      "rupee": 1,
+      "lakhSamples": ["13,92,000.00", "2,50,560.00", "16,42,560.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "payment_receipt__PAY-2026-0007__verified",
+    "type": "payment_receipt",
+    "ref": {
+      "pages": 1,
+      "bytes": 180889,
+      "rupee": 2,
+      "lakhSamples": ["1,00,000.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 70337,
+      "rupee": 2,
+      "lakhSamples": ["1,00,000.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "dispatch__DSP-2026-0005__in_transit__8line",
+    "type": "dispatch",
+    "ref": {
+      "pages": 1,
+      "bytes": 216885,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 70506,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "dispatch__DSP-REF-0026__26serials",
+    "type": "dispatch",
+    "ref": {
+      "pages": 1,
+      "bytes": 216701,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 66514,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "dispatch__DSP-REF-0500__500serials",
+    "type": "dispatch",
+    "ref": {
+      "pages": 2,
+      "bytes": 371942,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 2", "Page 2 of 2"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 2,
+      "bytes": 88176,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 2", "Page 2 of 2"],
+      "pageLabelOk": "ok",
+      "logoText": "fallback",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "BRANDED__quotation__QT-2026-0001",
+    "type": "quotation",
+    "ref": {
+      "pages": 1,
+      "bytes": 199357,
+      "rupee": 1,
+      "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 86485,
+      "rupee": 1,
+      "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "BRANDED__performa_invoice__PI-2026-0001",
+    "type": "performa_invoice",
+    "ref": {
+      "pages": 1,
+      "bytes": 212549,
+      "rupee": 1,
+      "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 90135,
+      "rupee": 1,
+      "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "BRANDED__payment_receipt__PAY-2026-0007",
+    "type": "payment_receipt",
+    "ref": {
+      "pages": 1,
+      "bytes": 180993,
+      "rupee": 2,
+      "lakhSamples": ["1,00,000.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 70957,
+      "rupee": 2,
+      "lakhSamples": ["1,00,000.00"],
+      "indianGrouping": "ok",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    }
+  },
+  {
+    "label": "BRANDED__dispatch__DSP-2026-0005",
+    "type": "dispatch",
+    "ref": {
+      "pages": 1,
+      "bytes": 217626,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    },
+    "typ": {
+      "pages": 1,
+      "bytes": 71491,
+      "rupee": 0,
+      "lakhSamples": [],
+      "indianGrouping": "n/a",
+      "pageLabels": ["Page 1 of 1"],
+      "pageLabelOk": "ok",
+      "logoText": "logo",
+      "stateNames": "names"
+    }
+  }
+]

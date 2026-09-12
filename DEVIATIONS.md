@@ -4218,3 +4218,105 @@ regardless of which grep was in play.
 **Unchanged:** the one-line sentinel fix remains the real elimination of the fault
 at source, still not done, still needing an operator call, still sequenced into
 F.37/F.63 which rewrites that script anyway.
+
+## DEV.119 — Day 26 — reference PDFs are reproducible by content, not by id: every Day 25 document id resolved to "not found"
+
+**Date:** 2026-09-12
+**Spec said:** `docs/pdf-references/README.md` (Day 25) — "Commit `b4fd549`,
+Seed `pnpm db:seed` at that commit", presented as making the references
+reproducible.
+**Found:** Day 26's first full render run failed **10 out of 10** cases with
+`Quotation <uuid> not found`, `Dispatch <uuid> not found`, and so on. `pnpm
+db:seed` truncates and re-inserts, so every id — tenant ids included — is new on
+each seed. The dev database had been reseeded between Day 25 and Day 26 (the e2e
+work of Day 24), and Day 25's manifests addressed documents by uuid.
+
+The **content** is stable: `QT-2026-0001` still totals `13,80,600.00`, the same
+dealer, the same lines. Only the addressing broke. So the references remain
+valid as a diff target — but the claim that they are reproducible was true of
+their content and false of the way anything reached them.
+
+**Resolution:** The Day 26 matrix (`apps/workers/scripts/typst-matrix.json`)
+names each case by `(tenant slug, document number)` and `render-typst.ts`
+resolves the ids at run time. Two consequences, both handled explicitly rather
+than left as traps:
+
+- `QT-2026-0010` is not unique — the seed builds a revision chain, so it exists
+  three times. The reference renders "QUOTATION REV 3", so the resolver takes the
+  highest revision explicitly; any other document type resolving to more than one
+  row raises instead of picking one.
+- `long-serial-fixture.sql` chose its order line with `ORDER BY ol.order_id`, a
+  random uuid. A reseed silently moved the 26- and 500-serial fixtures onto a
+  different order and product — the Day 26 render showed `ORD-2026-0004` /
+  `PRE-450-BI` against a reference showing `ORD-2026-0019` / `DSP13-PANEL`. Now
+  pinned to `ORD-2026-0019`, with a `RAISE EXCEPTION` if that order is absent,
+  because without the pin every INSERT below it is a silent no-op over an empty
+  relation.
+
+**Impact:** None on the references themselves. One thing remains unreproducible
+and is recorded as UNRESOLVED item A in `docs/TYPST_DIFF.md`: the day-13 seed
+builds serial numbers with a random per-run fragment (`DSP13-0d0f-0019` then,
+`DSP13-2b5c-0019` now), so the serials printed on `DSP-2026-0005` cannot be
+matched. Re-recording the reference would hide it, which the F.38 guardrail
+forbids.
+**Permanent fix:** `docs/pdf-references/README.md` now states that a reference is
+addressed by document number and never by id. Day 27's snapshot tests must do the
+same, and should pin the seed's serial fragment or assert on serial shape.
+
+## DEV.120 — Day 26 — CSS px transcribed as Typst pt: the whole document set rendered a third too large
+
+**Date:** 2026-09-12
+**Spec said:** Day 26 Phase 1 — the reference layout is the contract; Phase 4.3 —
+"do not omit small differences because they look cosmetic. Font metrics shifting
+a column by two points is the kind of thing that compounds."
+**Found:** `apps/workers/src/templates/styles.ts` is a print stylesheet stated
+entirely in **CSS px**. The first pass of the Typst chrome copied those numbers
+across as **pt** — `font-size: 9px` became `size: 9pt`. A CSS px is 1/96in and a
+point is 1/72in, so every glyph, every padding and every border came out 33% too
+large. It was not subtle in effect: the three-line quotation's Qty and Unit Price
+columns collided and the table printed `11,700.001,75,500.00`.
+
+Two related transcription faults surfaced with it:
+
+- the palette was Tailwind's slate/indigo ramp, not the document's own `:root`
+  tokens — `#4F46E5` against the reference's deeper `#3730A3`, and every border
+  and muted label off with it;
+- vertical rhythm was wrong in three separate ways, which together put the
+  quotation's totals row **58pt** above the reference's. CSS `line-height: 1.45`
+  sets the entire line advance, while Typst advances by `leading` plus the text's
+  own extent (cap-height to baseline, ~0.73em); a CSS line box also puts half its
+  excess above the first line and below the last, where Typst puts nothing; and
+  `par.spacing` is relative to the paragraph's own em, so a shared value became
+  ~16pt around the receipt's 30px amount, where the stylesheet asks for 3px and 4px.
+
+**Resolution:** `_lib/chrome.typ` defines `px(n) = n * 0.75pt` and every size is
+written `px(n)` with `n` copied verbatim from the stylesheet, so the conversion
+exists once and a bare `pt` in that file is now a visible exception. The palette
+was re-transcribed from `:root`. Leading is `0.72em` (em-relative, so correct at
+every size), the table's cell inset carries 3px beyond the stylesheet's padding to
+stand in for the half-leading Typst has no way to place, and paragraph spacing is
+zeroed inside the receipt's amount card with its margins written out.
+
+Two more of the same kind surfaced once the first three were measured away: the
+running footer sat 19.8pt high on every page of all 14 documents (Typst places it
+30% of the bottom margin below the content, Chromium's band sits nearer the paper
+edge), and the dispatch note's serial chips packed 40% tight and 2px narrow —
+`* { box-sizing: border-box }` counts a 1px border in the chip's width where a
+Typst stroke adds no layout width — which fitted eight chips per row instead of
+seven and put 416 of 500 serials on page 1 against the reference's 217.
+
+Measured after, by comparing the baseline of every string that appears exactly
+once in both files: the quotation's `Total` row sits at **exactly** the
+reference's baseline, and the largest remaining drift anywhere in the 14 cases is
+**16.3pt** — 5.7mm, at the bank block after a full page of accumulation. It
+started at 186pt.
+
+**Impact:** None shipped — this was caught at the Day 26 gate, which is what the
+gate is for. No number changed: all 138 money figures across the 14 documents
+extract identically to the references.
+**Permanent fix:** The `px()` helper and the comment above it. The deeper lesson
+is narrower than "convert units": **a stylesheet transcribed into another
+typesetting system is not a set of numbers to copy, it is a box model to
+reproduce**, and the parts that bit hardest here were the ones CSS does
+implicitly — half-leading, em-relative spacing, flex stretch — none of which
+announce themselves in the source being copied.
