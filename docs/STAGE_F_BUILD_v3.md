@@ -23,7 +23,7 @@
 The client will not go live until SP2 completes. **SP2 alone is not a legal
 go-live point for them.**
 
-Screenshot 4 shows sales ledger closing balances for 1-Apr-26 to 1-Sep-26:
+`2.png` shows sales ledger closing balances for 1-Apr-26 to 1-Sep-26:
 
 | Ledger                | Closing balance   |
 | --------------------- | ----------------- |
@@ -105,9 +105,9 @@ Day 19 found Ship-To is a **dealer**, not an address: `shipToDealerId` on
 performa invoices, orders and dispatches all reference `dealers`. Two options
 were on the table — keep it (2.7 d) or add `dealer_addresses` (~5 d).
 
-**Take the larger one.** The client's own evidence settles it: screenshot 3
+**Take the larger one.** The client's own evidence settles it: `3.png`
 shows Swipe with separate Billing Address and Shipping Address dropdowns on one
-customer, and screenshot 2 has a Goa bill-to shipping to Kolhapur, Maharashtra.
+customer, and `4.png` has a Goa bill-to shipping to Kolhapur, Maharashtra.
 One dealer, multiple delivery sites. The current model forces a fake dealer
 record per project site — in solar distribution that is the main path, not an
 edge case.
@@ -189,7 +189,7 @@ See §4 for the rationale. GSTIN requirements:
 
 ### F.11 — Tally mapping configuration
 
-There is no universal chart of accounts. Screenshot 4 shows
+There is no universal chart of accounts. `2.png` shows
 `SALE @ 5% - CENTRAL` beside `SALES @ 18% - CENTRAL` — singular and plural in
 the same ledger set. Tally XML import matches by **exact name string**, so a
 mismatch either creates a duplicate ledger or rejects the voucher. That is the
@@ -204,15 +204,15 @@ reproduce it.
    name anywhere in the UI.
 3. **Re-import** on demand, with a diff showing which mappings broke.
 
-| Mapping            | Detail                                                                                                                                                                  |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sales ledgers      | `(GST rate × supply type)` → ledger. Rows generated from rates actually in use                                                                                          |
-| Output tax ledgers | CGST / SGST / IGST, optionally rate-wise                                                                                                                                |
-| Round-off ledger   | Screenshot 5 shows `ROUND OFFS 0.46`; without it the voucher will not balance                                                                                           |
-| Party ledgers      | Dealer → ledger, plus the parent group for auto-creation (typically Sundry Debtors)                                                                                     |
-| **Stock items**    | **Not optional.** Screenshot 5 holds `Premier NDCR TOPCON G12R 615 wp` while their Swipe catalog holds `Premier Energies 620wp topcon dcr`. Tally matches stock by name |
-| Units              | Dealerlink UOM → Tally symbol (`NOS`, `OTH` in the screenshots)                                                                                                         |
-| Purchase ledgers   | Same structure, for the vendor bill export                                                                                                                              |
+| Mapping            | Detail                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sales ledgers      | `(GST rate × supply type)` → ledger. Rows generated from rates actually in use                                                                                     |
+| Output tax ledgers | CGST / SGST / IGST, optionally rate-wise                                                                                                                           |
+| Round-off ledger   | `1.png` shows `ROUND OFFS 0.46`; without it the voucher will not balance                                                                                           |
+| Party ledgers      | Dealer → ledger, plus the parent group for auto-creation (typically Sundry Debtors)                                                                                |
+| **Stock items**    | **Not optional.** `1.png` holds `Premier NDCR TOPCON G12R 615 wp` while their Swipe catalog holds `Premier Energies 620wp topcon dcr`. Tally matches stock by name |
+| Units              | Dealerlink UOM → Tally symbol (`NOS`, `OTH` in the screenshots)                                                                                                    |
+| Purchase ledgers   | Same structure, for the vendor bill export                                                                                                                         |
 
 **Guardrails:** export is blocked, loudly, when any mapping is incomplete —
 never fall back to a default name, never auto-create a ledger silently. Mapping
@@ -242,9 +242,33 @@ Validate before submission rather than failing at the API.
 Files in `docs/client-evidence/`. Prospect: Maharudra Agencies, running Swipe +
 TallyPrime Silver.
 
+### Citations in this document refer to FILENAMES, not to the original screenshot numbers
+
+This document originally cited the client's screenshots by a delivery-order
+number ("Screenshot 5") that is the **exact reverse** of the filenames they were
+saved under. Every citation resolved to the wrong image, in a document Day 26 and
+Day 27 both read for context. Corrected on the Day 25 follow-up by renumbering
+the citations to filenames — the filenames are load-bearing elsewhere (capture
+provenance in `docs/pdf-references/`), so the files were **not** renamed.
+
+The mapping is recorded because older notes, commits and the work order still use
+the original numbers:
+
+| original citation | file    | what it actually shows                                                                                                |
+| ----------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| Screenshot 1      | `5.png` | Tax invoice `MA/26-27/1094`, total ₹4,23,150.00 — **26 serials under one line item**, 4 pages                         |
+| Screenshot 2      | `4.png` | Swipe PFI-2033 preview, total ₹5,76,955.00 — Goa bill-to → Kolhapur ship-to, and **mixed-rate** (2.5%/2.5% and 9%/9%) |
+| Screenshot 3      | `3.png` | Swipe PFI create screen — `Stock: -84.00 NOS` in red against a 36-unit PFI                                            |
+| Screenshot 4      | `2.png` | TallyPrime Group Summary — `SALE @ 5% - CENTRAL` beside `SALES @ 18% - CENTRAL`                                       |
+| Screenshot 5      | `1.png` | TallyPrime voucher `MA/26-27/1079`, total ₹13,744.00 — carries `ROUND OFFS 0.46`                                      |
+
+Verified image by image, not inferred from the reversal: each row was confirmed
+against the content the citing sentence claims. **When adding a citation, use the
+filename.**
+
 ### Finding 1 — mixed-rate invoices collapse into one Tally ledger
 
-Screenshot 5, voucher `MA/26-27/1079`:
+`1.png`, voucher `MA/26-27/1079`:
 
 | Item                           | Qty | Amount         | Rate |
 | ------------------------------ | --- | -------------- | ---- |
@@ -254,7 +278,7 @@ Screenshot 5, voucher `MA/26-27/1079`:
 
 Tally shows a single `SGST - OUTPUT` of **₹557.02** = `8,917.50 × 2.5%` +
 `3,712.00 × 9%` = `222.94 + 334.08`. Two rates summed into one line. The
-four-ledger structure in screenshot 4 cannot be reconciled from that. The same
+four-ledger structure in `2.png` cannot be reconciled from that. The same
 voucher reads `Syncronized: No` and `Provide e-Invoice details: No`.
 
 **Their Tally Sync is enabled and running.** They tried it; it fails on exactly
@@ -265,14 +289,14 @@ that their sync collapses ₹222.94 + ₹334.08 into one ledger line.
 
 The Day 10 document spec renders tax as _"CGST @ X% + SGST @ X% (intra-state)
 OR IGST @ X%"_ — single-rate per document, with no HSN/SAC summary table.
-Swipe's preview (screenshot 2) handles this correctly. **In a mixed-rate
+Swipe's preview (`4.png`) handles this correctly. **In a mixed-rate
 side-by-side demo today, Dealerlink loses.** F.3 and F.4 close it.
 
 **Internal only. Never appears in a client document.**
 
 ### Finding 3 — negative stock
 
-Screenshot 3 shows `Stock: -84.00 NOS` in red while a PFI for 36 units is
+`3.png` shows `Stock: -84.00 NOS` in red while a PFI for 36 units is
 raised. Swipe permits invoicing against stock it does not have. Dealerlink's
 `confirmOrder` blocks this with `InsufficientInventoryError` naming the short
 product. **Demo this** — it is already built.
@@ -330,7 +354,7 @@ work. Out of scope for this phase.
 ### Serials in Tally — not required
 
 Confirmed by the client. Simplifies the Tally export. Serials on the **invoice
-PDF** (as screenshot 1 does, 26 under one line) are a separate question —
+PDF** (as `5.png` does, 26 under one line) are a separate question —
 confirm before F.7.
 
 ---
