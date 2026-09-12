@@ -20,6 +20,7 @@
     bill-from: data.billFrom,
     title: data.documentTitle,
     logo: logo,
+    revision: data.revision,
     rows: (
       (data.numberLabel, data.quoteNumber),
       ("Date", data.quoteDate),

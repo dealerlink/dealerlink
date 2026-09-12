@@ -44,6 +44,8 @@ import {
 } from '../schema';
 import type { DrizzleTx } from '../with-tenant';
 
+import { isoDaysAgo, seedNow } from './clock';
+
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -58,9 +60,7 @@ const PI_TAG = 'day13-seed-pi';
 const PRODUCT_SKU = 'DSP13-PANEL';
 const SERIAL_PREFIX = 'DSP13';
 
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-}
+// isoDaysAgo now comes from the pinned seed clock — see clock.ts.
 
 function fiscalYearOf(d: Date): number {
   const m = d.getUTCMonth();
@@ -144,6 +144,7 @@ interface SeedResult {
 async function seedTenant(
   db: ReturnType<typeof drizzle>,
   tenantId: string,
+  tenantSlug: string,
   actorId: string,
   fy: number,
 ): Promise<SeedResult> {
@@ -183,7 +184,22 @@ async function seedTenant(
       await tx.insert(inventoryItems).values({
         tenantId,
         productId: product!.id,
-        serialNumber: `${SERIAL_PREFIX}-${tenantId.slice(0, 4)}-${String(i + 1).padStart(4, '0')}`,
+        // The middle group is the tenant SLUG, not a slice of its uuid.
+        //
+        // It was `tenantId.slice(0, 4)`, and tenant ids are defaultRandom() —
+        // so every `pnpm db:seed` produced different serial numbers for the
+        // same document. The Day 25 reference dispatch note shows
+        // DSP13-0d0f-0019; the same document re-rendered on Day 26 showed
+        // DSP13-2b5c-0019 (F.67, DEV.119). A snapshot test cannot assert on a
+        // value the seed re-randomises, and a snapshot that skips the serial
+        // column leaves the field a dispatch note exists to carry permanently
+        // untested. Slugs are stable across a reseed; uuids are not.
+        //
+        // Uniqueness is unaffected either way: the constraint is
+        // UNIQUE (tenant_id, serial_number), so the tenant discriminator was
+        // never load-bearing — it is there to keep the two tenants' serials
+        // visually distinct in a shared dev database.
+        serialNumber: `${SERIAL_PREFIX}-${tenantSlug}-${String(i + 1).padStart(4, '0')}`,
         status: 'in_stock',
         warehouseCode: 'WH-MAIN',
       });
@@ -340,7 +356,7 @@ async function main() {
   await client.unsafe(`DELETE FROM products WHERE sku = '${PRODUCT_SKU}';`);
   await client.unsafe(`DELETE FROM document_counters WHERE doc_type = 'dispatch';`);
 
-  const fy = fiscalYearOf(new Date());
+  const fy = fiscalYearOf(seedNow());
   const tenantRows = await db.select().from(tenants);
   for (const t of tenantRows) {
     if (t.status !== 'active') continue;
@@ -360,7 +376,7 @@ async function main() {
       console.log('  · (no dispatch/admin user — skipping)');
       continue;
     }
-    const r = await seedTenant(db, t.id, actorId, fy);
+    const r = await seedTenant(db, t.id, t.slug, actorId, fy);
     console.log(
       `  · ${r.dispatches} dispatches (${r.delivered} delivered, ${r.returned} returned, ` +
         `${r.inTransit} in-transit, ${r.partial} partial)`,

@@ -178,8 +178,19 @@ things that costs, both handled there rather than left as traps:
   `PRE-450-BI` against a reference showing `ORD-2026-0019` / `DSP13-PANEL`. It is
   now pinned to `ORD-2026-0019` and raises if that order is absent.
 
-One thing this does **not** fix: the day-13 seed builds serial numbers with a
-random per-run fragment (`DSP13-0d0f-0019` then, `DSP13-2b5c-0019` now), so the
-serials on `DSP-2026-0005` cannot be reproduced. Recorded as UNRESOLVED item A in
-`docs/TYPST_DIFF.md`; re-recording the reference to hide it is exactly what the
-F.38 guardrail forbids.
+One thing this does **not** fix by itself: the day-13 seed built serial numbers
+with a random per-run fragment (`DSP13-0d0f-0019` then, `DSP13-2b5c-0019`
+later). **The seed is now deterministic** — the fragment is the tenant slug,
+`DSP13-demo-0019` (F.67, DEV.121) — but that value still is not the one baked
+into this reference, which came from a tenant uuid that no longer exists. No seed
+can reproduce `0d0f`. Re-capturing would close it; whether to re-capture is the
+operator's decision, because the F.38 guardrail forbids re-recording a reference
+to make a diff look better and only the operator can say that a deliberate seed
+change is a different thing.
+
+Two larger determinism holes sit behind it and are recorded against F.67:
+`created_at` is `defaultNow()`, so a reseeded document's Generated footer
+moves, and every seeded date comes from `Date.now()`, so the dates on the face
+of every document shift by a day, every day. **A reference captured on one day
+cannot be byte-matched by a render made on the next**, whatever the template
+does. Day 27's snapshot design has to answer that before it is written.

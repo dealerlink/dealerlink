@@ -15,7 +15,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 85519,
+      "bytes": 85517,
       "rupee": 1,
       "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
       "indianGrouping": "ok",
@@ -41,7 +41,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 91451,
+      "bytes": 91455,
       "rupee": 1,
       "lakhSamples": ["1,75,500.00", "21,64,500.00", "3,89,610.00", "25,54,110.00"],
       "indianGrouping": "ok",
@@ -67,7 +67,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 89025,
+      "bytes": 89450,
       "rupee": 1,
       "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
       "indianGrouping": "ok",
@@ -171,7 +171,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 70337,
+      "bytes": 70546,
       "rupee": 2,
       "lakhSamples": ["1,00,000.00"],
       "indianGrouping": "ok",
@@ -197,7 +197,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 70506,
+      "bytes": 70533,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -223,7 +223,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 66514,
+      "bytes": 66513,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -249,7 +249,7 @@
     },
     "typ": {
       "pages": 2,
-      "bytes": 88176,
+      "bytes": 88177,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -275,7 +275,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 86485,
+      "bytes": 86488,
       "rupee": 1,
       "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
       "indianGrouping": "ok",
@@ -301,7 +301,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 90135,
+      "bytes": 90133,
       "rupee": 1,
       "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
       "indianGrouping": "ok",
@@ -327,7 +327,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 70957,
+      "bytes": 71168,
       "rupee": 2,
       "lakhSamples": ["1,00,000.00"],
       "indianGrouping": "ok",
@@ -353,7 +353,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 71491,
+      "bytes": 71522,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",

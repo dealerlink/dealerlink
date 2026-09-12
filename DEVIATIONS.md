@@ -4320,3 +4320,132 @@ typesetting system is not a set of numbers to copy, it is a box model to
 reproduce**, and the parts that bit hardest here were the ones CSS does
 implicitly — half-leading, em-relative spacing, flex stretch — none of which
 announce themselves in the source being copied.
+
+## DEV.121 — F.67 — the seed's serial fragment was one of three wall-clock values; fixing it exposed the other two, which block Day 27's snapshot tests
+
+**Date:** 2026-09-12
+**Spec said:** `docs/F38_TYPST_PLAN.md`, Day 27 — "Add snapshot tests for all
+four documents against the Day 25 references — the capability that justified this
+choice." Byte-stable output is the load-bearing claim of the whole Typst
+migration.
+**Found:** Day 26's diff surfaced one non-reproducible value — inventory serial
+numbers, built in `packages/db/src/seeds/day13.ts` as
+`DSP13-${tenantId.slice(0, 4)}-0001` over a `defaultRandom()` tenant id, so every
+`pnpm db:seed` renamed every serial on every dispatch note. The operator directed
+the fix be made in the seed rather than by excluding the field from the snapshot:
+
+> A snapshot that skips the serial fragment leaves the product's core data
+> permanently untested. Deterministic seed data is the fix.
+
+Fixing it showed the serials were the _smallest_ of three wall-clock inputs, and
+the other two touch every document rather than one field:
+
+1. **`created_at` is `defaultNow()`.** The "Generated" footer resolves from it
+   when no `generated_documents` row exists, so a reseeded document's footer
+   moves — measured at `10:59:36` and then `11:00:05` across two consecutive
+   reseeds of the same document.
+2. **Every seeded date is computed from `Date.now()`** via `isoDaysAgo(n)` —
+   19 call sites across 7 seed files (`day6`, `day7`, `day8`, `day11`, `day12`,
+   `day13`, `smoke-auth`). Quote dates, validity dates, dispatch dates and
+   payment dates all shift by one day, every day. A reference captured on
+   11 September and a render made on 12 September differ on the face of the
+   document even with an untouched template.
+
+**Resolution:** The serial fragment is now the tenant **slug** —
+`DSP13-demo-0019`, `DSP13-sample-0019` — verified stable across two consecutive
+reseeds. Uniqueness was never at stake: the constraint is
+`UNIQUE (tenant_id, serial_number)`, so the discriminator is cosmetic, present
+only to keep two tenants' serials visually distinct in a shared dev database. No
+test asserted on a serial literal; that was established by enumerating every
+`DSP13-` occurrence in the repository rather than by a clean grep.
+
+(1) and (2) are **not** fixed here and are recorded against F.67 as an open
+operator decision, because both are changes to shared fixtures: either the seeds
+take a pinned clock — which alters data that dashboards and e2e specs may rely on
+being recent — or the snapshots compare against golden files regenerated when the
+tests are written, with the Day 25 captures kept as the visual contract only.
+
+**Impact:** Day 26 is unaffected: all 138 money figures still extract identically
+after the reseed, and the 14 renders are still byte-identical run-to-run. What
+changes is Day 27's premise. **A snapshot test that byte-compares a freshly
+rendered document against a Day 25 capture cannot pass** — not because of the
+serials, which are fixed, but because the document's dates and its footer are
+functions of when the database was seeded. That was going to be discovered while
+writing the tests; it is cheaper here.
+
+**Permanent fix:** F.67 carries the open decision and the sequencing constraint —
+it must be settled before F.38 sub-task (4), not after the tests are written. The
+narrower lesson is worth keeping separately: **"deterministic" is a property of
+the whole input, not of the renderer.** Day 25 proved Typst byte-stable and Day 26
+proved it again on real documents; neither could reveal that the data underneath
+was not.
+
+## DEV.122 — F.67 Part 2 — the seed clock is pinned; a document now renders byte-identically from an independently reseeded database
+
+**Date:** 2026-09-12
+**Spec said:** `docs/F38_TYPST_PLAN.md`, Day 27 — snapshot tests for all four
+documents against the Day 25 references. DEV.121 established that this could not
+work: `created_at` was `defaultNow()` and every seeded date was computed from
+`Date.now()`, so the dates on the face of every document shifted by a day, every
+day, and the footer moved on every reseed.
+**Operator decision:** pin the seed clock, and do not strip dates from the
+snapshot. Their reasoning, recorded because it is the same argument that decided
+the serial fragment one commit earlier:
+
+> Dates appear on every document and are legally relevant, so excluding them
+> leaves a visible field permanently untested.
+
+**Built:** `packages/db/src/seeds/clock.ts` holds one pinned instant —
+`2026-09-11T17:30:00Z`, overridable with `SEED_EPOCH` — and every seed derives
+its dates from it. All 17 data-bearing wall-clock call sites across six seed
+files now go through `seedNow` / `daysAgo` / `daysAhead` / `isoDaysAgo`. (The
+eighteenth and nineteenth, in `smoke-auth.ts`, time an Argon2 hash and write no
+data; they are left alone.)
+
+The instant is the moment the Day 25 references were captured — their footers
+read "Generated 11-Sept-2026 23:00 IST", which is 17:30 UTC. Any fixed instant
+makes the seed deterministic; this one also makes the date fields of a freshly
+seeded document reproduce the existing reference corpus exactly.
+
+`created_at` needed a second mechanism, because dispatches are not inserted by
+the seed at all — day13 creates them through `createDispatchDb`, the same
+production helper the application uses, deliberately, so the seed exercises the
+real path including its `FOR UPDATE` locking. Threading a test-only `createdAt`
+override through a protected code path to serve a fixture is the wrong trade, so
+`packages/db/src/seeds/pin-created-at.ts` runs last and derives each row's
+`created_at` / `updated_at` from **its own business date** at a fixed time of
+day. Rows keep a sane relative order, and a document's footer now agrees with the
+date printed on its face instead of contradicting it.
+
+**Verified, not assumed.** The database was seeded from scratch twice, with all
+14 documents rendered after each: **14/14 byte-identical**. Before this work the
+same comparison differed on every document.
+
+**Impact:** Seeded data no longer ages into the present. A "last 30 days"
+dashboard will show less as real time moves past the epoch and eventually
+nothing; `SEED_EPOCH` exists for a local database where recency matters more, but
+CI and any snapshot run must use the default or the guarantee is gone. That is
+the trade the pin buys — reproducibility over recency — and it was made
+deliberately.
+
+`audit_log` is **not** covered: its rows are written by triggers as the pinning
+pass runs, so their timestamps are wall-clock. Nothing renders them onto a
+document. Making the audit trail itself reproducible is a separate question.
+
+**Also found, and it is the part worth remembering.** Answering "do the Day 25
+captures survive?" required diffing extracted text character by character rather
+than looking at the side-by-side, and that comparison immediately found something
+the Day 26 gate had missed: **no Typst template rendered the `REV n` badge** that
+`Header.tsx:62` shows on a quotation with revision > 1. The Day 26 report said "0
+UNINTENTIONAL differences" and was wrong. Only one of the 14 cases is a revision
+at all, and **the eye does not notice an element that is absent** — every visual
+check asked whether what was drawn looked right, and nothing was drawn. Fixed;
+`QT-2026-0010`'s body text is now character-identical to its capture, 1085
+characters on both sides. The method lesson stands on its own: a visual diff can
+only find differences in things present in both documents, so a textual
+comparison belongs in the gate, not in the follow-up that happened to run one.
+
+**Permanent fix:** `clock.ts` and `pin-created-at.ts`, both documented at the
+point of use. `docs/TYPST_DIFF.md` carries the corrected counts and the evidence
+that the Day 25 captures survive as the visual record but cannot be the snapshot
+baseline.
