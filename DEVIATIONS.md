@@ -4297,9 +4297,19 @@ every size), the table's cell inset carries 3px beyond the stylesheet's padding 
 stand in for the half-leading Typst has no way to place, and paragraph spacing is
 zeroed inside the receipt's amount card with its margins written out.
 
-Measured after: the quotation's `Total` row sits at **exactly** the reference's
-baseline; the largest remaining drift anywhere in the 14 cases is 12pt over a
-full page.
+Two more of the same kind surfaced once the first three were measured away: the
+running footer sat 19.8pt high on every page of all 14 documents (Typst places it
+30% of the bottom margin below the content, Chromium's band sits nearer the paper
+edge), and the dispatch note's serial chips packed 40% tight and 2px narrow —
+`* { box-sizing: border-box }` counts a 1px border in the chip's width where a
+Typst stroke adds no layout width — which fitted eight chips per row instead of
+seven and put 416 of 500 serials on page 1 against the reference's 217.
+
+Measured after, by comparing the baseline of every string that appears exactly
+once in both files: the quotation's `Total` row sits at **exactly** the
+reference's baseline, and the largest remaining drift anywhere in the 14 cases is
+**16.3pt** — 5.7mm, at the bank block after a full page of accumulation. It
+started at 186pt.
 
 **Impact:** None shipped — this was caught at the Day 26 gate, which is what the
 gate is for. No number changed: all 138 money figures across the 14 documents

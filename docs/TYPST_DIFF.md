@@ -159,26 +159,27 @@ For the record, because several were close calls that would have shipped as
 | Footer read `QUOTATION QT-…`                                                                                                             | the heading was reused for the footer label                                         | `footerLabel` supplied per type, matching `buildFooterTemplate()`         |
 | Branded logo sat ~33px right of the reference                                                                                            | an explicit 220px width box centred the mark                                        | height-only sizing                                                        |
 | Logistics card white instead of tiled; a `LOGISTICS` label the HTML does not have                                                        | transcription slips                                                                 | corrected against the CSS                                                 |
-| Every document ran 58–67pt short by its totals row                                                                                       | three separate line-box differences between CSS and Typst                           | see **Residual vertical drift** below                                     |
+| Every document ran 58–186pt out of position, worst on the 500-serial case                                                                | five separate line-box and box-model differences between CSS and Typst              | see **Residual vertical drift** below                                     |
 
 ### Residual vertical drift — measured, not eyeballed
 
-A small vertical difference remains and is recorded rather than dropped for
-looking cosmetic. Baseline positions were extracted from both PDFs and compared
-in points from the page top:
+A vertical difference remains and is recorded rather than dropped for looking
+cosmetic. Every string appearing exactly once in both a reference and its render
+was compared by baseline, so the figures below are worst cases per document, not
+a sample:
 
-|                                                   | Chromium | Typst | Δ     |
-| ------------------------------------------------- | -------- | ----- | ----- |
-| Quotation QT-2026-0006 — GSTIN line               | 105      | 103   | −2    |
-| — line-items `Total` row                          | 350      | 350   | **0** |
-| — `Subtotal`                                      | 378      | 380   | +2    |
-| — `Terms & Conditions`                            | 472      | 461   | −11   |
-| Dispatch DSP-2026-0005 — `Total units dispatched` | 412      | 401   | −11   |
-| Receipt PAY-2026-0007 — `Method`                  | 330      | 318   | −12   |
+| Case                                | Strings compared | Worst Δ                     |
+| ----------------------------------- | ---------------- | --------------------------- |
+| Quotation QT-2026-0006              | 35               | 11.5pt                      |
+| Performa invoice PI-2026-0001       | 32               | **16.3pt** — worst anywhere |
+| Receipt PAY-2026-0007               | 19               | 12.8pt                      |
+| Dispatch DSP-2026-0005              | 25               | 3.5pt                       |
+| Dispatch DSP-REF-0500 (500 serials) | 232              | 7.2pt                       |
 
-Under 12pt over a full page, and zero at the row that matters most. It started
-at **58–67pt**: three separate causes, each fixed rather than classified, and
-each worth naming because the next person will hit them too.
+16.3pt is 5.7mm, at the bank block after a full page of accumulation; the
+quotation's line-items `Total` row sits on the reference's baseline exactly. It
+started at **186pt**. Five separate causes, each fixed rather than classified,
+and each worth naming because the next person will hit them too.
 
 1. **Line advance.** CSS `line-height: 1.45` sets the whole advance; Typst
    advances by `leading` plus the text's extent, and its default extent is
@@ -192,8 +193,22 @@ each worth naming because the next person will hit them too.
    30px amount that made the shared 0.72em into ~16pt above and below a value
    the stylesheet gives 3px and 4px — 20pt of drift from one card. Spacing is
    zeroed inside that card and the margins written out.
+4. **The running footer sat 19.8pt high**, on every page of all 14 documents.
+   Typst places the footer 30% of the bottom margin below the content; Chromium's
+   band sits closer to the paper edge. `footer-descent` is now 36.8pt, measured
+   against a reference footer baseline of 825.6pt from the top of an A4 page.
+5. **Serial chips packed 40% tight and 2px narrow.** Chip rows were 7.7pt apart
+   against the reference's 13.4pt, and `* { box-sizing: border-box }` makes the
+   chip's 1px border part of its width where a Typst stroke adds no layout
+   width. Together those fitted eight chips per row instead of seven and put 416
+   of the 500 serials on page 1 against the reference's 217 — the same page
+   count, a wildly different break. Now: chip pitch 51.76pt against 51.75pt, row
+   pitch 13.5pt against 13.4pt, split 224+276 against 217+283.
 
-No column position, figure or page break depends on what is left.
+**One difference is left here and not chased:** the 500-serial page break falls
+one chip row later than Chromium's — 224 serials on page 1 rather than 217. A
+row of vertical slack, worth seven serials, inside a page that still ends where
+the reference's does.
 
 ---
 

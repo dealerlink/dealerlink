@@ -208,6 +208,11 @@
   set page(
     paper: "a4",
     margin: (top: 14mm, bottom: 20mm, left: 18mm, right: 18mm),
+    // Typst's default puts the footer 30% of the bottom margin below the
+    // content — 17pt, where Chromium's band sits 36.8pt down, close to the
+    // paper edge. Measured, not guessed: the reference footer baseline is
+    // 825.6pt from the top of an A4 page and the default put ours at 805.8.
+    footer-descent: 36.8pt,
     // buildFooterTemplate(): 7px IBM Plex Mono in #6B7280, document id left,
     // "Page X of Y" right, and NO rule above it.
     footer: context {
@@ -400,12 +405,24 @@
   // it cost a third page against the reference's two. The chips flow as
   // ordinary paragraph content; each chip stays individually unbreakable,
   // which is correct, because a serial number must not be split.
-  set par(leading: px(4), spacing: px(4))
+  // Row pitch. `.serial-chip` is an inline-block about 15px tall (a 10.9px
+  // line box, plus 1px padding and 1px border on each side) and `.serial-chips`
+  // is a flex row with a 3px gap, so chip rows sit ~18px apart. Typst advances
+  // by leading plus the text's own 0.73em extent — 5.5px here — so leading
+  // carries the rest — 11px, tuned against a measured 13.4pt reference pitch.
+  // Left at a nominal 4px the rows packed 40% tighter than the reference, which
+  // moved the 500-serial page break 200 serials past where Chromium puts it.
+  set par(leading: px(11), spacing: px(11))
   serials
     .map(s => box(
       stroke: px(1) + line-2,
       radius: px(3),
-      inset: (x: px(5), y: px(1)),
+      // 6px, not the stylesheet's 5px: `* { box-sizing: border-box }` makes the
+      // chip's 1px border part of its width, and a Typst stroke is painted on
+      // the boundary without occupying layout space. Without the extra pixel a
+      // chip is 2px narrow, eight fit per row where Chromium fits seven, and
+      // the 500-serial page break lands 40 serials late.
+      inset: (x: px(5 + 1), y: px(1)),
       outset: (y: px(1.5)),
       text(size: px(7.5), font: mono-font, s),
     ))

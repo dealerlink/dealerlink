@@ -41,7 +41,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 91449,
+      "bytes": 91451,
       "rupee": 1,
       "lakhSamples": ["1,75,500.00", "21,64,500.00", "3,89,610.00", "25,54,110.00"],
       "indianGrouping": "ok",
@@ -67,7 +67,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 89024,
+      "bytes": 89025,
       "rupee": 1,
       "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
       "indianGrouping": "ok",
@@ -171,7 +171,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 70334,
+      "bytes": 70337,
       "rupee": 2,
       "lakhSamples": ["1,00,000.00"],
       "indianGrouping": "ok",
@@ -197,7 +197,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 70500,
+      "bytes": 70506,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -223,7 +223,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 66527,
+      "bytes": 66514,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -249,7 +249,7 @@
     },
     "typ": {
       "pages": 2,
-      "bytes": 82074,
+      "bytes": 88176,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -275,7 +275,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 86484,
+      "bytes": 86485,
       "rupee": 1,
       "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
       "indianGrouping": "ok",
@@ -301,7 +301,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 90133,
+      "bytes": 90135,
       "rupee": 1,
       "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
       "indianGrouping": "ok",
@@ -327,7 +327,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 70959,
+      "bytes": 70957,
       "rupee": 2,
       "lakhSamples": ["1,00,000.00"],
       "indianGrouping": "ok",
@@ -353,7 +353,7 @@
     },
     "typ": {
       "pages": 1,
-      "bytes": 71490,
+      "bytes": 71491,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
