@@ -13,6 +13,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    // Env only — see tests/setup-env.ts for what this replaced.
+    setupFiles: ['./tests/setup-env.ts'],
     // The snapshot tests render real documents through Typst. Each render is
     // ~66ms, but the suite loads documents from the database, so the default 5s
     // is tight rather than wrong.
