@@ -603,10 +603,116 @@ Misclassifying inter/intra-state misstates the tax on the invoice — a complian
 
 ---
 
+## ADR-015 — PDF rendering is in-process Typst; Chromium is removed
+
+**Date:** 2026-09-13
+**Status:** Accepted
+**Supersedes:** ADR-013 (which remains, and is still the correct record of why
+the queue exists)
+**Closes:** DEV.89, F.32
+**Implements:** F.38
+
+### Context
+
+ADR-013 put Chromium behind the pg-boss queue and gave the workers component a
+custom Dockerfile carrying fourteen shared libraries. That decision was right and
+is not being reversed: **the queue survives this ADR unchanged.** What changed is
+what runs inside the job.
+
+Three properties the Chromium pipeline could not provide, each of which cost real
+time before it was named:
+
+1. **Byte-stable output.** Chromium stamps `/CreationDate` and `/ModDate` from
+   the wall clock and numbers tagged-PDF structure elements from a per-browser-
+   process counter. Two renders of the same document differ (DEV.125). Without
+   byte stability there is no snapshot test, and PDF verification falls back to
+   image diffing.
+2. **A hermetic render.** Every render fetched Google Fonts over the network,
+   _inside the render_. If Google were unreachable, Chromium fell through to
+   system fonts and produced a differently typeset legal document with no error.
+   The requested fonts never arrived anyway — every Chromium-rendered reference
+   is set in Liberation Sans via that fallback.
+3. **One binary across three architectures.** `@sparticuz/chromium` ships x86-64
+   only; the devcontainer is arm64. DEV.89 records the divergence and the
+   `PUPPETEER_EXECUTABLE_PATH` gating it forced.
+
+### Decision
+
+**Render with Typst, in-process, inside the same `render-pdf` job.**
+
+- pg-boss, the queue, the job payload, `generated_documents` and the web Server
+  Action's polling contract are **unchanged**. ADR-013's isolation argument still
+  holds; it simply no longer needs a browser to isolate.
+- Templates are Typst source in `apps/workers/src/templates-typst/`, sharing one
+  `_lib/chrome.typ`. The performa invoice imports the quotation body rather than
+  copying it.
+- **Fonts are vendored** (`src/pdf/fonts/`) and the renderer passes
+  `--ignore-system-fonts`. No network in the render path, and identical
+  typography on every architecture.
+- **`SOURCE_DATE_EPOCH` is derived from the document**, by the renderer, not by
+  an env var a harness happens to set. A value pinned only in tests would make
+  the snapshots prove a property production lacks.
+- **The Typst binary is pinned by version and sha256, per architecture**, in
+  three places that must agree: `scripts/install-typst.mjs`,
+  `apps/workers/Dockerfile`, and CI. Removing one binary divergence is not worth
+  much if it introduces another.
+- `apps/workers/Dockerfile` becomes a plain Node image plus that binary. The
+  fourteen Chromium libraries, `fonts-liberation` and the emoji font are gone.
+
+### Why Typst and not @react-pdf/renderer
+
+Recorded here so the decision is reconstructible without the plan document, and
+because the evidence is specific rather than a matter of taste:
+
+- **react-pdf issue #3168** — ₹ (U+20B9) renders as the character `1` in the
+  default fonts. On a currency document that is not a visible failure; it is a
+  _plausible wrong character_. A dealer files ITC against these numbers.
+- **react-pdf issue #3047** — text rendered with fonts registered via
+  `Font.register` is parsed as garbled symbols by PDF parsers while looking
+  correct in a viewer.
+
+Those two interact badly: a custom font is mandatory to get ₹ at all, and
+registering one compromises text extraction. Byte-stable snapshots are also
+unavailable there, so verification would have fallen back to image diffing —
+slower, more brittle, and a worse story than Typst for roughly one day less work.
+
+The Day 25 spike verified the four blocking properties before any template was
+written: ₹ renders **and** survives extraction; `counter(page)` gives real
+"Page X of Y"; output is byte-identical across two renders; and 500 serials break
+cleanly with a repeating header.
+
+### Consequences
+
+**Gained.** Snapshot tests on all four document paths, asserting on the footer
+and the dates rather than around them. Renders at 57–125ms (median 66ms) against
+Chromium's 60–90s cold launch. Peak RSS 119.6 MB against the 512 MB that
+OOM-restarted the worker (DEV.67). No network dependency inside a render. One
+statically-linked binary instead of fourteen shared libraries.
+
+**Lost.** HTML/CSS as the template language, and with it the ability to preview a
+document in a browser. Typst is a smaller ecosystem than Chromium, and its layout
+engine is not contractually stable across versions — hence the version pin, which
+is load-bearing rather than hygienic: the reference baseline was captured from
+the Chromium pipeline immediately before deletion and **cannot be regenerated**.
+
+**Unresolved.** The 500-serial stress case breaks one chip row later than
+Chromium did (224+276 against 217+283). Identical serials, identical order, two
+pages either way. Verified stable across five renders; recorded in
+`docs/TYPST_DIFF.md` rather than tuned away.
+
+**Not done here.** `apps/workers` is not collapsed into `apps/web`. The original
+work order proposed it once rendering was in-process, and it remains correct and
+separate — it is a change to the deployment topology, not to the renderer.
+
 ## ADR-013 — Puppeteer rendering is queue-isolated to workers component
 
 **Date:** 2026-05-22
-**Status:** Accepted
+**Status:** SUPERSEDED by ADR-015 (2026-09-13) — Chromium was replaced by
+in-process Typst. **The queue isolation this ADR established was NOT reversed**:
+pg-boss, the `render-pdf` job and the polling contract are unchanged. What this
+record still explains, and ADR-015 does not repeat, is why PDF rendering left the
+web process in the first place — a `libnss3.so` failure on the App Platform Node
+buildpack that only appeared in staging.
 **Closes:** DEV.63
 
 ### Context

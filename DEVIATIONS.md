@@ -4636,3 +4636,58 @@ axis where it means something. The distinction matters for whoever reads
 equality.
 **Permanent fix:** the README states the standard and both mechanisms; this entry
 records that the original wording was a spec error, so nobody "restores" it.
+
+## DEV.126 — Day 27 — Chromium removed: DEV.89 closed, and a network fetch inside every render removed with it
+
+**Date:** 2026-09-13
+**Spec said:** `docs/DAY_27_PROMPT.md` Phase 3 — replace the `render-pdf`
+consumer with in-process Typst, remove `puppeteer` and `@sparticuz/chromium`,
+delete the custom Chromium Dockerfile, and say explicitly what that closes.
+**Built:** ADR-015 records the decision. This entry records what it closed and
+what it exposed.
+
+**DEV.89 IS CLOSED, and so is F.32.** `@sparticuz/chromium` shipped an x86-64
+binary only while the devcontainer is arm64, which forced a
+`PUPPETEER_EXECUTABLE_PATH` fallback and an `arch === 'x64'` guard in two
+separate places. Established by enumeration rather than assumption: no code in
+the repository references that variable any more, the devcontainer no longer sets
+it, and the R22 standing rule built around it is retired in place with its
+reasoning kept.
+
+**A defect removed that has nothing to do with Typst, and would have been worth
+fixing anyway.** Every Chromium render fetched Google Fonts over the network
+**inside the render**. If Google were unreachable, Chromium did not fail — it
+fell through its fallback chain to system fonts and produced a differently
+typeset legal document, silently. On a GST document that a dealer files input
+tax credit against, a silent change of typeface is not cosmetic: it changes what
+the archived artefact looks like against what was sent.
+
+Worse, in a way that only appeared when it was measured: **the requested fonts
+never arrived at all.** Inter is not installed in any of our environments and the
+fetch did not succeed, so every Chromium-rendered reference PDF is set in
+Liberation Sans via that fallback. The documents have always been Liberation; it
+was simply never a decision. The fonts are now vendored in
+`apps/workers/src/pdf/fonts/` and used with `--ignore-system-fonts`, so the
+typography is identical on arm64 dev, x86-64 CI and the x86-64 workers image —
+and it is chosen rather than defaulted into.
+
+**What the cutover did NOT change, deliberately:** pg-boss, the `render-pdf`
+queue, the job payload, `generated_documents`, and the web Server Action's
+polling contract. ADR-013's isolation argument survives ADR-015 intact; only the
+renderer inside the job changed.
+
+**Measured, for DEV.67's ceiling:** peak RSS 119.6 MB across ten consecutive
+renders of the heaviest document (11 MB above a 108.5 MB baseline), at 57–125 ms
+per render, median 66 ms. Against that, the Chromium path required a 60–90 s cold
+launch, an eager-warm at boot to hide it (DEV.66), a 45-minute idle-recycle, a
+100-page recycle as a memory-leak guard, and production raised to 1 GB after
+OOM-restarting at 512 MB. **None of that machinery exists now** — there is no
+browser to keep alive. The instance size and the 120 s `PDF_RENDER_TIMEOUT_MS`
+are both live-spec values (DEV.64); the evidence for lowering them is recorded in
+the specs and the decision is the operator's.
+
+**Not done, and named so it is not mistaken for an oversight:** the HTML
+templates still hold the data loaders, so `react` and `react-dom` remain workers
+dependencies and the React render halves are dead code. Extracting the loaders is
+a real refactor, not part of a cutover. `apps/workers` is likewise not collapsed
+into `apps/web` — correct, and a separate item.

@@ -1147,18 +1147,25 @@ browser rejects — so `next start` breaks tenant routing in a test environment
 deliberately not done. CI therefore runs the same faithful `next dev` path as
 local, and pays the same cold-compile cost.
 
-### Chromium on CI is the production binary
+### ~~Chromium on CI is the production binary~~ — REMOVED by Day 27
 
-`@sparticuz/chromium` ships an x86-64 binary only, which is why the arm64
-devcontainer points Puppeteer at Playwright's Chromium (DEV.89). **That
-fallback is inert on GitHub runners** — they are x86-64 and
-`PUPPETEER_EXECUTABLE_PATH` is unset, so `browser.ts` resolves `@sparticuz`,
-exactly as production does. Both gating paths for it are `process.arch === 'x64'`
-guards in `apps/web/playwright.config.ts` and
-`apps/workers/tests/setup-chromium.ts`. **Do not "fix" a Chromium failure on CI
-by setting `PUPPETEER_EXECUTABLE_PATH`** — that would silently make CI test a
-different binary than production, which is worse than no CI. (Task F.38, the
-Typst migration, removes this whole axis.)
+This section carried a standing rule: never "fix" a Chromium failure on CI by
+setting `PUPPETEER_EXECUTABLE_PATH`, because it would silently make CI test a
+different binary than production. **The rule is moot — there is no Chromium.**
+F.38 removed Puppeteer and `@sparticuz/chromium` entirely (ADR-015), which
+closes DEV.89 and F.32. No code references that variable and the devcontainer no
+longer sets it.
+
+What replaces it is not a rule but a mechanism, and it is worth knowing the
+difference: **the Typst binary is pinned by version and sha256 per architecture**
+in `scripts/install-typst.mjs`, `apps/workers/Dockerfile` and this workflow, and
+`pnpm typst:check` fails the job if the resolved binary is a different version.
+The old rule asked people to remember something; this one cannot be forgotten.
+
+The underlying hazard generalises past Chromium, so keep it in mind: **a test
+environment that resolves a different binary than production is worse than no
+test**, because it reports confidence it has not earned. That was true of
+`@sparticuz` and would be equally true of an unpinned Typst.
 
 ### The gate as actually configured — and it is a RULESET, not classic branch protection
 
@@ -1599,3 +1606,58 @@ The references are the contract. If a reference looks wrong, say so and stop —
 that is an F.38 guardrail, not a preference. `docs/TYPST_DIFF.md` is where a
 difference gets classified; `docs/pdf-references/README.md` explains why a
 reference is a suspect too when the two disagree.
+
+---
+
+## R26 — Typst: the pinned binary, and what to do when a render fails
+
+Rendering is Typst as of Day 27 (ADR-015). One binary, one version, three
+environments.
+
+### The pin, and why it is not hygiene
+
+```bash
+pnpm typst:install    # download, verify sha256, install to ~/.local/bin/typst
+pnpm typst:check      # fail if the resolved binary is a different version
+```
+
+The version and a per-architecture sha256 live in `scripts/install-typst.mjs`,
+and the **same version** is pinned in `apps/workers/Dockerfile` and
+`.github/workflows/verify.yml`. All three must agree.
+
+**Why an upgrade is not a routine dependency bump:** Typst's layout engine is not
+contractually stable across versions, and every reference PDF in
+`docs/pdf-references/` was rendered by the pinned build. Those references were
+captured from the Chromium pipeline immediately before it was deleted and
+**cannot be regenerated**. A silent upgrade re-typesets every document and
+invalidates a baseline that nothing can rebuild. Treat a Typst upgrade as a
+deliberate re-baselining with operator sign-off.
+
+### Failure modes, in the order they actually happen
+
+| Symptom                                     | Cause                                                                 | Fix                                                                                  |
+| ------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `typst binary not found`                    | not installed, or `~/.local/bin` not on PATH                          | `pnpm typst:install`; a container built before Day 27 lacks the PATH entry — rebuild |
+| `tar -J needs the xz binary`                | container predates the `xz-utils` addition (F.66)                     | rebuild the devcontainer                                                             |
+| `checksum mismatch`                         | corrupted download, or a changed release asset                        | do **not** bypass it; investigate which                                              |
+| `typst-determinism` CI job fails            | Typst version changed, or seeded data changed                         | both are real; **do not re-record the hash**                                         |
+| Snapshot tests fail on the footer or a date | the seed clock moved, or `generatedAt` stopped being document-derived | check `packages/db/src/seeds/clock.ts` and `src/pdf/generated-at.ts`                 |
+
+### Rendering one document by hand
+
+```bash
+# through the production consumer, persisting a generated_documents row
+node --import tsx apps/workers/src/pdf/render-cli.ts \
+  --type quotation --document <id> --tenant <id>
+
+# the whole 14-case matrix, without persisting
+cd apps/workers && pnpm exec tsx scripts/render-typst.ts \
+  --manifest scripts/typst-matrix.json --out /tmp/out
+```
+
+### What is deliberately absent
+
+No browser lifecycle. There is no warm-up, no idle-recycle, no page-cap, no
+`PDF_EAGER_WARM`, and no cold start to explain to anyone — a render is a ~66 ms
+subprocess. If you find yourself looking for the browser recycle logs described
+in DEV.66/DEV.67, they are gone with the browser.
