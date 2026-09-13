@@ -31,6 +31,20 @@ is what the snapshot tests assert against.
 | Approved            | Day 26 sign-off gate, after the `REV n` badge fix                      |
 | Recovered here from | `main` at the Day 27 branch point, hash-verified against git           |
 
+## The artifact as it was reviewed
+
+`docs/typst-comparison/` is regenerated whenever the templates or the
+references change, so the version the operator actually reviewed is the one at
+commit `d19cfb5` (`main`, immediately before Day 27). Recover it with:
+
+```bash
+git show d19cfb5:docs/typst-comparison/index.html > /tmp/day26-signoff.html
+git checkout d19cfb5 -- docs/typst-comparison   # or the whole directory
+```
+
+The PDFs in this directory, that artifact, and `docs/TYPST_DIFF.md` at that
+commit are together the record of what was approved.
+
 Do not delete these. Do not update them. If a future change makes them look
 wrong, that is expected — they record what was approved, on the day it was
 approved.

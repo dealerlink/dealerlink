@@ -1,32 +1,49 @@
-# F.38 Day 26 — Chromium reference vs Typst render
+# F.38 — Chromium reference vs Typst render
 
-Every difference between the 14 Day 25 reference PDFs and the Typst renders of
-the same 14 documents, classified. **This is the operator sign-off gate**: Day 27
-(cutover) does not begin until this list is reviewed.
+> **Day 27 update.** The baseline was re-captured against the pinned seed
+> (Phase 1) and re-compared (Phase 2). The counts below are the Day 27 result;
+> the Day 26 gate's history is kept because it is where the classifications were
+> argued and approved. **Two differences that the Day 26 gate classified as
+> INTENTIONAL no longer exist** — the footer and the dates now match, because
+> Phase 1 pinned `generatedAt` on the capture side too and F.67 pinned the seed
+> clock. A difference removed is better than a difference explained.
+
+Every difference between the 14 reference PDFs and the Typst renders of the same
+14 documents, classified. The Day 26 gate — where these classifications were
+argued and approved — is preserved below; the headline result is Day 27's, taken
+against the re-captured baseline.
 
 **Review the artifact, not this file alone.** `docs/typst-comparison/index.html`
 places each reference and its Typst render side by side at the same DPI, one
 image per page, with the extracted text of both underneath. Open it in a browser
 — no PDF viewer and no toolchain needed.
 
-|            |                                                                                        |
-| ---------- | -------------------------------------------------------------------------------------- |
-| References | `docs/pdf-references/*.pdf` — Chromium 152 (`/usr/bin/chromium`), captured Day 25      |
-| Renders    | Typst 0.15.1, `apps/workers/src/templates-typst/`, driven by `scripts/render-typst.ts` |
-| Cases      | 14 — all four document paths, branded and unbranded, 1-line through 500 serials        |
-| Artifact   | `docs/typst-comparison/index.html`                                                     |
+|                 |                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| References      | `docs/pdf-references/*.pdf` — Chromium 152 (`/usr/bin/chromium`), re-captured Day 27 against the pinned seed |
+| Sign-off record | `docs/pdf-references-day25-signoff/` — the Day 25 captures the operator approved. Not a test baseline        |
+| Renders         | Typst 0.15.1, `apps/workers/src/templates-typst/`, driven by `scripts/render-typst.ts`                       |
+| Cases           | 14 — all four document paths, branded and unbranded, 1-line through 500 serials                              |
+| Artifact        | `docs/typst-comparison/index.html`                                                                           |
 
 ## Result
 
-|                   | Count                           |
-| ----------------- | ------------------------------- |
-| **INTENTIONAL**   | 6                               |
-| **UNINTENTIONAL** | 1 — found after the gate, fixed |
-| **UNRESOLVED**    | 1                               |
+|                   | Count                                       |
+| ----------------- | ------------------------------------------- |
+| **INTENTIONAL**   | 4 (was 6 — two are now gone, not explained) |
+| **UNINTENTIONAL** | 0                                           |
+| **UNRESOLVED**    | 0                                           |
 
-Both UNRESOLVED items are properties of the **seed data**, not of either
-renderer, and neither can be closed by changing a template. They are described in
-full below so the gate is decided on them rather than around them.
+**Day 27 result, from the text comparison, which is the primary one:** page
+counts 14/14 identical, **footer text 14/14 identical**, body text 13/14
+character-identical, and all 138 money figures identical. The single body
+difference is a page-break position on the 500-serial stress case, described
+under UNRESOLVED.
+
+The footer matching is the notable change. The Day 26 gate classified it as an
+INTENTIONAL difference because the capture stamped wall-clock time while the
+render was document-keyed; Phase 1 pinned it on the capture side too, so the
+difference is now absent rather than explained.
 
 ## What is identical, and how that was established
 
@@ -59,6 +76,17 @@ than by eye:
 ---
 
 ## INTENTIONAL
+
+Six decisions are recorded here; **four still produce a visible difference**, and
+that is what the count in the result table refers to. Items 1 and 2 are kept
+because they are design decisions worth having written down, but as of Day 27
+neither shows up in a comparison any more:
+
+- **Item 1 (`Generated` timestamp)** — the difference is gone. Phase 1 applied
+  the same document-keyed value to the capture, so the footer now matches on all 14. The decision stands; the divergence does not.
+- **Item 2 (fonts)** — the difference is gone in extracted text, because both
+  sides set Liberation. Phase 3 removes the Google Fonts fetch entirely, at which
+  point the two sides agree by construction rather than by fallback.
 
 ### 1. `Generated` timestamp is keyed to the DOCUMENT, not to the render
 
@@ -239,57 +267,25 @@ the reference's does.
 
 ## UNRESOLVED
 
-One item, and it is now a question about what Day 27's snapshot tests compare
-against rather than about the templates. The two items listed at the Day 26 gate
-— the randomised serial fragment, and the references not being reproducible by
-document id — have both been fixed at the source (F.67; DEV.119, DEV.121,
-DEV.122). What survives is the consequence.
+**None.** Both items the Day 26 gate carried were fixed at the source and the
+Day 27 re-capture confirms it.
 
-### The Day 25 captures cannot be the snapshot baseline
+| Day 26 item                                            | Status                                                                                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Serial fragment randomised per reseed (`DSP13-0d0f-…`) | **Gone** — F.67 made it the tenant slug, and the Day 27 baseline was captured against the pinned seed, so reference and render agree |
+| References not reproducible by document id             | **Gone** — addressed by `(tenant slug, document number)`, and the baseline now reproduces 14/14 by content across two reseeds        |
 
-**They do survive as the visual sign-off record and as a content contract.**
-After the seed clock was pinned, a freshly seeded database renders:
+### The one remaining body difference, and why it is not a defect
 
-| Compared against the Day 25 capture | Result                                               |
-| ----------------------------------- | ---------------------------------------------------- |
-| Money figures                       | **138/138 identical**                                |
-| Document numbers                    | **0/14 differ**                                      |
-| Dates on the face of the document   | **0/14 differ** — verified per text item by position |
-| Body text, character for character  | **11/14 identical**                                  |
-| Running footer                      | **0/14 identical**                                   |
+`dispatch__DSP-REF-0500` — **identical 500 serials in identical order, two pages
+on both sides** — split 217+283 by Chromium and 224+276 by Typst. The page break
+falls one chip row later, so the text differs in _order across the page
+boundary_, not in content.
 
-And the same 14 documents rendered from **two independent full reseeds** are
-**14/14 byte-identical** — the property Day 27 needs, and one that did not hold
-before this work.
-
-The three body differences, each traced to its cause:
-
-| Case                                              | Difference                                             | Why it cannot be closed here                                                                               |
-| ------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `dispatch__DSP-2026-0005` (branded and unbranded) | `DSP13-0d0f-0019` vs `DSP13-demo-0019`                 | The capture's fragment came from a tenant uuid that no longer exists. No seed can reproduce it.            |
-| `dispatch__DSP-REF-0500`                          | The same 500 serials, split 224+276 instead of 217+283 | The page break falls one chip row later. The text is identical; its order across the page boundary is not. |
-
-The footer differs on all 14 by design: the reference shows the wall-clock
-instant of the capture run — 23:00 IST on every document, whatever it is dated —
-where the render shows the document's own date. That is INTENTIONAL item 1,
-approved at the Day 26 gate.
-
-**So: re-capture at Day 27.** The captures stay as the visual sign-off record,
-which is what they were commissioned as, and the snapshot baseline is re-captured
-against the pinned seed from the same Chromium pipeline, before the cutover
-removes it. Two reasons this is the right way round rather than a concession:
-
-- A baseline that disagrees with a correct render in two fields teaches the next
-  reader to expect failures, and a suite with expected failures is not a suite.
-- Re-capture is cheap **now** and was not an option on Day 25: the harness
-  resolves by document number rather than uuid, the seed is deterministic, and
-  `capture-references.ts` shares that resolver — so a re-capture is one command
-  and produces a corpus a byte-comparison can hold to.
-
-Re-capturing here is a deliberate, operator-directed act, not a diff being tidied
-away. The F.38 guardrail forbids re-recording a reference **to make a diff look
-better**; this is re-recording because the inputs were deliberately made
-reproducible. The existing corpus is preserved in git history either way.
+It is recorded here rather than fixed because fixing it would mean tuning the
+chip row height away from the reference's measured 13.4pt to force a break at a
+particular serial, which is worse engineering than a one-row difference on the
+stress case.
 
 ## Notes for Day 27
 
