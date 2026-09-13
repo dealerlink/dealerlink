@@ -4584,3 +4584,55 @@ plausible mechanism connecting them. What it lacked was a control. `f67-land-on-
 was the control, and it was already in the data. **When a setting's current value
 is used to explain past behaviour, find the case the explanation forbids before
 believing it.**
+
+## DEV.125 — Day 27 Phase 1.2 asked for byte-reproducibility from Chromium, which contradicts F.38's own premise
+
+**Date:** 2026-09-13
+**Spec said:** `docs/DAY_27_PROMPT.md` Phase 1.2 — "Verify reproducibility before
+trusting them: reseed, re-capture, confirm 14/14 byte-identical to the first
+capture. A baseline that is not itself reproducible is not a baseline."
+**Found:** The requirement is unsatisfiable, and unsatisfiable for the reason
+that produced the whole migration. Two captures of the same document from the
+same seed differ in bytes, in two places, neither of which is document content:
+
+1. **`/CreationDate` and `/ModDate`** are stamped with wall-clock time by Skia.
+   Puppeteer's `page.pdf()` exposes no control over them.
+2. **Tagged-PDF structure element ids** — `/ID (node00000135)` against
+   `/ID (node00000136)` — come from a counter that is per browser **process**,
+   not per document, so the same document captured twice gets different ids.
+
+Measured: 0/14 byte-identical; 6/14 after normalising the two date fields; 14/14
+once compared by content.
+
+**The operator identified this as an error in their own prompt rather than a
+shortfall in the work**, and asked that it be recorded so the bar is not read as
+having been lowered:
+
+> Asking for byte-reproducibility from Chromium contradicts F.38's own premise —
+> `/CreationDate`, `/ModDate` and the per-process tagged-PDF node counter are
+> precisely why Chromium was disqualified.
+
+That is exactly right, and `docs/F38_TYPST_PLAN.md` says so in its own decision
+record: byte-stable snapshots were unavailable from the alternatives, "PDF
+verification would have fallen back to image diffing — slower, more brittle, and
+a worse verification story than Typst". Chromium has the same defect. A prompt
+asking Chromium to be byte-stable asks it to be the thing it was replaced for
+not being.
+
+**Resolution:** the standard for the reference baseline is **content-identity
+across two independent reseeds and two independent captures** — the extracted
+text and the baseline position of every text item. That was met 14/14, and it is
+a stronger check than it sounds: it compares every glyph's placement, so a
+layout shift of a fraction of a point fails it.
+
+Byte-identity still applies where it can: **Typst-to-Typst**, which is byte-stable
+(14/14 across two full reseeds, and the 500-serial case verified identical across
+five renders). So Phase 4's byte baseline is Typst golden files, and the Chromium
+references are the content baseline and the cross-renderer check.
+
+**Impact:** none on the output. The bar was not lowered — it was moved onto the
+axis where it means something. The distinction matters for whoever reads
+`docs/pdf-references/README.md` later and wonders why it does not claim byte
+equality.
+**Permanent fix:** the README states the standard and both mechanisms; this entry
+records that the original wording was a spec error, so nobody "restores" it.

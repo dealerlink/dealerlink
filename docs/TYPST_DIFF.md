@@ -287,6 +287,13 @@ chip row height away from the reference's measured 13.4pt to force a break at a
 particular serial, which is worse engineering than a one-row difference on the
 stress case.
 
+**Verified stable, because a moving split would be a determinism fault wearing a
+layout difference's clothes — and it sits on the field this product is sold on.**
+Five observations: three consecutive renders and two renders from independent
+full reseeds. All five split 224+276, all five begin page 2 at REF-SN-00251, and
+all five are byte-identical. The break point is a property of the layout, not of
+the run.
+
 ## Notes for Day 27
 
 - File size: Typst averages **81 KB** against Chromium's **217 KB** — about 37%.

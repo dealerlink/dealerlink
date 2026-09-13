@@ -28,6 +28,23 @@ branded fixture's logo between them, and restores the tenant's original value in
 a `finally`. Day 25 did this by hand across two runs; that is not a procedure to
 rely on when the output is a one-way door.
 
+## These are a content contract, NOT a record of what production rendered
+
+One field in these captures is deliberately not what the live Chromium path would
+have produced. The loaders set `generatedAt: new Date()`, so a production render
+stamps the footer with the moment of rendering; the capture overrides it with the
+document-keyed value (`resolve-generated-at.ts`) so that a re-capture reproduces.
+
+That makes the footer here **the value the Typst renderer produces**, not the
+value the old pipeline produced. It was a correctness fix before it was a
+determinism one — a PDF re-fetched three weeks after issue should not claim it was
+generated today — but the consequence is worth stating plainly, because it is the
+kind of thing a future reader assumes the other way round:
+
+> **These files are a contract for what the documents should CONTAIN. They are not
+> evidence of what the Chromium pipeline emitted on any given day.** For that, see
+> `docs/pdf-references-day25-signoff/`, which is unmodified capture output.
+
 ## Reproducibility — what was verified, and what cannot be
 
 **Verified: 14/14 content-identical across two full reseeds and two independent
