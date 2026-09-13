@@ -170,17 +170,20 @@ jobs:
       - name: Seed
         run: pnpm db:seed
 
-      # apps/workers/tests/render.test.ts launches a real Chromium through
-      # @sparticuz/chromium. The runner is x86-64 with PUPPETEER_EXECUTABLE_PATH
-      # unset, so browser.ts resolves the SAME binary production uses — the
-      # DEV.89 arm64 fallback is inert here, by design. It needs the shared
-      # libraries apps/workers/Dockerfile installs for the same reason.
-      # `install-deps` (not `install`) — this job needs the shared libraries, not
-      # a Playwright browser. Using Playwright's own dep installer instead of a
-      # hand-written apt list keeps it correct across runner-image Ubuntu
-      # versions, where package names differ (libasound2 vs libasound2t64).
-      - name: Install Chromium runtime libraries
-        run: pnpm --filter web exec playwright install-deps chromium
+      # Typst for the PDF snapshot tests. This replaces the Chromium runtime
+      # libraries the workers' render specs used to need: one statically-linked
+      # musl binary, no shared-library surface, nothing to apt-install.
+      #
+      # The installer pins the version AND verifies a sha256 per architecture,
+      # and `typst:check` fails the job if the resolved binary is a different
+      # version. That check is not ceremony: every reference PDF in
+      # docs/pdf-references/ was rendered by the pinned build and those
+      # references can no longer be regenerated, so a silent upgrade would
+      # invalidate a baseline nothing can rebuild.
+      - name: Install Typst (pinned + checksum-verified)
+        run: pnpm typst:install
+      - name: Verify the pinned Typst version
+        run: pnpm typst:check
 
       - name: vitest
         run: pnpm test
@@ -312,32 +315,11 @@ jobs:
       # Run unconditionally, cache hit or miss. `install` is close to a no-op
       # when the browser is already on disk, and making it conditional is
       # exactly how a stale cache turns into a confusing "Executable doesn't
-      # exist" failure. --with-deps also covers the Chromium shared libraries
-      # the workers process needs for the PDF specs.
+      # exist" failure. --with-deps covers the browser's shared libraries.
+      # (It used to be load-bearing for the workers' PDF specs too; those render
+      # through Typst now and need no browser at all.)
       - name: Install Playwright Chromium + system deps
         run: pnpm --filter web exec playwright install --with-deps chromium
-
-      # DEV.95 — make the Chromium claim VERIFIABLE instead of inferred.
-      # browser.ts logs nothing about which executable it resolved, and its
-      # @sparticuz branch falls through on error to a system-Chromium lookup
-      # whose Linux candidates include /usr/bin/google-chrome — which IS
-      # preinstalled on GitHub runners. So a silent swap to the runner's Chrome
-      # would still go green. Print what resolveLaunchConfig() will pick.
-      # Diagnostic only: `|| true` so it can never fail the gate.
-      - name: Report the Chromium binary the PDF path will use
-        run: |
-          node -e "
-            const p = require('@sparticuz/chromium');
-            (async () => {
-              const exe = await (p.default ?? p).executablePath();
-              console.log('arch                       :', process.arch);
-              console.log('PUPPETEER_EXECUTABLE_PATH  :', process.env.PUPPETEER_EXECUTABLE_PATH ?? '(unset)');
-              console.log('@sparticuz executablePath  :', exe);
-              console.log('@sparticuz binary exists   :', require('fs').existsSync(exe));
-              console.log('/usr/bin/google-chrome     :', require('fs').existsSync('/usr/bin/google-chrome'), '(fallback if the above is false)');
-            })();
-          " || true
-        working-directory: apps/workers
 
       - name: Create extensions (scripts/init-db.sql)
         run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f scripts/init-db.sql

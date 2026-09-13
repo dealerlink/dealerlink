@@ -21,13 +21,13 @@ import { withTenant, closeDbConnection } from '@dealerlink/db';
 import { config as loadEnv } from 'dotenv';
 
 import { formatDocDate, formatGeneratedAt, formatMoney } from '../src/lib/format';
+import { resolveGeneratedAt } from '../src/pdf/generated-at';
 import { loadDispatchNotePdfData } from '../src/templates/dispatch-note';
 import { loadPaymentReceiptPdfData } from '../src/templates/payment-receipt';
 import { loadPerformaInvoicePdfData } from '../src/templates/performa-invoice';
 import { loadQuotationPdfData } from '../src/templates/quotation';
 
 import { resolveDocument, type DocumentCase, type Kind } from './resolve-document';
-import { resolveGeneratedAt } from './resolve-generated-at';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 loadEnv({ path: path.join(repoRoot, '.env.local') });

@@ -123,9 +123,17 @@ services:
       - key: PGBOSS_POOL_MAX
         scope: RUN_TIME
         value: '2'
-      # PDF Server Action wait. Same as staging for D.0; consider lowering
-      # toward ~60s once a prod smoke confirms cold launches are fast on the
-      # roomier basic-xs worker (handoff §2.2).
+      # PDF Server Action wait. 120s was sized for a COLD CHROMIUM LAUNCH of
+      # 60-90s (DEV.66/DEV.67). After the Day 27 Typst cutover a render of the
+      # heaviest document in the corpus measures 57-125ms, median 66ms, with no
+      # launch and no warm-up — so the wait is now three orders of magnitude
+      # larger than the work.
+      #
+      # Left at 120000 here ON PURPOSE. It is a live-spec value (DEV.64) and
+      # lowering it is the operator's call: a too-tight timeout turns a slow
+      # render into a user-visible failure, and the only thing this value costs
+      # while generous is how long a genuinely stuck render takes to surface.
+      # 10000 would still be ~150x the measured median.
       - key: PDF_RENDER_TIMEOUT_MS
         scope: RUN_TIME
         value: '120000'
@@ -142,6 +150,15 @@ workers:
     dockerfile_path: apps/workers/Dockerfile
     # UP from staging basic-xxs (512 MB): C5b showed 512 MB OOM-restarted >=2x
     # under PDF rendering. basic-xs (1 GB) doubles the headroom. DEV.67.
+    #
+    # DAY 27 — THIS CEILING IS NO LONGER NEEDED, and the decision to lower it is
+    # deliberately left to the operator rather than taken here. Measured after
+    # the Typst cutover: peak RSS 119.6 MB across ten consecutive renders of the
+    # heaviest document in the corpus (the 500-serial dispatch note), 11 MB above
+    # a 108.5 MB baseline. Chromium is gone, so the memory profile that caused
+    # the OOM no longer exists. basic-xxs (512 MB) would now carry roughly 4x
+    # headroom. Lowering it is a cost/reliability call and a live-spec change
+    # (DEV.64), so it is recorded here as evidence, not applied.
     instance_size_slug: basic-xs
     instance_count: 1
     envs:
