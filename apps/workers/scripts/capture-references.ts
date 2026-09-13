@@ -14,8 +14,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import os from 'node:os';
 import path from 'node:path';
 
-import { withTenant, closeDbConnection } from '@dealerlink/db';
+import { adminDb, withTenant, closeDbConnection } from '@dealerlink/db';
 import { config as loadEnv } from 'dotenv';
+import { sql } from 'drizzle-orm';
 
 import { shutdownBrowser } from '../src/pdf/browser';
 import { renderPdfFromHtml } from '../src/pdf/render';
@@ -25,6 +26,7 @@ import { buildPerformaInvoiceHtml } from '../src/templates/performa-invoice';
 import { buildQuotationHtml } from '../src/templates/quotation';
 
 import { resolveDocument, type DocumentCase } from './resolve-document';
+import { resolveGeneratedAt } from './resolve-generated-at';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 loadEnv({ path: path.join(repoRoot, '.env.local') });
@@ -66,6 +68,29 @@ const builders = {
   dispatch: buildDispatchNoteHtml,
 };
 
+/** The branded fixture's logo, read from the SQL that defines it — one source. */
+function fixtureLogo(): string {
+  const sqlText = readFileSync(path.join(__dirname, 'branded-tenant-fixture.sql'), 'utf8');
+  const m = /'(data:image\/[^']+)'/.exec(sqlText);
+  if (!m) throw new Error('branded-tenant-fixture.sql no longer contains a data: URI logo');
+  return m[1]!;
+}
+
+async function readLogo(): Promise<string | null> {
+  const rows = (await adminDb.execute(sql`
+    select ts.logo_url from tenant_settings ts
+    join tenants t on t.id = ts.tenant_id where t.slug = 'demo'
+  `)) as Array<{ logo_url: string | null }>;
+  return rows[0]?.logo_url ?? null;
+}
+
+async function setLogo(value: string | null): Promise<void> {
+  await adminDb.execute(sql`
+    update tenant_settings set logo_url = ${value}
+    where tenant_id = (select id from tenants where slug = 'demo')
+  `);
+}
+
 async function main(): Promise<void> {
   const resolved = findPlaywrightChromium();
   if (resolved) process.env.PUPPETEER_EXECUTABLE_PATH = resolved;
@@ -77,8 +102,29 @@ async function main(): Promise<void> {
   const OUT = path.join(repoRoot, 'docs/pdf-references');
   mkdirSync(OUT, { recursive: true });
 
+  // BRANDED AND UNBRANDED CANNOT SHARE A PASS. The logo comes from
+  // `tenant_settings.logo_url`, so the branded cases need it set and the
+  // unbranded ones need it null — different database state for the same
+  // documents. Day 25 did this by hand across two runs, which is not a
+  // procedure to rely on when the captures are a one-way door: Phase 3 deletes
+  // the pipeline that produces them.
+  //
+  // So the passes are ordered here and the tenant's original value is restored
+  // in a finally. Capture still does not leave tenant data altered.
+  const logoBefore = await readLogo();
+  const ordered = [...cases].sort(
+    (a, b) => Number(a.branded ?? false) - Number(b.branded ?? false),
+  );
+  let logoApplied: boolean | null = null;
+
   const results: Record<string, unknown>[] = [];
-  for (const c of cases) {
+  for (const c of ordered) {
+    const wantBranded = Boolean(c.branded);
+    if (logoApplied !== wantBranded) {
+      await setLogo(wantBranded ? fixtureLogo() : null);
+      logoApplied = wantBranded;
+      console.log(`     — tenant logo ${wantBranded ? 'applied' : 'cleared'}`);
+    }
     try {
       const { tenantId, documentId } = await resolveDocument(c);
       const out = await withTenant(tenantId, async (tx) => {
@@ -86,8 +132,17 @@ async function main(): Promise<void> {
           tx: unknown,
           tenantId: string,
           documentId: string,
+          generatedAt?: Date,
         ) => Promise<{ html: string; footerTemplate?: string; filename: string }>;
-        const built = await build(tx, tenantId, documentId);
+        // Document-keyed, not wall-clock. Without this a capture cannot pass its
+        // own reproducibility test (Phase 1.2) and the footer could never be
+        // asserted on (Phase 4.2) — see resolve-generated-at.ts.
+        const generatedAt = await resolveGeneratedAt(
+          tx as unknown as { execute: (q: unknown) => Promise<unknown> },
+          c.type,
+          documentId,
+        );
+        const built = await build(tx, tenantId, documentId, generatedAt);
         const buffer = await renderPdfFromHtml(built.html, {
           format: 'A4',
           margin: { top: '14mm', bottom: '20mm' },
@@ -124,6 +179,9 @@ async function main(): Promise<void> {
   // sloppiness: branded and unbranded cases need DIFFERENT fixture state in the
   // database and therefore cannot share a single run, so a complete record is
   // necessarily assembled from several.
+  await setLogo(logoBefore);
+  console.log('     — tenant logo restored to its original value');
+
   const resultsPath = path.join(OUT, 'capture-results.json');
   const byLabel = new Map<string, Record<string, unknown>>();
   if (existsSync(resultsPath)) {

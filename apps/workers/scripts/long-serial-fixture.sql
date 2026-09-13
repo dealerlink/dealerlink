@@ -15,6 +15,17 @@
 \set ON_ERROR_STOP on
 BEGIN;
 
+-- PINNED TIMESTAMPS. These rows are inserted AFTER `pnpm db:seed` has run its
+-- pin-created-at pass (F.67), so nothing else pins them and created_at would
+-- default to now(). That reaches a rendered document: `generatedAt` resolves to
+-- the source row's created_at, so the dispatch note's footer showed the minute
+-- the fixture happened to run — caught by Day 27 Phase 1.2, where two captures
+-- of DSP-REF-0026 differed by exactly one text item, "12:06" against "12:07".
+--
+-- The value follows the same rule pin-created-at.ts uses for seeded rows: the
+-- row's own business date at a fixed time of day, 10:00 UTC = 15:30 IST.
+\set pinned_ts '2026-04-01 10:00:00+00'
+
 CREATE TEMP TABLE ctx ON COMMIT DROP AS
 WITH t AS (SELECT id FROM tenants WHERE slug = 'demo'),
      -- PINNED to a document NUMBER, not to a uuid ordering.
@@ -58,38 +69,39 @@ DELETE FROM dispatches       WHERE dispatch_number LIKE 'DSP-REF-%';
 DELETE FROM inventory_items  WHERE serial_number LIKE 'REF-SN-%';
 
 -- Dedicated inventory so we never consume or mutate seeded stock.
-INSERT INTO inventory_items (tenant_id, product_id, serial_number, status, warehouse_code, procurement_date, purchase_price, created_by, updated_by)
-SELECT c.tenant_id, c.product_id, 'REF-SN-' || lpad(g::text, 5, '0'), 'in_stock', 'WH-REF', current_date, 1000.00, c.user_id, c.user_id
+INSERT INTO inventory_items (tenant_id, product_id, serial_number, status, warehouse_code, procurement_date, purchase_price, created_by, updated_by, created_at, updated_at)
+SELECT c.tenant_id, c.product_id, 'REF-SN-' || lpad(g::text, 5, '0'), 'in_stock', 'WH-REF', DATE '2026-04-01', 1000.00, c.user_id, c.user_id, :'pinned_ts', :'pinned_ts'
 FROM ctx c, generate_series(1, 526) g;
 
 -- Two dispatches: 26 serials (the real-world case) and 500 (the stress case).
-INSERT INTO dispatches (tenant_id, dispatch_number, order_id, bill_to_dealer_id, ship_to_dealer_id, dispatch_date, status, vehicle_number, transporter_name, created_by, updated_by)
-SELECT c.tenant_id, v.num, c.order_id, c.dealer_id, c.dealer_id, DATE '2026-04-01', 'in_transit', 'MH-12-AB-1234', 'Reference Transport Co', c.user_id, c.user_id
+INSERT INTO dispatches (tenant_id, dispatch_number, order_id, bill_to_dealer_id, ship_to_dealer_id, dispatch_date, status, vehicle_number, transporter_name, created_by, updated_by, created_at, updated_at)
+SELECT c.tenant_id, v.num, c.order_id, c.dealer_id, c.dealer_id, DATE '2026-04-01', 'in_transit', 'MH-12-AB-1234', 'Reference Transport Co', c.user_id, c.user_id, :'pinned_ts', :'pinned_ts'
 FROM ctx c, (VALUES ('DSP-REF-0026'), ('DSP-REF-0500')) AS v(num);
 
-INSERT INTO dispatch_lines (tenant_id, dispatch_id, line_number, order_line_id, product_id, product_sku, product_name, quantity)
+INSERT INTO dispatch_lines (tenant_id, dispatch_id, line_number, order_line_id, product_id, product_sku, product_name, quantity, created_at)
 SELECT c.tenant_id, d.id, 1, c.order_line_id, c.product_id, c.sku, c.pname,
-       CASE WHEN d.dispatch_number = 'DSP-REF-0026' THEN 26 ELSE 500 END
+       CASE WHEN d.dispatch_number = 'DSP-REF-0026' THEN 26 ELSE 500 END,
+       :'pinned_ts'
 FROM ctx c JOIN dispatches d ON d.tenant_id = c.tenant_id AND d.dispatch_number LIKE 'DSP-REF-%';
 
 -- 26 serials on the first dispatch, 500 on the second, from disjoint ranges.
-INSERT INTO dispatch_serials (tenant_id, dispatch_id, dispatch_line_id, inventory_item_id)
-SELECT c.tenant_id, d.id, dl.id, i.id
+INSERT INTO dispatch_serials (tenant_id, dispatch_id, dispatch_line_id, inventory_item_id, created_at)
+SELECT c.tenant_id, d.id, dl.id, i.id, :'pinned_ts'
 FROM ctx c
 JOIN dispatches d     ON d.tenant_id = c.tenant_id AND d.dispatch_number = 'DSP-REF-0026'
 JOIN dispatch_lines dl ON dl.dispatch_id = d.id
 JOIN inventory_items i ON i.tenant_id = c.tenant_id
                       AND i.serial_number BETWEEN 'REF-SN-00001' AND 'REF-SN-00026';
 
-INSERT INTO dispatch_serials (tenant_id, dispatch_id, dispatch_line_id, inventory_item_id)
-SELECT c.tenant_id, d.id, dl.id, i.id
+INSERT INTO dispatch_serials (tenant_id, dispatch_id, dispatch_line_id, inventory_item_id, created_at)
+SELECT c.tenant_id, d.id, dl.id, i.id, :'pinned_ts'
 FROM ctx c
 JOIN dispatches d     ON d.tenant_id = c.tenant_id AND d.dispatch_number = 'DSP-REF-0500'
 JOIN dispatch_lines dl ON dl.dispatch_id = d.id
 JOIN inventory_items i ON i.tenant_id = c.tenant_id
                       AND i.serial_number BETWEEN 'REF-SN-00027' AND 'REF-SN-00526';
 
-UPDATE inventory_items i SET status = 'dispatched', dispatch_id = ds.dispatch_id, dispatched_at = now()
+UPDATE inventory_items i SET status = 'dispatched', dispatch_id = ds.dispatch_id, dispatched_at = :'pinned_ts', updated_at = :'pinned_ts'
 FROM dispatch_serials ds WHERE ds.inventory_item_id = i.id AND i.serial_number LIKE 'REF-SN-%';
 
 COMMIT;
