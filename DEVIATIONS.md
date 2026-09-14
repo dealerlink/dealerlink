@@ -4833,7 +4833,7 @@ dangling or wrong id in the migrated content be corrected during migration:
 
 > `pnpm check:ids` must pass against the generated file with NO NEW ALLOWLIST
 > ENTRIES, and the existing deferred-fix entry for DEV.38 in PROJECT_PLAN.md
-> must be REMOVED as part of this task rather than left behind.
+> (scripts/id-reference-allowlist.json, tracked: F.63) must be REMOVED as part of this task rather than left behind.
 
 **Found by `verifier`, reviewing the commit that added it: that criterion could
 not be met.** The allowlist entry is scoped by `(id, file)`, and it covers three
