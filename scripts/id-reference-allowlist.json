@@ -1,0 +1,143 @@
+{
+  "$comment": [
+    "Places where a cited DEV/ADR id has no entry, with a reason AND a kind.",
+    "Checked by scripts/check-id-references.mjs.",
+    "",
+    "kind: 'deliberate-mention' — the id is named IN ORDER to say it is missing,",
+    "  or the file is a verbatim archive whose text must not be rewritten. These",
+    "  are permanent and correct.",
+    "kind: 'deferred-fix' — the citation IS wrong and reads as a real",
+    "  cross-reference, but fixing it is blocked on something outside this file.",
+    "  These require a `tracked` task id and are printed on every run so they",
+    "  cannot quietly become permanent. An allowlist that cannot tell these apart",
+    "  converts real errors into permitted ones, which is the failure mode the",
+    "  verifier identified when this file was introduced.",
+    "",
+    "Scoped by file, not file:line, so the allowlist survives edits above a",
+    "citation. The cost is a whole-file blast radius: a NEW wrong citation of the",
+    "same id in an allowlisted file is suppressed silently. Keep the list short."
+  ],
+  "allow": [
+    {
+      "id": "DEV.38",
+      "file": ".claude/agents/verifier.md",
+      "reason": "The verifier's remit uses DEV.38 as the worked example of why the dangling check exists — a citation that propagated from a prompt into three documents, and that meant two different things in different places.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "BUILD_PROMPTS.md",
+      "reason": "An archive of the Stage B prompts exactly as they were pasted into Claude Code. The prompt did say DEV.38; editing it would rewrite the record of what was asked, which is the only thing this file is for.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.41",
+      "file": "BUILD_PROMPTS.md",
+      "reason": "Same — a verbatim prompt archive. DEV.41 was the prompt's name for a premise that never became an entry; the decision that was actually taken is recorded as DEV.43.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.42",
+      "file": "BUILD_PROMPTS.md",
+      "reason": "Same — verbatim prompt archive. Described in the prompt as 'correlated subquery ambiguity'. No entry exists and none of the citing context says what was decided, so it cannot be resolved: unresolvable, not guessed.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "DEVIATIONS.md",
+      "kind": "deliberate-mention",
+      "reason": "DEV.128 records that DEV.38 was cited without an entry and what it turned out to mean. Naming the missing id is the content of that record — the entry exists to say the id does not."
+    },
+    {
+      "id": "DEV.41",
+      "file": "DEVIATIONS.md",
+      "reason": "Appears inside DEV.43's 'Spec said' field, quoting the original chunk prompt verbatim. The quotation is accurate — the prompt really did cite DEV.41 — and DEVIATIONS.md is append-only, so historic entries are not edited.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.42",
+      "file": "DEVIATIONS.md",
+      "kind": "deliberate-mention",
+      "reason": "DEV.128 records that DEV.42 was cited without an entry and what it turned out to mean. Naming the missing id is the content of that record — the entry exists to say the id does not."
+    },
+    {
+      "id": "DEV.38",
+      "file": "docs/stage-f-tasks.json",
+      "reason": "F.72's notes record which ids were dangling and what each turned out to mean. Naming them is the content of the record.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.41",
+      "file": "docs/stage-f-tasks.json",
+      "reason": "Same — F.72's notes.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.42",
+      "file": "docs/stage-f-tasks.json",
+      "reason": "Same — F.72's notes. DEV.42 is recorded there as unresolvable.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "docs/TYPST_DIFF.md",
+      "reason": "Same — records that a prompt's mis-citation propagated into three documents, which is the argument for this check existing.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "docs/TYPST_SPIKE.md",
+      "reason": "Prose that exists to explain that DEV.38 has no entry. Naming the missing id is the content.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "packages/db/src/seeds/day8.ts",
+      "reason": "The comments now describe the cross-tenant bug in place and state that no DEV.38 entry exists. The id is named only to say it is dangling.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "PROJECT_PLAN.md",
+      "reason": "THE CITATION IS WRONG AND READS AS REAL — it is not a deliberate mention. PROJECT_PLAN.md's B.10 row cites DEV.38 for a Day 8 seed cross-tenant dealer bug whose entry was never written, so a reader following it finds nothing. It is NOT corrected here because the row sits in the hand-maintained Stage B table, which the verifier requires to be byte-identical against main — so this check and that one are in genuine tension, and resolving it is an operator decision: either a one-time overrule of the Stage A-E rule (precedented by DEV.112) or F.63, which makes PROJECT_PLAN.md fully generated and removes the tension entirely. Recorded as deferred rather than absorbed.",
+      "kind": "deferred-fix",
+      "tracked": "F.63"
+    },
+    {
+      "id": "DEV.41",
+      "file": "PROJECT_PLAN.md",
+      "reason": "Generated from F.72 in docs/stage-f-tasks.json by pnpm plan:sync. Allowlisted at the source as well; this entry covers the generated copy.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.42",
+      "file": "PROJECT_PLAN.md",
+      "reason": "Generated from F.72 in docs/stage-f-tasks.json by pnpm plan:sync. Allowlisted at the source as well; this entry covers the generated copy.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "scripts/check-id-references.mjs",
+      "reason": "The checker's own docstring uses DEV.38 as the worked example of a citation that propagated unchecked.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "scripts/id-reference-allowlist.json",
+      "reason": "This file names the ids it allows.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.41",
+      "file": "scripts/id-reference-allowlist.json",
+      "reason": "This file names the ids it allows.",
+      "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.42",
+      "file": "scripts/id-reference-allowlist.json",
+      "reason": "This file names the ids it allows.",
+      "kind": "deliberate-mention"
+    }
+  ]
+}

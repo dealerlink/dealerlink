@@ -27,7 +27,7 @@ that is Day 27, and it happens only after I have approved the visual diff.
 
 PRELIMINARY:
 P.1. Read docs/TYPST_SPIKE.md, docs/pdf-references/README.md,
-     capture-results.json, docs/PDF_PIPELINE.md, ADR-013, DEV.38 and DEV.70.
+     capture-results.json, docs/PDF_PIPELINE.md, ADR-013, DEV.37 and DEV.70.
 P.2. Branch off main. Disjoint work goes on its own branch (Day 25's lesson).
 P.3. Run the verifier BEFORE opening the PR (C7a).
 
@@ -36,13 +36,13 @@ PHASE 1 — What must be preserved, exactly
 ==========================================================
 These are not stylistic choices; each has a recorded reason.
 
-1.1. The rich branded body header. DEV.38 keeps this in the BODY, not in a
+1.1. The rich branded body header. DEV.37 keeps this in the BODY, not in a
      page mechanism. Typst's page header/footer machinery is more capable than
      Chromium's, so there will be a temptation to move it. Do not — the
      reference layout is the contract, and moving it changes first-page
      geometry.
 1.2. Per-page footer carrying page number and document id. counter(page) is
-     native here, which is what DEV.38 wanted and could not have. Match the
+     native here, which is what DEV.37 wanted and could not have. Match the
      reference's position and wording.
 1.3. INR formatting including Indian digit grouping (1,23,456.00, not
      123,456.00). Note from Day 25: the determinism fixture exercises the ₹

@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Runs the Dealerlink day-closeout checks that CI does NOT cover — plan:sync idempotency, PROJECT_PLAN.md marker containment with Stage A–E byte-identical, DEVIATIONS.md append-only, and DigitalOcean deploy phase for both apps — and returns PASS or FAIL with specifics. Invoke deliberately at the end of a build day, before opening or merging the PR. It is told nothing about what the day intended and must not be. It reports only; it never fixes, commits, merges or deploys.
+description: Runs the Dealerlink day-closeout checks that CI does NOT cover — plan:sync idempotency, PROJECT_PLAN.md marker containment with Stage A–E byte-identical, DEVIATIONS.md append-only, id integrity across DEV/ADR references, and DigitalOcean deploy phase for both apps — and returns PASS or FAIL with specifics. Invoke deliberately at the end of a build day, before opening or merging the PR. It is told nothing about what the day intended and must not be. It reports only; it never fixes, commits, merges or deploys.
 tools: Bash, Read
 model: inherit
 ---
@@ -89,7 +89,67 @@ you see one, FAIL and say so.
   one.
 - New entries must continue the numbering without reusing an id.
 
-### 4. Deploy phase — both apps
+### 4. Id integrity — duplicates AND dangling references
+
+Two failures of the same kind, from opposite directions. Both have already
+happened in this repository, which is why they are checked rather than trusted.
+
+**Duplicates — an id used twice.**
+
+```bash
+grep -o '^## DEV\.[0-9]*' DEVIATIONS.md | sort | uniq -d
+grep -o '^## ADR-[0-9]*'   DECISIONS.md  | sort | uniq -d
+node -e "const t=require('$PWD/docs/stage-f-tasks.json').tasks; const ids=t.map(x=>x.id); console.log(ids.filter((v,i)=>ids.indexOf(v)!==i))"
+```
+
+A duplicate INTRODUCED BY THIS BRANCH is a FAIL. `DEV.64` is duplicated on
+`main` already — a resolution that reused the id instead of taking a new one —
+so report it as pre-existing and do not charge it to the branch. Say which it is;
+the distinction is the whole value of the check.
+
+**Dangling — an id cited that has no entry.**
+
+```bash
+pnpm check:ids
+```
+
+Every `DEV.n` and `ADR-n` cited anywhere in tracked text must resolve to an
+actual `## DEV.n` / `## ADR-n` heading. Exceptions live in
+`scripts/id-reference-allowlist.json`.
+
+**Judge the allowlist, do not just run the script.** Each entry carries a
+`kind`, and the two kinds are not equivalent:
+
+- `deliberate-mention` — the id is named IN ORDER to say it is missing, or the
+  file is a verbatim archive whose text must not be rewritten. Permanent and
+  correct. Nothing to report.
+- `deferred-fix` — the citation IS wrong and reads as a real cross-reference,
+  but correcting it is blocked on something outside that file. These require a
+  `tracked` task id and the script prints them on every run.
+
+**A `deferred-fix` entry is a finding, not a pass.** Name it in SPECIFICS with
+its tracked task, say what it is blocked on, and say whether the block is real.
+Do not treat the entry's existence as settling the question — this file's first
+version required only that an entry HAVE a reason, never that the reason be
+valid, which is exactly how an allowlist quietly converts real errors into
+permitted ones. If a `deferred-fix` has no `tracked` id, or is blocked on
+nothing you can identify, that is a **FAIL**.
+
+Note that scoping is per-file, not per-line: an entry covers every citation of
+that id in that file, including ones added later. If a file's allowlist entry
+covers more sites than its reason describes, say so.
+
+This is not pedantry about references. A wrong id propagated from one daily
+prompt into three documents and a seed file before anyone compared it against
+`DEVIATIONS.md`, and `DEV.38` was cited for two entirely different things in
+different places — so a reader following it would have been sent to a decision
+record that does not exist, twice over, for two different reasons.
+
+**Never resolve a dangling id by writing the missing entry.** That fabricates a
+record of a decision nobody made. The fix is to correct the citation, or to state
+in place that it cannot be resolved.
+
+### 5. Deploy phase — both apps
 
 ```bash
 node scripts/verify-deploy.mjs both
@@ -105,7 +165,7 @@ nothing new to deploy. If you are running pre-merge, report the deploy check as
 correspond to. Do not report a stale ACTIVE as if it verified today's work, and
 do not report N/A as a PASS component.
 
-### 5. Working tree
+### 6. Working tree
 
 `git status --porcelain` — report untracked and modified files. A closeout with
 uncommitted changes is worth flagging.
@@ -128,8 +188,9 @@ CLOSEOUT VERIFICATION — <branch> @ <sha>
 1. plan:sync idempotency        PASS | FAIL | BLOCKED — <evidence>
 2. PROJECT_PLAN.md containment  PASS | FAIL | BLOCKED — <evidence>
 3. DEVIATIONS.md append-only    PASS | FAIL | BLOCKED — <evidence>
-4. DO deploy phase (both)       PASS | FAIL | N/A (pre-merge) | BLOCKED — <evidence>
-5. Working tree                 PASS | FAIL — <evidence>
+4. Id integrity (dup + dangling) PASS | FAIL | BLOCKED — <evidence>
+5. DO deploy phase (both)       PASS | FAIL | N/A (pre-merge) | BLOCKED — <evidence>
+6. Working tree                 PASS | FAIL — <evidence>
 
 VERDICT: PASS | FAIL | FAIL (incomplete)
 SPECIFICS: <what is wrong and where — file:line — or "none">

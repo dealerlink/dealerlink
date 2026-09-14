@@ -39,7 +39,7 @@ If you find yourself editing apps/workers/src/jobs/render-pdf.ts, stop.
 
 PRELIMINARY:
 P.1. Read CLAUDE.md, docs/PDF_PIPELINE.md, ADR-013 in docs/DECISIONS.md,
-     docs/STAGE_F_BUILD_v3.md section 5, and DEV.38 (why "Page X of Y" fell
+     docs/STAGE_F_BUILD_v3.md section 5, and DEV.37 (why "Page X of Y" fell
      back to Chromium's footerTemplate) and DEV.70 (state names displayed,
      codes stored).
 P.2. Branch off main. Run the verifier before opening any PR (BUILD_PROMPT
@@ -74,7 +74,7 @@ Prove the three things most likely to block, before authoring anything real.
      survives text extraction from the output PDF. This is the exact failure
      that disqualified react-pdf; verify Typst does not share it.
 2.2. Page numbering. Render "Page X of Y" using counter(page) across a
-     forced 3-page document. DEV.38 records that Chromium's footerTemplate was
+     forced 3-page document. DEV.37 records that Chromium's footerTemplate was
      a fallback because it was the only mechanism available; confirm Typst
      removes that constraint.
 2.3. Determinism. Render the SAME input twice and diff the bytes. Report
@@ -120,7 +120,7 @@ WHEN DONE
 Written after Day 25's spike. Outline:
 
 - Re-author quotation, PI, payment receipt, dispatch note in Typst
-- Preserve: the rich branded body header (DEV.38 keeps this in the body, not
+- Preserve: the rich branded body header (DEV.37 keeps this in the body, not
   in a page mechanism), per-page footer with page number and document id, INR
   formatting, state **names** displayed with codes stored (DEV.70), the GST
   breakdown layout, and the round-off line

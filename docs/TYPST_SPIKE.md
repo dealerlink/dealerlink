@@ -52,7 +52,18 @@ the pipeline changes, not to this one.
 > 38, 41 and 42 are gaps — although it is referenced as real from
 > `PROJECT_PLAN.md:90`, `BUILD_PROMPTS.md:2972` and
 > `packages/db/src/seeds/day8.ts:309,535`, which describe it as a Day 8 seed
-> cross-tenant dealer bug. So the entry was never written. Flagged, not fixed:
+> cross-tenant dealer bug. So the entry was never written.
+>
+> **CORRECTED on Day 27 (F.72).** The Typst-prompt citations in
+> `docs/F38_TYPST_PLAN.md` and `docs/DAY_26_PROMPT.md` now say DEV.37. The day-8
+> seed comments now describe the bug in place and state that no entry exists,
+> rather than pointing at one that does not. The entries were NOT written —
+> the operator's direction was explicit that composing DEV.38/41/42 now would
+> fabricate a record of decisions nobody made. A dangling-reference check
+> (`pnpm check:ids`) now fails on any cited id without an entry, with an
+> allowlist for the places where naming a missing id is the point.
+>
+> Original Day 25 note, kept for the reasoning: flagged, not fixed —
 > writing a missing historical deviation is not this day's work, and a new entry
 > must NOT be numbered 38.
 

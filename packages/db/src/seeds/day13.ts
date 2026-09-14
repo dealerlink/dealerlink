@@ -11,7 +11,7 @@
  *   2 in_transit — PARTIAL dispatches (order has units still to ship)
  *
  * DEV.43: Day 13 creates its own backing orders rather than confirming the
- * Day 12 `pending` orders (DEV.41) — the Day 12 orders carry no inventory to
+ * Day 12 `pending` orders — the Day 12 orders carry no inventory to
  * reserve against, so confirming them would mean fabricating stock and would
  * shadow Day 11's reservations. A self-contained seed is cleaner + re-runnable.
  *

@@ -34,7 +34,8 @@
     "playwright:install": "pnpm --filter web exec playwright install chromium",
     "test:scripts": "vitest run --config scripts/vitest.config.ts",
     "typst:install": "node scripts/install-typst.mjs",
-    "typst:check": "node scripts/install-typst.mjs --check"
+    "typst:check": "node scripts/install-typst.mjs --check",
+    "check:ids": "node scripts/check-id-references.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

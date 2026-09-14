@@ -95,6 +95,15 @@ jobs:
       - name: plan:check
         run: pnpm plan:check
 
+      # Every cited DEV.n / ADR-n must resolve to an entry that exists. C6a in
+      # docs/BUILD_PROMPT_TEMPLATE.md catches a DUPLICATE id when it is written;
+      # this catches the inverse — a citation pointing at nothing — which is how
+      # a wrong id propagated from one prompt into three documents unnoticed.
+      # Deliberate exceptions live in scripts/id-reference-allowlist.json and
+      # each must carry a reason.
+      - name: check:ids
+        run: pnpm check:ids
+
       - name: typecheck
         run: pnpm typecheck
 
