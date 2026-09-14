@@ -4758,3 +4758,68 @@ question on reading it is why the more specific source is the fallback.
 correctness on re-render and missed that the mechanism poisons its own baseline
 on first render. Worth having the reasoning on record rather than just the
 outcome — someone will otherwise wonder why the obvious source was not used."_
+
+## DEV.128 — three cited DEV ids had no entries; the citations were corrected and the entries deliberately NOT written
+
+**Date:** 2026-09-14
+**Spec said:** Nothing — this was not in a day's prompt. `verifier` surfaced it
+while checking something else: `DEVIATIONS.md` jumps 37 → 39 → 40 → 43, and
+DEV.38, DEV.41 and DEV.42 were cited as real in 13, 4 and 1 places respectively.
+**Operator direction, and the reasoning is the point of this entry:**
+
+> Correct the references, do not reconstruct the entries — writing entries for
+> DEV.38/41/42 now would fabricate a record of decisions nobody made.
+
+**Found, and it is the part a blanket fix would have destroyed: DEV.38 was cited
+for two entirely different things.**
+
+| Sense                                                                                                  | Cited from                                                                   | Resolution                                             |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------ |
+| The page-footer deviation — `counter(page)` unavailable in Chromium, branded header stays in body HTML | the Typst prompts: `docs/F38_TYPST_PLAN.md` ×3, `docs/DAY_26_PROMPT.md` ×3   | **DEV.37**, corrected                                  |
+| A Day 8 seed cross-tenant dealer bug from unqualified RLS-bypassed selects                             | `packages/db/src/seeds/day8.ts` ×2, `BUILD_PROMPTS.md`, `PROJECT_PLAN.md:90` | **no entry exists**; the bug is now described in place |
+
+The first sense propagated from a daily prompt into three documents before
+anyone compared it against `DEVIATIONS.md`. That is the argument for the check
+below: a wrong id is not self-correcting, because every downstream citation
+looks exactly as authoritative as a right one.
+
+**DEV.41** was the prompt's name for a premise — "Day 12 deliberately left
+orders pending". The decision actually taken is recorded, as **DEV.43**, which
+the citing comment in `seeds/day13.ts` already referenced; the dangling half was
+removed rather than repointed.
+
+**DEV.42 is unresolvable and is recorded as such rather than guessed.** The only
+description anywhere is the prompt's own phrase, "correlated subquery ambiguity".
+No entry exists, and nothing in the citing context says what was decided. A
+plausible reconstruction would read exactly like a real record, which is worse
+than a gap.
+
+**Built:** `pnpm check:ids` (`scripts/check-id-references.mjs`) fails on any
+cited id with no entry, runs in the CI `checks` job, and is section 4 of the
+verifier's remit next to duplicate detection. C6a in
+`docs/BUILD_PROMPT_TEMPLATE.md` catches duplicates when an id is written; this
+catches dangling references when one is read. Together they close the problem
+from both ends — and the check flagged its own author's new text on first run,
+which is the case the allowlist exists for.
+
+**Impact / what is still wrong.** `PROJECT_PLAN.md:90` still carries the wrong
+citation. It sits in the hand-maintained Stage B table, which the verifier
+requires to be byte-identical against `main`, so **two closeout checks are in
+genuine tension** and resolving it is an operator decision: a one-time overrule
+of the Stage A–E rule (precedented by DEV.112), or F.63, which makes
+`PROJECT_PLAN.md` fully generated and removes the tension. It is recorded in the
+allowlist as `kind: deferred-fix`, `tracked: F.63`, and printed on every run of
+the check so it cannot quietly become permanent.
+
+**Resolution:** F.72 (complete). The `PROJECT_PLAN.md` citation remains open
+under F.63.
+
+**A correction to the first version of the allowlist, worth recording because the
+mechanism was wrong rather than the entries.** It required each exception to have
+a _reason_ but never that the reason be _valid_ — so it could not distinguish
+"this id is named in order to say it is missing" from "this citation is wrong and
+I am deferring it". `verifier` identified that precisely, and named the sharper
+version of the problem: the commit that extended its remit had used one of its
+own checks as the justification for suppressing another. Entries now carry a
+`kind`, `deferred-fix` requires a tracked owner, and the remit tells the verifier
+to treat such an entry as a finding rather than a pass.

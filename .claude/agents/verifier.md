@@ -99,7 +99,7 @@ happened in this repository, which is why they are checked rather than trusted.
 ```bash
 grep -o '^## DEV\.[0-9]*' DEVIATIONS.md | sort | uniq -d
 grep -o '^## ADR-[0-9]*'   DECISIONS.md  | sort | uniq -d
-node -e "const t=require('./docs/stage-f-tasks.json').tasks; const ids=t.map(x=>x.id); console.log(ids.filter((v,i)=>ids.indexOf(v)!==i))"
+node -e "const t=require('$PWD/docs/stage-f-tasks.json').tasks; const ids=t.map(x=>x.id); console.log(ids.filter((v,i)=>ids.indexOf(v)!==i))"
 ```
 
 A duplicate INTRODUCED BY THIS BRANCH is a FAIL. `DEV.64` is duplicated on
@@ -114,9 +114,30 @@ pnpm check:ids
 ```
 
 Every `DEV.n` and `ADR-n` cited anywhere in tracked text must resolve to an
-actual `## DEV.n` / `## ADR-n` heading. Deliberate exceptions live in
-`scripts/id-reference-allowlist.json`, each with a reason; the script fails if an
-allowlist entry has no reason.
+actual `## DEV.n` / `## ADR-n` heading. Exceptions live in
+`scripts/id-reference-allowlist.json`.
+
+**Judge the allowlist, do not just run the script.** Each entry carries a
+`kind`, and the two kinds are not equivalent:
+
+- `deliberate-mention` — the id is named IN ORDER to say it is missing, or the
+  file is a verbatim archive whose text must not be rewritten. Permanent and
+  correct. Nothing to report.
+- `deferred-fix` — the citation IS wrong and reads as a real cross-reference,
+  but correcting it is blocked on something outside that file. These require a
+  `tracked` task id and the script prints them on every run.
+
+**A `deferred-fix` entry is a finding, not a pass.** Name it in SPECIFICS with
+its tracked task, say what it is blocked on, and say whether the block is real.
+Do not treat the entry's existence as settling the question — this file's first
+version required only that an entry HAVE a reason, never that the reason be
+valid, which is exactly how an allowlist quietly converts real errors into
+permitted ones. If a `deferred-fix` has no `tracked` id, or is blocked on
+nothing you can identify, that is a **FAIL**.
+
+Note that scoping is per-file, not per-line: an entry covers every citation of
+that id in that file, including ones added later. If a file's allowlist entry
+covers more sites than its reason describes, say so.
 
 This is not pedantry about references. A wrong id propagated from one daily
 prompt into three documents and a seed file before anyone compared it against
