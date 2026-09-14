@@ -169,9 +169,11 @@ Position, wording and typography match the reference. The rich branded header
 deliberately stays in the **body**, as DEV.37 intended — moving it would change
 first-page geometry.
 
-_(The Day 25/26 prompts cite "DEV.38" for this; the deviation is **DEV.37**.
-Already noted in `docs/TYPST_SPIKE.md` §2.2 and repeated here so a reader of this
-file alone is not misled.)_
+_(The Day 25/26 prompts cited "DEV.38" for this; the deviation is **DEV.37**.
+Those citations were corrected on Day 27 (F.72), along with a dangling-reference
+check that now fails CI on any cited id with no entry. Kept here because the
+mis-citation propagated from a prompt into three documents before anyone checked
+it against `DEVIATIONS.md`, which is the argument for the check existing.)_
 
 ---
 

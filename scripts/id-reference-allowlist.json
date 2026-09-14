@@ -1,0 +1,101 @@
+{
+  "$comment": [
+    "Places where a cited DEV/ADR id deliberately has no entry, with the reason.",
+    "Checked by scripts/check-id-references.mjs. Every entry needs a reason: the",
+    "point of the check is that a dangling id is normally a mistake, so an",
+    "exception has to argue for itself.",
+    "Scoped by file rather than file:line so the allowlist survives edits above it."
+  ],
+  "allow": [
+    {
+      "id": "DEV.38",
+      "file": ".claude/agents/verifier.md",
+      "reason": "The verifier's remit uses DEV.38 as the worked example of why the dangling check exists — a citation that propagated from a prompt into three documents, and that meant two different things in different places."
+    },
+    {
+      "id": "DEV.38",
+      "file": "BUILD_PROMPTS.md",
+      "reason": "An archive of the Stage B prompts exactly as they were pasted into Claude Code. The prompt did say DEV.38; editing it would rewrite the record of what was asked, which is the only thing this file is for."
+    },
+    {
+      "id": "DEV.41",
+      "file": "BUILD_PROMPTS.md",
+      "reason": "Same — a verbatim prompt archive. DEV.41 was the prompt's name for a premise that never became an entry; the decision that was actually taken is recorded as DEV.43."
+    },
+    {
+      "id": "DEV.42",
+      "file": "BUILD_PROMPTS.md",
+      "reason": "Same — verbatim prompt archive. Described in the prompt as 'correlated subquery ambiguity'. No entry exists and none of the citing context says what was decided, so it cannot be resolved: unresolvable, not guessed."
+    },
+    {
+      "id": "DEV.41",
+      "file": "DEVIATIONS.md",
+      "reason": "Appears inside DEV.43's 'Spec said' field, quoting the original chunk prompt verbatim. The quotation is accurate — the prompt really did cite DEV.41 — and DEVIATIONS.md is append-only, so historic entries are not edited."
+    },
+    {
+      "id": "DEV.38",
+      "file": "docs/stage-f-tasks.json",
+      "reason": "F.72's notes record which ids were dangling and what each turned out to mean. Naming them is the content of the record."
+    },
+    {
+      "id": "DEV.41",
+      "file": "docs/stage-f-tasks.json",
+      "reason": "Same — F.72's notes."
+    },
+    {
+      "id": "DEV.42",
+      "file": "docs/stage-f-tasks.json",
+      "reason": "Same — F.72's notes. DEV.42 is recorded there as unresolvable."
+    },
+    {
+      "id": "DEV.38",
+      "file": "docs/TYPST_DIFF.md",
+      "reason": "Same — records that a prompt's mis-citation propagated into three documents, which is the argument for this check existing."
+    },
+    {
+      "id": "DEV.38",
+      "file": "docs/TYPST_SPIKE.md",
+      "reason": "Prose that exists to explain that DEV.38 has no entry. Naming the missing id is the content."
+    },
+    {
+      "id": "DEV.38",
+      "file": "packages/db/src/seeds/day8.ts",
+      "reason": "The comments now describe the cross-tenant bug in place and state that no DEV.38 entry exists. The id is named only to say it is dangling."
+    },
+    {
+      "id": "DEV.38",
+      "file": "PROJECT_PLAN.md",
+      "reason": "The B.10 row describes a real Day 8 seed cross-tenant dealer bug and cites it as DEV.38, but that entry was never written. Correcting the row would edit the hand-maintained Stage B table, which the verifier requires to be byte-identical against main — so the fix needs either an operator overrule of that rule or F.63, which makes PROJECT_PLAN.md fully generated. Tracked by F.72."
+    },
+    {
+      "id": "DEV.41",
+      "file": "PROJECT_PLAN.md",
+      "reason": "Generated from F.72 in docs/stage-f-tasks.json by pnpm plan:sync. Allowlisted at the source as well; this entry covers the generated copy."
+    },
+    {
+      "id": "DEV.42",
+      "file": "PROJECT_PLAN.md",
+      "reason": "Generated from F.72 in docs/stage-f-tasks.json by pnpm plan:sync. Allowlisted at the source as well; this entry covers the generated copy."
+    },
+    {
+      "id": "DEV.38",
+      "file": "scripts/check-id-references.mjs",
+      "reason": "The checker's own docstring uses DEV.38 as the worked example of a citation that propagated unchecked."
+    },
+    {
+      "id": "DEV.38",
+      "file": "scripts/id-reference-allowlist.json",
+      "reason": "This file names the ids it allows."
+    },
+    {
+      "id": "DEV.41",
+      "file": "scripts/id-reference-allowlist.json",
+      "reason": "This file names the ids it allows."
+    },
+    {
+      "id": "DEV.42",
+      "file": "scripts/id-reference-allowlist.json",
+      "reason": "This file names the ids it allows."
+    }
+  ]
+}

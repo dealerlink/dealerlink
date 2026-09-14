@@ -307,8 +307,13 @@ async function seedTenant(
     // Explicit tenant filter on every master-data read: the seed runs with
     // a role that bypasses RLS, so an unqualified select would return rows
     // from EVERY tenant and `pick()` could grab a cross-tenant dealer —
-    // producing quotations whose dealer_id points outside their own tenant
-    // (DEV.38). Scope every read to `tenantId`.
+    // producing quotations whose dealer_id points outside their own tenant.
+    // Scope every read to `tenantId`.
+    //
+    // This fix was cited as "DEV.38" in the Day 11 prompt and in PROJECT_PLAN's
+    // B.10 row, but NO SUCH DEVIATION ENTRY WAS EVER WRITTEN — the id is
+    // dangling, and nothing in DEVIATIONS.md records this bug. The behaviour is
+    // described here instead of pointing at an entry that does not exist.
     const dealerRows = (await tx
       .select({ id: dealers.id, displayName: dealers.displayName, state: dealers.state })
       .from(dealers)
@@ -534,7 +539,8 @@ async function seedTenant(
       // Tenant filter is required: the seed bypasses RLS, so an unqualified
       // status filter would pick an 'accepted' quotation from ANOTHER tenant
       // and build this tenant's revision chain on top of it — cross-tenant
-      // dealer + parent references (DEV.38).
+      // dealer + parent references. (Cited as DEV.38 historically; that entry
+      // does not exist — see the note on the dealer query above.)
       .where(sql`status = 'accepted' AND tenant_id = ${tenantId}`)
       .limit(1);
 
