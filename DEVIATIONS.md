@@ -4691,3 +4691,70 @@ templates still hold the data loaders, so `react` and `react-dom` remain workers
 dependencies and the React render halves are dead code. Extracting the loaders is
 a real refactor, not part of a cutover. `apps/workers` is likewise not collapsed
 into `apps/web` — correct, and a separate item.
+
+## DEV.127 — Day 27 OVERTURNS the Day 26 operator instruction on `generatedAt`: the source it named poisons its own baseline on first render
+
+**Date:** 2026-09-14
+**Spec said:** The operator's Day 26 instruction, chosen from two options I put
+to them and stated with its reasoning:
+
+> Option (a) — derive `generatedAt` from `generated_documents.created_at`.
+> Rationale beyond F.66: wall-clock makes the footer WRONG on re-render […]
+> That is a correctness bug; determinism is the consequence of fixing it, not
+> the reason.
+
+**Built Day 26, as instructed:** resolution took the earliest
+`generated_documents` row for the document, falling back to the source row's
+`created_at` only when no such row existed. **Day 27 reversed that order:**
+`created_at` first, `generated_documents` second.
+
+**Why the instruction was right about the problem and wrong about the source.**
+The diagnosis was exactly correct and is not in question: a wall-clock
+`generatedAt` makes the footer claim a document was generated whenever it was
+last fetched, which is wrong on the face of an archived tax document regardless
+of any test. What the chosen source does not survive is its own first use.
+
+`generated_documents.generated_at` is written **by the render**. So:
+
+1. The reference baseline was captured when no `generated_documents` row existed
+   for any of the 14 documents — capture deliberately does not persist one — so
+   every reference encodes the fallback, `created_at`.
+2. The first production render of any document writes a row stamped with the
+   wall clock at that moment.
+3. Every render after that resolves to the row, not to `created_at`.
+4. So the document's footer permanently disagrees with the baseline, and the
+   snapshot suite **passes once and then fails forever** — on a value that is
+   correct by the rule it was given, for a reason nobody would find quickly.
+
+The property the instruction was reaching for is _stable per document_. The
+property a baseline needs is stronger: **derivable from seed data**. The first
+render's timestamp is a wall-clock fact about history, and no amount of
+re-rendering reproduces it.
+
+`created_at` satisfies both. It is written once when the document is created,
+never moves, and F.67 pinned it to the document's own business date — so the
+footer now reads the same date printed on the face of the document rather than
+contradicting it.
+
+**Verified rather than argued:** the comparison was re-run with four
+`generated_documents` rows present from an earlier consumer run — the exact
+condition that would have triggered the divergence. Footer text still matches the
+baseline 14/14. Under the Day 26 order those four documents would have diverged
+permanently.
+
+**Impact:** none shipped — the reversal landed in the same cutover. What changes
+is that the footer is now a pure function of the document, which is what allows
+Day 27 Phase 4.2 to assert on it rather than around it. A snapshot suite that
+excluded the footer would have been the alternative, and the operator's standing
+position on that is on record from F.67: _"a snapshot that skips the serial
+fragment leaves the product's core data permanently untested."_ The same
+reasoning applies here.
+
+**Resolution:** implemented in `apps/workers/src/pdf/generated-at.ts`, whose
+docstring carries this reasoning at the point of use, because the obvious
+question on reading it is why the more specific source is the fallback.
+
+**Recorded at the operator's request**, in their words: _"I was solving for
+correctness on re-render and missed that the mechanism poisons its own baseline
+on first render. Worth having the reasoning on record rather than just the
+outcome — someone will otherwise wonder why the obvious source was not used."_

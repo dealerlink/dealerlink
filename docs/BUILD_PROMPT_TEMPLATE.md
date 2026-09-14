@@ -58,6 +58,18 @@ C5. Update PROJECT_PLAN.md:
 C6. Append the day's deviations to /DEVIATIONS.md
     (append-only; never edit historic entries; if a deviation is
      resolved later, write a new RESOLVED entry referencing the original)
+C6a. CONFIRM EVERY NEW ID IS FREE before writing it — DEV entries, ADRs,
+     Stage F tasks, runbook sections. One command each:
+
+       grep -c '^## DEV\.NN'  DEVIATIONS.md    # must print 0
+       grep -c '^## ADR-NNN'   DECISIONS.md     # must print 0
+       node -e "console.log(require('./docs/stage-f-tasks.json').tasks.some(t=>t.id==='F.NN'))"
+
+     Do not derive the next id by eye from the end of the file. Both failures
+     this guards against were caused by exactly that: DEVIATIONS.md carries two
+     `## DEV.64` headings, and Day 27 nearly shipped a second `## ADR-014`
+     because the highest-numbered ADR does not sit last in DECISIONS.md. The
+     file is not sorted, and the tail is not the maximum.
 C7. git switch -c day-<N>-<slug>
     git add -A && git commit -m "feat(<scope>): day N — <summary>"
     git push -u origin day-<N>-<slug>
@@ -173,7 +185,15 @@ shows, a form submits). Deep behavioural coverage lives in Vitest.
 ## Deviations log
 
 `/DEVIATIONS.md` is the append-only record of any time the implementation
-intentionally drifted from a daily prompt's spec. Format is per-entry:
+intentionally drifted from a daily prompt's spec.
+
+**Check the id is free before you write it** — `grep -c '^## DEV.NN' DEVIATIONS.md`
+must print 0. The file is long, it is not sorted by id, and the highest id does
+not necessarily sit at the end. It already contains two `## DEV.64` headings
+from a resolution that reused the id instead of taking a new one, which is why
+the `verifier` flags it on every run.
+
+Format is per-entry:
 
 ```markdown
 ## DEV.NN — Day N — short title
