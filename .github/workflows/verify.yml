@@ -170,6 +170,14 @@ jobs:
       - name: Seed
         run: pnpm db:seed
 
+      # The 26- and 500-serial dispatch notes are NOT in the seed — they are
+      # built by this fixture, and two of the fourteen snapshot cases are them.
+      # Without it the suite fails with "no dispatch DSP-REF-0026 for tenant
+      # 'demo' — has the database been seeded?", which is the resolver reporting
+      # exactly what is wrong.
+      - name: Apply the long-serial fixture
+        run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f apps/workers/scripts/long-serial-fixture.sql
+
       # Typst for the PDF snapshot tests. This replaces the Chromium runtime
       # libraries the workers' render specs used to need: one statically-linked
       # musl binary, no shared-library surface, nothing to apt-install.
@@ -180,8 +188,15 @@ jobs:
       # docs/pdf-references/ was rendered by the pinned build and those
       # references can no longer be regenerated, so a silent upgrade would
       # invalidate a baseline nothing can rebuild.
+      # The install dir goes on PATH explicitly. The RENDERER resolves the
+      # binary with `command -v typst` (src/pdf/typst.ts), so a runner whose
+      # PATH happens not to include ~/.local/bin would install successfully and
+      # then fail at render time — the worst ordering, because the install step
+      # goes green.
       - name: Install Typst (pinned + checksum-verified)
-        run: pnpm typst:install
+        run: |
+          pnpm typst:install
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Verify the pinned Typst version
         run: pnpm typst:check
 
@@ -240,8 +255,15 @@ jobs:
       # reference PDF was rendered by this build and none of them can be
       # regenerated, so a silent upgrade would invalidate a baseline nothing can
       # rebuild.
+      # The install dir goes on PATH explicitly. The RENDERER resolves the
+      # binary with `command -v typst` (src/pdf/typst.ts), so a runner whose
+      # PATH happens not to include ~/.local/bin would install successfully and
+      # then fail at render time — the worst ordering, because the install step
+      # goes green.
       - name: Install Typst (pinned + checksum-verified)
-        run: pnpm typst:install
+        run: |
+          pnpm typst:install
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Verify the pinned Typst version
         run: pnpm typst:check
 
@@ -350,6 +372,27 @@ jobs:
       # runs no vitest at all, so nothing can pollute it.
       - name: Seed
         run: pnpm db:seed
+
+      # THE WORKERS PROCESS RENDERS PDFS DURING THIS SUITE. `pnpm verify` boots
+      # web AND workers, and the Day 10/14 specs click through to a real PDF
+      # download, so the render path runs for real here — it just runs behind a
+      # queue instead of in the test process.
+      #
+      # Without this the download specs time out at 55s waiting for an event
+      # that can never arrive, because the job resolving the render throws
+      # "typst binary not found". That is a slow and indirect way to learn the
+      # binary is missing, which is precisely why it belongs here.
+      # The install dir goes on PATH explicitly. The RENDERER resolves the
+      # binary with `command -v typst` (src/pdf/typst.ts), so a runner whose
+      # PATH happens not to include ~/.local/bin would install successfully and
+      # then fail at render time — the worst ordering, because the install step
+      # goes green.
+      - name: Install Typst (pinned + checksum-verified)
+        run: |
+          pnpm typst:install
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify the pinned Typst version
+        run: pnpm typst:check
 
       # A SEPARATE key namespace from the `checks` job. Both write
       # apps/web/.next/cache, but `checks` fills it with a production build and
