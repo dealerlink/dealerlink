@@ -73,8 +73,13 @@ async function main(): Promise<void> {
   // NO WARM-UP ANY MORE (Day 27). There used to be a background eager-warm of
   // Chromium's binary extraction here (DEV.66), because the first render was a
   // slow cold start and `PDF_EAGER_WARM=false` existed to switch it off. Typst
-  // is a ~10ms subprocess with nothing to extract and no browser to keep alive,
-  // so there is no cold start to hide. The env var is gone with it.
+  // is a subprocess with nothing to extract and no browser to keep alive, so
+  // there is no cold start to hide. The env var is gone with it.
+  //
+  // Two figures circulate and they measure different things: Day 25 timed the
+  // typst COMPILE at 8-31ms, while a full render of the heaviest document —
+  // load, view model, compile — measured 57-125ms, median 66ms (DEV.126).
+  // Neither is a cold start, which is the only claim this comment needs.
 }
 
 async function shutdown(): Promise<void> {
