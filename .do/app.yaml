@@ -192,10 +192,9 @@ workers:
       - key: PGBOSS_POOL_MAX
         scope: RUN_TIME
         value: '2'
-      # The workers process eager-warms Chromium at boot (DEV.66) so the first
-      # PDF render isn't a slow cold start. It is ON by default in code; to
-      # disable, add `PDF_EAGER_WARM` here with value 'false' (and apply the
-      # spec — see docs/DEPLOYMENT.md / DEV.64).
+      # PDF_EAGER_WARM is gone (Day 27). It existed to eager-warm Chromium's
+      # binary extraction at boot (DEV.66) because the first render was a 60-90s
+      # cold start. Typst is a ~66ms subprocess with nothing to extract.
 
 databases:
   # production: true attaches an existing managed cluster (provisioned out-of-

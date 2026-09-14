@@ -27,7 +27,6 @@ import { handleRenderPdfJob, type RenderPdfPayload } from './jobs/render-pdf';
 import { runValidityExpiry } from './jobs/validity-expiry';
 import { logger } from './observability/logger';
 import { flushWorkerSentry, initWorkerSentry, instrumentJobHandler } from './observability/sentry';
-import { warmChromium } from './pdf/browser';
 import { startBoss, stopBoss } from './queue/boss';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -71,22 +70,11 @@ async function main(): Promise<void> {
 
   logger.info('Workers process started — pg-boss queues + daily crons registered.');
 
-  // Eager-warm Chromium's binary extraction in the BACKGROUND (DEV.66) so the
-  // first PDF render isn't a slow cold start. Runs AFTER consumers are
-  // registered and is fire-and-forget, so a slow/failed warm can never block
-  // the worker from processing jobs. Disable with PDF_EAGER_WARM=false.
-  if (process.env.PDF_EAGER_WARM !== 'false') {
-    const startedAt = Date.now();
-    void warmChromium()
-      .then(() =>
-        logger.info(
-          `PDF: eager-warmed Chromium in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`,
-        ),
-      )
-      .catch((err: unknown) =>
-        logger.warn({ err }, 'PDF: eager-warm Chromium failed; first render may be a cold start'),
-      );
-  }
+  // NO WARM-UP ANY MORE (Day 27). There used to be a background eager-warm of
+  // Chromium's binary extraction here (DEV.66), because the first render was a
+  // slow cold start and `PDF_EAGER_WARM=false` existed to switch it off. Typst
+  // is a ~10ms subprocess with nothing to extract and no browser to keep alive,
+  // so there is no cold start to hide. The env var is gone with it.
 }
 
 async function shutdown(): Promise<void> {

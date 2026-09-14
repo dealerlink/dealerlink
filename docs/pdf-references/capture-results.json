@@ -3,237 +3,202 @@
     {
       "label": "BRANDED__dispatch__DSP-2026-0005",
       "type": "dispatch",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "2a2c73e9-1608-4df3-81c6-06fe092f3890",
+      "tenantSlug": "demo",
       "documentNumber": "DSP-2026-0005",
-      "covers": [
-        "BRANDED tenant: inline SVG logo in the header band",
-        "bank details block in the footer",
-        "intra-state CGST+SGST (demo MH)"
-      ],
-      "sizeBytes": 217626,
+      "branded": true,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "f124f421-6450-47a4-9506-7893c80a7218",
+      "sizeBytes": 217955,
       "productionFilename": "DSP-2026-0005.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:29:44.247Z"
+      "capturedAt": "2026-09-13T06:41:56.443Z"
     },
     {
       "label": "BRANDED__payment_receipt__PAY-2026-0007",
       "type": "payment_receipt",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "ad773d36-423a-4507-b990-ade940d12427",
+      "tenantSlug": "demo",
       "documentNumber": "PAY-2026-0007",
-      "covers": [
-        "BRANDED tenant: inline SVG logo in the header band",
-        "bank details block in the footer",
-        "intra-state CGST+SGST (demo MH)"
-      ],
-      "sizeBytes": 180993,
+      "branded": true,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "5ba7eb52-3928-404f-84f2-a238ef3f9720",
+      "sizeBytes": 181050,
       "productionFilename": "PAY-2026-0007.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:29:42.134Z"
+      "capturedAt": "2026-09-13T06:41:54.321Z"
     },
     {
       "label": "BRANDED__performa_invoice__PI-2026-0001",
       "type": "performa_invoice",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "50e54bf6-6c9c-4b54-89a7-1ff9c89fc9a4",
+      "tenantSlug": "demo",
       "documentNumber": "PI-2026-0001",
-      "covers": [
-        "BRANDED tenant: inline SVG logo in the header band",
-        "bank details block in the footer",
-        "intra-state CGST+SGST (demo MH)"
-      ],
-      "sizeBytes": 212549,
+      "branded": true,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "60894673-4301-40c7-98ff-8419ef932273",
+      "sizeBytes": 212603,
       "productionFilename": "PI-2026-0001.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:29:39.981Z"
+      "capturedAt": "2026-09-13T06:41:52.197Z"
     },
     {
       "label": "BRANDED__quotation__QT-2026-0001",
       "type": "quotation",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "81eff36b-da9e-4b9b-8d21-a490cfd45e6d",
+      "tenantSlug": "demo",
       "documentNumber": "QT-2026-0001",
-      "covers": [
-        "BRANDED tenant: inline SVG logo in the header band",
-        "bank details block in the footer",
-        "intra-state CGST+SGST (demo MH)"
-      ],
-      "sizeBytes": 199357,
+      "branded": true,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "55d699c8-c99d-49dd-bf94-2639da2f3312",
+      "sizeBytes": 199423,
       "productionFilename": "QT-2026-0001.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:29:37.870Z"
+      "capturedAt": "2026-09-13T06:41:50.000Z"
     },
     {
       "label": "dispatch__DSP-2026-0005__in_transit__8line",
       "type": "dispatch",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "2a2c73e9-1608-4df3-81c6-06fe092f3890",
+      "tenantSlug": "demo",
       "documentNumber": "DSP-2026-0005",
-      "covers": ["UNBRANDED tenant (logo_url NULL; bank details present)"],
-      "sizeBytes": 216885,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "f124f421-6450-47a4-9506-7893c80a7218",
+      "sizeBytes": 217158,
       "productionFilename": "DSP-2026-0005.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:19.836Z"
+      "capturedAt": "2026-09-13T06:41:43.397Z"
     },
     {
       "label": "dispatch__DSP-REF-0026__26serials",
       "type": "dispatch",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "23c514f3-9bdd-4d36-9b4a-d4e59b02d849",
+      "tenantSlug": "demo",
       "documentNumber": "DSP-REF-0026",
-      "covers": [
-        "HARD CASE: 26 serials under one line item",
-        "UNBRANDED tenant (logo_url NULL; bank details present)"
-      ],
-      "sizeBytes": 216701,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "478d4533-05f9-44e1-8566-60d3e4f12a89",
+      "sizeBytes": 217078,
       "productionFilename": "DSP-REF-0026.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:24.101Z"
+      "capturedAt": "2026-09-13T06:41:45.543Z"
     },
     {
       "label": "dispatch__DSP-REF-0500__500serials",
       "type": "dispatch",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "93a5ca0f-180a-4fa1-b9bd-6be629e3dedb",
+      "tenantSlug": "demo",
       "documentNumber": "DSP-REF-0500",
-      "covers": [
-        "HARD CASE: 500 serials under one line item",
-        "UNBRANDED tenant (logo_url NULL; bank details present)"
-      ],
-      "sizeBytes": 371942,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "c6a125c4-52c8-455b-9eac-4b70dca1ce0f",
+      "sizeBytes": 372115,
       "productionFilename": "DSP-REF-0500.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:26.273Z"
+      "capturedAt": "2026-09-13T06:41:47.845Z"
     },
     {
       "label": "payment_receipt__PAY-2026-0007__verified",
       "type": "payment_receipt",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "ad773d36-423a-4507-b990-ade940d12427",
+      "tenantSlug": "demo",
       "documentNumber": "PAY-2026-0007",
-      "covers": ["UNBRANDED tenant (logo_url NULL; bank details present)"],
-      "sizeBytes": 180889,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "5ba7eb52-3928-404f-84f2-a238ef3f9720",
+      "sizeBytes": 181088,
       "productionFilename": "PAY-2026-0007.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:17.735Z"
+      "capturedAt": "2026-09-13T06:41:41.217Z"
     },
     {
       "label": "performa_invoice__PI-2026-0001__intra__2line",
       "type": "performa_invoice",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "50e54bf6-6c9c-4b54-89a7-1ff9c89fc9a4",
+      "tenantSlug": "demo",
       "documentNumber": "PI-2026-0001",
-      "covers": ["intra-state CGST+SGST", "UNBRANDED tenant (logo_url NULL; bank details present)"],
-      "sizeBytes": 212436,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "60894673-4301-40c7-98ff-8419ef932273",
+      "sizeBytes": 212635,
       "productionFilename": "PI-2026-0001.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:13.504Z"
+      "capturedAt": "2026-09-13T06:41:36.969Z"
     },
     {
       "label": "performa_invoice__PI-2026-0002__inter__1line",
       "type": "performa_invoice",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "bc43acbb-5aee-4281-a2dd-abcc198e2bdd",
+      "tenantSlug": "demo",
       "documentNumber": "PI-2026-0002",
-      "covers": [
-        "inter-state IGST",
-        "single line item",
-        "UNBRANDED tenant (logo_url NULL; bank details present)"
-      ],
-      "sizeBytes": 207954,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "e72227fa-447d-4792-bdb6-8361297fdb52",
+      "sizeBytes": 208468,
       "productionFilename": "PI-2026-0002.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:15.631Z"
+      "capturedAt": "2026-09-13T06:41:39.093Z"
     },
     {
       "label": "quotation__QT-2026-0001__inter-sample-tenant__1line",
       "type": "quotation",
-      "tenantId": "772dc9f0-91b3-4708-b115-30f259b1a47f",
-      "documentId": "56977782-08db-40cc-87e8-66b04c5af878",
+      "tenantSlug": "sample",
       "documentNumber": "QT-2026-0001",
-      "covers": [
-        "inter-state IGST",
-        "second tenant (sample, KA)",
-        "single line item",
-        "UNBRANDED tenant (logo_url NULL; bank details present)"
-      ],
-      "sizeBytes": 197880,
+      "tenantId": "0bc90059-1679-4ee0-9db2-653e5e8e31ac",
+      "documentId": "97ab4b73-9d91-4578-9dd1-a4a8a1685c3e",
+      "sizeBytes": 198079,
       "productionFilename": "QT-2026-0001.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:21.946Z"
+      "capturedAt": "2026-09-13T06:41:34.837Z"
     },
     {
       "label": "quotation__QT-2026-0001__intra__1line",
       "type": "quotation",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "81eff36b-da9e-4b9b-8d21-a490cfd45e6d",
+      "tenantSlug": "demo",
       "documentNumber": "QT-2026-0001",
-      "covers": [
-        "intra-state CGST+SGST",
-        "single line item",
-        "UNBRANDED tenant (logo_url NULL; bank details present)"
-      ],
-      "sizeBytes": 199243,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "55d699c8-c99d-49dd-bf94-2639da2f3312",
+      "sizeBytes": 199442,
       "productionFilename": "QT-2026-0001.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:06.955Z"
+      "capturedAt": "2026-09-13T06:41:28.348Z"
     },
     {
       "label": "quotation__QT-2026-0006__inter__3line",
       "type": "quotation",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "e1a6e4b1-5351-47ba-ba9f-22cc97df9f56",
+      "tenantSlug": "demo",
       "documentNumber": "QT-2026-0006",
-      "covers": [
-        "inter-state IGST",
-        "multi line item",
-        "UNBRANDED tenant (logo_url NULL; bank details present)"
-      ],
-      "sizeBytes": 214306,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "a46f5ad8-c03e-4298-a943-4199a98fdb79",
+      "sizeBytes": 214608,
       "productionFilename": "QT-2026-0006.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:09.183Z"
+      "capturedAt": "2026-09-13T06:41:30.514Z"
     },
     {
       "label": "quotation__QT-2026-0010__intra__2line",
       "type": "quotation",
-      "tenantId": "0d0f2cef-640f-4090-b4af-0ef396c28599",
-      "documentId": "26581e8f-fb1b-431a-8bf3-e9eb60d72568",
+      "tenantSlug": "demo",
       "documentNumber": "QT-2026-0010",
-      "covers": ["intra-state CGST+SGST", "UNBRANDED tenant (logo_url NULL; bank details present)"],
-      "sizeBytes": 209706,
+      "tenantId": "7bd7eca3-5530-414f-b3c4-74ec607e29db",
+      "documentId": "aed8f81a-1dca-4cec-84ad-1df66f794d71",
+      "sizeBytes": 209904,
       "productionFilename": "QT-2026-0010-rev3.pdf",
       "ok": true,
       "renderedBy": "/usr/bin/chromium",
       "arch": "arm64",
-      "capturedAt": "2026-09-11T17:30:11.334Z"
+      "capturedAt": "2026-09-13T06:41:32.670Z"
     }
   ]
 }

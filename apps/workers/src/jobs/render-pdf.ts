@@ -9,18 +9,29 @@
  *   - pg-boss handler  — `handleRenderPdfJob`, registered once pg-boss is
  *     bootstrapped (Day 14). Written now so Day 14 is a wiring change only.
  *   - one-shot CLI     — `src/pdf/render-cli.ts`, spawned synchronously by
- *     the web `generateQuotationPdf` Server Action (DEV.36). This keeps
- *     Puppeteer entirely inside the workers process — the web build never
- *     imports puppeteer-core (Day 10 guardrail).
+ *     the web `generateQuotationPdf` Server Action (DEV.36).
+ *
+ * DAY 27: rendering is now IN-PROCESS TYPST. pg-boss, the queue, the job
+ * contract and `generated_documents` are unchanged — only the bytes' origin
+ * changed. Chromium, Puppeteer and the HTML templates are gone.
+ *
+ * The CLI path survives for the web Server Action, but its original reason no
+ * longer applies: it existed to keep Puppeteer out of the web build (Day 10
+ * guardrail, DEV.36). Typst is a subprocess invocation with no Node dependency
+ * to leak, so collapsing that path is now possible — and is deliberately NOT
+ * done here, because it is a change to the web action's contract and belongs
+ * with the apps/workers consolidation item, not with the cutover.
  */
 import { withTenant } from '@dealerlink/db';
 
-import { renderPdfFromHtml } from '../pdf/render';
+import { resolveGeneratedAt } from '../pdf/generated-at';
 import { storeRenderedPdf } from '../pdf/store';
-import { buildDispatchNoteHtml } from '../templates/dispatch-note';
-import { buildPaymentReceiptHtml } from '../templates/payment-receipt';
-import { buildPerformaInvoiceHtml } from '../templates/performa-invoice';
-import { buildQuotationHtml } from '../templates/quotation';
+import { renderTypstPdf } from '../pdf/typst';
+import { buildViewModel, filenameFor, logoSvgFrom, TEMPLATE_FOR } from '../pdf/view-model';
+import { loadDispatchNotePdfData } from '../templates/dispatch-note';
+import { loadPaymentReceiptPdfData } from '../templates/payment-receipt';
+import { loadPerformaInvoicePdfData } from '../templates/performa-invoice';
+import { loadQuotationPdfData } from '../templates/quotation';
 
 export type RenderableDocumentType =
   | 'quotation'
@@ -68,25 +79,40 @@ export async function runRenderPdf(payload: RenderPdfPayload): Promise<RenderPdf
   return withTenant(
     payload.tenantId,
     async (tx) => {
-      const built =
+      const data =
         documentType === 'quotation'
-          ? await buildQuotationHtml(tx, payload.tenantId, payload.documentId)
+          ? await loadQuotationPdfData(tx, payload.tenantId, payload.documentId)
           : documentType === 'performa_invoice'
-            ? await buildPerformaInvoiceHtml(tx, payload.tenantId, payload.documentId)
+            ? await loadPerformaInvoicePdfData(tx, payload.tenantId, payload.documentId)
             : documentType === 'dispatch'
-              ? await buildDispatchNoteHtml(tx, payload.tenantId, payload.documentId)
-              : await buildPaymentReceiptHtml(tx, payload.tenantId, payload.documentId);
-      const buffer = await renderPdfFromHtml(built.html, {
-        format: 'A4',
-        margin: { top: '14mm', bottom: '20mm' },
-        footerTemplate: built.footerTemplate,
+              ? await loadDispatchNotePdfData(tx, payload.tenantId, payload.documentId)
+              : await loadPaymentReceiptPdfData(tx, payload.tenantId, payload.documentId);
+
+      // The loaders still set `generatedAt: new Date()`. Overridden with the
+      // document-keyed value so the footer does not claim a PDF was generated
+      // whenever it was last fetched, and so the same document always renders to
+      // the same bytes. This is F.66's requirement that the RENDERER own the
+      // value rather than a harness or an env var: if it were pinned only in
+      // tests, the snapshots would prove a property production does not have.
+      data.generatedAt = await resolveGeneratedAt(
+        tx as unknown as { execute: (q: unknown) => Promise<unknown> },
+        documentType,
+        payload.documentId,
+      );
+
+      const filename = filenameFor(documentType, data);
+      const buffer = renderTypstPdf({
+        template: TEMPLATE_FOR[documentType],
+        data: buildViewModel(documentType, data),
+        generatedAt: data.generatedAt,
+        logoSvg: logoSvgFrom(data),
       });
       const stored = await storeRenderedPdf({
         tx,
         tenantId: payload.tenantId,
         documentType,
         documentId: payload.documentId,
-        filename: built.filename,
+        filename,
         buffer,
         generatedBy: payload.userId,
       });

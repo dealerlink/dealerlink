@@ -4,7 +4,7 @@
     "type": "quotation",
     "ref": {
       "pages": 1,
-      "bytes": 199243,
+      "bytes": 199442,
       "rupee": 1,
       "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
       "indianGrouping": "ok",
@@ -30,7 +30,7 @@
     "type": "quotation",
     "ref": {
       "pages": 1,
-      "bytes": 214306,
+      "bytes": 214608,
       "rupee": 1,
       "lakhSamples": ["1,75,500.00", "21,64,500.00", "3,89,610.00", "25,54,110.00"],
       "indianGrouping": "ok",
@@ -56,7 +56,7 @@
     "type": "quotation",
     "ref": {
       "pages": 1,
-      "bytes": 209706,
+      "bytes": 209904,
       "rupee": 1,
       "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
       "indianGrouping": "ok",
@@ -82,7 +82,7 @@
     "type": "quotation",
     "ref": {
       "pages": 1,
-      "bytes": 197880,
+      "bytes": 198079,
       "rupee": 1,
       "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00"],
       "indianGrouping": "ok",
@@ -108,7 +108,7 @@
     "type": "performa_invoice",
     "ref": {
       "pages": 1,
-      "bytes": 212436,
+      "bytes": 212635,
       "rupee": 1,
       "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
       "indianGrouping": "ok",
@@ -134,7 +134,7 @@
     "type": "performa_invoice",
     "ref": {
       "pages": 1,
-      "bytes": 207954,
+      "bytes": 208468,
       "rupee": 1,
       "lakhSamples": ["13,92,000.00", "2,50,560.00", "16,42,560.00"],
       "indianGrouping": "ok",
@@ -160,7 +160,7 @@
     "type": "payment_receipt",
     "ref": {
       "pages": 1,
-      "bytes": 180889,
+      "bytes": 181088,
       "rupee": 2,
       "lakhSamples": ["1,00,000.00"],
       "indianGrouping": "ok",
@@ -186,7 +186,7 @@
     "type": "dispatch",
     "ref": {
       "pages": 1,
-      "bytes": 216885,
+      "bytes": 217158,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -212,7 +212,7 @@
     "type": "dispatch",
     "ref": {
       "pages": 1,
-      "bytes": 216701,
+      "bytes": 217078,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -238,7 +238,7 @@
     "type": "dispatch",
     "ref": {
       "pages": 2,
-      "bytes": 371942,
+      "bytes": 372115,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -249,7 +249,7 @@
     },
     "typ": {
       "pages": 2,
-      "bytes": 88177,
+      "bytes": 88176,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",
@@ -264,7 +264,7 @@
     "type": "quotation",
     "ref": {
       "pages": 1,
-      "bytes": 199357,
+      "bytes": 199423,
       "rupee": 1,
       "lakhSamples": ["11,70,000.00", "2,10,600.00", "13,80,600.00", "1,05,300.00"],
       "indianGrouping": "ok",
@@ -290,7 +290,7 @@
     "type": "performa_invoice",
     "ref": {
       "pages": 1,
-      "bytes": 212549,
+      "bytes": 212603,
       "rupee": 1,
       "lakhSamples": ["1,71,000.00", "15,39,000.00", "2,77,020.00", "18,16,020.00"],
       "indianGrouping": "ok",
@@ -316,7 +316,7 @@
     "type": "payment_receipt",
     "ref": {
       "pages": 1,
-      "bytes": 180993,
+      "bytes": 181050,
       "rupee": 2,
       "lakhSamples": ["1,00,000.00"],
       "indianGrouping": "ok",
@@ -342,7 +342,7 @@
     "type": "dispatch",
     "ref": {
       "pages": 1,
-      "bytes": 217626,
+      "bytes": 217955,
       "rupee": 0,
       "lakhSamples": [],
       "indianGrouping": "n/a",

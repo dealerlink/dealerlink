@@ -19,15 +19,15 @@ import path from 'node:path';
 
 import { withTenant, closeDbConnection } from '@dealerlink/db';
 import { config as loadEnv } from 'dotenv';
-import { sql } from 'drizzle-orm';
 
 import { formatDocDate, formatGeneratedAt, formatMoney } from '../src/lib/format';
+import { resolveGeneratedAt } from '../src/pdf/generated-at';
 import { loadDispatchNotePdfData } from '../src/templates/dispatch-note';
 import { loadPaymentReceiptPdfData } from '../src/templates/payment-receipt';
 import { loadPerformaInvoicePdfData } from '../src/templates/performa-invoice';
 import { loadQuotationPdfData } from '../src/templates/quotation';
 
-import { resolveDocument, SOURCE_TABLE, type DocumentCase, type Kind } from './resolve-document';
+import { resolveDocument, type DocumentCase, type Kind } from './resolve-document';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 loadEnv({ path: path.join(repoRoot, '.env.local') });
@@ -107,55 +107,6 @@ function toViewModel(value: unknown, key?: string): unknown {
     return formatDocDate(value.slice(0, 10));
   }
   return value;
-}
-
-/**
- * Resolve the document's "generated at" — KEYED TO THE DOCUMENT, not to this
- * render.
- *
- * The loaders currently set `generatedAt: new Date()`, so the footer claims a
- * document was generated whenever it was last rendered. That is a CORRECTNESS
- * bug before it is a determinism one: a PDF re-fetched three weeks after issue
- * says it was generated today. Determinism is the consequence of fixing it.
- *
- * Resolution order — both terms stable per document, neither wall-clock:
- *   1. the EARLIEST `generated_documents.generated_at` for this document, so
- *      the first render establishes the value and every later render
- *      reproduces it;
- *   2. failing that, the source row's own `created_at`.
- *
- * (2) is the case worth being explicit about: a document rendered before any
- * `generated_documents` row exists is exactly where a wall-clock value could
- * sneak back in. It cannot here — `created_at` is written once when the
- * document is created and never moves, so a first render and a render after
- * the row appears agree. If BOTH are absent the render fails loudly rather
- * than silently substituting `new Date()`.
- */
-async function resolveGeneratedAt(
-  tx: { execute: (q: unknown) => Promise<unknown> },
-  type: Kind,
-  documentId: string,
-): Promise<Date> {
-  const first = (await tx.execute(sql`
-    select min(generated_at) as at
-    from generated_documents
-    where document_type = ${type}::generated_document_type
-      and document_id = ${documentId}
-  `)) as Array<{ at: Date | string | null }>;
-  const fromGenerated = first[0]?.at ?? null;
-  if (fromGenerated) return new Date(fromGenerated);
-
-  const src = (await tx.execute(
-    sql`select created_at as at from ${sql.raw(SOURCE_TABLE[type])} where id = ${documentId}`,
-  )) as Array<{ at: Date | string | null }>;
-  const fromSource = src[0]?.at ?? null;
-  if (fromSource) return new Date(fromSource);
-
-  throw new Error(
-    `render-typst: cannot resolve a stable generatedAt for ${type} ${documentId} — ` +
-      'no generated_documents row and no source created_at. Refusing to fall back to ' +
-      'wall-clock, which is the bug this resolution exists to remove.',
-  );
 }
 
 const loaders = {

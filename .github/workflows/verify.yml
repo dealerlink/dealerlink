@@ -170,78 +170,119 @@ jobs:
       - name: Seed
         run: pnpm db:seed
 
-      # apps/workers/tests/render.test.ts launches a real Chromium through
-      # @sparticuz/chromium. The runner is x86-64 with PUPPETEER_EXECUTABLE_PATH
-      # unset, so browser.ts resolves the SAME binary production uses — the
-      # DEV.89 arm64 fallback is inert here, by design. It needs the shared
-      # libraries apps/workers/Dockerfile installs for the same reason.
-      # `install-deps` (not `install`) — this job needs the shared libraries, not
-      # a Playwright browser. Using Playwright's own dep installer instead of a
-      # hand-written apt list keeps it correct across runner-image Ubuntu
-      # versions, where package names differ (libasound2 vs libasound2t64).
-      - name: Install Chromium runtime libraries
-        run: pnpm --filter web exec playwright install-deps chromium
+      # The 26- and 500-serial dispatch notes are NOT in the seed — they are
+      # built by this fixture, and two of the fourteen snapshot cases are them.
+      # Without it the suite fails with "no dispatch DSP-REF-0026 for tenant
+      # 'demo' — has the database been seeded?", which is the resolver reporting
+      # exactly what is wrong.
+      - name: Apply the long-serial fixture
+        run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f apps/workers/scripts/long-serial-fixture.sql
+
+      # Typst for the PDF snapshot tests. This replaces the Chromium runtime
+      # libraries the workers' render specs used to need: one statically-linked
+      # musl binary, no shared-library surface, nothing to apt-install.
+      #
+      # The installer pins the version AND verifies a sha256 per architecture,
+      # and `typst:check` fails the job if the resolved binary is a different
+      # version. That check is not ceremony: every reference PDF in
+      # docs/pdf-references/ was rendered by the pinned build and those
+      # references can no longer be regenerated, so a silent upgrade would
+      # invalidate a baseline nothing can rebuild.
+      # The install dir goes on PATH explicitly. The RENDERER resolves the
+      # binary with `command -v typst` (src/pdf/typst.ts), so a runner whose
+      # PATH happens not to include ~/.local/bin would install successfully and
+      # then fail at render time — the worst ordering, because the install step
+      # goes green.
+      - name: Install Typst (pinned + checksum-verified)
+        run: |
+          pnpm typst:install
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify the pinned Typst version
+        run: pnpm typst:check
 
       - name: vitest
         run: pnpm test
 
   # ---------------------------------------------------------------------------
-  # B2 — Typst cross-architecture byte determinism (F.38 / F.66).
+  # B2 — Typst cross-architecture byte determinism, ON A REAL DOCUMENT (F.66).
   #
-  # References for the PDF migration are captured in the devcontainer, which is
-  # arm64. This job runs on x86-64. If Typst's output is architecture-dependent,
-  # a locally-captured reference can never match a CI render, every snapshot test
-  # fails on its first run with no useful signal, and the fix is that references
-  # must be produced in CI rather than locally — a change to how Day 25 works,
-  # not to how Day 27 tests.
+  # This job used to compile a synthetic fixture. That fixture had no timestamp
+  # in it, so it could not have caught the defect Day 26 actually found:
+  # `generatedAt: new Date()` in the shared loaders made every render of a real
+  # document differ from the last, while the fixture sat green the whole time. A
+  # check that cannot fail for the reason the system actually breaks is
+  # decoration, so it now renders the 500-serial dispatch note — the heaviest and
+  # only multi-page document in the corpus — and compares its sha256 against a
+  # hash recorded on the arm64 devcontainer.
   #
-  # Cheap (~20s, no database, no browser) and it answers the one question most
-  # likely to invalidate the migration's premise. See
-  # apps/workers/scripts/typst-determinism/README.md.
+  # It costs a database now, which the fixture did not. That is the price of
+  # testing the thing rather than a proxy for it.
   # ---------------------------------------------------------------------------
   typst-determinism:
     name: typst-determinism
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      # Both pins are load-bearing. Unpinned, SOURCE_DATE_EPOCH lets the
-      # creation timestamp AND the DocumentID derived from it change on every
-      # render (88 differing metadata bytes). A different Typst version may
-      # legitimately change layout, which would change the hash with nothing
-      # actually wrong.
-      TYPST_VERSION: '0.15.1'
-      SOURCE_DATE_EPOCH: '1700000000'
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dealerlink
+          POSTGRES_PASSWORD: dev_password_change_me
+          POSTGRES_DB: dealerlink_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dealerlink -d dealerlink_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Typst ${{ env.TYPST_VERSION }} (x86-64, static musl)
-        run: |
-          set -euo pipefail
-          curl -sSfL -o /tmp/typst.tar.xz \
-            "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz"
-          tar -xJf /tmp/typst.tar.xz -C /tmp
-          /tmp/typst-x86_64-unknown-linux-musl/typst --version
+      - uses: pnpm/action-setup@v4
 
-      - name: Render the fixture and compare against the arm64 hash
-        working-directory: apps/workers/scripts/typst-determinism
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Pinned by version AND sha256, per architecture. Not ceremony: every
+      # reference PDF was rendered by this build and none of them can be
+      # regenerated, so a silent upgrade would invalidate a baseline nothing can
+      # rebuild.
+      # The install dir goes on PATH explicitly. The RENDERER resolves the
+      # binary with `command -v typst` (src/pdf/typst.ts), so a runner whose
+      # PATH happens not to include ~/.local/bin would install successfully and
+      # then fail at render time — the worst ordering, because the install step
+      # goes green.
+      - name: Install Typst (pinned + checksum-verified)
         run: |
-          set -euo pipefail
-          /tmp/typst-x86_64-unknown-linux-musl/typst compile fixture.typ /tmp/fixture.pdf
-          ACTUAL="$(sha256sum /tmp/fixture.pdf | awk '{print $1}')"
-          EXPECTED="$(awk '{print $1}' expected-sha256.txt)"
-          echo "arch     : $(uname -m)"
-          echo "expected : $EXPECTED  (recorded on arm64)"
-          echo "actual   : $ACTUAL  (this x86-64 runner)"
-          echo "bytes    : $(stat -c%s /tmp/fixture.pdf)"
-          if [ "$ACTUAL" = "$EXPECTED" ]; then
-            echo "MATCH — Typst output is byte-identical across arm64 and x86-64."
-          else
-            echo "MISMATCH — Typst output is architecture-dependent."
-            echo "References captured in the arm64 devcontainer cannot be compared"
-            echo "against x86-64 CI renders. See F.66: references would have to be"
-            echo "produced in CI instead. Do NOT re-record the hash to make this pass."
-            exit 1
-          fi
+          pnpm typst:install
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify the pinned Typst version
+        run: pnpm typst:check
+
+      - name: Create extensions (scripts/init-db.sql)
+        run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f scripts/init-db.sql
+
+      - name: Migrate
+        run: pnpm db:migrate
+
+      # The seed clock is pinned (F.67), which is what makes a rendered document
+      # reproducible at all. The long-serial fixture is not part of the seed.
+      - name: Seed
+        run: pnpm db:seed
+      - name: Apply the long-serial fixture
+        run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f apps/workers/scripts/long-serial-fixture.sql
+
+      - name: Render a real document and compare bytes against the arm64 hash
+        working-directory: apps/workers
+        run: pnpm exec tsx scripts/determinism-check.ts
 
   # ---------------------------------------------------------------------------
   # C — the verify chain. Gated on `checks` so a typo does not cost ten
@@ -312,32 +353,11 @@ jobs:
       # Run unconditionally, cache hit or miss. `install` is close to a no-op
       # when the browser is already on disk, and making it conditional is
       # exactly how a stale cache turns into a confusing "Executable doesn't
-      # exist" failure. --with-deps also covers the Chromium shared libraries
-      # the workers process needs for the PDF specs.
+      # exist" failure. --with-deps covers the browser's shared libraries.
+      # (It used to be load-bearing for the workers' PDF specs too; those render
+      # through Typst now and need no browser at all.)
       - name: Install Playwright Chromium + system deps
         run: pnpm --filter web exec playwright install --with-deps chromium
-
-      # DEV.95 — make the Chromium claim VERIFIABLE instead of inferred.
-      # browser.ts logs nothing about which executable it resolved, and its
-      # @sparticuz branch falls through on error to a system-Chromium lookup
-      # whose Linux candidates include /usr/bin/google-chrome — which IS
-      # preinstalled on GitHub runners. So a silent swap to the runner's Chrome
-      # would still go green. Print what resolveLaunchConfig() will pick.
-      # Diagnostic only: `|| true` so it can never fail the gate.
-      - name: Report the Chromium binary the PDF path will use
-        run: |
-          node -e "
-            const p = require('@sparticuz/chromium');
-            (async () => {
-              const exe = await (p.default ?? p).executablePath();
-              console.log('arch                       :', process.arch);
-              console.log('PUPPETEER_EXECUTABLE_PATH  :', process.env.PUPPETEER_EXECUTABLE_PATH ?? '(unset)');
-              console.log('@sparticuz executablePath  :', exe);
-              console.log('@sparticuz binary exists   :', require('fs').existsSync(exe));
-              console.log('/usr/bin/google-chrome     :', require('fs').existsSync('/usr/bin/google-chrome'), '(fallback if the above is false)');
-            })();
-          " || true
-        working-directory: apps/workers
 
       - name: Create extensions (scripts/init-db.sql)
         run: psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f scripts/init-db.sql
@@ -352,6 +372,27 @@ jobs:
       # runs no vitest at all, so nothing can pollute it.
       - name: Seed
         run: pnpm db:seed
+
+      # THE WORKERS PROCESS RENDERS PDFS DURING THIS SUITE. `pnpm verify` boots
+      # web AND workers, and the Day 10/14 specs click through to a real PDF
+      # download, so the render path runs for real here — it just runs behind a
+      # queue instead of in the test process.
+      #
+      # Without this the download specs time out at 55s waiting for an event
+      # that can never arrive, because the job resolving the render throws
+      # "typst binary not found". That is a slow and indirect way to learn the
+      # binary is missing, which is precisely why it belongs here.
+      # The install dir goes on PATH explicitly. The RENDERER resolves the
+      # binary with `command -v typst` (src/pdf/typst.ts), so a runner whose
+      # PATH happens not to include ~/.local/bin would install successfully and
+      # then fail at render time — the worst ordering, because the install step
+      # goes green.
+      - name: Install Typst (pinned + checksum-verified)
+        run: |
+          pnpm typst:install
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify the pinned Typst version
+        run: pnpm typst:check
 
       # A SEPARATE key namespace from the `checks` job. Both write
       # apps/web/.next/cache, but `checks` fills it with a production build and

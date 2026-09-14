@@ -9,9 +9,18 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget gnupg jq git openssh-client less procps iproute2 \
-      # Chromium itself (@sparticuz/chromium is x64-only; dev falls back to system chromium)
+      # xz — Typst ships Linux builds ONLY as .tar.xz and GNU tar shells out to
+      # the xz binary for -J. Without this, `pnpm typst:install` cannot unpack a
+      # release, which is the blocker F.66 recorded: the Day 25 spike had to pull
+      # a pure-JS decoder into /tmp to get a binary at all.
+      xz-utils \
+      # Chromium. NOT for PDF rendering any more — that is Typst as of Day 27,
+      # and puppeteer is gone. This is Playwright's business: the e2e suite runs
+      # a real browser, and Playwright's own Chromium links the same shared
+      # libraries. The package itself is kept as a fallback browser for manual
+      # debugging; the LIBRARIES below are load-bearing for e2e.
       chromium \
-      # Chromium runtime libs — same list proven in apps/workers/Dockerfile (DEV.63)
+      # Browser runtime libs — list proven in apps/workers/Dockerfile (DEV.63)
       libnss3 libatk-bridge2.0-0 libdrm2 libgbm1 libxkbcommon0 \
       libpango-1.0-0 libgtk-3-0 libasound2 libxcomposite1 libxdamage1 \
       libxrandr2 libxshmfence1 libxss1 libxtst6 \
@@ -60,11 +69,22 @@ RUN npm install -g corepack@latest \
 
 USER node
 
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
-    PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright \
+# PUPPETEER_EXECUTABLE_PATH is gone (Day 27). It pointed puppeteer at the
+# system Chromium because @sparticuz/chromium ships x86-64 only and this
+# container is arm64 — the divergence DEV.89 recorded and F.32 tracked. With
+# puppeteer removed there is nothing left to point.
+#
+# It had a second effect worth remembering: because it was set at the image
+# level, the Day 25 reference capture silently used /usr/bin/chromium rather
+# than the binary the capture script would otherwise have chosen. An env var set
+# in an image is an invisible input to everything that runs in it.
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright \
     NPM_CONFIG_PREFIX=/home/node/.npm-global \
     PNPM_STORE_PATH=/home/node/.local/share/pnpm/store \
-    PATH=/home/node/.npm-global/bin:/home/node/.local/share/pnpm:$PATH
+    # ~/.local/bin is where scripts/install-typst.mjs puts the pinned Typst
+    # binary. Without it on PATH the renderer cannot find typst and fails at
+    # render time rather than at install time.
+    PATH=/home/node/.local/bin:/home/node/.npm-global/bin:/home/node/.local/share/pnpm:$PATH
 
 RUN mkdir -p /home/node/.npm-global /home/node/.claude \
              /home/node/.local/share/pnpm /home/node/.cache/ms-playwright \

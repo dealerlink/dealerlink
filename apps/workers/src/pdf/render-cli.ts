@@ -3,9 +3,13 @@
  *
  * The web `generateQuotationPdf` Server Action spawns this as a subprocess
  * (DEV.36): it renders one document, persists the `generated_documents`
- * row, prints a JSON result to stdout, and exits. This keeps Puppeteer
- * (and the Chromium binary) entirely inside the workers process — the web
- * build never imports puppeteer-core (Day 10 guardrail).
+ * row, prints a JSON result to stdout, and exits.
+ *
+ * DAY 27: this used to exist so Puppeteer and its Chromium binary stayed out of
+ * the web build (Day 10 guardrail). Rendering is now Typst — a subprocess with
+ * no Node dependency to leak — so that reason is gone. The CLI stays because
+ * removing it changes the web Server Action's contract, which belongs with the
+ * apps/workers consolidation item rather than with the cutover.
  *
  * The pg-boss path (`handleRenderPdfJob`) wraps the exact same
  * `runRenderPdf` core and takes over in Day 14 when the queue is
@@ -26,8 +30,6 @@ import { closeDbConnection } from '@dealerlink/db';
 import { config as loadEnv } from 'dotenv';
 
 import { runRenderPdf, type RenderableDocumentType } from '../jobs/render-pdf';
-
-import { shutdownBrowser } from './browser';
 
 // Load DB credentials from the repo-root env files. When this CLI is spawned
 // by the web Server Action the vars are already inherited from the parent
@@ -62,14 +64,12 @@ async function main(): Promise<void> {
 
 main()
   .then(async () => {
-    await shutdownBrowser();
     await closeDbConnection();
     process.exit(0);
   })
   .catch(async (err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     process.stdout.write(`${JSON.stringify({ ok: false, error: message })}\n`);
-    await shutdownBrowser().catch(() => undefined);
     await closeDbConnection().catch(() => undefined);
     process.exit(1);
   });

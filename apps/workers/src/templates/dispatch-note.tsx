@@ -317,8 +317,18 @@ export async function buildDispatchNoteHtml(
   tx: DrizzleTx,
   tenantId: string,
   documentId: string,
+  /**
+   * OPTIONAL, and production never passes it. The reference capture supplies a
+   * document-keyed `generatedAt` so a captured PDF reproduces byte-identically
+   * across a reseed — the loaders set `new Date()`, which makes two captures
+   * minutes apart differ in the footer and disqualifies them as a snapshot
+   * baseline (Day 27 Phase 1.2, and Phase 4.2 which forbids asserting around
+   * the footer). Omitted, behaviour is exactly as before.
+   */
+  generatedAt?: Date,
 ): Promise<BuiltDispatchNoteHtml> {
   const data = await loadDispatchNotePdfData(tx, tenantId, documentId);
+  if (generatedAt) data.generatedAt = generatedAt;
   return {
     html: renderDispatchNoteHtml(data),
     filename: `${data.dispatchNumber}.pdf`,
