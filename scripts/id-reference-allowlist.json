@@ -46,7 +46,7 @@
       "id": "DEV.38",
       "file": "DEVIATIONS.md",
       "kind": "deliberate-mention",
-      "reason": "DEV.128 records that DEV.38 was cited without an entry and what it turned out to mean. Naming the missing id is the content of that record — the entry exists to say the id does not."
+      "reason": "DEV.128 records that DEV.38 was cited without an entry and what it turned out to mean, and DEV.129 cites it twice more (DEVIATIONS.md:4835 and :4845) while recounting the same finding. Naming the missing id is the content of both records — the entries exist to say the id does not. Listed site by site because this entry is file-scoped: it now covers four citations across two entries, and a reason that described only the first would understate its reach."
     },
     {
       "id": "DEV.41",
