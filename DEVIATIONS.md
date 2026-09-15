@@ -5061,7 +5061,12 @@ Two of my own probes were wrong before the code was: a pipe counter that was
 not escape-aware reported four broken fields when one was, and a blanket
 surrogate assertion fired on the status emoji, which are valid pairs. Both are
 now written so they fail when the property is absent — a test that cannot fail
-is the same defect as a claim nobody checked. That is weaker than byte-identity and it is the
+is the same defect as a claim nobody checked.
+
+(An earlier draft of this entry ended this paragraph with a sentence about
+byte-identity being the deliberate price of a satisfiable rule. It had no
+referent here; it belongs to the WHAT THIS TRADE COSTS paragraph above, where
+the same point is made in full.) That is weaker than byte-identity and it is the
 deliberate price of the rule becoming satisfiable.
 
 **Carried in with the migration, because porting them verbatim would have

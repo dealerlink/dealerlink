@@ -423,7 +423,7 @@ function renderSummary(tasks: StageFTask[]): string {
  * How the banned section can be spelled. "Change Log" and "Change-Log" are the
  * same section under DEV.110's ban, and an HTML heading is a heading.
  */
-const CHANGELOG_NAME_BODY = 'Change[ \\t-]*Log\\b';
+const CHANGELOG_NAME_BODY = 'Change[\\s\\u00a0\\u00ad\\u200b\\u202f\\u2000-\\u200a\\u3000-]*Log\\b';
 
 /** Changelog heading matchers, in every form Markdown and HTML allow. */
 function changelogHeadings(): RegExp[] {
@@ -455,6 +455,21 @@ export function assertRenderedOk(rendered: string): void {
         sources,
     );
   }
+  // The highest-consequence invariant, and the one the input-path guard alone
+  // could not protect: a lone surrogate survives a utf8 round-trip as U+FFFD,
+  // so the file on disk can never equal this string — plan:sync writes forever
+  // and plan:check can never be satisfied. sanitize() closes the routes that
+  // exist today; this closes the class, including a future field that skips it.
+  if (Buffer.from(rendered, 'utf8').toString('utf8') !== rendered) {
+    throw new Error(
+      'REFUSING TO WRITE: the rendered document does not survive a utf8 ' +
+        'round-trip, so the written file could never equal it and plan:check ' +
+        'would be unsatisfiable. A field almost certainly holds an unpaired ' +
+        'surrogate. ' +
+        sources,
+    );
+  }
+
   const malformed = malformedTableRows(rendered);
   if (malformed.length > 0) {
     throw new Error(

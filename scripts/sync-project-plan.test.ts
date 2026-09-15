@@ -746,8 +746,14 @@ describe('the Changelog section stays deleted (DEV.110)', () => {
   // one-character underline.
   it('is absent from the hand-maintained history file, in any heading form', async () => {
     const history = await readFile(REAL_HISTORY, 'utf8');
-    expect(history).not.toMatch(/^ {0,3}#{1,6}[ \t]+Changelog\b/im);
-    expect(history).not.toMatch(/^ {0,3}Changelog[ \t]*\n {0,3}[=-]+[ \t]*$/im);
-    expect(history).not.toMatch(/<h[1-6][^>]*>\s*Changelog/i);
+    // Uses the RENDERER's own matchers rather than a hand-copied narrower set.
+    // The previous version matched `Changelog` only and let `## Change Log`
+    // through, on the one surface with no renderer behind it — and its comment
+    // claimed to match assertTemplateUsable(), which stopped being true the
+    // moment the renderer's pattern widened. Sharing the matchers is what keeps
+    // that from recurring.
+    expect(() => assertRenderedOk(history)).not.toThrow();
+    // non-vacuous: the same call rejects the section when it is present
+    expect(() => assertRenderedOk(`${history}\n\n## Change Log\n`)).toThrow(/Changelog heading/);
   });
 });
