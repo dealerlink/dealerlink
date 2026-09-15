@@ -49,6 +49,45 @@ mechanical edit.
 `parked`, `deferred`, `blocked`. The sync script rejects anything else by name.
 Do not invent a seventh.
 
+**UNEARNED PRECISION IN NOTES TEXT — flag it, and check what you can.** Closeout
+rule C6b (`docs/BUILD_PROMPT_TEMPLATE.md`) bans counts, "only"/"the only",
+"first"/"first N versions", "same as"/"identical to"/"byte-identical", and
+version-history claims ("wrong in the first version", "three commits rewrote
+this field") from a notes field unless the number or the exclusivity IS the
+point and a command was run to produce it.
+
+You do not write the notes text — the invocation hands it to you — so this is
+not yours to author. It IS yours to catch, because you are the last reader
+before it lands:
+
+- **Check the cheap ones.** You have Bash. A claim of the form "N sites",
+  "only reference", "declared in M files" is one `grep -c` or one `git grep`
+  away. Run it. If it disagrees with the text, do NOT write the text — report
+  the command, its output, and the discrepancy, and ask.
+- **Flag the ones you cannot check.** Claims about commit history, about how
+  many versions of a note carried an error, or about how many assertions
+  someone ran are not checkable from the JSON. List them in your report under
+  a `PRECISION FLAGGED` line so the main thread either runs the command or
+  deletes the clause.
+- **REFUSE drafting history outright.** If the notes text handed to you says
+  what an earlier draft of itself said, how many times it was rewritten, or
+  what was fixed before committing, do not write it — no command can check it,
+  because the drafts were never committed. Say so and ask for the sentence
+  without it. Claims about COMMITTED history are different and are checkable:
+  `git show <rev>:docs/stage-f-tasks.json` settles them.
+- **Prefer an enumeration to a count** if the invocation offers you the choice:
+  an enumeration fails visibly when it drifts, a count fails silently.
+
+Established after PR #27, where this shape produced findings round after
+round, several of them introduced by the very commit correcting the previous
+one. THE TEST, and note which way it cuts: delete the clause, and if the
+sentence still means what it meant, the clause was decoration: "A clause that
+cannot be load-bearing can only be wrong." If deleting it CHANGES the meaning,
+it is load-bearing and the fix is to verify it, not to cut it. Two of PR #27's
+findings were of that second kind (the pg-boss retry figure in e3dd539, the
+Axiom/pino mechanism in f165352), so do not report a load-bearing claim as a
+precision violation — check it, or say you could not.
+
 Every task object carries: `id`, `task`, `subPhase`, `days`, `status`,
 `completedDate` (`null` unless complete), `notes`.
 

@@ -70,6 +70,64 @@ C6a. CONFIRM EVERY NEW ID IS FREE before writing it — DEV entries, ADRs,
      `## DEV.64` headings, and Day 27 nearly shipped a second `## ADR-014`
      because the highest-numbered ADR does not sit last in DECISIONS.md. The
      file is not sorted, and the tail is not the maximum.
+C6b. NO UNEARNED PRECISION — in a notes field, a DEV entry, an ADR, or a
+     commit message. Do not write a count, an "only"/"the only", a "first" or
+     "first N versions", a "same as"/"identical to"/"byte-identical", or any
+     version-history claim ("wrong in the first version", "three commits
+     rewrote this field") UNLESS the number or the exclusivity IS the point
+     AND you ran the command that produces it. When it is the point, name the
+     command in the text so the next reader can re-run it, and prefer an
+     ENUMERATION over a count: an enumeration fails visibly when it drifts,
+     a count fails silently.
+
+     THE TEST THAT SETTLES IT — delete the clause. If the sentence still means
+     what it meant, the clause was decoration, and the operator's formulation
+     applies: "A clause that cannot be load-bearing can only be wrong."
+
+     AND THE CONVERSE, which the same PR demonstrated and which decides whether
+     this rule is even the right one to reach for: if deleting the clause
+     CHANGES the meaning, it is load-bearing, and deleting it is not the fix —
+     verifying it is. Two of PR #27's findings were of that kind, not this one:
+     the pg-boss retry figure — e3dd539: "That is wrong in exactly the way that
+     misleads someone checking Sentry for a specific render and counting
+     events" — and the trackEvent Axiom/pino mechanism, which f165352 calls
+     "the most consequential error on this branch, because it is load-bearing
+     for the fix F.73 asks for". C6b governs DECORATION. A load-bearing claim is C6a's
+     habit — run the command — applied to prose.
+
+     WHY THIS IS A SEPARATE RULE from C6a rather than a note under it: it
+     targets the category that per-command discipline cannot reach. Claims
+     ABOUT THE REPO get checked because a command exists for them. Claims
+     ABOUT YOUR OWN WORK — how many commits touched a field, which version
+     first carried an error, how many assertions you ran before committing —
+     have no command unless you write one, and writing one feels like
+     ceremony. The operator's count of PR #27: "three failures were counts
+     about your own process, where no command exists unless you write one" —
+     and per a37eed3, which enumerates all three, "Every one sits in a sentence
+     whose purpose was to establish that the checking was done".
+
+     NO DRAFTING HISTORY IN TRACKED FILES — this one is absolute, not
+     conditional on having run a command, because no command exists. A claim
+     about what an earlier DRAFT of a sentence said, how many times you
+     rewrote it, or what you fixed before committing cannot be checked by
+     anyone, ever: the drafts were never committed. Two such claims reached
+     file content on the branch that added this rule, and one of them named
+     the wrong commit — for an event that no committed version of the file
+     ever recorded.
+
+     The line between the two cases is git: COMMITTED history is fair game
+     ("the attribution stood until 8e735a8" is one command away). Uncommitted
+     drafting is not. If the lesson from a draft is worth keeping, state the
+     RULE it produced and drop the anecdote — "cite anchors, not line numbers,
+     in a file you are editing" needs no story to be useful. The anecdote
+     belongs in the commit message, where a reader knows they are reading an
+     account rather than a fact.
+
+     INHERITED TEXT IS NOT VERIFIED TEXT. On PR #27 the trackEvent
+     Axiom/pino mechanism and the "PR #25 was docs-only" claim both arrived
+     from main (664d39e) and were rewritten AROUND without being re-read,
+     because text already in the file reads as already-checked. If you are
+     editing a paragraph, the claims you did not write are now yours.
 C7. git switch -c day-<N>-<slug>
     git add -A && git commit -m "feat(<scope>): day N — <summary>"
     git push -u origin day-<N>-<slug>
