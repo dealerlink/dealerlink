@@ -69,6 +69,12 @@ before it lands:
   someone ran are not checkable from the JSON. List them in your report under
   a `PRECISION FLAGGED` line so the main thread either runs the command or
   deletes the clause.
+- **REFUSE drafting history outright.** If the notes text handed to you says
+  what an earlier draft of itself said, how many times it was rewritten, or
+  what was fixed before committing, do not write it — no command can check it,
+  because the drafts were never committed. Say so and ask for the sentence
+  without it. Claims about COMMITTED history are different and are checkable:
+  `git show <rev>:docs/stage-f-tasks.json` settles them.
 - **Prefer an enumeration to a count** if the invocation offers you the choice:
   an enumeration fails visibly when it drifts, a count fails silently.
 

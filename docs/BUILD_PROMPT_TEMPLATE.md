@@ -106,6 +106,23 @@ C6b. NO UNEARNED PRECISION — in a notes field, a DEV entry, an ADR, or a
      and per a37eed3, which enumerates all three, "Every one sits in a sentence
      whose purpose was to establish that the checking was done".
 
+     NO DRAFTING HISTORY IN TRACKED FILES — this one is absolute, not
+     conditional on having run a command, because no command exists. A claim
+     about what an earlier DRAFT of a sentence said, how many times you
+     rewrote it, or what you fixed before committing cannot be checked by
+     anyone, ever: the drafts were never committed. Two such claims reached
+     file content on the branch that added this rule, and one of them named
+     the wrong commit — for an event that no committed version of the file
+     ever recorded.
+
+     The line between the two cases is git: COMMITTED history is fair game
+     ("the attribution stood until 8e735a8" is one command away). Uncommitted
+     drafting is not. If the lesson from a draft is worth keeping, state the
+     RULE it produced and drop the anecdote — "cite anchors, not line numbers,
+     in a file you are editing" needs no story to be useful. The anecdote
+     belongs in the commit message, where a reader knows they are reading an
+     account rather than a fact.
+
      INHERITED TEXT IS NOT VERIFIED TEXT. On PR #27 the trackEvent
      Axiom/pino mechanism and the "PR #25 was docs-only" claim both arrived
      from main (664d39e) and were rewritten AROUND without being re-read,
