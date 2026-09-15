@@ -329,11 +329,44 @@ function renderSummary(tasks: StageFTask[]): string {
 }
 
 /**
+ * Reject a header template that would corrupt the rendered document.
+ *
+ * Both of these were live holes before F.63's closeout review found them:
+ *
+ *  - A `Changelog` heading in the template renders straight through into
+ *    PROJECT_PLAN.md and `plan:check` reports "in sync", because the file DOES
+ *    equal the render. The section was deleted on Day 24 (DEV.110) and must
+ *    not return, so the ban is enforced at the source it could now come from.
+ *    Matches setext form too — `Changelog\n=====` is a heading in Markdown and
+ *    a regex anchored on `#` would miss it.
+ *  - A marker in the template puts TWO marker pairs in the output. Nothing
+ *    downstream notices while the file is in sync, and the next genuine drift
+ *    then aborts with "malformed markers" instead of anything useful.
+ */
+export function assertTemplateUsable(header: string): void {
+  if (/^#{1,6}\s+Changelog\b/m.test(header) || /^Changelog\s*\n[=-]{2,}\s*$/m.test(header)) {
+    throw new Error(
+      'REFUSING TO RENDER: the header template contains a Changelog heading. ' +
+        'That section was deleted on Day 24 (DEV.110) and must not return — ' +
+        'docs/stage-f-tasks.json already carries completedDate and notes per task.',
+    );
+  }
+  if (header.includes(MARKER_START) || header.includes(MARKER_END)) {
+    throw new Error(
+      'REFUSING TO RENDER: the header template contains a STAGE_F_TASKS marker. ' +
+        'The markers are emitted by the renderer; a second pair in the output makes ' +
+        'the task block unlocatable.',
+    );
+  }
+}
+
+/**
  * Render the entire document: committed header template, generated legend,
  * the marker-delimited task tables, and a generated summary. No part of the
  * output is authored in PROJECT_PLAN.md itself.
  */
 export function renderPlan(header: string, tasks: StageFTask[]): string {
+  assertTemplateUsable(header);
   return [
     '<!-- GENERATED FILE — DO NOT EDIT.',
     '     Every line of PROJECT_PLAN.md is rendered by scripts/sync-project-plan.ts',
@@ -401,6 +434,12 @@ export async function run(argv: string[]): Promise<RunResult> {
   // three from disagreeing: comparing a trimmed render against an on-disk file
   // that ends in a newline reports the trailing byte as prose drift.
   const next = `${(await formatBlock(renderPlan(header, tasks))).trimEnd()}\n`;
+  // findMarkers throws on a duplicated, orphaned or inverted pair. Calling it
+  // on the OUTPUT is what makes that guard cover the committed file: the
+  // comparison and write paths below never look at the markers themselves.
+  if (findMarkers(next) == null) {
+    throw new Error('REFUSING TO RENDER: the rendered document has no STAGE_F_TASKS markers.');
+  }
   const current = await readFile(PLAN_PATH, 'utf8').catch(() => '');
   const changed = next !== current;
 

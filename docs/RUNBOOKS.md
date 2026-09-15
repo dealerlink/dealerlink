@@ -1542,7 +1542,8 @@ instead of quietly deploying.
 If `verifier` returns FAIL or FAIL (incomplete), do not open or merge the PR.
 Nothing enforces this: there is no hook and no check that observes a subagent's
 verdict. It is a convention we keep because the verifier covers precisely the
-things CI cannot see — `plan:sync` idempotency, marker containment,
+things CI cannot see — `plan:sync` idempotency, PROJECT_PLAN.md being
+generated in full,
 `DEVIATIONS.md` being append-only, and both DO apps actually reaching ACTIVE.
 
 See `CLAUDE.md` §10 for the orchestration rules themselves: when the main thread

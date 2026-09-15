@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Runs the Dealerlink day-closeout checks that CI does NOT cover — plan:sync idempotency, PROJECT_PLAN.md marker containment with Stage A–E byte-identical, DEVIATIONS.md append-only, id integrity across DEV/ADR references, and DigitalOcean deploy phase for both apps — and returns PASS or FAIL with specifics. Invoke deliberately at the end of a build day, before opening or merging the PR. It is told nothing about what the day intended and must not be. It reports only; it never fixes, commits, merges or deploys.
+description: Runs the Dealerlink day-closeout checks that CI does NOT cover — plan:sync idempotency, PROJECT_PLAN.md being generated in full with no hand edits, DEVIATIONS.md append-only, id integrity across DEV/ADR references, and DigitalOcean deploy phase for both apps — and returns PASS or FAIL with specifics. Invoke deliberately at the end of a build day, before opening or merging the PR. It is told nothing about what the day intended and must not be. It reports only; it never fixes, commits, merges or deploys.
 tools: Bash, Read
 model: inherit
 ---
@@ -120,6 +120,24 @@ grep -o '^## DEV\.[0-9]*' DEVIATIONS.md | sort | uniq -d
 grep -o '^## ADR-[0-9]*'   DECISIONS.md  | sort | uniq -d
 node -e "const t=require('$PWD/docs/stage-f-tasks.json').tasks; const ids=t.map(x=>x.id); console.log(ids.filter((v,i)=>ids.indexOf(v)!==i))"
 ```
+
+**SEARCH INSTRUMENT — your verdicts are negative-existence claims, so this is
+not optional.** In a Claude Code session `grep` is a shell-function shim backed
+by ugrep, and on a file containing a NUL byte it exits 1 with NO OUTPUT: a
+silent false negative, indistinguishable in your report from a true absence
+(DEV.115, root-caused and corrected in DEV.117/DEV.118). No tracked TEXT file
+carries a NUL today — F.63 removed the last one — but binaries do, a future
+sentinel or fixture could reintroduce one, and this costs nothing when there is
+none.
+
+Prefer `git grep -n`, then `rg -na`, then `node -e`. Bare `grep` is
+CORROBORATION ONLY and never the sole basis for a negative; `grep -a` if you
+must. The duplicate-heading commands above use bare `grep -o` for a POSITIVE
+match on files known to be NUL-free, which is fine — but if one of them returns
+nothing where you expected a hit, re-run it with `git grep` before reporting an
+absence. The property is SESSION-SCOPED to the harness shim: `/usr/bin/grep`
+handles these files correctly and CI has no shim, so never report it as a repo
+defect, and do not conclude the warning is stale because GNU grep works.
 
 A duplicate INTRODUCED BY THIS BRANCH is a FAIL. `DEV.64` is duplicated on
 `main` already — a resolution that reused the id instead of taking a new one —

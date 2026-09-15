@@ -64,6 +64,12 @@ before it lands:
   "only reference", "declared in M files" is one `grep -c` or one `git grep`
   away. Run it. If it disagrees with the text, do NOT write the text — report
   the command, its output, and the discrepancy, and ask.
+- **Use `git grep`, not bare `grep`, when you check one.** In a Claude Code
+  session `grep` is a ugrep-backed shim that exits 1 with NO OUTPUT on a
+  NUL-bearing file — a silent false negative that would have you report a claim
+  as false when it is true (DEV.115, DEV.118). No tracked text file carries a
+  NUL since F.63, but the habit is the only thing that catches the next one.
+  Session-scoped: CI has no shim, so it is never a repo defect.
 - **Flag the ones you cannot check.** Claims about commit history, about how
   many versions of a note carried an error, or about how many assertions
   someone ran are not checkable from the JSON. List them in your report under
@@ -124,11 +130,13 @@ stamped 2026-09-09 by a session whose commits are all dated 2026-09-10.
 5. `git diff --stat` and `git diff docs/stage-f-tasks.json` — report both.
 
 If `plan:sync` refuses to run, do **not** work around it. Report the exact
-message. The three refusal modes are documented in `docs/RUNBOOKS.md`
-("Updating the Stage F task table"): malformed markers, a Stage F heading with
-no markers, and the byte-identity assertion tripping. The last one means the
-script would have changed content outside the markers — treat it as a bug in
-the script, never as something to route around by editing the markdown.
+message. The refusal modes are documented in `docs/RUNBOOKS.md`
+("Updating the Stage F task table"): malformed markers, and a Stage F heading
+with no markers. The third mode that runbook used to list — the byte-identity
+assertion tripping — **no longer exists**: F.37/F.63 made the whole file
+generated, so there is no content outside the markers to protect and the
+assertion was removed. If you ever see that message you are running an old copy
+of the script.
 
 ## Output format
 

@@ -4920,12 +4920,36 @@ than the old rule and, unlike it, satisfiable forever.
 1. The `Edit`/`Write` deny in `.claude/settings.json` is now unqualified and
    CORRECT. It previously forbade the only route to a legitimate change; there
    is now nothing it blocks that anyone should be doing.
-2. The `## Changelog` ban (DEV.110) closes structurally rather than by regex.
-   A generated file cannot acquire a section by hand, so the form-specificity
-   of `not.toMatch(/^##\s+Changelog\s*$/m)` — which would not have caught
-   `### Changelog` or `## Changelog — restored` — stops being load-bearing.
-   The guard now also covers the header template and
-   `docs/PROJECT_HISTORY.md`, which is where the residual risk moved.
+2. The `## Changelog` ban (DEV.110) closes for the HAND-EDIT route only, and
+   the closeout review caught an earlier draft of this entry overstating that
+   as "structurally". Being generated removes one route, not every route: a
+   `Changelog` heading placed in the header template rendered straight through
+   into `PROJECT_PLAN.md` and `plan:check` reported "in sync", because the file
+   genuinely did equal the render. So the ban is now enforced where it can
+   still be breached — `assertTemplateUsable()` in
+   `scripts/sync-project-plan.ts` refuses to render a template containing one,
+   in ATX or setext form, and the same function rejects a template that
+   smuggles in a `STAGE_F_TASKS` marker (which would put two pairs in the
+   output and make the task block unlocatable). The test suite asserts the ban
+   against all three surfaces: the plan, the template and
+   `docs/PROJECT_HISTORY.md`. The regex is exactly as load-bearing as it was
+   before; it is just better written and applied in more places.
+
+**WHAT THIS TRADE COSTS, recorded because the entry is otherwise one-sided.**
+The new rule is stronger where it is enforced and NARROWER in what it protects.
+Stronger: it is self-enforcing through `plan:check` in CI, total over the file,
+and satisfiable — where the old rule depended on a human reading a diff and
+could not be satisfied at all. Narrower: the substantive protection the old rule
+gave was that Stage 0 and Stages A–E could not be silently rewritten, and
+nothing inherits that. `docs/PROJECT_HISTORY.md` has no sync step, no deny rule
+and no append-only requirement, and the verifier is explicitly told not to
+report edits to it as containment failures. Ordinary review is most of the
+replacement. The rest is three assertions in
+`scripts/sync-project-plan.test.ts` — the six stage headings survive, the table
+rows do not fall below a floor, and every Stage B day still has a row — which
+turn a mass deletion or a silently emptied stage into a red `test` job rather
+than an unnoticed commit. That is weaker than byte-identity and it is the
+deliberate price of the rule becoming satisfiable.
 
 **Carried in with the migration, because porting them verbatim would have
 regenerated the defects:** `PROJECT_PLAN.md:3` carried a standing instruction
@@ -4941,11 +4965,15 @@ all.
 **Also closed here:** the NUL-byte sentinel in `outsideMarkers()` is now a
 printable token, which was F.65's remaining one-line fix (DEV.115, DEV.117,
 DEV.118). Plain `grep -c MARKER_START scripts/sync-project-plan.ts` returns 4
-with exit 0 where it used to exit 1 with no output. The three Bash-holding
-agents' search-instrument guidance was updated in the same change, because
-that file's NUL was its worked example and F.65 had predicted the exact
-consequence of fixing it silently: an agent that finds `grep` working would
-reasonably conclude the whole warning was stale.
+with exit 0 where it used to exit 1 with no output. All FIVE Bash-holding agents now
+carry search-instrument guidance — the three that already had it
+(`doc-auditor`, `ci-investigator`, `flake-triager`) were updated because that
+file's NUL was their worked example and F.65 predicted the exact consequence of
+fixing it silently: an agent that finds `grep` working would reasonably
+conclude the whole warning was stale. The other two, `verifier` and
+`plan-keeper`, had NONE and now do. That gap mattered most for `verifier`,
+whose entire output is negative-existence claims and whose own prompt tells it
+to run bare `grep -o` over `DEVIATIONS.md` and `DECISIONS.md`.
 
 **What this does NOT do.** It does not sanction a permitted-edit path for
 generated files — the operator rejected that explicitly, on the grounds that it

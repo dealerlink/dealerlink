@@ -133,7 +133,7 @@ C7. git switch -c day-<N>-<slug>
     git push -u origin day-<N>-<slug>
 C7a. RUN THE `verifier` SUBAGENT — BEFORE opening the PR, not after.
     It runs the closeout checks CI cannot see: plan:sync idempotency,
-    PROJECT_PLAN.md marker containment with Stage 0/A–E byte-identical,
+    PROJECT_PLAN.md being generated in full with no hand edits,
     DEVIATIONS.md append-only, and the DO deploy phase. Tell it nothing about
     what the day intended — it must not be given a reason to soften a finding.
 
@@ -187,9 +187,13 @@ Every Stage F day's close-out therefore does this instead of editing the table:
 ```
 
 `pnpm plan:check` runs inside `pnpm verify`, so a table that has drifted from
-the JSON fails the gate. The script writes only between
-`<!-- STAGE_F_TASKS:START -->` and `<!-- STAGE_F_TASKS:END -->` and asserts
-that everything outside those markers is byte-identical before writing.
+the JSON fails the gate. Since F.37/F.63 the script renders the WHOLE file —
+from `docs/stage-f-tasks.json` plus the committed header template
+`docs/project-plan-header.md` — so there is no hand-editable region left in it
+and no byte-identity assertion to trip. The markers survive inside the output
+to delimit the JSON-sourced half, so `plan:check` can name which source
+drifted. Stages 0–E moved to `docs/PROJECT_HISTORY.md`, which IS
+hand-maintained.
 
 Full workflow, failure modes and recovery: `docs/RUNBOOKS.md` — "Updating the
 Stage F task table".

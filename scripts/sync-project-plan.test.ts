@@ -29,6 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   BLOCK_SENTINEL,
+  assertTemplateUsable,
   MARKER_END,
   MARKER_START,
   findMarkers,
@@ -389,6 +390,64 @@ describe('docs/PROJECT_HISTORY.md — where the narrative went', () => {
 // heading. F.63's and F.65's notes did exactly that and turned the `test` job
 // red. What is banned is a Changelog SECTION — in Markdown, a heading at the
 // start of a line — so that, and only that, is what this matches.
+describe('template validation — the two holes generation opened', () => {
+  // Both were found by F.63's closeout review. Before the guard, a Changelog
+  // heading or a marker in the TEMPLATE rendered straight through and
+  // `plan:check` reported "in sync", because the file genuinely did equal the
+  // render. Being generated closes the hand-edit route, not every route.
+  it('refuses a template carrying a Changelog heading', () => {
+    expect(() => assertTemplateUsable(`${header}\n\n## Changelog\n`)).toThrow(/Changelog heading/);
+  });
+
+  it('refuses a SETEXT Changelog heading too', () => {
+    expect(() => assertTemplateUsable(`${header}\n\nChangelog\n=========\n`)).toThrow(
+      /Changelog heading/,
+    );
+  });
+
+  it('refuses a template that smuggles in a marker', () => {
+    expect(() => assertTemplateUsable(`${header}\n\n${MARKER_START}\n`)).toThrow(/marker/);
+    expect(() => assertTemplateUsable(`${header}\n\n${MARKER_END}\n`)).toThrow(/marker/);
+  });
+
+  it('accepts the committed template', () => {
+    expect(() => assertTemplateUsable(header)).not.toThrow();
+  });
+
+  it('renderPlan enforces it, so no caller can bypass the guard', () => {
+    expect(() => renderPlan(`${header}\n\n## Changelog\n`, tasks)).toThrow(/Changelog heading/);
+  });
+});
+
+describe('docs/PROJECT_HISTORY.md keeps its substance, not just its headings', () => {
+  // WHAT THIS IS FOR, stated because the trade is easy to miss: the old rule
+  // protected Stage 0/A-E by forbidding any change outside the markers. That
+  // protection is gone — the history file is hand-maintained, has no sync step
+  // and no deny rule, and the verifier is told not to treat edits to it as
+  // containment failures. Ordinary review is most of the replacement. These
+  // assertions are the rest: a mass deletion or a silently emptied stage table
+  // fails the `test` job rather than passing unnoticed.
+  it('still carries the bulk of its table rows', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    const rows = history.split('\n').filter((l) => /^\|/.test(l));
+    // 125 at the migration. A floor, not an equality — rows are expected to be
+    // added, and Stage E's remaining work will close over time.
+    expect(rows.length).toBeGreaterThanOrEqual(110);
+  });
+
+  it('still has a populated row for every Stage B build day', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    for (let day = 1; day <= 18; day++) {
+      expect(history).toMatch(new RegExp(`\\|\\s*B\\.${day}\\s*\\|`));
+    }
+  });
+
+  it('still records the pilot tenant by name', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    expect(history).toContain('UMA Trading Company');
+  });
+});
+
 describe('the Changelog section stays deleted (DEV.110)', () => {
   it('is absent from the generated plan', async () => {
     const plan = await readFile(REAL_PLAN, 'utf8');
