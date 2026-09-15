@@ -70,6 +70,38 @@ C6a. CONFIRM EVERY NEW ID IS FREE before writing it — DEV entries, ADRs,
      `## DEV.64` headings, and Day 27 nearly shipped a second `## ADR-014`
      because the highest-numbered ADR does not sit last in DECISIONS.md. The
      file is not sorted, and the tail is not the maximum.
+C6b. NO UNEARNED PRECISION — in a notes field, a DEV entry, an ADR, or a
+     commit message. Do not write a count, an "only"/"the only", a "first" or
+     "first N versions", a "same as"/"identical to"/"byte-identical", or any
+     version-history claim ("wrong in the first version", "three commits
+     rewrote this field") UNLESS the number or the exclusivity IS the point
+     AND you ran the command that produces it. When it is the point, name the
+     command in the text so the next reader can re-run it, and prefer an
+     ENUMERATION over a count: an enumeration fails visibly when it drifts,
+     a count fails silently.
+
+     THE TEST THAT SETTLES IT — delete the clause. If the sentence still means
+     what it meant, the clause was decoration. The operator's summary of the
+     nine verifier rounds on PR #27: "In all nine rounds, deleting the clause
+     left the sentence's meaning intact. A clause that cannot be load-bearing
+     can only be wrong."
+
+     WHY THIS IS A SEPARATE RULE from C6a rather than a note under it: it
+     targets the category that per-command discipline cannot reach. Claims
+     ABOUT THE REPO get checked because a command exists for them. Claims
+     ABOUT YOUR OWN WORK — how many commits touched a field, which version
+     first carried an error, how many assertions you ran before committing —
+     have no command unless you write one, and writing one feels like
+     ceremony. The operator's count of PR #27: "three failures were counts
+     about your own process, where no command exists unless you write one" —
+     two of them inside sentences whose purpose was to establish that the
+     checking had been done.
+
+     INHERITED TEXT IS NOT VERIFIED TEXT. On PR #27 the trackEvent
+     Axiom/pino mechanism and the "PR #25 was docs-only" claim both arrived
+     from main (664d39e) and were rewritten AROUND without being re-read,
+     because text already in the file reads as already-checked. If you are editing a paragraph, the claims you did not
+     write are now yours.
 C7. git switch -c day-<N>-<slug>
     git add -A && git commit -m "feat(<scope>): day N — <summary>"
     git push -u origin day-<N>-<slug>

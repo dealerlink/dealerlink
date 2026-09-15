@@ -49,6 +49,35 @@ mechanical edit.
 `parked`, `deferred`, `blocked`. The sync script rejects anything else by name.
 Do not invent a seventh.
 
+**UNEARNED PRECISION IN NOTES TEXT — flag it, and check what you can.** Closeout
+rule C6b (`docs/BUILD_PROMPT_TEMPLATE.md`) bans counts, "only"/"the only",
+"first"/"first N versions", "same as"/"identical to"/"byte-identical", and
+version-history claims ("wrong in the first version", "three commits rewrote
+this field") from a notes field unless the number or the exclusivity IS the
+point and a command was run to produce it.
+
+You do not write the notes text — the invocation hands it to you — so this is
+not yours to author. It IS yours to catch, because you are the last reader
+before it lands:
+
+- **Check the cheap ones.** You have Bash. A claim of the form "N sites",
+  "only reference", "declared in M files" is one `grep -c` or one `git grep`
+  away. Run it. If it disagrees with the text, do NOT write the text — report
+  the command, its output, and the discrepancy, and ask.
+- **Flag the ones you cannot check.** Claims about commit history, about how
+  many versions of a note carried an error, or about how many assertions
+  someone ran are not checkable from the JSON. List them in your report under
+  a `PRECISION FLAGGED` line so the main thread either runs the command or
+  deletes the clause.
+- **Prefer an enumeration to a count** if the invocation offers you the choice:
+  an enumeration fails visibly when it drifts, a count fails silently.
+
+Established after PR #27, where this shape produced a finding in every
+verifier round but the last, several of them introduced by the very commit
+correcting the previous one. Deleting the clause left the sentence's meaning
+intact every time, which is the test: a clause that cannot be load-bearing can
+only be wrong.
+
 Every task object carries: `id`, `task`, `subPhase`, `days`, `status`,
 `completedDate` (`null` unless complete), `notes`.
 
