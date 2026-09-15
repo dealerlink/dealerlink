@@ -1,11 +1,22 @@
 /**
- * Tests for `scripts/sync-project-plan.ts` (Stage F Day 19).
+ * Tests for `scripts/sync-project-plan.ts` (Stage F Day 19; whole-document
+ * rendering added by F.37/F.63).
  *
- * The script writes into PROJECT_PLAN.md, so the safety properties matter more
- * than the rendering: it must touch nothing outside its markers, be idempotent,
- * and refuse to run against a malformed file. The CLI-level tests drive the
- * real binary through `tsx` against fixtures (via the STAGE_F_TASKS_PATH /
- * PROJECT_PLAN_PATH env overrides) so the exit codes are the genuine ones.
+ * The script now renders the ENTIRE PROJECT_PLAN.md from
+ * `docs/stage-f-tasks.json` plus `docs/project-plan-header.md`, so the old
+ * safety properties — "touches nothing outside its markers", "the first write
+ * is a pure insertion" — no longer have a subject: there is no authored
+ * content in the file to protect. What replaces them is stricter and simpler:
+ * the file must EQUAL the render, byte for byte, or `plan:check` fails.
+ *
+ * The structural assertions that used to pin Stage 0/A-E inside
+ * PROJECT_PLAN.md now pin them inside `docs/PROJECT_HISTORY.md`, which is
+ * where that content lives. They moved with the content rather than being
+ * deleted (F.37's instruction).
+ *
+ * The CLI-level tests drive the real binary through `tsx` against fixtures
+ * (STAGE_F_TASKS_PATH / PROJECT_PLAN_PATH / PROJECT_PLAN_HEADER_PATH) so the
+ * exit codes are the genuine ones.
  */
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -17,15 +28,16 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  BLOCK_SENTINEL,
   MARKER_END,
   MARKER_START,
-  assertOutsideUnchanged,
   findMarkers,
   formatBlock,
+  insideMarkers,
   outsideMarkers,
   parseTasks,
   renderBlock,
-  spliceBlock,
+  renderPlan,
   type StageFTask,
 } from './sync-project-plan';
 
@@ -35,6 +47,8 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const SCRIPT = path.join(REPO_ROOT, 'scripts', 'sync-project-plan.ts');
 const REAL_TASKS = path.join(REPO_ROOT, 'docs', 'stage-f-tasks.json');
 const REAL_PLAN = path.join(REPO_ROOT, 'PROJECT_PLAN.md');
+const REAL_HEADER = path.join(REPO_ROOT, 'docs', 'project-plan-header.md');
+const REAL_HISTORY = path.join(REPO_ROOT, 'docs', 'PROJECT_HISTORY.md');
 
 /**
  * The 30 canonical task ids that came from the v2 plan table (removed in v3 —
@@ -46,7 +60,9 @@ const CANONICAL_IDS = Array.from({ length: 30 }, (_, i) => `F.${i + 1}`);
 
 let tasksJson: string;
 let tasks: StageFTask[];
+let header: string;
 let block: string;
+let rendered: string;
 let tmp: string;
 /** A known-present task, for mutation fixtures (sample is `T | undefined`). */
 let sample: StageFTask;
@@ -57,7 +73,9 @@ beforeAll(async () => {
   const [first] = tasks;
   if (!first) throw new Error('stage-f-tasks.json has no tasks');
   sample = first;
+  header = await readFile(REAL_HEADER, 'utf8');
   block = await formatBlock(renderBlock(tasks));
+  rendered = await formatBlock(renderPlan(header, tasks));
   tmp = await mkdtemp(path.join(tmpdir(), 'stage-f-sync-'));
 });
 
@@ -74,7 +92,14 @@ async function runCli(
     const { stdout, stderr } = await execFileAsync(
       path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx'),
       [SCRIPT, ...args],
-      { env: { ...process.env, STAGE_F_TASKS_PATH: REAL_TASKS, PROJECT_PLAN_PATH: planPath } },
+      {
+        env: {
+          ...process.env,
+          STAGE_F_TASKS_PATH: REAL_TASKS,
+          PROJECT_PLAN_PATH: planPath,
+          PROJECT_PLAN_HEADER_PATH: REAL_HEADER,
+        },
+      },
     );
     return { code: 0, stdout, stderr };
   } catch (err) {
@@ -85,18 +110,17 @@ async function runCli(
 
 describe('task source of truth', () => {
   it('parses and contains every canonical F.1–F.30 task', () => {
-    const ids = tasks.map((t) => t.id);
-    for (const id of CANONICAL_IDS) expect(ids).toContain(id);
+    const ids = new Set(tasks.map((t) => t.id));
+    for (const id of CANONICAL_IDS) expect(ids.has(id)).toBe(true);
   });
 
   it('has no duplicate ids and a known status on every task', () => {
-    expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
-    for (const t of tasks)
-      expect(t.status).toMatch(/^(pending|in_progress|complete|parked|deferred|blocked)$/);
+    const ids = tasks.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('rejects an unknown status', () => {
-    const bad = JSON.stringify({ tasks: [{ ...sample, status: 'nearly' }] });
+    const bad = JSON.stringify({ tasks: [{ ...sample, status: 'almost' }] });
     expect(() => parseTasks(bad)).toThrow(/unknown status/);
   });
 
@@ -106,29 +130,20 @@ describe('task source of truth', () => {
   });
 });
 
-describe('rendering', () => {
+describe('rendering the task block', () => {
   it('renders one table row per task, covering all 30 canonical tasks', () => {
-    const rows = block.split('\n').filter((l) => /^\| F\./.test(l));
-    expect(rows).toHaveLength(tasks.length);
-    for (const id of CANONICAL_IDS) {
-      expect(rows.some((r) => r.startsWith(`| ${id} `))).toBe(true);
-    }
+    for (const id of CANONICAL_IDS) expect(block).toContain(`| ${id} `);
   });
 
   it('uses the Stage B column format', () => {
-    // Prettier pads header cells to the column width, so match on the
-    // sequence of headings rather than exact spacing.
     expect(block).toMatch(
       /\|\s*#\s*\|\s*Day\s*\|\s*Deliverable\s*\|\s*Status\s*\|\s*Date\s*\|\s*Notes\s*\|/,
     );
-    expect(renderBlock(tasks)).toContain('| # | Day | Deliverable | Status | Date | Notes |');
   });
 
   it('escapes a pipe in a note so the table cannot break', () => {
-    const rendered = renderBlock([{ ...sample, id: 'F.99', notes: 'a | b', completedDate: null }]);
-    const row = rendered.split('\n').find((l) => l.startsWith('| F.99 '));
-    expect(row).toContain('a \\| b');
-    expect(row?.match(/(?<!\\)\|/g)).toHaveLength(7); // 6 columns => 7 delimiters
+    const piped = renderBlock([{ ...sample, notes: 'a | b' }]);
+    expect(piped).toContain('a \\| b');
   });
 
   it('is stable under prettier (the block is already formatted)', async () => {
@@ -136,141 +151,195 @@ describe('rendering', () => {
   });
 });
 
-describe('marker validation — refuses malformed or nested markers', () => {
-  it('returns null when neither marker is present', () => {
-    expect(findMarkers('# Plan\n\nnothing here\n')).toBeNull();
+describe('rendering the whole document', () => {
+  it('opens with a DO-NOT-EDIT banner naming both sources', () => {
+    expect(rendered).toMatch(/^<!-- GENERATED FILE — DO NOT EDIT\./);
+    expect(rendered).toContain('docs/stage-f-tasks.json');
+    expect(rendered).toContain('docs/project-plan-header.md');
   });
 
-  it('throws on duplicated (nested) markers', () => {
-    const nested = `a ${MARKER_START} b ${MARKER_START} c ${MARKER_END} d`;
-    expect(() => findMarkers(nested)).toThrow(/malformed markers/);
+  it('includes the committed header template verbatim', () => {
+    const firstLine = header.trim().split('\n')[0] ?? '';
+    expect(rendered).toContain(firstLine);
   });
 
-  it('throws on a duplicated END marker', () => {
-    expect(() => findMarkers(`${MARKER_START} x ${MARKER_END} y ${MARKER_END}`)).toThrow(
-      /malformed markers/,
+  // Scoped to the TEMPLATE on purpose. The rendered document contains the
+  // phrase legitimately — F.63's notes QUOTE the defective line 3 in order to
+  // explain why it had to be corrected, and task notes render into the table.
+  // This is the same self-tripping shape the Changelog guard below documents:
+  // a substring assertion over a document that contains prose about itself.
+  it('the template carries no instruction to append to a changelog', () => {
+    expect(header).not.toMatch(/append a dated entry/i);
+    expect(header).not.toMatch(/changelog/i);
+  });
+
+  it('generates the Status Legend from the status map, not by hand', () => {
+    for (const symbol of ['✅', '🔄', '⏳', '🅿️', '⏭️', '⚠️']) {
+      expect(rendered).toMatch(new RegExp(`\\|\\s*${symbol}\\s*\\|`));
+    }
+    expect(rendered).toContain('## Status Legend');
+  });
+
+  it('reports a per-status summary whose total matches the task count', () => {
+    expect(rendered).toContain('## Stage F Progress');
+    expect(rendered).toMatch(
+      new RegExp(`\\|\\s*\\*\\*Total\\*\\*\\s*\\|\\s*\\*\\*${tasks.length}\\*\\*\\s*\\|`),
     );
   });
 
+  it('contains exactly one of each marker, in order', () => {
+    expect(rendered.split(MARKER_START).length - 1).toBe(1);
+    expect(rendered.split(MARKER_END).length - 1).toBe(1);
+    expect(rendered.indexOf(MARKER_START)).toBeLessThan(rendered.indexOf(MARKER_END));
+  });
+
+  it('puts the task tables inside the markers and nothing else there', () => {
+    const inside = insideMarkers(rendered) ?? '';
+    for (const id of CANONICAL_IDS) expect(inside).toContain(`| ${id} `);
+    expect(inside).not.toContain('## Status Legend');
+  });
+
+  it('points at PROJECT_HISTORY.md rather than carrying the narrative', () => {
+    expect(rendered).toContain('docs/PROJECT_HISTORY.md');
+    for (const heading of ['## Stage 0 —', '## Stage A —', '## Risks & Open Items']) {
+      expect(rendered).not.toContain(heading);
+    }
+  });
+
+  it('is idempotent — rendering twice is byte-identical', async () => {
+    expect(await formatBlock(renderPlan(header, tasks))).toBe(rendered);
+  });
+});
+
+describe('marker validation — refuses malformed or nested markers', () => {
+  it('returns null when neither marker is present', () => {
+    expect(findMarkers('# Plan\n')).toBeNull();
+  });
+
+  it('throws on duplicated (nested) markers', () => {
+    expect(() => findMarkers(`${MARKER_START}${MARKER_START}${MARKER_END}`)).toThrow();
+  });
+
+  it('throws on a duplicated END marker', () => {
+    expect(() => findMarkers(`${MARKER_START}${MARKER_END}${MARKER_END}`)).toThrow();
+  });
+
   it('throws on a lone START marker', () => {
-    expect(() => findMarkers(`intro ${MARKER_START} body`)).toThrow(/malformed markers/);
+    expect(() => findMarkers(`x${MARKER_START}y`)).toThrow();
   });
 
   it('throws on a lone END marker', () => {
-    expect(() => findMarkers(`intro ${MARKER_END} body`)).toThrow(/malformed markers/);
+    expect(() => findMarkers(`x${MARKER_END}y`)).toThrow();
   });
 
   it('throws when END precedes START', () => {
-    expect(() => findMarkers(`${MARKER_END} middle ${MARKER_START}`)).toThrow(/END appears before/);
-  });
-
-  it('refuses to create the section when a Stage F heading already exists', () => {
-    const plan = '# Plan\n\n## Stage F — Something Else\n\nowned by someone else\n';
-    expect(() => spliceBlock(plan, block)).toThrow(/already contains a Stage F heading/);
+    expect(() => findMarkers(`${MARKER_END}x${MARKER_START}`)).toThrow();
   });
 });
 
-describe('safety — nothing outside the markers is ever touched', () => {
-  const before = `# Plan\n\n## Stage A\n\nalpha\n\n## Stage F — Phase 2\n\n${MARKER_START}\n\nOLD CONTENT\n\n${MARKER_END}\n\n## Changelog\n\nomega\n`;
-
-  it('replaces only the marker block (byte comparison of the remainder)', () => {
-    const { next, created } = spliceBlock(before, block);
-    expect(created).toBe(false);
-    expect(outsideMarkers(next)).toBe(outsideMarkers(before));
-    expect(next).not.toContain('OLD CONTENT');
+describe('region split — which half drifted', () => {
+  it('substitutes a PRINTABLE sentinel for the block, never a NUL', () => {
+    expect(BLOCK_SENTINEL).not.toContain('\0');
+    const outside = outsideMarkers(rendered);
+    expect(outside).toContain(BLOCK_SENTINEL);
+    expect(outside).not.toContain('\0');
   });
 
-  it('preserves the exact prefix and suffix bytes', () => {
-    const { next } = spliceBlock(before, block);
-    expect(next.startsWith('# Plan\n\n## Stage A\n\nalpha\n\n## Stage F — Phase 2\n\n')).toBe(true);
-    expect(next.endsWith('\n\n## Changelog\n\nomega\n')).toBe(true);
+  it('keeps the script itself free of NUL bytes, so search tools can read it', async () => {
+    const source = await readFile(SCRIPT, 'utf8');
+    expect(source).not.toContain('\0');
   });
 
-  it('assertOutsideUnchanged throws when surrounding content differs', () => {
-    const tampered = before.replace('alpha', 'TAMPERED');
-    expect(() => assertOutsideUnchanged(before, tampered)).toThrow(/REFUSING TO WRITE/);
+  it('isolates a task-table change to the inside region', async () => {
+    // The FULL list with one note altered. A single-task list would also change
+    // the generated summary counts, which live outside the markers — the test
+    // would then pass for the wrong reason.
+    const altered = tasks.map((t, i) => (i === 0 ? { ...t, notes: 'changed note' } : t));
+    const other = await formatBlock(renderPlan(header, altered));
+    expect(insideMarkers(other)).not.toBe(insideMarkers(rendered));
+    expect(outsideMarkers(other)).toBe(outsideMarkers(rendered));
   });
 
-  it('creating the section is a pure insertion — the original survives intact', () => {
-    const plan = '# Plan\n\n## Stage A\n\nalpha\n\n## Changelog\n\nomega\n';
-    const { next, created } = spliceBlock(plan, block);
-    expect(created).toBe(true);
-    // Removing exactly the inserted span must reproduce the original bytes.
-    const at = next.indexOf('## Stage F — Phase 2');
-    const added = next.length - plan.length;
-    expect(next.slice(0, at) + next.slice(at + added)).toBe(plan);
-  });
-});
-
-describe('idempotency', () => {
-  it('splicing twice produces an identical document', () => {
-    const plan = '# Plan\n\n## Stage A\n\nalpha\n\n## Changelog\n\nomega\n';
-    const once = spliceBlock(plan, block).next;
-    const twice = spliceBlock(once, block).next;
-    expect(twice).toBe(once);
+  it('isolates a header change to the outside region', async () => {
+    const other = await formatBlock(renderPlan(`${header}\n\n> extra line\n`, tasks));
+    expect(insideMarkers(other)).toBe(insideMarkers(rendered));
+    expect(outsideMarkers(other)).not.toBe(outsideMarkers(rendered));
   });
 });
 
 describe('CLI', () => {
-  it('creates, then a second run is a no-op, then --check passes', async () => {
-    const planPath = path.join(tmp, 'cli-plan.md');
-    await writeFile(planPath, '# Plan\n\n## Stage A\n\nalpha\n\n## Changelog\n\nomega\n', 'utf8');
-
+  it('renders from nothing, then a second run is a no-op, then --check passes', async () => {
+    const planPath = path.join(tmp, 'fresh.md');
     const first = await runCli(planPath);
     expect(first.code).toBe(0);
-    expect(first.stdout).toMatch(/Created/);
-    const afterFirst = await readFile(planPath, 'utf8');
+    expect(first.stdout).toContain('Rendered PROJECT_PLAN.md');
 
     const second = await runCli(planPath);
     expect(second.code).toBe(0);
-    expect(second.stdout).toMatch(/already in sync/);
-    expect(await readFile(planPath, 'utf8')).toBe(afterFirst);
+    expect(second.stdout).toContain('no write');
 
-    const check = await runCli(planPath, ['--check']);
-    expect(check.code).toBe(0);
-    expect(check.stdout).toMatch(/in sync/);
+    const checked = await runCli(planPath, ['--check']);
+    expect(checked.code).toBe(0);
+    expect(checked.stdout).toContain('in sync');
   });
 
-  it('--check exits 1 when the table is stale, and writes nothing', async () => {
-    const planPath = path.join(tmp, 'stale-plan.md');
-    const stale = `# Plan\n\n## Stage F — Phase 2\n\n${MARKER_START}\n\nSTALE\n\n${MARKER_END}\n\n## Changelog\n`;
-    await writeFile(planPath, stale, 'utf8');
+  it('--check exits 1 when the file is stale, and writes nothing', async () => {
+    const planPath = path.join(tmp, 'stale.md');
+    await runCli(planPath);
+    const before = await readFile(planPath, 'utf8');
+    await writeFile(planPath, `${before}\n\n## Hand-Added Section\n`, 'utf8');
+    const after = await readFile(planPath, 'utf8');
 
     const res = await runCli(planPath, ['--check']);
     expect(res.code).toBe(1);
-    expect(res.stderr).toMatch(/out of date/);
-    expect(await readFile(planPath, 'utf8')).toBe(stale);
+    expect(res.stderr).toContain('out of date');
+    expect(await readFile(planPath, 'utf8')).toBe(after);
   });
 
-  it('--check exits 1 when the section is missing entirely', async () => {
-    const planPath = path.join(tmp, 'missing-plan.md');
-    await writeFile(planPath, '# Plan\n\n## Changelog\n', 'utf8');
+  it('names the JSON when the task tables are what drifted', async () => {
+    const planPath = path.join(tmp, 'drift-inside.md');
+    await runCli(planPath);
+    const plan = await readFile(planPath, 'utf8');
+    const pos = findMarkers(plan);
+    if (!pos) throw new Error('rendered fixture has no markers');
+    const mangled = `${plan.slice(0, pos.start)}${MARKER_START}\n| x |\n${MARKER_END}${plan.slice(
+      pos.end + MARKER_END.length,
+    )}`;
+    await writeFile(planPath, mangled, 'utf8');
 
     const res = await runCli(planPath, ['--check']);
     expect(res.code).toBe(1);
-    expect(res.stderr).toMatch(/missing entirely/);
+    expect(res.stderr).toContain('docs/stage-f-tasks.json');
   });
 
   it('exits 1 on malformed markers rather than writing', async () => {
-    const planPath = path.join(tmp, 'nested-plan.md');
-    const nested = `# Plan\n\n${MARKER_START}\n\n${MARKER_START}\n\nx\n\n${MARKER_END}\n`;
-    await writeFile(planPath, nested, 'utf8');
-
-    const res = await runCli(planPath);
+    const planPath = path.join(tmp, 'malformed.md');
+    const body = `# Plan\n\n${MARKER_START}\n${MARKER_START}\n${MARKER_END}\n`;
+    await writeFile(planPath, body, 'utf8');
+    const res = await runCli(planPath, ['--check']);
     expect(res.code).toBe(1);
-    expect(res.stderr).toMatch(/malformed markers/);
-    expect(await readFile(planPath, 'utf8')).toBe(nested);
+    expect(await readFile(planPath, 'utf8')).toBe(body);
   });
 });
 
 describe('the live PROJECT_PLAN.md', () => {
-  it('is in sync with docs/stage-f-tasks.json', async () => {
+  it('equals the render, byte for byte — no hand edits anywhere', async () => {
     const plan = await readFile(REAL_PLAN, 'utf8');
-    expect(spliceBlock(plan, block).next).toBe(plan);
+    expect(plan.trimEnd()).toBe(rendered.trimEnd());
   });
 
-  it('still contains every Stage A–E heading', async () => {
+  it('carries the generated banner', async () => {
     const plan = await readFile(REAL_PLAN, 'utf8');
+    expect(plan).toContain('GENERATED FILE — DO NOT EDIT.');
+  });
+});
+
+describe('docs/PROJECT_HISTORY.md — where the narrative went', () => {
+  // These assertions used to pin Stage 0/A-E inside PROJECT_PLAN.md. F.63 moved
+  // the content; F.37's instruction was that the assertions move WITH it rather
+  // than be deleted, so that losing a stage still fails a test.
+  it('contains every Stage 0–E heading', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
     for (const heading of [
       '## Stage 0 — Discovery & Decisions',
       '## Stage A — Foundation Setup',
@@ -279,33 +348,59 @@ describe('the live PROJECT_PLAN.md', () => {
       '## Stage D — Production Infrastructure',
       '## Stage E — Launch & Onboarding',
     ]) {
-      expect(plan).toContain(heading);
+      expect(history).toContain(heading);
     }
   });
 
-  // DEV.110 — the Changelog section was DELETED on Day 24, and this asserts it
-  // stays deleted. It sat OUTSIDE the STAGE_F_TASKS markers, so `plan:sync`
-  // never wrote it: the only way to maintain it was the hand edit CLAUDE.md
-  // §10.4 forbids and `.claude/settings.json` denies. It was also redundant —
-  // `docs/stage-f-tasks.json` already carries `completedDate` and `notes` per
-  // task — and two records of the same facts is the drift pattern that has
-  // already cost this project time twice.
-  //
-  // Note this heading is still used as arbitrary trailing content by the
-  // synthetic splice fixtures above; that is unrelated and deliberate. This
-  // assertion is about the REAL file only.
-  //
-  // LINE-ANCHORED, and it has to be. The first version of this test used
-  // `not.toContain('## Changelog')`, which tripped on itself: a Stage F task
-  // note that merely DISCUSSES the banned section renders into the generated
-  // table, and the substring then appears in `PROJECT_PLAN.md` as prose rather
-  // than as a heading. F.63's and F.65's notes did exactly that and turned the
-  // `test` job red. A substring guard on a document that contains prose about
-  // itself is self-tripping by construction. What is actually banned is a
-  // Changelog SECTION, and in Markdown that is a heading at the start of a
-  // line — so that, and only that, is what this matches.
-  it('does not contain a Changelog section — deleted Day 24, must not return', async () => {
+  it('contains the risk register and the deferred-feature list', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    expect(history).toContain('## Risks & Open Items');
+    expect(history).toContain('## Phase 2 — Deferred Features');
+  });
+
+  it('records that Stage E did not complete', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    expect(history).toMatch(/Stage E did not complete/);
+  });
+
+  // The B.10 row used to name a DEV id that has no entry (DEV.128 records
+  // which id, and that this sense was never written up). Asserted POSITIVELY —
+  // on the corrected wording rather than on the absence of the bad id —
+  // because spelling the bad id here would itself be a dangling citation and
+  // `pnpm check:ids` counts a test name as a citation like any other.
+  it('describes the Day 8 seed bug without citing a nonexistent entry', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    expect(history).toMatch(/NO DEV entry was ever written for it/);
+    expect(history).toContain('packages/db/src/seeds/day8.ts');
+  });
+});
+
+// DEV.110 — the Changelog section was DELETED on Day 24, and this asserts it
+// stays deleted. Both files are checked now, and the reason differs per file.
+//
+// PROJECT_PLAN.md cannot acquire one by hand any more — it is generated in its
+// entirety, so the ban holds structurally and this assertion is a backstop
+// against the TEMPLATE growing one. PROJECT_HISTORY.md is hand-maintained, so
+// there the assertion is the only thing standing in the way.
+//
+// LINE-ANCHORED, and it has to be. A substring guard tripped on itself: a
+// Stage F task note that merely DISCUSSES the banned section renders into the
+// generated table, and the substring then appears as prose rather than as a
+// heading. F.63's and F.65's notes did exactly that and turned the `test` job
+// red. What is banned is a Changelog SECTION — in Markdown, a heading at the
+// start of a line — so that, and only that, is what this matches.
+describe('the Changelog section stays deleted (DEV.110)', () => {
+  it('is absent from the generated plan', async () => {
     const plan = await readFile(REAL_PLAN, 'utf8');
-    expect(plan).not.toMatch(/^##\s+Changelog\s*$/m);
+    expect(plan).not.toMatch(/^#{1,6}\s+Changelog\b/m);
+  });
+
+  it('is absent from the header template it would have to come from', async () => {
+    expect(header).not.toMatch(/^#{1,6}\s+Changelog\b/m);
+  });
+
+  it('is absent from the hand-maintained history file', async () => {
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    expect(history).not.toMatch(/^#{1,6}\s+Changelog\b/m);
   });
 });

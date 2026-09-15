@@ -1,18 +1,34 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+     Every line of PROJECT_PLAN.md is rendered by scripts/sync-project-plan.ts
+     from docs/stage-f-tasks.json and docs/project-plan-header.md.
+     Edit those, then run `pnpm plan:sync`. Hand edits are overwritten and
+     fail `pnpm plan:check` in CI. Stages 0-E live in docs/PROJECT_HISTORY.md. -->
+
 # PROJECT_PLAN.md — Dealerlink Phase 1 Tracker
 
-> **Purpose:** Single source-of-truth checklist for the entire Phase 1 journey, from discovery to live tenants. Update statuses as work progresses. Append a dated entry to the changelog at the bottom every time you mark something done.
+> **Purpose:** Forward-looking tracker for Stage F (Phase 2) work. To change
+> anything on this page, edit `docs/stage-f-tasks.json` and run
+> `pnpm plan:sync`. Do not edit `PROJECT_PLAN.md` — every line of it, this
+> sentence included, is generated.
 >
 > **How to use:**
 >
-> - Tick boxes as you complete each task
-> - Move parked items to "In progress" when you unpark them
-> - Don't delete completed items — they're the project's audit trail
-> - When all of a stage's items are ✅, the stage is done
+> - Mark a task done by setting its `status` and `completedDate` in the JSON
+> - Add a task by appending a new id — ids are permanent cross-references, so
+>   never renumber, reuse or delete one
+> - Re-sequence by editing a task's `days` field, not its position or id
+> - Don't delete completed tasks — they are the project's audit trail
+>
+> **Closed history lives elsewhere:** Stage 0, Stages A–E, the deferred-feature
+> list, the critical path and the risk register are in
+> `docs/PROJECT_HISTORY.md`, which is hand-maintained and edited normally.
 >
 > **Companion files:**
 >
+> - `docs/PROJECT_HISTORY.md` — Stages 0–E, risks, deferred features
 > - `CLAUDE.md` — implementation guide for Claude Code
 > - `DECISIONS.md` — architecture decision records
+> - `DEVIATIONS.md` — every deviation from spec, append-only
 > - `docs/dealerlink-architecture-v4.html` — visual architecture
 > - `docs/Dealerlink Detailed BRD v1.0.docx` — business requirements
 
@@ -25,233 +41,15 @@
 | ✅     | Done                                            |
 | 🔄     | In progress                                     |
 | ⏳     | Not started                                     |
-| 🅿️     | Parked (will resume later in Phase 1)           |
-| ⏭️     | Deferred to Phase 2                             |
+| 🅿️     | Parked (will resume later)                      |
+| ⏭️     | Deferred to a later phase                       |
 | ⚠️     | Blocked (needs decision or external dependency) |
-
----
-
-## Stage 0 — Discovery & Decisions
-
-| #   | Task                                                                                              | Status | Date | Notes                                                      |
-| --- | ------------------------------------------------------------------------------------------------- | ------ | ---- | ---------------------------------------------------------- |
-| 0.1 | BRD authored (12 modules, GST logic, pipeline stages)                                             | ✅     |      |                                                            |
-| 0.2 | Visual design prototype created (12 screens)                                                      | ✅     |      | Distribyte.html + screens-extra.jsx                        |
-| 0.3 | Tech stack evaluated and locked                                                                   | ✅     |      | Next.js + Postgres + Drizzle + Lucia + pg-boss + Puppeteer |
-| 0.4 | Architecture diagram created (v4 with observability + audit)                                      | ✅     |      | dealerlink-architecture-v4.html                            |
-| 0.5 | 7 platform decisions resolved and logged in DECISIONS.md                                          | ✅     |      | All defaults accepted                                      |
-| 0.6 | Brand naming locked: Dealerlink (dealerlink.in)                                                   | ✅     |      | ADR-008                                                    |
-| 0.7 | CLAUDE.md implementation guide finalized (10 sections; 10 deep-dive docs in `docs/` after DEV.28) | ✅     |      | Includes engineering standards                             |
-| 0.8 | Engineering standards & Definition of Done documented                                             | ✅     |      | `docs/STANDARDS.md` (moved out of CLAUDE.md in DEV.28)     |
-
-**Stage 0 status: ✅ Complete (8/8)**
-
----
-
-## Stage A — Foundation Setup
-
-| #    | Task                                                | Status | Date       | Notes                                                                                              |
-| ---- | --------------------------------------------------- | ------ | ---------- | -------------------------------------------------------------------------------------------------- |
-| A.1  | GitHub repo `dealerlink` created (private)          | ✅     |            |                                                                                                    |
-| A.2  | Local dev environment configured                    | ✅     |            | Node 20, pnpm, Docker, Postgres 16                                                                 |
-| A.3  | Repo scaffolded with starter files                  | ✅     |            | .gitignore, docker-compose.yml, .env.example, README.md                                            |
-| A.4  | Documentation placed in /docs and CLAUDE.md at root | ✅     |            |                                                                                                    |
-| A.5  | Local Postgres running with extensions              | ✅     |            | uuid-ossp, pg_trgm, btree_gin                                                                      |
-| A.6  | Initial commit pushed to GitHub                     | ✅     |            |                                                                                                    |
-| A.7  | Resend account + API key configured                 | ✅     |            | RESEND_API_KEY in .env.local                                                                       |
-| A.8  | Sentry account + DSN configured                     | ✅     |            | dealerlink-web + dealerlink-workers projects                                                       |
-| A.9  | .env.local populated with core secrets              | ✅     |            | SESSION_SECRET, RESEND_API_KEY, SENTRY_DSN                                                         |
-| A.10 | RESEND_INBOUND_WEBHOOK_SECRET configured            | ✅     | 2026-05-16 | ✅ closed by Day 14 — generated, in `.env.local` + documented in `SETUP.md`; inbound webhook wired |
-
-**Stage A status: ✅ Complete (10/10)**
-
----
-
-## Stage B — The 3.5-Week Build
-
-### Week 1 — Foundation (Days 1–5)
-
-| #   | Day   | Deliverable                                                                 | Status | Date       | Notes                                                                                                                                                                                                                           |
-| --- | ----- | --------------------------------------------------------------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| B.1 | Day 1 | Repo scaffold, design tokens, fonts, base layout (Sidebar + Topbar + Shell) | ✅     | 2026-05-10 | 63 files, commit d364ad7. Two follow-ups carried to Day 2 (R.5, R.6)                                                                                                                                                            |
-| B.2 | Day 2 | Drizzle schema (tenant, user, role) + Lucia auth + login screen             | ✅     | 2026-05-11 | Initial commit included Lucia snake_case bug; fixed in 81613de with full audit. 4 similar latent bugs caught and fixed. Prop types widened at boundary.                                                                         |
-| B.3 | Day 3 | RLS policies, tenant middleware, audit log triggers, seed scripts           | ✅     | 2026-05-11 | 45 tests passing across 8 tables. Operator impersonation with read-only enforcement. 4 documented deviations, all justified. R.8 closed via ADR-009.                                                                            |     |
-| B.4 | Day 4 | Tenant provisioning admin app (admin.dealerlink.in route group)             | ✅     | 2026-05-11 | 75 tests, 6 runbooks, cascade-delete audit bug fixed. 4 documented deviations, all tracked. Commit 62c568b.                                                                                                                     |     |
-| B.5 | Day 5 | Dealer Master CRUD + Product Catalog + Inventory schema                     | ✅     | 2026-05-11 | 112 tests, 37 new. 40 seed rows per tenant. 5 deviations tracked as R.16-R.18. tRPC replaced by Server Components pattern (CLAUDE.md §3 needs update). 5 lint errors caught by pre-commit revealed R.5 only partially resolved. |     |
-
-### Week 2 — Core Operations (Days 6–10)
-
-| #    | Day    | Deliverable                                                  | Status | Date       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ---- | ------ | ------------------------------------------------------------ | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| B.6  | Day 6  | Inventory bulk procurement, serial entry, status transitions | ✅     | 2026-05-11 | 131 tests (19 new). Procurement workflow + state machine + 500 seeded items. Daily automation kit established (preflight, Playwright verify, BUILD_PROMPT_TEMPLATE.md, DEVIATIONS.md). R.5 + R.18 closed; R.16 stays open (DEV.22).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| B.7  | Day 7  | Sales Pipeline 9-stage kanban with dnd-kit                   | ✅     | 2026-05-12 | 165 tests (34 new: 25 db deals, 4 client stage-meta parity, 5 verify-day-7). 60 deals seeded (30/tenant) across all 9 stages. State machine with row-locked transitions, high-risk guard with admin-override modal, deal detail + create + dashboard KPIs/funnel. DEV.27 captures the API stream timeout recovery; future complex UI days chunk components per the new rule.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| B.8  | Day 8  | Quotation Builder UI + line items                            | ✅     | 2026-05-15 | 185 tests (20 new: 13 db quotation, 11 web preview, 5 verify-day-8 — net new after recount). Builder UI split across 5 components <250 LOC each per Day 7 lesson. `computeQuotationTotals` is the shared source of truth between client preview and server-side persistence — Day 9 will replace it with `packages/tax`. Revision chain via `parent_quotation_id` self-FK, live inter-state badge, deal auto-advance on send. 15+2 quotations seeded per tenant covering all statuses, mixed GST rates, both discount kinds, and one Rev 1→Rev 3 chain.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| B.9  | Day 9  | GST tax engine in packages/tax/ + live preview integration   | ✅     | 2026-05-15 | `@dealerlink/tax` is now the authoritative GST engine — pure library, decimal.js only, no I/O/framework deps. `computeTax` does line-level rounding (per-line subtotal + per-line CGST/SGST/IGST rounded to 2dp, document totals are sums of rounded line values), proportional pre-tax discount allocation, full input validation with stable `TaxComputationError` codes. 51 engine tests across 9 suites. Preview helper + `computeTotalsForPersistence` redirected to the engine via thin adapters; `preview.test.ts` (11 tests) passes unchanged as the parity proof. New `quotation-engine-parity.test.ts` re-derives every seeded `QT-` quotation's totals and matches stored values exactly. Parity run surfaced DEV.35 (a Day 8 seed revision-chain bug — discount metadata dropped, since fixed + re-seeded) and DEV.34 (engine state compare is case-sensitive by design). All gates green: typecheck, lint, test (218 total), verify 21/21, build.                                                                                                                                                     |
-| B.10 | Day 10 | PDF rendering pipeline + Puppeteer worker setup              | ✅     | 2026-05-15 | Quotation PDF end to end. `apps/workers/src/pdf` — lazy Chromium singleton (idle/100-page/crash recycle; `@sparticuz/chromium` in prod, system Chrome dev fallback), pure `renderPdfFromHtml`. React-on-the-server quotation template (typed props, no `any`; Header/PartyBlock/LineItemsTable/TaxSummary/Footer reused by Day 11 invoice), inline A4 print CSS, Indian amount-in-words + money formatting. Per-line GST recomputed via `@dealerlink/tax` (parity-safe). Immutable `generated_documents` store (RLS + audit; inline base64 per DEV.16). Web actions generate/download/email; render runs as a spawned workers subprocess (DEV.36 — Puppeteer never enters the web build; pg-boss path written for Day 14). DEV.37 (page-number footer via Chromium footerTemplate), DEV.38 (Day 8 seed cross-tenant dealer bug — unqualified RLS-bypassed selects — found by Day 10 render + fixed). 28 new tests (13 amount-in-words, 8 template, 1 render smoke, 3 verify-day-10, +3 prior recount). All gates green: typecheck, lint, test, verify 24/24, build. Sample at `docs/samples/quotation-sample.pdf`. |
-
-### Week 3 — Order Lifecycle (Days 11–15)
-
-| #    | Day    | Deliverable                                                                        | Status | Date       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---- | ------ | ---------------------------------------------------------------------------------- | ------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B.11 | Day 11 | PI generation + Order creation from accepted quote                                 | ✅     | 2026-05-16 | Performa Invoice + Order lifecycle end to end. New `performa_invoices`/`orders` (+ lines + status-history) tables with RLS, audit triggers, explicit transition state machines (`pi/transitions.ts`, `orders/transitions.ts`). PI confirmation is one atomic transaction: confirm PI → spawn Order → copy lines → advance deal `po_pending → payment_pending`. Order confirmation reserves serialised inventory FIFO under `SELECT FOR UPDATE`, all-or-nothing with a structured `InsufficientInventoryError` (per-product shortages). **ADR-012**: place of supply corrected to follow Ship-To (IGST Act §10), not Bill-To — CLAUDE.md §5 rewritten (DEV.39); convert-to-PI flow shows a tax-change banner when Ship-To flips IGST↔CGST/SGST. PI list/detail/convert/edit UI + PI PDF (reuses the Day 10 template via a generalised Header; new `performa_invoice` doc type). Order list/detail (tabbed: overview, lines, reservations, history) + confirm-order modal with reservation preview. 10 PIs/tenant seeded (incl. 2 three-party, ≥1 cross-state) + orders + reservations. 19 new db tests (orders.test.ts) + verify-day-11 (3 specs). DEV.40 (draft-PI edit is header-only; lines inherited). All gates green: typecheck, lint, test (150 db), verify 27/27, build.                                                                                                         |
-| B.12 | Day 12 | Payment tracking + status transitions                                              | ✅     | 2026-05-16 | Payment recording, allocation, receipts. New `payments`/`payment_allocations` tables (RLS, audit triggers, `payment` document counter). Payment state machine (`payments/transitions.ts`): `pending_verification → verified → cleared → refunded`, `verified → bounced`. Pure `deriveOrderPaymentStatus` + `recomputeOrderPaymentStatus` propagate an order's `paymentStatus` (`unpaid`/`partially_paid`/`paid`) from verified/cleared allocations. Server actions (admin + accounts; refund admin-only) — record, verify, clear, bounce, refund, allocate, deallocate, applyAdvancePayment — all atomic with `SELECT FOR UPDATE` on the payment + affected orders. Bounce/refund reverse allocations and regress order status. Funds-received-then-confirm: a fully-paid pending order auto-reserves + confirms. Day 11 `confirmPi` extended to transfer PI advances onto the spawned order. Payment list/detail/record UI + order **Payments** tab + dashboard widgets (overdue, recent, unallocated). Tax-neutral receipt PDF (`payment-receipt.tsx`, reuses Day 10 Header/PartyBlock/Footer). Overdue tracking via dealer credit period. 15 payments/tenant + 11 orders seeded. 17 new db tests (payments) + 8 propagation + 6 receipt-template + verify-day-12 (4 specs). All gates green: typecheck, lint, test (156 db), verify 31/31, build.                                    |
-|      |
-| B.13 | Day 13 | Dispatch flow (pick serials, generate LR, tax invoice)                             | ✅     | 2026-05-16 | Dispatch — physical fulfilment. New dispatches / dispatch_lines / dispatch_serials tables (RLS, audit triggers, dispatch document counter); dispatch_serials UNIQUE (tenant_id, inventory_item_id) guarantees a serial is dispatched at most once. Dispatch state machine (dispatch/lifecycle.ts): in_transit → delivered/returned. Inventory transitions extended (dispatchItem/deliverItem/returnItem); order transitions wired for dispatch states + pure deriveOrderFulfillmentStatus. createDispatchDb is atomic — locks the order then every serial FOR UPDATE, validates reserved/owned/product, inserts the dispatch, transitions serials, bumps dispatchedQuantity, recomputes order status, closes a fully-dispatched deal. The mandatory concurrent-dispatch test proves the loser fails SERIAL_ALREADY_DISPATCHED. Server actions: createDispatch (admin+dispatch), markDispatchDelivered (admin+dispatch), returnDispatch (admin-only). Dispatch list/create/detail UI + order Dispatches tab + 3 dashboard widgets. Tax-neutral dispatch-note PDF (dispatch-note.tsx + new SerialsTable, reuses Day 10 Header/PartyBlock/Footer) addressed to the Ship-To consignee. 8 dispatches/tenant seeded (3 delivered, 1 returned, 4 in-transit incl. 2 partial). 13 new db tests + verify-day-13 (5 specs). All gates green: typecheck, lint, test (169 db), verify 36/36, build. |
-| B.14 | Day 14 | Email log + Resend integration (outbound + inbound webhooks)                       | ✅     | 2026-05-16 | Async email end to end. Outbound: web `queueEmail` writes a `queued` email_delivery_log row + enqueues a pg-boss `send-email` job; the workers Resend client sends it (classified EmailSendError — rate-limit retried 5×, permanent fails stop), attaches PDFs from generated_documents, flips the row sent/failed, drops the body from meta (R.3). Inline Day-4 send removed (R.13 closed). Inbound: public `/api/webhooks/resend` route, Svix signature verification IS the auth boundary; new `webhook_events` forensic table (no tenant_id, RLS off, unique-on-event-id replay guard); delivered/bounced/opened/clicked/complained events update email_delivery_log. New daily crons: validity-expiry (sent quotations/PIs past valid_until → expired, 02:00 IST) + pdf-cleanup (inline PDFs >30d purged, 03:00 IST). RESEND_INBOUND_WEBHOOK_SECRET generated (A.10 closed). DEV.47 (email log self-auditing — no audit trigger), DEV.48 (webhook processing in web). 21 new tests (8 email handler, 9 webhook, 4 maintenance); verify 37/37. All gates green.                                                                                                                                                                                                                                                                                                                      |
-| B.15 | Day 15 | Reports (Sales Summary, Outstanding Receivables, Inventory Valuation, GST Summary) | ✅     | 2026-05-16 | Reports module — read-only. Report query layer (apps/web/lib/reports): pure typed functions returning ReportResult { columns, rows, totals, metadata } driving both the UI table and CSV. 4 reports: Sales Summary (quotations+PIs+orders by month/dealer/product), Outstanding Receivables (orders aged 0-30/31-60/61-90/91+ by dealer/bucket), Inventory Valuation (in-stock at last procurement cost), GST Summary (CGST/SGST/IGST on supplied orders by place of supply). Money READ from stored columns — never recomputed (CLAUDE.md §6); a GST parity test asserts report totals == a direct SUM over orders. CSV export: pure reportToCsv (Indian money, ISO dates, RFC-4180 quoting, UTF-8 BOM); exportReportCsv server action runs query+serialise server-side. Role-gated: admin/accounts all 4, sales 2, dispatch 1 — assertReportAccess (404) + canAccessReport. Dashboard ReportWidgets (top dealer, tax payable, slow-moving). DEV.49 (plain tables not TanStack — aggregates ≤36 rows), DEV.50 (dealer select not typeahead). 21 report tests; verify-day-15 (5 specs). All gates green.                                                                                                                                                                                                                                                                                |
-
-### Half Week 4 — Polish (Days 16–18)
-
-| #    | Day    | Deliverable                                                         | Status | Date       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ---- | ------ | ------------------------------------------------------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| B.16 | Day 16 | Polish pass — empty/loading/error states, accessibility, micro-copy | ✅     | 2026-05-16 | Polish pass (Settings module deferred). Shared state components (app/\_components): EmptyState (no-data vs filtered-out copy), LoadingSkeleton + ListLoading (table-shaped, no layout shift), ErrorState (friendly, no internals leaked). app/(app)/error.tsx page boundary + reportError shim (Day-17 Sentry hook). loading.tsx for 8 list routes; EmptyState retrofitted across every list page. Accessibility: skip-to-content link + &lt;main&gt; landmark, focus rings, axe gate (0 serious/critical, WCAG 2 A+AA) on dashboard/dealers list+detail/quotation builder/order detail — fixed icon-link/select/textarea labels, --mute darkened for 4.5:1 contrast. Branded not-found.tsx, per-page document titles (%s · Dealerlink template), favicon + apple icon. DEV.51 (axe as the a11y gate, not Lighthouse CLI). 7 component tests; verify-day-16 (8 specs). All gates green.                                                                                                                                                                                                                                                                                              |
-| B.17 | Day 17 | Observability wiring (Sentry, Better Stack /health, Axiom)          | ✅     | 2026-05-16 | Observability stack — additive, audit*log untouched. Sentry: @sentry/nextjs (browser/server/edge) + @sentry/node (workers), graceful no-op without a DSN; `beforeSend` PII scrubber (email→hash, phone/GSTIN/PAN/card runs); scope enrichment (tenant/user/route) wired into auth session + tenantAction; reportError shim now routes to captureException; per-job capture in workers; operator-only `/api/internal/sentry-test`. Better Stack: pino logger per process (pino-pretty in dev, @logtail/pino in prod when configured), AsyncLocalStorage request context (tenantId/userId/requestId/role) propagated across awaits + injected on every line; all non-test console.* migrated to logger.\_. Axiom: closed typed event taxonomy (23 events — compile error on unknown name), fire-and-forget trackEvent with standard props auto-attached, wired at login/quotation/order/dispatch/email points. `/health` enriched — db/migrations/auditTrigger/rls/resend/queue component checks, ok/degraded/down aggregation (200/200/503). DEV.52–55. 33 new tests (PII scrubber 10, scope 5, capture 1, ALS 6, logger 4, events 7) + verify-day-17; verify 51/51. All gates green. |
-| B.18 | Day 18 | E2E tests for primary workflows + Stage B close-out                 | ✅     | 2026-05-16 | Stage B close-out. New `critical-path.spec.ts` — one 27-step E2E driving the whole distributor workflow across all 4 roles; caught + fixed two latent bugs (DEV.56). New `operator-onboarding.spec.ts` closes **R.12**. `docs/USER_MANUAL.md` + `docs/STAGE_C_HANDOFF.md` added. All gates green: typecheck, lint, test (405), verify 53/53, build. Tagged `stage-b-complete`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-
-**Stage B status: ✅ COMPLETE (18/18) — closed 2026-05-16**
-
-### Stage B summary
-
-- **18 of 18 build days delivered, all on time** (Day 1 2026-05-10 → Day 18 2026-05-16).
-- **12 ADRs** locked (ADR-001 … ADR-012, `DECISIONS.md`).
-- **56 documented deviations** (`DEVIATIONS.md`); the carried-forward subset
-  is distilled in `docs/STAGE_C_HANDOFF.md` §3.
-- **Final Stage B numbers:** 405 unit/integration tests passing
-  (schemas 20 · tax 51 · db 169 · workers 40 · web 125) + 53/53 Playwright
-  verify specs. Build, typecheck and lint gates all green.
-- **Commit range:** `d364ad7` (Day 1 scaffold) → `stage-b-complete` tag.
-- Every Phase-1 module is feature-complete and exercised end to end by the
-  Day-18 critical-path E2E. Stage C (Internal Validation) starts next.
-- Open `R.x` items at Stage B exit (R.14, R.16, R.17 — and the new DEV.56
-  carried-forward items) are non-blocking and escalated to the Stage C
-  handoff backlog (`docs/STAGE_C_HANDOFF.md` §3).
-
----
-
-## Stage C — Internal Validation (Week 5)
-
-> **Note (2026-05-23):** the Stage C day sequence was reorganized when staging
-> was brought up early as C.0 and two debt-closure days (force-password-change,
-> state normalization) were inserted ahead of the validation walkthroughs. The
-> table below matches the canonical living tracker in `docs/STAGE_C_HANDOFF.md`
-> §0; the original validation tasks (provision tenants, walk every workflow,
-> real GST docs, RLS isolation, stress test) are folded into C.3–C.5.
-
-| #   | Task                                            | Status | Date       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| --- | ----------------------------------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| C.0 | Stand up staging environment on DO App Platform | ✅     | 2026-05-22 | staging.dealerlink.in live (web + workers + Managed PG, BLR1). Critical-path E2E green against staging. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| C.1 | Force-password-change flow (closes DEV.56)      | ✅     | 2026-05-23 | Rotation screen + layout enforcement + login redirect. operator-onboarding spec updated; verify-day-c1 added (54/54). See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| C.2 | State-code normalization (closes DEV.33)        | ✅     | 2026-05-24 | Migration `0015` → ISO 3166-2:IN codes across tenant_settings/dealers/quotations/PIs/orders; CHECK tightened; canonical map + helpers in `@dealerlink/schemas`; dropdowns submit codes / displays show names. Day 9 parity green pre+post. DEV.70. Re-seed surfaced a latent fragility in verify-day-11's three-party test (now filters by PI #) — DEV.71.                                                                                                                                                                                                                                                         |
-| C.3 | Pilot staging handoff + UX walkthrough          | ✅     | 2026-05-25 | Folds old C.1–C.3: provision 2 demo tenants via the admin app, walk every workflow as each role, generate real GST docs vs `3 PO Premier.pdf`. **Prep ✅ (2026-05-25)** — onboarding guide, UX-findings template, welcome-email + credentials drafts committed. Triage complete in `docs/UX_FINDINGS.md`: 0 pilot-blockers (C-1 PDF 503 downgraded to infra cold-start), 5 important (I-1…I-5) + 12 polish; the 5 C.4-scoped fixes shipped in C.4.                                                                                                                                                                 |
-| C.4 | Security audit                                  | ✅     | 2026-05-26 | Read-only audit in `docs/SECURITY_AUDIT.md`: RLS 35/35 tables + 19/19 isolation test, role-matrix + secrets clean, **0 critical-exploitable** (1 upstream-Critical Next.js CVE mitigated by layout-based auth). Shipped: 5 UX fixes (I-1,I-2,I-4,I-5,P-9) + HTTP security headers (F-2) + PDF cold-start warm-up (C-1). F-1 (Next.js upgrade) + F-3 (login rate-limit) deferred to Stage D.                                                                                                                                                                                                                        |
-| C.5 | Performance test + Stage D handoff              | ✅     | 2026-05-27 | Empirical load test vs live staging (pilot-realistic, operator-approved): baseline + 5-user light load (867 req, 0 errors), 10-concurrent DB load (469 req, 0 errors — validates DEV.61/62), concurrent write-isolation (RLS holds, document counter race-free, 0 deadlocks). **PDF finding:** basic-xxs (512MB) workers OOM-restart under a 10-concurrent PDF burst (single/sequential renders fine: cold 5.5s/warm 2.4–3.5s). Resolved in `docs/STAGE_D_HANDOFF.md` §2 sizing package (workers→basic-xs + web DB_POOL_MAX 2→10 + DB Basic 2GB). Harness + data in `scripts/load-test/`. Stage D handoff shipped. |
-
-**Stage C status: ✅ COMPLETE (6/6) — closed 2026-05-27.** C.0 staging + C.1 force-password-change + C.2 state-code normalization + C.3 pilot walkthrough/triage + C.4 security audit + C.5 performance test + Stage D handoff. Tagged `stage-c-complete`. Staging is live, validated, security-audited, and load-tested; `docs/STAGE_D_HANDOFF.md` is the authoritative Stage D starting point. Pilot live target: Wednesday 2026-06-03.
-
-### Stage C Day 1 — staging environment (2026-05-22)
-
-Staging deployed to DigitalOcean App Platform (Bangalore), executing the
-staging slice of the Stage D deployment doc early so the pilot can preview by
-2026-05-24.
-
-- **URLs:** apex `https://staging.dealerlink.in` (operator/login), tenants at
-  `demo.staging.dealerlink.in` + `sample.staging.dealerlink.in`. Full env doc:
-  `docs/STAGING_ENV.md`.
-- **Infra:** app `dealerlink-staging` (web basic-xs + workers basic-xxs) +
-  `dealerlink-staging-db` (Managed PG 16, db-s-1vcpu-1gb). ~$30/mo. Spec is
-  `.do/app.yaml`; auto-deploys on push to `main`.
-- **Verified:** `/api/health` 200 + all checks green (db/migrations/audit/rls/
-  queue; resend skipped — no key yet) across all 3 hosts; the 27-step
-  critical-path E2E passes against `demo.staging` (48.6s); tenant isolation
-  confirmed (demo vs sample resolve to distinct tenants + RLS smoke).
-- **6 deployment bugs found + fixed (DEV.57–DEV.62):** managed-PG role ALTER,
-  staging bootstrap scripts, pg-boss TLS chain, apex-domain config for the
-  `staging.` prefix, connection-pool caps, and the big one — the db client
-  created a new pool on every access in production (DEV.62).
-- **Carried to Stage D:** real Resend/Sentry/Better Stack/Axiom values;
-  wildcard SSL (currently enumerated subdomains); consider a connection pooler
-  or larger DB tier for production; Cloudflare security flags + DO billing
-  alerts (UI-only, set during closeout).
-
-### Stage C Day C.1 — force-password-change (2026-05-23) — closes DEV.56
-
-Closed the force-password-change gap that CLAUDE.md §6 / ADR-010 described but
-never shipped (carried forward from Stage B Day 18, DEV.56 (c)).
-
-- **Already in place since Day 4:** the `must_change_password` column, the
-  Lucia attribute (ADR-009), and both provisioning flows (create-tenant +
-  tenant-users create/reset) setting the flag with a generated temporary
-  password. C.1 added the missing rotation UI + enforcement.
-- **New:** `app/(auth)/change-password/` (page + client form with a live
-  strength meter + rule checklist + sign-out escape) and
-  `lib/auth/change-password.ts` (verifies the temp password, enforces the §6
-  policy via the shared `lib/auth/password-policy.ts` schema, then updates the
-  hash + clears the flag atomically; audit trigger redacts the hash; emits
-  `user.password_changed`).
-- **Enforcement** lives in `(app)/layout.tsx` + `admin/layout.tsx` (not Edge
-  middleware — DEV.68); the login action routes flagged users to
-  `/change-password`.
-- **Tests:** 11 new unit tests (password policy), `operator-onboarding.spec.ts`
-  updated to assert the real forced flow, `verify-day-c1.spec.ts` added.
-  `pnpm verify` now 54/54. Seeded users (`must_change_password = false`)
-  unaffected.
-- **Deviations:** DEV.68 (layout vs Edge enforcement), DEV.69 (policy follows
-  CLAUDE.md §6, not the plan's looser wording). 4 chunk commits (C1a–C1d).
-
----
-
-## Stage D — Production Infrastructure
-
-> **Authoritative runbook:** `docs/STAGE_D_HANDOFF.md` (shipped C.5). It carries
-> the data-driven production sizing package (workers `basic-xs` + web
-> `DB_POOL_MAX` 2→10 + DB Basic 2 GB), the secrets checklist, the F-1/F-3
-> security carry-forwards, the D.0–D.3 day-by-day plan, DNS/SSL, backups, and the
-> risk register. The D.x rows below are the high-level tracker; the handoff doc
-> is the detail. Target: pilot live **2026-06-03**.
-
-Tracker realigned to the authoritative `docs/STAGE_D_HANDOFF.md` day plan
-(D.0–D.3). The old D.1–D.13 task checklist is superseded — its DO-account /
-domain / DNS items are either long done (the `dealerlink.in` zone is live on
-Cloudflare from staging) or folded into the day rows below.
-
-| Day        | Date (plan)   | Status | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ---------- | ------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **D.0**    | Thu May 28    | ✅     | **Ran 2026-05-26 (2 days early).** Dedicated DO project `dealerlink-production` + Managed PG **Basic 2 GB** (BLR1) + App Platform `web`+`workers` (both **basic-xs**). Dual-role RLS (app role NOBYPASSRLS) + 16 migrations + operator-only seed. First deploy ACTIVE, `/api/health` green, DB firewall locked to the app. DNS/SSL operator-pending (Cloudflare CNAME). DEV.73 logged. See `docs/PRODUCTION_ENV.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **D.1**    | Fri May 29    | ✅     | **Ran 2026-05-27.** Fresh prod Sentry (web+workers) / Better Stack / Axiom + sending-only Resend key injected via one `doctl apps update --spec` (placeholders→real; DB/session secrets untouched). Resend `dealerlink.in` already verified (`send.`-subdomain scheme); DMARC `p=quarantine` added; SSL on `app.dealerlink.in` confirmed live. `/health` `resend: ok`. Sentry `tracesSampleRate` 0.1. DEV.74 (health check accepts least-privilege sending-only key). **Deferred:** inbound webhook+MX → D.3; DO Spaces → future (would break PDF render until `uploadToSpaces()` lands, operator-skipped); `SENTRY_RELEASE` → D.2. Orange-cloud proxy on `app` flagged for D.3. Sentry/BetterStack/Axiom event delivery is operator-dashboard-confirmed. See `docs/PRODUCTION_ENV.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **D.2**    | Sat May 30    | ✅     | **Ran 2026-05-29.** **F-1** ✅ Next.js 14.2.18→14.2.35 (CVE-2025-29927 + 4× DoS highs); 503 unit tests + 59 verify specs green on the bumped framework. **F-3** ✅ login rate-limit + cumulative lockout (5/15 min + 10/30 min) wired into `login()`; migration `0016` (`users.failed_login_attempts` + `lockout_until`) applied to staging + prod via R17 whitelist-migrate-remove; 27 new pure-fn tests + a staging DB smoke (insert→walk→lockout→clear→cleanup, all 6 checks pass) + an end-to-end Server Action smoke against `app.dealerlink.in` (7× `nonexistent@dealerlink.test` → identical generic error, response-time pattern shows the rate-limit short-circuit firing). **DEV.64** ✅ closed via Option C: `pnpm sync-spec:staging/production` + R18 runbook (LIVE base preserves DO-derived `ingress:`, committed overlays, encrypted `EV[...]` survive; aborts on missing-in-live secret). **DEV.73** ✅ reserved-slug guard (admin/app/www + infra superset: mail/staging/api/cdn/…) refines `slugSchema`; 21 new tests. **DEV.79** ✅ removed `@logtail/pino` worker-thread transport (broke under Next webpack bundling; surfaced as `worker.js not found` Sentry events on POST /login). Production deploy verified at `9c4cc4b`. |
-| **D.3**    | Sun May 31    | ✅     | **Ran 2026-05-31 — STAGE D COMPLETE.** **PART 1** wildcard `*.dealerlink.in` SSL live (Option A DO-native, CNAME-validated, **no TXT**; SAN `*.dealerlink.in`, Let's Encrypt → Aug 19; apex untouched; zero-touch renewal, R19). **PART 2** backups verified (6 dailies + PITR) + restore rehearsed (fork online 5m51s, 17 migrations + operator intact, destroyed; **RTO ~6 min / RPO ≤24h**; DISASTER_RECOVERY + R20). **PART 3** prod smoke passed (`d3smoketest`: real-subdomain SSL, **first prod email delivered**, force-password-change, full dealer→…→dispatch clean, CGST+SGST correct, PDF ~2–3 s; tenant removed, slug retired). **PART 4** PILOT_ONBOARDING_PRODUCTION.md. **DEV.80** sync-spec hardened. **DEV.81** Playwright `globalTimeout` + JSON reporter fix for the recurring Windows webServer-teardown hang. Gates: typecheck + lint + 503 unit/integration green; E2E **56/57 green on a re-seeded run** (1 read-only GST-display spec cut by the globalTimeout cap, not a failure; app code unchanged since D.2 59/59). Tagged `stage-d-complete`.                                                                                                                                                                          |
-| Buffer     | Jun 1–2       | ⏳     | DNS/Resend propagation slack + smoke-test fixes. Pilot tenant provisioning is **Stage E**, not Stage D.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Pilot live | **Wed Jun 3** | 🎯     | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-
-**Stage D status: ✅ COMPLETE (4/4) — closed 2026-05-31.** D.0 (dedicated DO project + prod infra) + D.1 (observability + outbound email) + D.2 (F-1/F-3 security + spec-sync) + D.3 (wildcard SSL + backup/restore rehearsal + prod smoke + pilot procedure). Production is hardened, backed up, and validated end-to-end; wildcard `*.dealerlink.in` SSL means tenant subdomains need no per-tenant cert work. Tagged `stage-d-complete`. ~$54/mo (web ~$12 + workers ~$12 + DB ~$30). **Stage E (pilot launch) cleared to start** — see `docs/PILOT_ONBOARDING_PRODUCTION.md`.
-
----
-
-## Stage E — Launch & Onboarding
-
-| #   | Task                                                            | Status | Date       | Notes                                                                                                                                                                       |
-| --- | --------------------------------------------------------------- | ------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E.1 | Marketing landing page at dealerlink.in (1-pager + access form) | ⏳     |            |                                                                                                                                                                             |
-| E.2 | Identify 3–5 friendly beta tenants                              | 🔄     | 2026-06-02 | First pilot live: **UMA Trading Company** (solar, Dhule MH)                                                                                                                 |
-| E.3 | Onboard each beta tenant via admin app                          | 🔄     | 2026-06-02 | **UMA Trading Company LIVE** (`umatrading.dealerlink.in`) — exec step E.1; self-serve, validated, getting-started guide shipped. See `docs/PILOT_ONBOARDING_PRODUCTION.md`. |
-| E.4 | Beta feedback collection + iteration sprint                     | ⏳     |            |                                                                                                                                                                             |
-| E.5 | Public launch announcement                                      | ⏳     |            |                                                                                                                                                                             |
-| E.6 | Hypercare period (daily check-ins, 1-week)                      | ⏳     |            | First-day monitoring of UMA = exec step E.2                                                                                                                                 |
-| E.7 | Phase 1 retrospective + Phase 2 backlog                         | ⏳     |            |                                                                                                                                                                             |
-
-**Stage E status: 🔄 In progress (0/7 fully closed) — first real pilot (UMA Trading Company) went LIVE on production 2026-06-02 (exec step E.1). Next: first-day monitoring + follow-up (exec step E.2).**
-
-> **Note on numbering:** the build was executed in finer-grained "exec steps"
-> (E.0, E.1, …) than this tracker's E.1–E.7 rows. Exec step **E.1 = launch the
-> first real pilot tenant (UMA Trading Company)** — it advances tracker rows E.2
-> (first beta tenant identified) and E.3 (onboarded via admin app).
 
 ---
 
 ## Stage F — Phase 2
 
 <!-- STAGE_F_TASKS:START -->
-
 <!-- Generated by scripts/sync-project-plan.ts from docs/stage-f-tasks.json.
      Do not edit by hand — edit the JSON and run `pnpm plan:sync`. -->
 
@@ -384,79 +182,16 @@ Cloudflare from staging) or folded into the day rows below.
 
 ---
 
-## Phase 2 — Deferred Features
+## Stage F Progress
 
-These are intentionally deferred. Architecture preserves clean migration paths to each.
-
-| #     | Feature                                           | Status | Notes                                             |
-| ----- | ------------------------------------------------- | ------ | ------------------------------------------------- |
-| F2.1  | Self-serve tenant signup                          | ⏭️     | Needs payment integration + abuse prevention      |
-| F2.2  | SSO via Google / Microsoft (Lucia)                | ⏭️     | Lucia adapters exist; one-day lift                |
-| F2.3  | Multi-currency support                            | ⏭️     | Schema is ready (default_currency column exists)  |
-| F2.4  | Per-tenant fiscal year config                     | ⏭️     | Schema is ready (fiscal_year_start column exists) |
-| F2.5  | Custom domain per tenant                          | ⏭️     | Enterprise tier feature                           |
-| F2.6  | Mobile app (iOS + Android)                        | ⏭️     |                                                   |
-| F2.7  | Custom document templates per tenant              | ⏭️     | High engineering cost; GST compliance risk        |
-| F2.8  | Meilisearch                                       | ⏭️     | When pg_trgm slows on 100K+ records               |
-| F2.9  | Redis                                             | ⏭️     | When job volume exceeds Postgres queue capacity   |
-| F2.10 | DOKS / Kubernetes                                 | ⏭️     | When 5+ tenants need scale isolation              |
-| F2.11 | PostHog product analytics + session replay        | ⏭️     |                                                   |
-| F2.12 | Tenant-specific email server (custom From domain) | ⏭️     |                                                   |
+| Status                        | Tasks  |
+| ----------------------------- | ------ |
+| ✅ Done                       | 13     |
+| ⏳ Not started                | 53     |
+| 🅿️ Parked (will resume later) | 1      |
+| ⏭️ Deferred to a later phase  | 11     |
+| **Total**                     | **78** |
 
 ---
 
-## Progress Summary
-
-| Stage                           | Total  | Done   | In Progress | Pending | % Complete |
-| ------------------------------- | ------ | ------ | ----------- | ------- | ---------- |
-| Stage 0 — Discovery & Decisions | 8      | 8      | 0           | 0       | 100%       |
-| Stage A — Foundation Setup      | 10     | 10     | 0           | 0       | 100%       |
-| Stage B — Build (3.5 weeks)     | 18     | 18     | 0           | 0       | 100%       |
-| Stage C — Validation            | 6      | 6      | 0           | 0       | 100%       |
-| Stage D — Production Infra      | 4      | 4      | 0           | 0       | 100%       |
-| Stage E — Launch                | 7      | 0      | 0           | 7       | 0%         |
-| **Total**                       | **62** | **43** | **0**       | **19**  | **69%**    |
-
----
-
-## Critical Path Items
-
-These items, if delayed, push the whole timeline:
-
-| Item                               | Why critical                                                   | Mitigation                                                           |
-| ---------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **B.9 GST tax engine**             | Tax bugs destroy trust across all tenants                      | Test-first development; cross-check against BRD §4 examples          |
-| **B.3 RLS policies + tests**       | Multi-tenant data leak is the worst-case bug                   | Mandatory CI test: query as Tenant A, assert zero rows from Tenant B |
-| **B.10 PDF pipeline**              | Distinguishing feature; complex (Puppeteer in workers process) | Build as React component first, render path second                   |
-| **B.4 Tenant provisioning**        | Without it, no tenant can log in                               | Don't skip to ship faster                                            |
-| **D.6 Resend domain verification** | DNS propagation can eat 24+ hours                              | Start D.1–D.2 early in Stage D                                       |
-
----
-
-## Risks & Open Items
-
-| #    | Risk / Open item                                                                                                                 | Owner                                                                                                          | Status                                                   |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| R.1  | Prototype files still labeled "Distribyte"; Claude Code must silently rename to "Dealerlink" during implementation               | Claude Code                                                                                                    | Mitigated via CLAUDE.md §0                               |
-| R.2  | Puppeteer memory leaks under bulk PDF generation                                                                                 | Dev                                                                                                            | Mitigated via worker process isolation + 100-job restart |
-| R.3  | Postgres storage growth from email body logging                                                                                  | Dev                                                                                                            | Mitigated by moving large bodies to Spaces in Phase 2    |
-| R.4  | First tenant onboarding requires manual provisioning (no self-serve in Phase 1)                                                  | Operator                                                                                                       | Acceptable; admin app makes it 5 min                     |
-| R.5  | ~~Lint coverage gap: `pnpm lint` only ran on `apps/web`~~                                                                        | Resolved Day 6: every workspace defines a `lint` script; `pnpm -r lint` now uniform with pre-commit hook       |
-| R.6  | ~~tailwind-preset uses Record<string, any>~~                                                                                     | Resolved in Day 2 Phase 10                                                                                     |
-| R.7  | PowerShell ExecutionPolicy blocked pnpm scripts on Windows; resolved with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`  | Dev                                                                                                            | Resolved — note for any other Windows contributor        |
-| R.8  | ~~Lucia DatabaseUserAttributes silently undefined~~                                                                              | Resolved via ADR-009 (Zod at Lucia boundary)                                                                   |
-| R.9  | ~~No integration test for Lucia session contract~~                                                                               | Resolved — audit + RLS tests collectively cover the contract                                                   |
-| R.10 | Pattern of unguarded .split/.charAt/.toUpperCase on user/tenant fields keeps recurring. ESLint plugin to detect this could help. | Dev                                                                                                            | Phase 2 if it recurs                                     |
-| R.11 | ~~`tax` workspace has `--passWithNoTests` flag to let root test runner pass. Must be removed when tax engine ships on Day 9.~~   | Resolved — Day 9 — flag removed; `packages/tax` now has 51 engine tests                                        | —                                                        |
-| R.12 | ~~Playwright E2E deferred from Day 4 — operator-onboarding spec must be added on Day 18~~                                        | ✅ Resolved Day 18 — `apps/web/tests/e2e/operator-onboarding.spec.ts` provisions a tenant + signs in its admin |                                                          |
-| R.13 | ~~Inline email dispatch from /admin/tenants/new — must be worker-ized when pg-boss bootstraps on Day 14~~                        | Resolved Day 14 — all email goes through `queueEmail` → pg-boss `send-email` worker; inline send removed       | —                                                        |
-| R.14 | Plain HTML email template instead of @react-email/components — revisit when 2nd template ships (Day 11 or 13)                    | Dev                                                                                                            | Day 11/13                                                |
-| R.15 | Base64 logo fallback — swap to DO Spaces in Stage D                                                                              | Dev                                                                                                            | Stage D                                                  |
-| R.16 | TanStack Virtual not yet added — needed Day 6 for inventory lists (500+ serials per product)                                     | Dev                                                                                                            | Day 6                                                    |
-| R.17 | Atomic CSV imports don't show per-row error report — error message should identify which row failed                              | Dev                                                                                                            | Day 7 or 8 polish                                        |
-| R.18 | ~~GSTIN empty-string edge case~~                                                                                                 | Resolved Day 6: `dealers_gstin_not_empty_chk` CHECK + integration test                                         |
-| R.19 | ~~Day 5 lint-vs-hook divergence~~                                                                                                | Resolved Day 6 via R.5 fix                                                                                     |
-
----
-
-_This plan is the canonical project tracker. When in doubt about what's done or what's next, this file wins._
+_This plan is generated. For what is already done, see `docs/PROJECT_HISTORY.md`._

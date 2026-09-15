@@ -116,10 +116,11 @@ Use, in this order:
 4. Bare `grep` — **corroboration only.** `grep -a` works if you must.
 
 **The mechanism, so you can judge scope instead of guessing (DEV.115, root-caused
-in DEV.118):** `scripts/sync-project-plan.ts` contains a deliberate NUL byte at
-offset 9441 — the sentinel in `outsideMarkers()` that stands in for generated
-content. Tools that classify NUL-bearing files as binary then diverge in how
-honestly they say so. Measured on that file, pattern `MARKER_START`, true count 4:
+in DEV.118):** a file containing a NUL byte is classified as binary, and tools
+then diverge in how honestly they say so — some suppress matches and exit 1
+with no output at all. The measurements below were taken on
+`scripts/sync-project-plan.ts`, which used to carry a deliberate NUL at offset
+9441 (the sentinel in `outsideMarkers()`), pattern `MARKER_START`, true count 4:
 
 | instrument                     | result                                   |
 | ------------------------------ | ---------------------------------------- |
@@ -127,8 +128,17 @@ honestly they say so. Measured on that file, pattern `MARKER_START`, true count 
 | bare `grep` (ugrep shim)       | **exit 1, no output** ← the trap         |
 | `grep -a`                      | 4                                        |
 | `/usr/bin/grep` (GNU grep 3.8) | 4, and `-n` prints `binary file matches` |
-| `git grep`                     | 4, lists lines                           |
-| `rg`                           | `binary file matches`; needs `-a`        |
+
+**THAT FILE IS FIXED — the guidance is not stale.** F.37/F.63 replaced the NUL
+sentinel with a printable token, so `scripts/sync-project-plan.ts` now greps
+normally and `grep -c MARKER_START` on it returns 4 with exit 0. Do NOT conclude
+from that the warning no longer applies: the repo still contains NUL-bearing
+files (PDFs, a .docx, PNGs), any future sentinel or fixture could reintroduce
+one, and the instrument order above costs nothing when there is no NUL to hit.
+The property is also SESSION-SCOPED — the broken instrument is the Claude Code
+`grep` shim, not GNU grep, and it does not exist in CI.
+| `git grep` | 4, lists lines |
+| `rg` | `binary file matches`; needs `-a` |
 
 **Two things follow that are easy to get wrong.** This is a **session-scoped**
 property of the harness shim, _not_ a property of this repo and _not_ present in

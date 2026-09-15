@@ -49,34 +49,53 @@ the committed `docs/stage-f-tasks.json`. That is a FAIL, and you must say which
 file changed. If it did write, `git checkout -- PROJECT_PLAN.md` to restore the
 tree exactly as you found it, and report that you did so.
 
-### 2. PROJECT_PLAN.md diff containment
+### 2. PROJECT_PLAN.md is generated — no hand edits at all
 
-Diff the branch against `main`:
+`PROJECT_PLAN.md` is rendered IN ITS ENTIRETY by `scripts/sync-project-plan.ts`
+from `docs/stage-f-tasks.json` plus the committed header template at
+`docs/project-plan-header.md` (F.37/F.63). There is no authored region left in
+it, so the check is now total and trivially satisfiable:
 
 ```bash
-git diff main...HEAD -- PROJECT_PLAN.md
+pnpm plan:check                        # must exit 0 — the file equals the render
+git diff main...HEAD -- PROJECT_PLAN.md   # every changed line must be explained by
+                                          # a change to the JSON or the template
 ```
 
-Every changed line must lie between `<!-- STAGE_F_TASKS:START -->` and
-`<!-- STAGE_F_TASKS:END -->`. **No change outside the markers is permitted. Full
-stop.** Any change outside them — in particular any edit to the Stage 0 or
-Stage A–E tables — is a FAIL. State the line numbers.
+**No hand edit of this file is legitimate anywhere in it. Full stop.** A changed
+line that `plan:check` accepts came from the JSON or the template and is fine;
+a `plan:check` failure means someone edited the rendered file, and that is a
+FAIL. You no longer need to reason about marker positions to decide.
 
-This rule used to carry one exception, for "an appended changelog row at the
-bottom". **That exception is gone, and its removal TIGHTENED this check rather
-than loosening it.** The `## Changelog` section was deleted from
-`PROJECT_PLAN.md` on Day 24 (DEV.110): it sat outside the markers, so
-`plan:sync` never wrote it, which meant the only way to maintain it was the hand
-edit CLAUDE.md §10.4 forbids and `.claude/settings.json` denies. It was also
-redundant — `docs/stage-f-tasks.json` already carries `completedDate` and
-`notes` per task. With the section gone there is no longer any legitimate
-hand-edit of this file at all, so the rule no longer needs a carve-out and this
-check is now unqualified.
+WHAT CHANGED AND WHY IT MATTERS TO YOU: this check used to be "no change
+outside the markers, full stop", which was unsatisfiable rather than strict.
+Stage 0 and Stages A–E lived outside the markers, so a stage retitle, a
+corrected citation, or recording that Stage E never completed were all
+legitimate, all necessary eventually, and all forbidden by every approved
+route — `plan:sync` could not write there, CLAUDE.md §10.4 banned hand edits,
+and `.claude/settings.json` denied them. That is the tension DEV.112 had to be
+overruled through once, and F.63 existed to dissolve it rather than let the
+overrule become routine. The narrative now lives in
+`docs/PROJECT_HISTORY.md`, which is hand-maintained and needs no rule.
 
-The section **must not return**, and you are not the only thing enforcing that:
-`scripts/sync-project-plan.test.ts` asserts the real `PROJECT_PLAN.md` does not
-contain `## Changelog`, so a reappearance fails the `test` job in CI as well. If
-you see one, FAIL and say so.
+The markers survive inside the generated output and still mean something
+narrower: they delimit the part rendered from the JSON, so `plan:check`'s
+failure message can name which file to edit. Treat them as a diagnostic, not a
+boundary you police.
+
+TWO THINGS TO STILL CHECK, because generation moved them rather than removing
+them:
+
+- `docs/PROJECT_HISTORY.md` is a NORMAL file. Ordinary review applies; there is
+  no sync step and no deny rule. Do not report an edit to it as a containment
+  failure.
+- The `## Changelog` section **must not return** to either file. In
+  `PROJECT_PLAN.md` it now cannot appear by hand — the file is generated — so
+  the residual risk is the TEMPLATE growing one; in `PROJECT_HISTORY.md` the
+  assertion is the only thing standing in the way.
+  `scripts/sync-project-plan.test.ts` checks all three surfaces (plan,
+  template, history) with a heading-anchored match, so a reappearance fails the
+  `test` job in CI as well. If you see one, FAIL and say so.
 
 ### 3. DEVIATIONS.md
 
@@ -186,7 +205,7 @@ overall verdict is **FAIL (incomplete)** — never PASS on unverified checks.
 CLOSEOUT VERIFICATION — <branch> @ <sha>
 
 1. plan:sync idempotency        PASS | FAIL | BLOCKED — <evidence>
-2. PROJECT_PLAN.md containment  PASS | FAIL | BLOCKED — <evidence>
+2. PROJECT_PLAN.md generated    PASS | FAIL | BLOCKED — <evidence>
 3. DEVIATIONS.md append-only    PASS | FAIL | BLOCKED — <evidence>
 4. Id integrity (dup + dangling) PASS | FAIL | BLOCKED — <evidence>
 5. DO deploy phase (both)       PASS | FAIL | N/A (pre-merge) | BLOCKED — <evidence>

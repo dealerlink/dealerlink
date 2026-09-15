@@ -977,15 +977,25 @@ doctl databases firewalls append <new-cluster-id> --rule "app:d8a25cb8-e4cb-4035
 
 ## R? — Updating the Stage F task table (PROJECT_PLAN.md)
 
-**Established Stage F Day 19.** The Stage F table in `PROJECT_PLAN.md` is
-**generated**. Never hand-edit it.
+**Established Stage F Day 19; extended to the whole document by F.37/F.63.**
+`PROJECT_PLAN.md` is **generated in its entirety**. Never hand-edit any part of
+it — not the table, not the heading, not the prose.
 
-The source of truth is `docs/stage-f-tasks.json`. `PROJECT_PLAN.md` holds only
-a rendered copy, between these two markers:
+It has two sources, both committed:
 
-```
-<!-- STAGE_F_TASKS:START -->   … generated, do not touch …   <!-- STAGE_F_TASKS:END -->
-```
+| Source                        | Supplies                                       |
+| ----------------------------- | ---------------------------------------------- |
+| `docs/stage-f-tasks.json`     | every task row, the sub-phase headings, counts |
+| `docs/project-plan-header.md` | the title, purpose, how-to-use, companion list |
+
+The `STAGE_F_TASKS` markers still appear in the output and still delimit the
+part that comes from the JSON, so `plan:check` can tell you which source to
+edit. They are a diagnostic, not a boundary — everything outside them is
+generated too.
+
+**Stages 0–E are not here.** They live in `docs/PROJECT_HISTORY.md`, which is
+hand-maintained: edit it normally, no sync step, no deny rule. That separation
+is the point of F.63 — see the note at the end of this runbook.
 
 ### Marking a task complete (the common case)
 
@@ -1031,16 +1041,31 @@ canonical tracker:
 - **"already contains a Stage F heading … but no STAGE_F_TASKS markers"** — some
   other section has claimed the name. The script will not overwrite a section it
   does not own. Put the markers inside the intended section yourself, then re-run.
-- **"REFUSING TO WRITE: content outside the STAGE_F_TASKS markers would change"** —
-  an internal assertion tripped. Stage A–E content is compared byte-for-byte
-  before and after every write. Treat this as a bug in the script, not something
-  to work around.
+  The third refusal mode — **"REFUSING TO WRITE: content outside the
+  STAGE_F_TASKS markers would change"** — **no longer exists.** It guarded
+  hand-written Stage A–E content that is no longer in the file. The assertion and
+  its NUL-byte sentinel were removed by F.37/F.63; if you see that message, you
+  are running an old copy of the script.
 
 ### If CI fails on `plan:check`
 
-The table drifted from the JSON — almost always because someone hand-edited the
-table. Run `pnpm plan:sync` and commit the result. Do not "fix" it by editing
-the markdown.
+The file drifted from its sources — almost always because someone hand-edited
+the rendered markdown. The failure message names which half drifted: the task
+tables (edit the JSON) or the surrounding prose (edit the header template). Run
+`pnpm plan:sync` and commit the result. Do not "fix" it by editing
+`PROJECT_PLAN.md`.
+
+### Why the narrative was moved out (F.63)
+
+The file used to carry Stage 0 and Stages A–E outside the markers. `plan:sync`
+could not write there, CLAUDE.md §10.4 banned hand edits, and
+`.claude/settings.json` denies `Edit`/`Write` on the path — so a legitimate
+change (a stage retitle, a corrected citation, recording that Stage E never
+completed) was impossible by every approved route at once. That tension needed
+an operator overrule to resolve once (DEV.112), and the fix was to remove the
+tension rather than to keep spending overrules: the narrative moved to a
+normal file, the rest became generated, and the closeout rule simplified to
+"no hand edits at all".
 
 Tests for all of the above: `scripts/sync-project-plan.test.ts` (`pnpm test:scripts`).
 
