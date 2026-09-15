@@ -81,8 +81,8 @@ before it lands:
 Established after PR #27, where this shape produced findings round after
 round, several of them introduced by the very commit correcting the previous
 one. THE TEST, and note which way it cuts: delete the clause, and if the
-sentence still means what it meant, the clause was decoration — "a clause that
-cannot be load-bearing can only be wrong". If deleting it CHANGES the meaning,
+sentence still means what it meant, the clause was decoration: "A clause that
+cannot be load-bearing can only be wrong." If deleting it CHANGES the meaning,
 it is load-bearing and the fix is to verify it, not to cut it. Two of PR #27's
 findings were of that second kind (the pg-boss retry figure in e3dd539, the
 Axiom/pino mechanism in f165352), so do not report a load-bearing claim as a
