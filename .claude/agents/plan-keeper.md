@@ -131,11 +131,15 @@ stamped 2026-09-09 by a session whose commits are all dated 2026-09-10.
 
 If `plan:sync` refuses to run, do **not** work around it. Report the exact
 message. `plan:sync` NEVER refuses because of the state of `PROJECT_PLAN.md` — that
-file is generated, so any state it is in is regenerated and the command exits 0. It refuses only when a SOURCE is unusable, and each message names the source:
+file is generated, so any state it is in is regenerated and the command exits 0. It refuses only when a SOURCE is unusable, and every message names the source:
 a Changelog heading or a smuggled marker in `docs/project-plan-header.md`, or a
-bad `status`/duplicate `id`/missing field in the JSON you just edited. The last
-of those three is the one you can cause, so read the message: it names the task
-and the field.
+bad `status`, duplicate `id`, missing field or invalid JSON in the file you just
+edited. That last group is the one you can cause, so read the message — it
+names the task and the field.
+
+You can safely write the `STAGE_F_TASKS` marker text INSIDE a note. It used to
+abort the render with an error blaming `PROJECT_PLAN.md`; the comment opener is
+now escaped, so it renders as visible text.
 
 Two older refusals are RETIRED and are documented in `docs/RUNBOOKS.md`
 ("Updating the Stage F task table") so the messages stay recognisable: the

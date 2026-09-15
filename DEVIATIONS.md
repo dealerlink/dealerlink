@@ -4947,17 +4947,24 @@ nothing inherits that. `docs/PROJECT_HISTORY.md` has no sync step, no deny rule
 and no append-only requirement, and the verifier is explicitly told not to
 report edits to it as containment failures. Ordinary review is most of the
 replacement. The rest is a set of assertions in
-`scripts/sync-project-plan.test.ts`: the six stage headings survive, EVERY
-SECTION holds at or above its own row floor, and every Stage B day row is
+`scripts/sync-project-plan.test.ts`: the six stage headings survive, EVERY table-bearing
+SECTION holds at or above its own row floor — all ten, including Progress
+Summary, which had no floor in the first version, and every Stage B day row is
 POPULATED rather than merely present. Both of those are narrower than the first
 attempt, which the review broke: a single whole-file floor of 110 rows out of
 125 did not notice an emptied Stage C (6 rows), and matching only the id cell
 did not notice all 18 Stage B rows gutted to `| B.N | | | |`. Per-section
 floors and non-empty cell checks catch both, verified against those exact
 mutations and against six more section-emptying cases found by the review.
-Stage B's floor was also set from an inflated count — the row counter
-subtracted one header for the whole section where Stage B holds five
-sub-tables — and is now 17 rather than 20.
+Stage B's floor was also wrong, twice over, and the second reading corrects
+the first: it was 20 from a counter that subtracted a fixed header count, then
+17 from a counter that mistook a stray `|      |` line — pre-existing on main
+and migrated verbatim — for an extra table. Stage B has FOUR tables and 18
+rows, which the file's own Progress Summary states independently. The stray
+line is removed (a normal edit to a now-hand-maintained file, which is the
+point of the move), the counter now identifies data rows exactly rather than
+arithmetically, and the floors are each section's true migrated count. A floor
+derived from a buggy counter is calibrated to the bug.
 
 **ONE MORE THING THE REVIEW FOUND, and it is a documentation failure rather
 than a code one.** Two `plan:sync` refusal modes documented in
@@ -4971,7 +4978,22 @@ the world in which the script protected authored content. Both were rewritten
 to state the real guarantee — a generated file is always repairable by
 `plan:sync`, and the only refusals left name an unusable SOURCE — and
 `plan:check`'s message on a corrupt file now says so instead of surfacing a
-raw marker error. Three tests lock the guarantee in. That is weaker than byte-identity and it is the
+raw marker error. Three tests lock the guarantee in.
+
+**A FOURTH REFUSAL EXISTED AND WAS MISSED BY THAT SAME REWRITE**, found by the
+next review. A task field containing the `STAGE_F_TASKS` marker text — any of
+`notes`, `task`, `subPhase`, `days`, `id` — put a second marker pair in the
+output and aborted the render with a "malformed markers" error that blamed
+`PROJECT_PLAN.md`, prescribed the hand repair the settings deny, and named
+neither the JSON nor the field. Live rather than theoretical: F.63's and F.65's
+own notes discuss the markers. It is eliminated rather than documented — the
+comment opener is now escaped in table cells and in sub-phase headings, so such
+text renders visibly and inertly, which also fixes a latent bug where any HTML
+comment in a note vanished from the rendered table. Tested from all five
+fields. The lesson is narrower than "sweep further": validating the OUTPUT for
+markers, which is what closed the smuggled-template hole, is what opened this
+one, and the commit that wrote the first fix described that mechanism without
+following it to its consequence. That is weaker than byte-identity and it is the
 deliberate price of the rule becoming satisfiable.
 
 **Carried in with the migration, because porting them verbatim would have

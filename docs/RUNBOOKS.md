@@ -1041,8 +1041,8 @@ state it is in — hand-edited, corrupt markers, an unrelated Stage F section,
 truncated, absent — `pnpm plan:sync` regenerates it and exits 0. If you are
 looking at a broken `PROJECT_PLAN.md`, that is the whole remedy.
 
-It refuses only when a SOURCE is unusable, and all three refusals name the
-source to fix:
+It refuses only when a SOURCE is unusable, and every refusal names the source
+to fix:
 
 - **"REFUSING TO RENDER: the header template contains a Changelog heading"** —
   `docs/project-plan-header.md` has one, in any CommonMark form (ATX, indented
@@ -1052,7 +1052,18 @@ source to fix:
   the renderer emits the markers; a second pair in the output makes the task
   block unlocatable. Remove it from the template.
 - **"stage-f-tasks.json: …"** — a task has an unknown `status`, a duplicate
-  `id`, or a missing required field. The message names the task and the field.
+  `id`, a missing required field, or the file is not valid JSON. The message
+  names the task and the field, or the parse error.
+- A missing `docs/project-plan-header.md` or `docs/stage-f-tasks.json` fails
+  with a plain `ENOENT` naming the path.
+
+NO LONGER A REFUSAL, because it should never have been one: a task field that
+CONTAINS the marker text. A note discussing the markers used to inject a second
+pair into the output and abort the render with a "malformed markers" error that
+blamed `PROJECT_PLAN.md` and asked for a hand repair — while naming neither
+the JSON nor the field. The comment opener is now escaped in table cells and in
+sub-phase headings, so such a note renders as visible, inert text. Notes in
+this repo do discuss the markers, so this was a live case.
 
 RETIRED, so an old message is recognisable rather than puzzling: **"REFUSING TO
 WRITE: content outside the STAGE_F_TASKS markers would change"** guarded

@@ -323,6 +323,29 @@ describe('CLI', () => {
   });
 });
 
+describe('a task field cannot inject a marker into the output', () => {
+  // Notes in this repo DO discuss the STAGE_F_TASKS markers — F.63's and
+  // F.65's both do. Before cell() and subPhaseHeading() escaped the comment
+  // opener, such a note put a second marker pair in the rendered document and
+  // aborted the render with a "malformed markers" error that blamed
+  // PROJECT_PLAN.md and prescribed a hand repair the settings deny. The field
+  // it came from was named nowhere.
+  const FIELDS = ['notes', 'task', 'subPhase', 'days', 'id'] as const;
+
+  it.each(FIELDS)('renders safely with a marker in %s', (field) => {
+    const poisoned = { ...sample, [field]: `x ${MARKER_START} y ${MARKER_END} z` };
+    const out = renderPlan(header, [poisoned]);
+    expect(out.split(MARKER_START).length - 1).toBe(1);
+    expect(out.split(MARKER_END).length - 1).toBe(1);
+    expect(() => findMarkers(out)).not.toThrow();
+  });
+
+  it('keeps the text visible rather than swallowing it as an HTML comment', () => {
+    const out = renderPlan(header, [{ ...sample, notes: `see ${MARKER_START} above` }]);
+    expect(out).toContain('&lt;!-- STAGE_F_TASKS:START -->');
+  });
+});
+
 describe('a generated file is always repairable — no hand edit, ever', () => {
   // The docs used to list two plan:sync refusal modes that protected authored
   // content: a malformed marker pair, and an unowned Stage F heading. Neither
@@ -463,32 +486,51 @@ describe('docs/PROJECT_HISTORY.md keeps its substance, not just its headings', (
   // them leaves the total comfortably above any global floor. The closeout
   // review proved exactly that against an earlier version of this block, which
   // claimed to catch a silently emptied stage table and did not.
+  //
+  // The floors are each section's row count at migration, counted by the
+  // function below. An earlier version set Stage B to 20 from a miscount — the
+  // counter subtracted a fixed header count and a stray `|      |` line read
+  // as an extra table. Stage B is 18 rows, which the file's own Progress
+  // Summary independently states.
   const SECTION_FLOORS: Array<[string, number]> = [
     ['Stage 0 — Discovery & Decisions', 8],
     ['Stage A — Foundation Setup', 10],
-    ['Stage B — The 3.5-Week Build', 17],
+    ['Stage B — The 3.5-Week Build', 18],
     ['Stage C — Internal Validation (Week 5)', 6],
     ['Stage D — Production Infrastructure', 6],
     ['Stage E — Launch & Onboarding', 7],
     ['Phase 2 — Deferred Features', 12],
     ['Critical Path Items', 5],
     ['Risks & Open Items', 19],
+    // The tenth table-bearing section. It had no floor, which made the claim
+    // "every section holds at or above its floor" true of nine of ten.
+    ['Progress Summary', 7],
   ];
 
   /**
-   * Data rows in one `## `-delimited section.
+   * Data rows in one `## `-delimited section, for any number of sub-tables.
    *
-   * Counts a header AND a separator per table, not one header for the section:
-   * Stage B holds five sub-tables (four week tables plus its summary), so
-   * subtracting a single header inflated it by four and set its floor from the
-   * wrong number.
+   * A pipe line counts unless it is a separator, or the header directly above
+   * one. The previous version subtracted a fixed number of header rows, which
+   * made it depend on how many tables the section happened to hold — and it
+   * mistook a stray `|      |` line (pre-existing, now removed) for a fifth
+   * table in Stage B, which is where the earlier floor of 20 came from.
    */
   function sectionRows(history: string, heading: string): number {
     const body = history.split(`## ${heading}`)[1] ?? '';
     const upToNext = body.split(/^## /m)[0] ?? '';
-    const pipes = upToNext.split('\n').filter((l) => /^\|/.test(l));
-    const tables = pipes.filter((l) => /^\|[\s|:-]+\|?\s*$/.test(l)).length;
-    return Math.max(0, pipes.length - 2 * tables);
+    const lines = upToNext.split('\n');
+    const isSeparator = (l: string | undefined): boolean =>
+      l != null && /^\|[\s|:-]+\|?\s*$/.test(l);
+    let rows = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line == null || !/^\|/.test(line)) continue;
+      if (isSeparator(line)) continue;
+      if (isSeparator(lines[i + 1])) continue; // header
+      rows++;
+    }
+    return rows;
   }
 
   it('keeps every section at or above its row floor', async () => {

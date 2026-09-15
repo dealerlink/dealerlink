@@ -94,7 +94,15 @@ export interface StageFTask {
 // ---------------------------------------------------------------------------
 
 export function parseTasks(raw: string): StageFTask[] {
-  const parsed: unknown = JSON.parse(raw);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    // The bare SyntaxError names no file, and this one is always the JSON.
+    throw new Error(
+      `stage-f-tasks.json: not valid JSON — ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   const tasks = (parsed as { tasks?: unknown }).tasks;
   if (!Array.isArray(tasks) || tasks.length === 0) {
     throw new Error('stage-f-tasks.json: expected a non-empty "tasks" array');
@@ -137,10 +145,23 @@ export function parseTasks(raw: string): StageFTask[] {
 // Rendering
 // ---------------------------------------------------------------------------
 
-/** Escape the cell delimiter so a stray `|` cannot break the table. */
+/**
+ * Escape a table cell.
+ *
+ *  - `|` would break the table.
+ *  - Newlines would break the row.
+ *  - `<!--` would open an HTML comment. Two reasons that matters: a note
+ *    discussing the STAGE_F_TASKS markers would inject a SECOND marker pair
+ *    into the rendered document — which used to abort the render with a
+ *    "malformed markers" error blaming PROJECT_PLAN.md and prescribing a hand
+ *    repair the settings deny — and any other comment in a note would vanish
+ *    from the rendered table instead of being readable. Escaping the opener
+ *    makes such text visible and inert. Notes in this repo do discuss the
+ *    markers, so this is a live case, not a theoretical one.
+ */
 function cell(value: string | null): string {
   if (value == null || value === '') return '—';
-  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
+  return value.replace(/\|/g, '\\|').replace(/<!--/g, '&lt;!--').replace(/\r?\n/g, ' ').trim();
 }
 
 /**
@@ -148,13 +169,16 @@ function cell(value: string | null): string {
  * The day range is DERIVED from the task rows, never hand-written.
  */
 function subPhaseHeading(subPhase: string, tasks: StageFTask[]): string {
+  // Heading text bypasses cell(), so neutralise the comment opener here too —
+  // this is the one field that could still inject a marker into the output.
+  const label = subPhase.replace(/<!--/g, '&lt;!--').replace(/\r?\n/g, ' ').trim();
   const days = tasks
     .flatMap((t) => t.days.split(/[–-]/).map((d) => Number(d.trim())))
     .filter((n) => Number.isFinite(n));
-  if (days.length === 0) return `### ${subPhase}`;
+  if (days.length === 0) return `### ${label}`;
   const lo = Math.min(...days);
   const hi = Math.max(...days);
-  return lo === hi ? `### ${subPhase} (Day ${lo})` : `### ${subPhase} (Days ${lo}–${hi})`;
+  return lo === hi ? `### ${label} (Day ${lo})` : `### ${label} (Days ${lo}–${hi})`;
 }
 
 /**
