@@ -45,6 +45,30 @@
       "kind": "planned-deliverable",
       "task": "F.30",
       "reason": "The Phase 2 plan states this file plus an ADR as the deliverable, with 'No plugin code' — which is what F.30 tracks."
+    },
+    {
+      "path": "docs/PLUGIN_ROADMAP.md",
+      "file": "scripts/path-reference-allowlist.json",
+      "kind": "deliberate-mention",
+      "reason": "This file names the paths it allows. Mirrors the four self-referential entries in scripts/id-reference-allowlist.json, whose reason is \"This file names the ids it allows.\""
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "file": "scripts/path-reference-allowlist.json",
+      "kind": "deliberate-mention",
+      "reason": "This file names the paths it allows."
+    },
+    {
+      "path": "docs/STAGE_F_BUILD_v2.md",
+      "file": "scripts/path-reference-allowlist.json",
+      "kind": "deliberate-mention",
+      "reason": "This file names the paths it allows."
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "file": "scripts/check-path-references.mjs",
+      "kind": "deliberate-mention",
+      "reason": "The checker's own docblock uses this wrong path as the worked example of why the check exists — docs/DOC_AUDIT_2026-09-08.md recorded it on 2026-09-08 and README.md still carried it months later. Mirrors the DEV.38 entry for scripts/check-id-references.mjs."
     }
   ]
 }
