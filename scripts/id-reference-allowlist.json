@@ -137,6 +137,12 @@
       "file": "scripts/id-reference-allowlist.json",
       "reason": "This file names the ids it allows.",
       "kind": "deliberate-mention"
+    },
+    {
+      "id": "DEV.38",
+      "file": "scripts/check-path-references.mjs",
+      "kind": "deliberate-mention",
+      "reason": "The path checker's docblock quotes the incident that demonstrates mutual coverage: its own allowlist reason once read \"Mirrors the DEV.38 entry for check-id-references.mjs\", and check:ids rejected it because DEV.38 deliberately has no entry. The id has to be named for the anecdote to make its point — a version with the id elided would not show what was rejected. Mirrors the existing entry covering the id checker's own docstring, which names DEV.38 for the same reason."
     }
   ]
 }

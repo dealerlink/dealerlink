@@ -13,6 +13,25 @@
  * TYPST_SPIKE.md, F38_TYPST_PLAN.md and PROJECT_PLAN.md, none of which could be
  * checked against anything.
  *
+ * MUTUAL COVERAGE WITH `check:paths` — READ THIS BEFORE SIMPLIFYING EITHER.
+ * `scripts/check-path-references.mjs` is the same idea for `docs/` PATHS, and
+ * the two cover each other on purpose:
+ *
+ *   - this check reads ID citations, including the ones inside
+ *     `scripts/path-reference-allowlist.json`'s reasons;
+ *   - `check:paths` reads PATH citations, including the ones inside THIS
+ *     check's allowlist reasons.
+ *
+ * So a decorative cross-reference in either allowlist is caught by the other.
+ * Demonstrated the day `check:paths` landed: its allowlist reason said
+ * "Mirrors the DEV.38 entry for check-id-references.mjs", and this check
+ * rejected it, because DEV.38 deliberately has no entry.
+ *
+ * The consequence for anyone refactoring: if either check is narrowed to stop
+ * scanning the other's files, or either allowlist moves outside the scanned
+ * set, the pair silently stops covering each other's prose, and nothing
+ * announces it. Keep both allowlists inside both scans.
+ *
  * Usage:  node scripts/check-id-references.mjs          # report, exit 1 if dangling
  *         node scripts/check-id-references.mjs --list   # also list every id defined
  */
@@ -48,14 +67,14 @@ function allowed() {
         `${ALLOWLIST_FILE}: ${entry.id} in ${entry.file} needs a kind — ` +
           "'deliberate-mention' (the id is named in order to say it is missing, or " +
           "the file is a verbatim archive) or 'deferred-fix' (the citation is " +
-          "genuinely wrong and blocked on something outside this file).",
+          'genuinely wrong and blocked on something outside this file).',
       );
     }
     if (entry.kind === 'deferred-fix') {
       if (!entry.tracked?.trim()) {
         throw new Error(
           `${ALLOWLIST_FILE}: ${entry.id} in ${entry.file} is a deferred-fix and needs ` +
-            "a `tracked` task id. A known-wrong citation with no owner becomes permanent.",
+            'a `tracked` task id. A known-wrong citation with no owner becomes permanent.',
         );
       }
       deferred.push(entry);
@@ -74,7 +93,6 @@ function reportDeferred(deferred) {
   );
   for (const d of deferred) console.log(`  ${d.id} in ${d.file} — tracked as ${d.tracked}`);
 }
-
 
 /** Ids that actually have an entry — an `## DEV.n` / `## ADR-n` heading. */
 function defined() {
@@ -127,7 +145,9 @@ const dangling = [...cited.entries()]
     id,
     new Set([...where].filter((w) => !allow.has(`${id}@${w.split(':')[0]}`))),
   ])
-  .filter(([id, where]) => where.size > 0 && (id.startsWith('DEV.') ? !devs.has(id) : !adrs.has(id)))
+  .filter(
+    ([id, where]) => where.size > 0 && (id.startsWith('DEV.') ? !devs.has(id) : !adrs.has(id)),
+  )
   .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
 
 if (process.argv.includes('--list')) {
