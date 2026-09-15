@@ -1035,17 +1035,37 @@ the `days` field, so re-sequencing means editing `days` on the affected tasks
 The script is deliberately paranoid, because it writes into the project's
 canonical tracker:
 
-- **"malformed markers"** — the marker pair is duplicated, nested, orphaned, or
-  END precedes START. Repair `PROJECT_PLAN.md` by hand, then re-run. The script
-  writes nothing in this state.
-- **"already contains a Stage F heading … but no STAGE_F_TASKS markers"** — some
-  other section has claimed the name. The script will not overwrite a section it
-  does not own. Put the markers inside the intended section yourself, then re-run.
-  The third refusal mode — **"REFUSING TO WRITE: content outside the
-  STAGE_F_TASKS markers would change"** — **no longer exists.** It guarded
-  hand-written Stage A–E content that is no longer in the file. The assertion and
-  its NUL-byte sentinel were removed by F.37/F.63; if you see that message, you
-  are running an old copy of the script.
+**`plan:sync` never refuses because of what is in `PROJECT_PLAN.md`, and never
+needs you to repair that file by hand.** The file is generated, so whatever
+state it is in — hand-edited, corrupt markers, an unrelated Stage F section,
+truncated, absent — `pnpm plan:sync` regenerates it and exits 0. If you are
+looking at a broken `PROJECT_PLAN.md`, that is the whole remedy.
+
+It refuses only when a SOURCE is unusable, and all three refusals name the
+source to fix:
+
+- **"REFUSING TO RENDER: the header template contains a Changelog heading"** —
+  `docs/project-plan-header.md` has one, in any CommonMark form (ATX, indented
+  ATX, setext). The section was deleted on Day 24 (DEV.110) and must not come
+  back through the template. Remove the heading.
+- **"REFUSING TO RENDER: the header template contains a STAGE_F_TASKS marker"** —
+  the renderer emits the markers; a second pair in the output makes the task
+  block unlocatable. Remove it from the template.
+- **"stage-f-tasks.json: …"** — a task has an unknown `status`, a duplicate
+  `id`, or a missing required field. The message names the task and the field.
+
+RETIRED, so an old message is recognisable rather than puzzling: **"REFUSING TO
+WRITE: content outside the STAGE_F_TASKS markers would change"** guarded
+hand-written Stage A–E content that is no longer in this file, and the
+assertion was removed by F.37/F.63 (its sentinel survives as a printable
+`BLOCK_SENTINEL`, used to report WHICH half drifted). **"already contains a
+Stage F heading … but no STAGE_F_TASKS markers"** is also gone — a hand-written
+Stage F section is now simply overwritten, which is correct for a generated
+file. Seeing either message means you are running an old copy of the script.
+
+`plan:check` is the half that reports problems rather than fixing them. On a
+file with corrupt markers it says so and still points you at `plan:sync`; it
+never asks for a hand edit, because `.claude/settings.json` denies one.
 
 ### If CI fails on `plan:check`
 

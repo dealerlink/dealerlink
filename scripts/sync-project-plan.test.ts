@@ -323,6 +323,37 @@ describe('CLI', () => {
   });
 });
 
+describe('a generated file is always repairable — no hand edit, ever', () => {
+  // The docs used to list two plan:sync refusal modes that protected authored
+  // content: a malformed marker pair, and an unowned Stage F heading. Neither
+  // can fire now, and both remedies were a hand edit that settings.json denies.
+  // These assert the replacement guarantee instead.
+  it('regenerates over a file with duplicated markers', async () => {
+    const planPath = path.join(tmp, 'corrupt-markers.md');
+    await writeFile(planPath, `# x\n\n${MARKER_START}\n${MARKER_START}\n${MARKER_END}\n`, 'utf8');
+    const res = await runCli(planPath);
+    expect(res.code).toBe(0);
+    expect(await readFile(planPath, 'utf8')).toBe(rendered.trimEnd() + '\n');
+  });
+
+  it('regenerates over a hand-written Stage F section with no markers', async () => {
+    const planPath = path.join(tmp, 'unowned-heading.md');
+    await writeFile(planPath, '# x\n\n## Stage F — Phase 2\n\n| hand | written |\n', 'utf8');
+    const res = await runCli(planPath);
+    expect(res.code).toBe(0);
+    expect(await readFile(planPath, 'utf8')).toBe(rendered.trimEnd() + '\n');
+  });
+
+  it('tells you to run plan:sync rather than to repair a corrupt file by hand', async () => {
+    const planPath = path.join(tmp, 'corrupt-check.md');
+    await writeFile(planPath, `# x\n\n${MARKER_START}\n${MARKER_START}\n${MARKER_END}\n`, 'utf8');
+    const res = await runCli(planPath, ['--check']);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain('Nothing needs repairing by hand');
+    expect(res.stderr).not.toMatch(/by hand, then re-run/);
+  });
+});
+
 describe('the live PROJECT_PLAN.md', () => {
   it('equals the render, byte for byte — no hand edits anywhere', async () => {
     const plan = await readFile(REAL_PLAN, 'utf8');
@@ -435,7 +466,7 @@ describe('docs/PROJECT_HISTORY.md keeps its substance, not just its headings', (
   const SECTION_FLOORS: Array<[string, number]> = [
     ['Stage 0 — Discovery & Decisions', 8],
     ['Stage A — Foundation Setup', 10],
-    ['Stage B — The 3.5-Week Build', 20],
+    ['Stage B — The 3.5-Week Build', 17],
     ['Stage C — Internal Validation (Week 5)', 6],
     ['Stage D — Production Infrastructure', 6],
     ['Stage E — Launch & Onboarding', 7],
@@ -444,13 +475,20 @@ describe('docs/PROJECT_HISTORY.md keeps its substance, not just its headings', (
     ['Risks & Open Items', 19],
   ];
 
-  /** Data rows in one `## `-delimited section, excluding header + separator. */
+  /**
+   * Data rows in one `## `-delimited section.
+   *
+   * Counts a header AND a separator per table, not one header for the section:
+   * Stage B holds five sub-tables (four week tables plus its summary), so
+   * subtracting a single header inflated it by four and set its floor from the
+   * wrong number.
+   */
   function sectionRows(history: string, heading: string): number {
     const body = history.split(`## ${heading}`)[1] ?? '';
     const upToNext = body.split(/^## /m)[0] ?? '';
     const pipes = upToNext.split('\n').filter((l) => /^\|/.test(l));
-    const separators = pipes.filter((l) => /^\|[\s|:-]+\|?\s*$/.test(l)).length;
-    return Math.max(0, pipes.length - separators - 1);
+    const tables = pipes.filter((l) => /^\|[\s|:-]+\|?\s*$/.test(l)).length;
+    return Math.max(0, pipes.length - 2 * tables);
   }
 
   it('keeps every section at or above its row floor', async () => {
@@ -492,8 +530,17 @@ describe('the Changelog section stays deleted (DEV.110)', () => {
     expect(header).not.toMatch(/^#{1,6}\s+Changelog\b/m);
   });
 
-  it('is absent from the hand-maintained history file', async () => {
+  // WIDER THAN THE OTHER TWO, deliberately. The plan is Prettier-normalised on
+  // render, so an odd heading form there becomes a plain `## Changelog` that a
+  // narrow regex catches. This file gets no Prettier pass and CI runs no
+  // `format:check`, so the odd forms stay odd — and the comment above says this
+  // assertion is the only thing standing in the way. It therefore matches what
+  // `assertTemplateUsable()` matches: indented ATX, and setext with a
+  // one-character underline.
+  it('is absent from the hand-maintained history file, in any heading form', async () => {
     const history = await readFile(REAL_HISTORY, 'utf8');
-    expect(history).not.toMatch(/^#{1,6}\s+Changelog\b/m);
+    expect(history).not.toMatch(/^ {0,3}#{1,6}[ \t]+Changelog\b/im);
+    expect(history).not.toMatch(/^ {0,3}Changelog[ \t]*\n {0,3}[=-]+[ \t]*$/im);
+    expect(history).not.toMatch(/<h[1-6][^>]*>\s*Changelog/i);
   });
 });

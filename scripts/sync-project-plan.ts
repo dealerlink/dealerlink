@@ -417,8 +417,24 @@ export interface RunResult {
 
 /** Where the drift is, so the failure message can name the file to edit. */
 function describeDrift(current: string, next: string): string {
-  const outsideChanged = outsideMarkers(current) !== outsideMarkers(next);
-  const insideChanged = insideMarkers(current) !== insideMarkers(next);
+  // The region split needs well-formed markers in the ON-DISK file to mean
+  // anything, and findMarkers throws when they are duplicated, orphaned or
+  // inverted. That is no longer a state anyone has to repair: the file is
+  // generated, so `plan:sync` regenerates it whatever is in it. Say that,
+  // instead of surfacing a marker error whose old remedy was a hand edit the
+  // settings now deny.
+  let outsideChanged: boolean;
+  let insideChanged: boolean;
+  try {
+    outsideChanged = outsideMarkers(current) !== outsideMarkers(next);
+    insideChanged = insideMarkers(current) !== insideMarkers(next);
+  } catch {
+    return (
+      'The file on disk is corrupt or hand-edited beyond recognition ' +
+      '(its STAGE_F_TASKS markers are duplicated, orphaned or inverted). ' +
+      'Nothing needs repairing by hand — `pnpm plan:sync` regenerates the whole file.'
+    );
+  }
   if (insideChanged && !outsideChanged) {
     return 'The task tables drifted — edit docs/stage-f-tasks.json.';
   }

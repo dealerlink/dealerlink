@@ -130,13 +130,19 @@ stamped 2026-09-09 by a session whose commits are all dated 2026-09-10.
 5. `git diff --stat` and `git diff docs/stage-f-tasks.json` — report both.
 
 If `plan:sync` refuses to run, do **not** work around it. Report the exact
-message. The refusal modes are documented in `docs/RUNBOOKS.md`
-("Updating the Stage F task table"): malformed markers, and a Stage F heading
-with no markers. The third mode that runbook used to list — the byte-identity
-assertion tripping — **no longer exists**: F.37/F.63 made the whole file
-generated, so there is no content outside the markers to protect and the
-assertion was removed. If you ever see that message you are running an old copy
-of the script.
+message. `plan:sync` NEVER refuses because of the state of `PROJECT_PLAN.md` — that
+file is generated, so any state it is in is regenerated and the command exits 0. It refuses only when a SOURCE is unusable, and each message names the source:
+a Changelog heading or a smuggled marker in `docs/project-plan-header.md`, or a
+bad `status`/duplicate `id`/missing field in the JSON you just edited. The last
+of those three is the one you can cause, so read the message: it names the task
+and the field.
+
+Two older refusals are RETIRED and are documented in `docs/RUNBOOKS.md`
+("Updating the Stage F task table") so the messages stay recognisable: the
+byte-identity assertion, and "already contains a Stage F heading … but no
+markers". Neither can fire now. If you see one, you are running an old copy of
+the script — report that, do not act on its advice, which is a hand edit the
+settings deny.
 
 ## Output format
 

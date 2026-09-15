@@ -4954,7 +4954,24 @@ attempt, which the review broke: a single whole-file floor of 110 rows out of
 125 did not notice an emptied Stage C (6 rows), and matching only the id cell
 did not notice all 18 Stage B rows gutted to `| B.N | | | |`. Per-section
 floors and non-empty cell checks catch both, verified against those exact
-mutations. That is weaker than byte-identity and it is the
+mutations and against six more section-emptying cases found by the review.
+Stage B's floor was also set from an inflated count — the row counter
+subtracted one header for the whole section where Stage B holds five
+sub-tables — and is now 17 rather than 20.
+
+**ONE MORE THING THE REVIEW FOUND, and it is a documentation failure rather
+than a code one.** Two `plan:sync` refusal modes documented in
+`docs/RUNBOOKS.md` and repeated in `plan-keeper`'s prompt no longer exist,
+and both of their remedies instructed the hand edit `.claude/settings.json`
+denies. "A Stage F heading with no markers" now results in a silent overwrite,
+which is CORRECT for a generated file; and "malformed markers" is a
+`plan:check`-only report, because `plan:sync` regenerates whatever state the
+file is in. That is the whole point of the change and the docs still described
+the world in which the script protected authored content. Both were rewritten
+to state the real guarantee — a generated file is always repairable by
+`plan:sync`, and the only refusals left name an unusable SOURCE — and
+`plan:check`'s message on a corrupt file now says so instead of surfacing a
+raw marker error. Three tests lock the guarantee in. That is weaker than byte-identity and it is the
 deliberate price of the rule becoming satisfiable.
 
 **Carried in with the migration, because porting them verbatim would have
