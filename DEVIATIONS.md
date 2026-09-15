@@ -4879,3 +4879,226 @@ erosion the surrounding decision was protecting against.
 `scripts/id-reference-allowlist.json`. No process change is proposed, because the
 mechanism that caught it already exists and worked: the closeout runs `verifier`
 before the PR opens, and `verifier` reads the artefact rather than the intent.
+
+## DEV.130 — the unsatisfiable containment rule is gone; DEV.112's overrule cannot recur
+
+**Date:** 2026-09-15
+**Scope:** `PROJECT_PLAN.md`, `scripts/sync-project-plan.ts`, the `verifier` closeout gate, CLAUDE.md §10.4/§10.5.
+
+**Spec said:** F.63 — make `PROJECT_PLAN.md` entirely generated so no
+hand-editable region remains, and change the verifier's rule from "no change
+outside the markers" to "no hand edits at all".
+
+**Done, and this entry exists because a gate's pass condition changed.** Not a
+deviation from the day's scope — it is the day's scope. It is recorded because
+`verifier` has flagged on several branches that a change of this kind belongs
+in this file, and because DEV.112 needs closing out.
+
+**What DEV.112 recorded, and why it can now be retired as a precedent rather
+than as a mistake:** DEV.112 was the one operator overrule of a `verifier`
+FAIL, justified on unsatisfiability — exactly one commit in the repository's
+history had to fail the containment check, and no rule change available at the
+time could avoid it. That justification was sound and the overrule was
+correctly narrow. But its claim that only one commit could ever fail was
+already false when written: **any** legitimate change to Stage 0 or Stages A–E
+failed the same check, because that content sat outside the `STAGE_F_TASKS`
+markers where `plan:sync` could not write, CLAUDE.md §10.4 banned hand edits,
+and `.claude/settings.json` denies `Edit`/`Write` on the path. A stage
+retitle, a corrected citation, or recording that Stage E never finished were
+each legitimate, eventually necessary, and forbidden by every approved route at
+once.
+
+**The fix removed the tension instead of spending more overrules.** The
+narrative moved to `docs/PROJECT_HISTORY.md`, which is hand-maintained and
+needs no rule at all; the rest of `PROJECT_PLAN.md` is now rendered in its
+entirety from `docs/stage-f-tasks.json` plus `docs/project-plan-header.md`.
+The check became total — the file must equal the render — which is stricter
+than the old rule and, unlike it, satisfiable forever.
+
+**Two consequences worth naming:**
+
+1. The `Edit`/`Write` deny in `.claude/settings.json` is now unqualified and
+   CORRECT. It previously forbade the only route to a legitimate change; there
+   is now nothing it blocks that anyone should be doing.
+2. The `## Changelog` ban (DEV.110) closes for the HAND-EDIT route only, and
+   the closeout review caught an earlier draft of this entry overstating that
+   as "structurally". Being generated removes one route, not every route: a
+   `Changelog` heading placed in the header template rendered straight through
+   into `PROJECT_PLAN.md` and `plan:check` reported "in sync", because the file
+   genuinely did equal the render. So the ban is now enforced where it can
+   still be breached — `assertTemplateUsable()` in
+   `scripts/sync-project-plan.ts` refuses to render a template containing one,
+   in ATX or setext form — including the two escapes the review found, an ATX
+   heading indented up to three spaces and a single-character setext underline,
+   both valid CommonMark that a naive `/^#+ Changelog/` misses — and the same
+   function rejects a template that smuggles in a `STAGE_F_TASKS` marker (which would put two pairs in the
+   output and make the task block unlocatable). The test suite asserts the ban
+   against all three surfaces: the plan, the template and
+   `docs/PROJECT_HISTORY.md`. The regex is exactly as load-bearing as it was
+   before; it is just better written and applied in more places.
+
+**WHAT THIS TRADE COSTS, recorded because the entry is otherwise one-sided.**
+The new rule is stronger where it is enforced and NARROWER in what it protects.
+Stronger: it is self-enforcing through `plan:check` in CI, total over the file,
+and satisfiable — where the old rule depended on a human reading a diff and
+could not be satisfied at all. Narrower: the substantive protection the old rule
+gave was that Stage 0 and Stages A–E could not be silently rewritten, and
+nothing inherits that. `docs/PROJECT_HISTORY.md` has no sync step, no deny rule
+and no append-only requirement, and the verifier is explicitly told not to
+report edits to it as containment failures. Ordinary review is most of the
+replacement. The rest is a set of assertions in
+`scripts/sync-project-plan.test.ts`: the six stage headings survive, EVERY table-bearing
+SECTION holds at or above its own row floor — all ten, including Progress
+Summary, which had no floor in the first version, and every Stage B day row is
+POPULATED rather than merely present. Both of those are narrower than the first
+attempt, which the review broke: a single whole-file floor of 110 rows out of
+125 did not notice an emptied Stage C (6 rows), and matching only the id cell
+did not notice all 18 Stage B rows gutted to `| B.N | | | |`. Per-section
+floors and non-empty cell checks catch both, verified against those exact
+mutations and against six more section-emptying cases found by the review.
+Stage B's floor was also wrong, twice over, and the second reading corrects
+the first: it was 20 from a counter that subtracted a fixed header count, then
+17 from a counter that mistook a stray `|      |` line — pre-existing on main
+and migrated verbatim — for an extra table. Stage B has FOUR tables and 18
+rows, which the file's own Progress Summary also states — though that table is
+unreliable in general and identically so on main (it gives Stage D as 4 against
+6 rows, and a total of 62 against a column sum of 53), so the count was taken
+independently rather than read off it. The stray
+line is removed (a normal edit to a now-hand-maintained file, which is the
+point of the move), the counter now identifies data rows exactly rather than
+arithmetically, and the floors are each section's true migrated count. A floor
+derived from a buggy counter is calibrated to the bug.
+
+**ONE MORE THING THE REVIEW FOUND, and it is a documentation failure rather
+than a code one.** Two `plan:sync` refusal modes documented in
+`docs/RUNBOOKS.md` and repeated in `plan-keeper`'s prompt no longer exist,
+and both of their remedies instructed the hand edit `.claude/settings.json`
+denies. "A Stage F heading with no markers" now results in a silent overwrite,
+which is CORRECT for a generated file; and "malformed markers" is a
+`plan:check`-only report, because `plan:sync` regenerates whatever state the
+file is in. That is the whole point of the change and the docs still described
+the world in which the script protected authored content. Both were rewritten
+to state the real guarantee — a generated file is always repairable by
+`plan:sync`, and the only refusals left name an unusable SOURCE — and
+`plan:check`'s message on a corrupt file now says so instead of surfacing a
+raw marker error. Three tests lock the guarantee in.
+
+**A FOURTH REFUSAL EXISTED AND WAS MISSED BY THAT SAME REWRITE**, found by the
+next review. A task field containing the `STAGE_F_TASKS` marker text — any of
+`notes`, `task`, `subPhase`, `days`, `id` — put a second marker pair in the
+output and aborted the render with a "malformed markers" error that blamed
+`PROJECT_PLAN.md`, prescribed the hand repair the settings deny, and named
+neither the JSON nor the field. Live rather than theoretical: F.63's and F.65's
+own notes discuss the markers. It is eliminated rather than documented — the
+comment opener is now escaped in table cells and in sub-phase headings, so such
+text renders visibly and inertly, which also fixes a latent bug where any HTML
+comment in a note vanished from the rendered table. Tested from all five
+fields. The lesson is narrower than "sweep further": validating the OUTPUT for
+markers, which is what closed the smuggled-template hole, is what opened this
+one, and the commit that wrote the first fix described that mechanism without
+following it to its consequence.
+
+**FOUR MORE, from an adversarial pass that went looking rather than reading.**
+Escaping `<!--` closed one route into the rendered document and left three
+open, which is the useful shape of this whole sequence:
+
+1. A LONE `\r` in any field. `/\r?\n/` does not match it, and Prettier
+   normalises `\r` to `\n` AFTER the guard runs, so the newline came back,
+   split the table row and emitted a bogus extra row — the exact malformed-row
+   class removed from the history file one commit earlier. `plan:check` stayed
+   green throughout, because the file genuinely equalled the render. And
+   `subPhase: 'x\r## Changelog'` planted a REAL Changelog heading in
+   `PROJECT_PLAN.md` with sync and check both reporting success. So consequence
+   2 above named the wrong residual surface: the template was one route, the
+   JSON was another.
+2. A NUL in any field passed through into the plan, making search tools
+   classify it as binary — bare `grep` exits 1 with no output. That is
+   DEV.115/117/118 reintroduced into the file F.63 had just cleaned of one.
+3. `status in STATUS_SYMBOLS` walks the PROTOTYPE CHAIN, so `toString`,
+   `__proto__`, `constructor` and `valueOf` passed validation and rendered a
+   native function into the Status cell, counted in the total and absent from
+   every per-status row. `Object.hasOwn` closes it. The existing test used
+   `'almost'`, which is not on the chain.
+4. `completedDate` and `notes` are typed `string | null` and were copied
+   through unchecked, so a number or object threw a bare
+   "value.replace is not a function", and `tasks: [null]` threw
+   "Cannot read properties of null" — neither naming the file, the task or the
+   field. Both now refuse with the message style the JSON-parse fix introduced.
+
+All four are closed at source — control characters collapsed to spaces in both
+cell and heading paths — with twelve tests, and all four re-probed through the
+real CLI afterwards.
+
+**TWO MORE, and then a change of approach.** A further adversarial pass found:
+
+5. An UNPAIRED SURROGATE in any field — what `JSON.stringify` emits whenever a
+   string carrying an emoji is sliced mid-pair. It does not corrupt the output;
+   it makes the output UNREACHABLE. `writeFile` with utf8 transcodes a lone
+   `\ud83d` to U+FFFD, so the file on disk can never equal the string it was
+   compared against: `plan:sync` writes on every run, `plan:check` is red
+   forever, and the one command meant to fix it cannot. **That is the
+   unsatisfiable-gate condition this entry exists to record the removal of,
+   recreated inside the generated file** — and it would have committed clean,
+   because the bytes are stable and `git status` stays quiet.
+6. `cell()` escaped `|` without escaping `\`, so a value's own `\|` became an
+   escaped backslash followed by a LIVE pipe and split the row. Reachable in one
+   edit: a note quoting a regex that matches a pipe — which is what the escaping
+   code inside `cell()` itself looks like.
+
+THE CHANGE OF APPROACH, which is the part worth keeping. Six defects in three
+rounds all had the same shape: a guard on ONE INPUT PATH, and the next route in
+was through a different field, a different character class, or a different
+spelling. So the invariants that matter are now asserted on the OUTPUT, once,
+in `assertRenderedOk()`: no Changelog heading in any form Markdown or HTML
+allows — ATX, indented ATX, setext, `<h2>`, and "Change Log" or "Change-Log"
+spelled apart — and no malformed table row, counted escape-aware so a quoted
+regex is not a false positive. Those hold for any route, including ones nobody
+has thought of, and the message names both sources because the output cannot
+say which one it came from. The per-source guard stays as well, because an early
+error naming the template is more useful than a late one naming both.
+
+Two of my own probes were wrong before the code was: a pipe counter that was
+not escape-aware reported four broken fields when one was, and a blanket
+surrogate assertion fired on the status emoji, which are valid pairs. Both are
+now written so they fail when the property is absent — a test that cannot fail
+is the same defect as a claim nobody checked.
+
+(An earlier draft of this entry ended this paragraph with a sentence about
+byte-identity being the deliberate price of a satisfiable rule. It had no
+referent here; it belongs to the WHAT THIS TRADE COSTS paragraph above, where
+the same point is made in full.) That is weaker than byte-identity and it is the
+deliberate price of the rule becoming satisfiable.
+
+**Carried in with the migration, because porting them verbatim would have
+regenerated the defects:** `PROJECT_PLAN.md:3` carried a standing instruction
+to append to the changelog deleted on Day 24 — corrected in the template, not
+ported. `PROJECT_PLAN.md:90` cited DEV.38 for a Day 8 seed bug whose entry was
+never written (DEV.128) — corrected in the migrated content. The
+DEV.38/`PROJECT_PLAN.md` allowlist entry was CONVERTED from `deferred-fix` to
+`deliberate-mention` rather than deleted, because its surviving mentions (five occurrences across two generated table rows) are
+generated from F.63's and F.72's own notes, which name the id in order to say
+it does not resolve. `pnpm check:ids` now exits 0 with no deferred-fix line at
+all.
+
+**Also closed here:** the NUL-byte sentinel in `outsideMarkers()` is now a
+printable token, which was F.65's remaining one-line fix (DEV.115, DEV.117,
+DEV.118). Plain `grep` on that file now lists its matches and exits 0 where it used to
+exit 1 with no output at all. No count is quoted: the first version of this
+sentence said "returns 4", and the same commit that wrote it added a fifth
+occurrence — the marker check in `assertTemplateUsable()`. A count of a string
+in a file you are editing in the same change is a claim with a half-life. All FIVE Bash-holding agents now
+carry search-instrument guidance — the three that already had it
+(`doc-auditor`, `ci-investigator`, `flake-triager`) were updated because that
+file's NUL was their worked example and F.65 predicted the exact consequence of
+fixing it silently: an agent that finds `grep` working would reasonably
+conclude the whole warning was stale. The other two, `verifier` and
+`plan-keeper`, had NONE and now do. That gap mattered most for `verifier`,
+whose entire output is negative-existence claims and whose own prompt tells it
+to run bare `grep -o` over `DEVIATIONS.md` and `DECISIONS.md`.
+
+**What this does NOT do.** It does not sanction a permitted-edit path for
+generated files — the operator rejected that explicitly, on the grounds that it
+reintroduces the drift the deny exists to prevent and turns §10.3 into a
+formality. And it does not audit the negative-existence claims derived while
+the grep fault was live; that remains open on F.65, with the exposure believed
+nil and unverified.

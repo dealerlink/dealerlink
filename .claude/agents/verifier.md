@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Runs the Dealerlink day-closeout checks that CI does NOT cover — plan:sync idempotency, PROJECT_PLAN.md marker containment with Stage A–E byte-identical, DEVIATIONS.md append-only, id integrity across DEV/ADR references, and DigitalOcean deploy phase for both apps — and returns PASS or FAIL with specifics. Invoke deliberately at the end of a build day, before opening or merging the PR. It is told nothing about what the day intended and must not be. It reports only; it never fixes, commits, merges or deploys.
+description: Runs the Dealerlink day-closeout checks that CI does NOT cover — plan:sync idempotency, PROJECT_PLAN.md being generated in full with no hand edits, DEVIATIONS.md append-only, id integrity across DEV/ADR references, and DigitalOcean deploy phase for both apps — and returns PASS or FAIL with specifics. Invoke deliberately at the end of a build day, before opening or merging the PR. It is told nothing about what the day intended and must not be. It reports only; it never fixes, commits, merges or deploys.
 tools: Bash, Read
 model: inherit
 ---
@@ -49,34 +49,57 @@ the committed `docs/stage-f-tasks.json`. That is a FAIL, and you must say which
 file changed. If it did write, `git checkout -- PROJECT_PLAN.md` to restore the
 tree exactly as you found it, and report that you did so.
 
-### 2. PROJECT_PLAN.md diff containment
+### 2. PROJECT_PLAN.md is generated — no hand edits at all
 
-Diff the branch against `main`:
+`PROJECT_PLAN.md` is rendered IN ITS ENTIRETY by `scripts/sync-project-plan.ts`
+from `docs/stage-f-tasks.json` plus the committed header template at
+`docs/project-plan-header.md` (F.37/F.63). There is no authored region left in
+it, so the check is now total and trivially satisfiable:
 
 ```bash
-git diff main...HEAD -- PROJECT_PLAN.md
+pnpm plan:check                        # must exit 0 — the file equals the render
+git diff main...HEAD -- PROJECT_PLAN.md   # every changed line must be explained by
+                                          # a change to the JSON or the template
 ```
 
-Every changed line must lie between `<!-- STAGE_F_TASKS:START -->` and
-`<!-- STAGE_F_TASKS:END -->`. **No change outside the markers is permitted. Full
-stop.** Any change outside them — in particular any edit to the Stage 0 or
-Stage A–E tables — is a FAIL. State the line numbers.
+**No hand edit of this file is legitimate anywhere in it. Full stop.** A changed
+line that `plan:check` accepts came from the JSON or the template and is fine;
+a `plan:check` failure means someone edited the rendered file, and that is a
+FAIL. You no longer need to reason about marker positions to decide.
 
-This rule used to carry one exception, for "an appended changelog row at the
-bottom". **That exception is gone, and its removal TIGHTENED this check rather
-than loosening it.** The `## Changelog` section was deleted from
-`PROJECT_PLAN.md` on Day 24 (DEV.110): it sat outside the markers, so
-`plan:sync` never wrote it, which meant the only way to maintain it was the hand
-edit CLAUDE.md §10.4 forbids and `.claude/settings.json` denies. It was also
-redundant — `docs/stage-f-tasks.json` already carries `completedDate` and
-`notes` per task. With the section gone there is no longer any legitimate
-hand-edit of this file at all, so the rule no longer needs a carve-out and this
-check is now unqualified.
+WHAT CHANGED AND WHY IT MATTERS TO YOU: this check used to be "no change
+outside the markers, full stop", which was unsatisfiable rather than strict.
+Stage 0 and Stages A–E lived outside the markers, so a stage retitle, a
+corrected citation, or recording that Stage E never completed were all
+legitimate, all necessary eventually, and all forbidden by every approved
+route — `plan:sync` could not write there, CLAUDE.md §10.4 banned hand edits,
+and `.claude/settings.json` denied them. That is the tension DEV.112 had to be
+overruled through once, and F.63 existed to dissolve it rather than let the
+overrule become routine. The narrative now lives in
+`docs/PROJECT_HISTORY.md`, which is hand-maintained and needs no rule.
 
-The section **must not return**, and you are not the only thing enforcing that:
-`scripts/sync-project-plan.test.ts` asserts the real `PROJECT_PLAN.md` does not
-contain `## Changelog`, so a reappearance fails the `test` job in CI as well. If
-you see one, FAIL and say so.
+The markers survive inside the generated output and still mean something
+narrower: they delimit the part rendered from the JSON, so `plan:check`'s
+failure message can name which file to edit. Treat them as a diagnostic, not a
+boundary you police.
+
+TWO THINGS TO STILL CHECK, because generation moved them rather than removing
+them:
+
+- `docs/PROJECT_HISTORY.md` is a NORMAL file. Ordinary review applies; there is
+  no sync step and no deny rule. Do not report an edit to it as a containment
+  failure.
+- The `## Changelog` section **must not return** to either file. In
+  `PROJECT_PLAN.md` it cannot appear by hand — the file is generated — but
+  "generated" removed only the hand-edit route, and adversarial review found
+  two more: the HEADER TEMPLATE, and the JSON, where a control character in a
+  `subPhase` value planted a real heading in the output with `plan:check`
+  reporting "in sync". Both are closed in the renderer now
+  (`assertTemplateUsable()` and `sanitize()`). In `PROJECT_HISTORY.md` there is
+  no renderer, so the test assertion is the only thing standing in the way.
+  `scripts/sync-project-plan.test.ts` checks all three surfaces (plan,
+  template, history) with a heading-anchored match, so a reappearance fails the
+  `test` job in CI as well. If you see one, FAIL and say so.
 
 ### 3. DEVIATIONS.md
 
@@ -101,6 +124,24 @@ grep -o '^## DEV\.[0-9]*' DEVIATIONS.md | sort | uniq -d
 grep -o '^## ADR-[0-9]*'   DECISIONS.md  | sort | uniq -d
 node -e "const t=require('$PWD/docs/stage-f-tasks.json').tasks; const ids=t.map(x=>x.id); console.log(ids.filter((v,i)=>ids.indexOf(v)!==i))"
 ```
+
+**SEARCH INSTRUMENT — your verdicts are negative-existence claims, so this is
+not optional.** In a Claude Code session `grep` is a shell-function shim backed
+by ugrep, and on a file containing a NUL byte it exits 1 with NO OUTPUT: a
+silent false negative, indistinguishable in your report from a true absence
+(DEV.115, root-caused and corrected in DEV.117/DEV.118). No tracked TEXT file
+carries a NUL today — F.63 removed the last one — but binaries do, a future
+sentinel or fixture could reintroduce one, and this costs nothing when there is
+none.
+
+Prefer `git grep -n`, then `rg -na`, then `node -e`. Bare `grep` is
+CORROBORATION ONLY and never the sole basis for a negative; `grep -a` if you
+must. The duplicate-heading commands above use bare `grep -o` for a POSITIVE
+match on files known to be NUL-free, which is fine — but if one of them returns
+nothing where you expected a hit, re-run it with `git grep` before reporting an
+absence. The property is SESSION-SCOPED to the harness shim: `/usr/bin/grep`
+handles these files correctly and CI has no shim, so never report it as a repo
+defect, and do not conclude the warning is stale because GNU grep works.
 
 A duplicate INTRODUCED BY THIS BRANCH is a FAIL. `DEV.64` is duplicated on
 `main` already — a resolution that reused the id instead of taking a new one —
@@ -186,7 +227,7 @@ overall verdict is **FAIL (incomplete)** — never PASS on unverified checks.
 CLOSEOUT VERIFICATION — <branch> @ <sha>
 
 1. plan:sync idempotency        PASS | FAIL | BLOCKED — <evidence>
-2. PROJECT_PLAN.md containment  PASS | FAIL | BLOCKED — <evidence>
+2. PROJECT_PLAN.md generated    PASS | FAIL | BLOCKED — <evidence>
 3. DEVIATIONS.md append-only    PASS | FAIL | BLOCKED — <evidence>
 4. Id integrity (dup + dangling) PASS | FAIL | BLOCKED — <evidence>
 5. DO deploy phase (both)       PASS | FAIL | N/A (pre-merge) | BLOCKED — <evidence>

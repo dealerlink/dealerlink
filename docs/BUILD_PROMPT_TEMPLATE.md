@@ -43,18 +43,23 @@ C4. pnpm build && pnpm test                # both green
                                            # against a known seeded state
                                            # (DEV.91). Re-run pnpm db:seed if
                                            # you need to go back the other way.
-C5. Update PROJECT_PLAN.md:
-    - Stage A–E (hand-maintained): find the row, set status ✅, set date,
-      add notes summary
-    - Stage F (GENERATED — see below): edit docs/stage-f-tasks.json, then
-      run `pnpm plan:sync`. NEVER hand-edit the Stage F table.
+C5. Update the plan:
+    - Stage F work: edit docs/stage-f-tasks.json, then run `pnpm plan:sync`.
+      PROJECT_PLAN.md is GENERATED IN FULL since F.37/F.63 — never hand-edit
+      any part of it, and `.claude/settings.json` denies Edit/Write on it.
+    - Stage 0 / Stages A–E / risks: those moved to docs/PROJECT_HISTORY.md,
+      which IS hand-maintained. Find the row and edit it normally — no sync
+      step, no deny rule. Do not look for those rows in PROJECT_PLAN.md.
+    - the prose around the Stage F table (title, purpose, companion list) comes
+      from docs/project-plan-header.md. Edit that, then `pnpm plan:sync`.
+      `pnpm plan:check` names which of the two sources drifted.
     - there is NO changelog row to append. The `## Changelog` section was
-      DELETED on Day 24 (DEV.110) and must not return: it sat outside the
-      markers, so plan:sync never wrote it, which made it maintainable only by
-      the hand edit CLAUDE.md §10.4 forbids — and it duplicated the
-      completedDate + notes that docs/stage-f-tasks.json already carries.
-      scripts/sync-project-plan.test.ts now fails the `test` job if it
-      reappears. Nothing outside the STAGE_F_TASKS markers should change.
+      DELETED on Day 24 (DEV.110) and must not return: it duplicated the
+      completedDate + notes that docs/stage-f-tasks.json already carries, and
+      it was maintainable only by a hand edit CLAUDE.md §10.4 forbids.
+      scripts/sync-project-plan.test.ts fails the `test` job if it reappears in
+      the plan, the header template or the history file, and
+      `assertTemplateUsable()` refuses to render a template containing one.
 C6. Append the day's deviations to /DEVIATIONS.md
     (append-only; never edit historic entries; if a deviation is
      resolved later, write a new RESOLVED entry referencing the original)
@@ -133,7 +138,7 @@ C7. git switch -c day-<N>-<slug>
     git push -u origin day-<N>-<slug>
 C7a. RUN THE `verifier` SUBAGENT — BEFORE opening the PR, not after.
     It runs the closeout checks CI cannot see: plan:sync idempotency,
-    PROJECT_PLAN.md marker containment with Stage 0/A–E byte-identical,
+    PROJECT_PLAN.md being generated in full with no hand edits,
     DEVIATIONS.md append-only, and the DO deploy phase. Tell it nothing about
     what the day intended — it must not be given a reason to soften a finding.
 
@@ -187,9 +192,13 @@ Every Stage F day's close-out therefore does this instead of editing the table:
 ```
 
 `pnpm plan:check` runs inside `pnpm verify`, so a table that has drifted from
-the JSON fails the gate. The script writes only between
-`<!-- STAGE_F_TASKS:START -->` and `<!-- STAGE_F_TASKS:END -->` and asserts
-that everything outside those markers is byte-identical before writing.
+the JSON fails the gate. Since F.37/F.63 the script renders the WHOLE file —
+from `docs/stage-f-tasks.json` plus the committed header template
+`docs/project-plan-header.md` — so there is no hand-editable region left in it
+and no byte-identity assertion to trip. The markers survive inside the output
+to delimit the JSON-sourced half, so `plan:check` can name which source
+drifted. Stages 0–E moved to `docs/PROJECT_HISTORY.md`, which IS
+hand-maintained.
 
 Full workflow, failure modes and recovery: `docs/RUNBOOKS.md` — "Updating the
 Stage F task table".

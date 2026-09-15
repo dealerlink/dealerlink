@@ -977,15 +977,25 @@ doctl databases firewalls append <new-cluster-id> --rule "app:d8a25cb8-e4cb-4035
 
 ## R? — Updating the Stage F task table (PROJECT_PLAN.md)
 
-**Established Stage F Day 19.** The Stage F table in `PROJECT_PLAN.md` is
-**generated**. Never hand-edit it.
+**Established Stage F Day 19; extended to the whole document by F.37/F.63.**
+`PROJECT_PLAN.md` is **generated in its entirety**. Never hand-edit any part of
+it — not the table, not the heading, not the prose.
 
-The source of truth is `docs/stage-f-tasks.json`. `PROJECT_PLAN.md` holds only
-a rendered copy, between these two markers:
+It has two sources, both committed:
 
-```
-<!-- STAGE_F_TASKS:START -->   … generated, do not touch …   <!-- STAGE_F_TASKS:END -->
-```
+| Source                        | Supplies                                       |
+| ----------------------------- | ---------------------------------------------- |
+| `docs/stage-f-tasks.json`     | every task row, the sub-phase headings, counts |
+| `docs/project-plan-header.md` | the title, purpose, how-to-use, companion list |
+
+The `STAGE_F_TASKS` markers still appear in the output and still delimit the
+part that comes from the JSON, so `plan:check` can tell you which source to
+edit. They are a diagnostic, not a boundary — everything outside them is
+generated too.
+
+**Stages 0–E are not here.** They live in `docs/PROJECT_HISTORY.md`, which is
+hand-maintained: edit it normally, no sync step, no deny rule. That separation
+is the point of F.63 — see the note at the end of this runbook.
 
 ### Marking a task complete (the common case)
 
@@ -1025,22 +1035,68 @@ the `days` field, so re-sequencing means editing `days` on the affected tasks
 The script is deliberately paranoid, because it writes into the project's
 canonical tracker:
 
-- **"malformed markers"** — the marker pair is duplicated, nested, orphaned, or
-  END precedes START. Repair `PROJECT_PLAN.md` by hand, then re-run. The script
-  writes nothing in this state.
-- **"already contains a Stage F heading … but no STAGE_F_TASKS markers"** — some
-  other section has claimed the name. The script will not overwrite a section it
-  does not own. Put the markers inside the intended section yourself, then re-run.
-- **"REFUSING TO WRITE: content outside the STAGE_F_TASKS markers would change"** —
-  an internal assertion tripped. Stage A–E content is compared byte-for-byte
-  before and after every write. Treat this as a bug in the script, not something
-  to work around.
+**`plan:sync` never refuses because of what is in `PROJECT_PLAN.md`, and never
+needs you to repair that file by hand.** The file is generated, so whatever
+state it is in — hand-edited, corrupt markers, an unrelated Stage F section,
+truncated, absent — `pnpm plan:sync` regenerates it and exits 0. If you are
+looking at a broken `PROJECT_PLAN.md`, that is the whole remedy.
+
+It refuses only when a SOURCE is unusable, and every refusal names the source
+to fix:
+
+- **"REFUSING TO RENDER: the header template contains a Changelog heading"** —
+  `docs/project-plan-header.md` has one, in any CommonMark form (ATX, indented
+  ATX, setext). The section was deleted on Day 24 (DEV.110) and must not come
+  back through the template. Remove the heading.
+- **"REFUSING TO RENDER: the header template contains a STAGE_F_TASKS marker"** —
+  the renderer emits the markers; a second pair in the output makes the task
+  block unlocatable. Remove it from the template.
+- **"stage-f-tasks.json: …"** — a task has an unknown `status`, a duplicate
+  `id`, a missing required field, or the file is not valid JSON. The message
+  names the task and the field, or the parse error.
+- A missing `docs/project-plan-header.md` or `docs/stage-f-tasks.json` fails
+  with a plain `ENOENT` naming the path.
+
+NO LONGER A REFUSAL, because it should never have been one: a task field that
+CONTAINS the marker text. A note discussing the markers used to inject a second
+pair into the output and abort the render with a "malformed markers" error that
+blamed `PROJECT_PLAN.md` and asked for a hand repair — while naming neither
+the JSON nor the field. The comment opener is now escaped in table cells and in
+sub-phase headings, so such a note renders as visible, inert text. Notes in
+this repo do discuss the markers, so this was a live case.
+
+RETIRED, so an old message is recognisable rather than puzzling: **"REFUSING TO
+WRITE: content outside the STAGE_F_TASKS markers would change"** guarded
+hand-written Stage A–E content that is no longer in this file, and the
+assertion was removed by F.37/F.63 (its sentinel survives as a printable
+`BLOCK_SENTINEL`, used to report WHICH half drifted). **"already contains a
+Stage F heading … but no STAGE_F_TASKS markers"** is also gone — a hand-written
+Stage F section is now simply overwritten, which is correct for a generated
+file. Seeing either message means you are running an old copy of the script.
+
+`plan:check` is the half that reports problems rather than fixing them. On a
+file with corrupt markers it says so and still points you at `plan:sync`; it
+never asks for a hand edit, because `.claude/settings.json` denies one.
 
 ### If CI fails on `plan:check`
 
-The table drifted from the JSON — almost always because someone hand-edited the
-table. Run `pnpm plan:sync` and commit the result. Do not "fix" it by editing
-the markdown.
+The file drifted from its sources — almost always because someone hand-edited
+the rendered markdown. The failure message names which half drifted: the task
+tables (edit the JSON) or the surrounding prose (edit the header template). Run
+`pnpm plan:sync` and commit the result. Do not "fix" it by editing
+`PROJECT_PLAN.md`.
+
+### Why the narrative was moved out (F.63)
+
+The file used to carry Stage 0 and Stages A–E outside the markers. `plan:sync`
+could not write there, CLAUDE.md §10.4 banned hand edits, and
+`.claude/settings.json` denies `Edit`/`Write` on the path — so a legitimate
+change (a stage retitle, a corrected citation, recording that Stage E never
+completed) was impossible by every approved route at once. That tension needed
+an operator overrule to resolve once (DEV.112), and the fix was to remove the
+tension rather than to keep spending overrules: the narrative moved to a
+normal file, the rest became generated, and the closeout rule simplified to
+"no hand edits at all".
 
 Tests for all of the above: `scripts/sync-project-plan.test.ts` (`pnpm test:scripts`).
 
@@ -1517,7 +1573,8 @@ instead of quietly deploying.
 If `verifier` returns FAIL or FAIL (incomplete), do not open or merge the PR.
 Nothing enforces this: there is no hook and no check that observes a subagent's
 verdict. It is a convention we keep because the verifier covers precisely the
-things CI cannot see — `plan:sync` idempotency, marker containment,
+things CI cannot see — `plan:sync` idempotency, PROJECT_PLAN.md being
+generated in full,
 `DEVIATIONS.md` being append-only, and both DO apps actually reaching ACTIVE.
 
 See `CLAUDE.md` §10 for the orchestration rules themselves: when the main thread

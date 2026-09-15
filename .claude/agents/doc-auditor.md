@@ -127,10 +127,11 @@ Use, in this order:
 4. Bare `grep` — **corroboration only.** `grep -a` works if you must.
 
 **The mechanism, so you can judge scope instead of guessing (DEV.115, root-caused
-in DEV.118):** `scripts/sync-project-plan.ts` contains a deliberate NUL byte at
-offset 9441 — the sentinel in `outsideMarkers()` that stands in for generated
-content. Tools that classify NUL-bearing files as binary then diverge in how
-honestly they say so. Measured on that file, pattern `MARKER_START`, true count 4:
+in DEV.118):** a file containing a NUL byte is classified as binary, and tools
+then diverge in how honestly they say so — some suppress matches and exit 1
+with no output at all. The measurements below were taken on
+`scripts/sync-project-plan.ts`, which used to carry a deliberate NUL at offset
+9441 (the sentinel in `outsideMarkers()`), pattern `MARKER_START`, true count 4:
 
 | instrument                     | result                                   |
 | ------------------------------ | ---------------------------------------- |
@@ -141,14 +142,27 @@ honestly they say so. Measured on that file, pattern `MARKER_START`, true count 
 | `git grep`                     | 4, lists lines                           |
 | `rg`                           | `binary file matches`; needs `-a`        |
 
+**THAT FILE IS FIXED — the guidance is not stale.** F.37/F.63 replaced the NUL
+sentinel with a printable token, so `scripts/sync-project-plan.ts` now greps
+normally: plain `grep` lists its matches and exits 0, where it used to exit
+1 with no output at all. Do NOT conclude
+from that the warning no longer applies: any future sentinel or fixture could
+reintroduce a NUL, and the instrument order above costs nothing when there is
+none to hit. The property is also SESSION-SCOPED — the broken instrument is the
+Claude Code `grep` shim, not GNU grep, and it does not exist in CI.
+
 **Two things follow that are easy to get wrong.** This is a **session-scoped**
 property of the harness shim, _not_ a property of this repo and _not_ present in
 CI, which has no shim — so do not report it as a repo defect. And if you test
 `/usr/bin/grep` directly and see it behave correctly, that does **not** mean this
 warning is stale: GNU grep was never the broken one.
 
-Scope is narrow: in tracked source, exactly one file carries a NUL besides genuine
-binaries. Every other text file searches correctly by any instrument.
+Scope, as of the F.63 sentinel fix: **no tracked text file carries a NUL any
+more.** The only tracked files that do are genuine binaries — PDFs, a .docx,
+PNGs and the vendored `.ttf` fonts under `apps/workers/src/pdf/fonts/` — which
+you would not be grepping for source facts anyway. That is why the instrument
+order is a habit rather than a workaround: it costs nothing today and it is the
+only thing that would catch the next one.
 
 **Whatever you used, say so.** A negative-existence claim should name the
 instrument that produced it.
