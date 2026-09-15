@@ -133,6 +133,30 @@ C6b. NO UNEARNED PRECISION — in a notes field, a DEV entry, an ADR, or a
      from main (664d39e) and were rewritten AROUND without being re-read,
      because text already in the file reads as already-checked. If you are
      editing a paragraph, the claims you did not write are now yours.
+C6c. `git add` A NEW SCANNER BEFORE YOU VALIDATE IT. Any tool that enumerates
+     `git ls-files` — `check:ids`, `check:paths`, a NUL sweep, a doc audit —
+     CANNOT BE VALIDATED FROM A TREE WHERE IT IS UNTRACKED. The scan will not
+     reach itself, so the tool never sees its own source, its own allowlist or
+     its own fixtures, and the validation is vacuous while looking convincing.
+
+     This is not hypothetical. `check:paths` was written, run locally against
+     58 paths, probed for non-vacuity by moving a cited file, and it passed —
+     because its two files were still `??` in `git status`. They became tracked
+     at commit time, the scan reached its own allowlist, read every
+     deliberately-absent path in it as a citation, and CI went red on the first
+     run. The local probes inherited the same blind spot, which is exactly why
+     they had looked convincing.
+
+     SAME SHAPE AS DEV.124, and worth naming as a family rather than as two
+     incidents: there, a reading of the PRESENT was used as evidence about the
+     PAST — a real API call, a real branch listing, a plausible mechanism
+     connecting them, and no control. Here, a real command, real output, and no
+     control either: nothing in the run distinguished "no dangling paths" from
+     "the scanner cannot see the files that would dangle". **A real command with
+     real output is not evidence until you know what result would have falsified
+     it.** For a scanner, the falsifying case is its own tracked presence — so
+     stage it first, and check that the tool's own files appear in the set it
+     scanned.
 C7. git switch -c day-<N>-<slug>
     git add -A && git commit -m "feat(<scope>): day N — <summary>"
     git push -u origin day-<N>-<slug>

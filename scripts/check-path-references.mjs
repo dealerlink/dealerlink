@@ -28,6 +28,26 @@
  *     entry must name that task, and the checker verifies the task is not yet
  *     complete, so the allowance expires on its own instead of rotting.
  *
+ * MUTUAL COVERAGE WITH `check:ids` — READ THIS BEFORE SIMPLIFYING EITHER.
+ * The two checks cover each other, and the coupling is deliberate rather than
+ * accidental:
+ *
+ *   - this check reads PATH citations, including the ones inside
+ *     `scripts/id-reference-allowlist.json`'s reasons;
+ *   - `check:ids` reads ID citations, including the ones inside THIS check's
+ *     allowlist reasons.
+ *
+ * So a decorative cross-reference in either allowlist is caught by the other.
+ * That is not theoretical: the reason field covering this file's own docblock
+ * originally read "Mirrors the DEV.38 entry for check-id-references.mjs", and
+ * `check:ids` rejected it on the spot — DEV.38 deliberately has no entry. The
+ * citation was dropped rather than the id allowlist grown.
+ *
+ * The consequence for anyone refactoring: if one check is narrowed to stop
+ * scanning the other's files, or either allowlist is moved outside the scanned
+ * set, the pair silently stops covering each other's prose. Nothing will fail
+ * to announce it. Keep both allowlists inside both scans.
+ *
  * Usage: pnpm check:paths
  */
 import { execSync } from 'node:child_process';
