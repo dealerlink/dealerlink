@@ -4879,3 +4879,77 @@ erosion the surrounding decision was protecting against.
 `scripts/id-reference-allowlist.json`. No process change is proposed, because the
 mechanism that caught it already exists and worked: the closeout runs `verifier`
 before the PR opens, and `verifier` reads the artefact rather than the intent.
+
+## DEV.130 — the unsatisfiable containment rule is gone; DEV.112's overrule cannot recur
+
+**Date:** 2026-09-15
+**Scope:** `PROJECT_PLAN.md`, `scripts/sync-project-plan.ts`, the `verifier` closeout gate, CLAUDE.md §10.4/§10.5.
+
+**Spec said:** F.63 — make `PROJECT_PLAN.md` entirely generated so no
+hand-editable region remains, and change the verifier's rule from "no change
+outside the markers" to "no hand edits at all".
+
+**Done, and this entry exists because a gate's pass condition changed.** Not a
+deviation from the day's scope — it is the day's scope. It is recorded because
+`verifier` has flagged on several branches that a change of this kind belongs
+in this file, and because DEV.112 needs closing out.
+
+**What DEV.112 recorded, and why it can now be retired as a precedent rather
+than as a mistake:** DEV.112 was the one operator overrule of a `verifier`
+FAIL, justified on unsatisfiability — exactly one commit in the repository's
+history had to fail the containment check, and no rule change available at the
+time could avoid it. That justification was sound and the overrule was
+correctly narrow. But its claim that only one commit could ever fail was
+already false when written: **any** legitimate change to Stage 0 or Stages A–E
+failed the same check, because that content sat outside the `STAGE_F_TASKS`
+markers where `plan:sync` could not write, CLAUDE.md §10.4 banned hand edits,
+and `.claude/settings.json` denies `Edit`/`Write` on the path. A stage
+retitle, a corrected citation, or recording that Stage E never finished were
+each legitimate, eventually necessary, and forbidden by every approved route at
+once.
+
+**The fix removed the tension instead of spending more overrules.** The
+narrative moved to `docs/PROJECT_HISTORY.md`, which is hand-maintained and
+needs no rule at all; the rest of `PROJECT_PLAN.md` is now rendered in its
+entirety from `docs/stage-f-tasks.json` plus `docs/project-plan-header.md`.
+The check became total — the file must equal the render — which is stricter
+than the old rule and, unlike it, satisfiable forever.
+
+**Two consequences worth naming:**
+
+1. The `Edit`/`Write` deny in `.claude/settings.json` is now unqualified and
+   CORRECT. It previously forbade the only route to a legitimate change; there
+   is now nothing it blocks that anyone should be doing.
+2. The `## Changelog` ban (DEV.110) closes structurally rather than by regex.
+   A generated file cannot acquire a section by hand, so the form-specificity
+   of `not.toMatch(/^##\s+Changelog\s*$/m)` — which would not have caught
+   `### Changelog` or `## Changelog — restored` — stops being load-bearing.
+   The guard now also covers the header template and
+   `docs/PROJECT_HISTORY.md`, which is where the residual risk moved.
+
+**Carried in with the migration, because porting them verbatim would have
+regenerated the defects:** `PROJECT_PLAN.md:3` carried a standing instruction
+to append to the changelog deleted on Day 24 — corrected in the template, not
+ported. `PROJECT_PLAN.md:90` cited DEV.38 for a Day 8 seed bug whose entry was
+never written (DEV.128) — corrected in the migrated content. The
+DEV.38/`PROJECT_PLAN.md` allowlist entry was CONVERTED from `deferred-fix` to
+`deliberate-mention` rather than deleted, because its two surviving sites are
+generated from F.63's and F.72's own notes, which name the id in order to say
+it does not resolve. `pnpm check:ids` now exits 0 with no deferred-fix line at
+all.
+
+**Also closed here:** the NUL-byte sentinel in `outsideMarkers()` is now a
+printable token, which was F.65's remaining one-line fix (DEV.115, DEV.117,
+DEV.118). Plain `grep -c MARKER_START scripts/sync-project-plan.ts` returns 4
+with exit 0 where it used to exit 1 with no output. The three Bash-holding
+agents' search-instrument guidance was updated in the same change, because
+that file's NUL was its worked example and F.65 had predicted the exact
+consequence of fixing it silently: an agent that finds `grep` working would
+reasonably conclude the whole warning was stale.
+
+**What this does NOT do.** It does not sanction a permitted-edit path for
+generated files — the operator rejected that explicitly, on the grounds that it
+reintroduces the drift the deny exists to prevent and turns §10.3 into a
+formality. And it does not audit the negative-existence claims derived while
+the grep fault was live; that remains open on F.65, with the exposure believed
+nil and unverified.
