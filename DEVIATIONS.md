@@ -5102,3 +5102,54 @@ reintroduces the drift the deny exists to prevent and turns §10.3 into a
 formality. And it does not audit the negative-existence claims derived while
 the grep fault was live; that remains open on F.65, with the exposure believed
 nil and unverified.
+
+## DEV.131 — F.63 removed a guarantee and did not replace it in kind
+
+**Date:** 2026-09-15
+**Scope:** `docs/PROJECT_HISTORY.md`, the `verifier` closeout gate, and what Stage 0-E content is protected by.
+
+**Spec said:** F.63 — make `PROJECT_PLAN.md` entirely generated and change the
+closeout rule from "no change outside the markers" to "no hand edits at all".
+
+**Recorded on operator instruction, and deliberately NOT written as closed:**
+"Per-section floors and mutation testing are a different guarantee, not the
+same one. Keep it visible rather than closed." Tracked as F.79.
+
+**WHAT WAS REMOVED.** Before F.63 the rule was "no change outside the
+`STAGE_F_TASKS` markers, full stop". Its substantive effect — separate from
+its unsatisfiability — was that **Stage 0 and Stages A-E could not be silently
+rewritten.** Any edit to a stage row, a date, a status or a note failed the
+gate. That is a real property, and it is gone.
+
+**WHAT REPLACED IT: nothing in kind.** `docs/PROJECT_HISTORY.md` is
+hand-maintained. It has no sync step, no `Edit`/`Write` deny in
+`.claude/settings.json`, no append-only requirement, and
+`.claude/agents/verifier.md` now explicitly instructs the verifier NOT to
+report edits to it as containment failures. What exists instead is ordinary
+review plus assertions in `scripts/sync-project-plan.test.ts`.
+
+**Those assertions are a DIFFERENT guarantee, and the difference is the point
+of this entry.** They catch deletion and emptying: the six stage headings
+surviving, every table-bearing section holding at or above its migrated row
+count, every Stage B day row staying populated, no malformed rows, and the
+pilot-tenant and Stage-E-did-not-complete records surviving. Verified against
+20 mutations. **They do not catch a changed date, a changed status symbol, a
+rewritten note, or a swapped row** — which the old rule did catch. A floor
+notices 6 rows becoming 0; it does not notice 6 rows becoming 6 different rows.
+
+**WHY THE TRADE WAS STILL RIGHT, so this entry is not read as a regret.** The
+old guarantee was unsatisfiable rather than strict: it forbade every legitimate
+edit as well, which is what forced DEV.112's overrule and what F.63 existed to
+dissolve. Trading an unsatisfiable guarantee for a partial one is an
+improvement. It is also a loss, and the loss is the half that tends to go
+unrecorded — which is the only reason this entry exists.
+
+**What would actually restore it**, for whoever picks up F.79: checksum the
+CLOSED sections (Stage 0 through Stage D) and leave Stage E editable, since
+Stage E's rows will legitimately change when the pilot resumes. Making the
+whole file append-only is cheap and wrong for the same reason. Generating it
+reintroduces exactly what F.63 removed.
+
+**Do not close this by pointing at the floor tests.** Conflating the two
+guarantees is how the loss stops being visible, and this entry is the record
+that it was visible once.
