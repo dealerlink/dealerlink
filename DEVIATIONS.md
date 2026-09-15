@@ -4928,8 +4928,10 @@ than the old rule and, unlike it, satisfiable forever.
    genuinely did equal the render. So the ban is now enforced where it can
    still be breached — `assertTemplateUsable()` in
    `scripts/sync-project-plan.ts` refuses to render a template containing one,
-   in ATX or setext form, and the same function rejects a template that
-   smuggles in a `STAGE_F_TASKS` marker (which would put two pairs in the
+   in ATX or setext form — including the two escapes the review found, an ATX
+   heading indented up to three spaces and a single-character setext underline,
+   both valid CommonMark that a naive `/^#+ Changelog/` misses — and the same
+   function rejects a template that smuggles in a `STAGE_F_TASKS` marker (which would put two pairs in the
    output and make the task block unlocatable). The test suite asserts the ban
    against all three surfaces: the plan, the template and
    `docs/PROJECT_HISTORY.md`. The regex is exactly as load-bearing as it was
@@ -4944,11 +4946,15 @@ gave was that Stage 0 and Stages A–E could not be silently rewritten, and
 nothing inherits that. `docs/PROJECT_HISTORY.md` has no sync step, no deny rule
 and no append-only requirement, and the verifier is explicitly told not to
 report edits to it as containment failures. Ordinary review is most of the
-replacement. The rest is three assertions in
-`scripts/sync-project-plan.test.ts` — the six stage headings survive, the table
-rows do not fall below a floor, and every Stage B day still has a row — which
-turn a mass deletion or a silently emptied stage into a red `test` job rather
-than an unnoticed commit. That is weaker than byte-identity and it is the
+replacement. The rest is a set of assertions in
+`scripts/sync-project-plan.test.ts`: the six stage headings survive, EVERY
+SECTION holds at or above its own row floor, and every Stage B day row is
+POPULATED rather than merely present. Both of those are narrower than the first
+attempt, which the review broke: a single whole-file floor of 110 rows out of
+125 did not notice an emptied Stage C (6 rows), and matching only the id cell
+did not notice all 18 Stage B rows gutted to `| B.N | | | |`. Per-section
+floors and non-empty cell checks catch both, verified against those exact
+mutations. That is weaker than byte-identity and it is the
 deliberate price of the rule becoming satisfiable.
 
 **Carried in with the migration, because porting them verbatim would have
@@ -4957,15 +4963,18 @@ to append to the changelog deleted on Day 24 — corrected in the template, not
 ported. `PROJECT_PLAN.md:90` cited DEV.38 for a Day 8 seed bug whose entry was
 never written (DEV.128) — corrected in the migrated content. The
 DEV.38/`PROJECT_PLAN.md` allowlist entry was CONVERTED from `deferred-fix` to
-`deliberate-mention` rather than deleted, because its two surviving sites are
+`deliberate-mention` rather than deleted, because its surviving mentions (five occurrences across two generated table rows) are
 generated from F.63's and F.72's own notes, which name the id in order to say
 it does not resolve. `pnpm check:ids` now exits 0 with no deferred-fix line at
 all.
 
 **Also closed here:** the NUL-byte sentinel in `outsideMarkers()` is now a
 printable token, which was F.65's remaining one-line fix (DEV.115, DEV.117,
-DEV.118). Plain `grep -c MARKER_START scripts/sync-project-plan.ts` returns 4
-with exit 0 where it used to exit 1 with no output. All FIVE Bash-holding agents now
+DEV.118). Plain `grep` on that file now lists its matches and exits 0 where it used to
+exit 1 with no output at all. No count is quoted: the first version of this
+sentence said "returns 4", and the same commit that wrote it added a fifth
+occurrence — the marker check in `assertTemplateUsable()`. A count of a string
+in a file you are editing in the same change is a claim with a half-life. All FIVE Bash-holding agents now
 carry search-instrument guidance — the three that already had it
 (`doc-auditor`, `ci-investigator`, `flake-triager`) were updated because that
 file's NUL was their worked example and F.65 predicted the exact consequence of

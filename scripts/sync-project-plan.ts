@@ -337,14 +337,21 @@ function renderSummary(tasks: StageFTask[]): string {
  *    PROJECT_PLAN.md and `plan:check` reports "in sync", because the file DOES
  *    equal the render. The section was deleted on Day 24 (DEV.110) and must
  *    not return, so the ban is enforced at the source it could now come from.
- *    Matches setext form too — `Changelog\n=====` is a heading in Markdown and
- *    a regex anchored on `#` would miss it.
+ *    Covers ATX with up to 3 leading spaces and setext with a one-character
+ *    underline, both of which are valid CommonMark headings that a naive
+ *    `/^#+ Changelog/` misses. Prettier would normalise either into a visible
+ *    heading in the output, so the test-suite assertion on the rendered plan is
+ *    a second line of defence rather than the only one.
  *  - A marker in the template puts TWO marker pairs in the output. Nothing
  *    downstream notices while the file is in sync, and the next genuine drift
  *    then aborts with "malformed markers" instead of anything useful.
  */
 export function assertTemplateUsable(header: string): void {
-  if (/^#{1,6}\s+Changelog\b/m.test(header) || /^Changelog\s*\n[=-]{2,}\s*$/m.test(header)) {
+  const atxChangelog = /^ {0,3}#{1,6}[ \t]+Changelog\b/im;
+  // CommonMark: a setext underline is one or more = or -, and the text line may
+  // itself be indented up to 3 spaces. `Changelog\n=` is a valid h1.
+  const setextChangelog = /^ {0,3}Changelog[ \t]*\n {0,3}[=-]+[ \t]*$/im;
+  if (atxChangelog.test(header) || setextChangelog.test(header)) {
     throw new Error(
       'REFUSING TO RENDER: the header template contains a Changelog heading. ' +
         'That section was deleted on Day 24 (DEV.110) and must not return — ' +

@@ -425,20 +425,54 @@ describe('docs/PROJECT_HISTORY.md keeps its substance, not just its headings', (
   // protection is gone — the history file is hand-maintained, has no sync step
   // and no deny rule, and the verifier is told not to treat edits to it as
   // containment failures. Ordinary review is most of the replacement. These
-  // assertions are the rest: a mass deletion or a silently emptied stage table
-  // fails the `test` job rather than passing unnoticed.
-  it('still carries the bulk of its table rows', async () => {
+  // assertions are the rest.
+  //
+  // PER-SECTION, and that is the whole point. A single whole-file floor does
+  // NOT catch an emptied stage: Stage C is 6 rows of 125, so deleting all of
+  // them leaves the total comfortably above any global floor. The closeout
+  // review proved exactly that against an earlier version of this block, which
+  // claimed to catch a silently emptied stage table and did not.
+  const SECTION_FLOORS: Array<[string, number]> = [
+    ['Stage 0 — Discovery & Decisions', 8],
+    ['Stage A — Foundation Setup', 10],
+    ['Stage B — The 3.5-Week Build', 20],
+    ['Stage C — Internal Validation (Week 5)', 6],
+    ['Stage D — Production Infrastructure', 6],
+    ['Stage E — Launch & Onboarding', 7],
+    ['Phase 2 — Deferred Features', 12],
+    ['Critical Path Items', 5],
+    ['Risks & Open Items', 19],
+  ];
+
+  /** Data rows in one `## `-delimited section, excluding header + separator. */
+  function sectionRows(history: string, heading: string): number {
+    const body = history.split(`## ${heading}`)[1] ?? '';
+    const upToNext = body.split(/^## /m)[0] ?? '';
+    const pipes = upToNext.split('\n').filter((l) => /^\|/.test(l));
+    const separators = pipes.filter((l) => /^\|[\s|:-]+\|?\s*$/.test(l)).length;
+    return Math.max(0, pipes.length - separators - 1);
+  }
+
+  it('keeps every section at or above its row floor', async () => {
     const history = await readFile(REAL_HISTORY, 'utf8');
-    const rows = history.split('\n').filter((l) => /^\|/.test(l));
-    // 125 at the migration. A floor, not an equality — rows are expected to be
-    // added, and Stage E's remaining work will close over time.
-    expect(rows.length).toBeGreaterThanOrEqual(110);
+    for (const [heading, floor] of SECTION_FLOORS) {
+      expect(sectionRows(history, heading), `rows under "${heading}"`).toBeGreaterThanOrEqual(
+        floor,
+      );
+    }
   });
 
-  it('still has a populated row for every Stage B build day', async () => {
+  it('keeps every Stage B day row POPULATED, not just present', async () => {
     const history = await readFile(REAL_HISTORY, 'utf8');
     for (let day = 1; day <= 18; day++) {
-      expect(history).toMatch(new RegExp(`\\|\\s*B\\.${day}\\s*\\|`));
+      // id, then a non-empty Day cell, then a non-empty Deliverable cell. The
+      // earlier version matched only the id cell, so gutting a row to
+      // `| B.7 | | | |` passed.
+      const row = new RegExp(`^\\|\\s*B\\.${day}\\s*\\|([^|]*)\\|([^|]*)\\|`, 'm');
+      const m = history.match(row);
+      expect(m, `row for B.${day}`).not.toBeNull();
+      expect((m?.[1] ?? '').trim().length, `B.${day} day cell`).toBeGreaterThan(0);
+      expect((m?.[2] ?? '').trim().length, `B.${day} deliverable cell`).toBeGreaterThan(0);
     }
   });
 

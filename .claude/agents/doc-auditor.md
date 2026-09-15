@@ -144,7 +144,8 @@ with no output at all. The measurements below were taken on
 
 **THAT FILE IS FIXED — the guidance is not stale.** F.37/F.63 replaced the NUL
 sentinel with a printable token, so `scripts/sync-project-plan.ts` now greps
-normally and `grep -c MARKER_START` on it returns 4 with exit 0. Do NOT conclude
+normally: plain `grep` lists its matches and exits 0, where it used to exit
+1 with no output at all. Do NOT conclude
 from that the warning no longer applies: any future sentinel or fixture could
 reintroduce a NUL, and the instrument order above costs nothing when there is
 none to hit. The property is also SESSION-SCOPED — the broken instrument is the
