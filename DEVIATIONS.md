@@ -4823,3 +4823,59 @@ version of the problem: the commit that extended its remit had used one of its
 own checks as the justification for suppressing another. Entries now carry a
 `kind`, `deferred-fix` requires a tracked owner, and the remit tells the verifier
 to treat such an entry as a finding rather than a pass.
+
+## DEV.129 — the task written to prevent unsatisfiable criteria was given one, by the operator who set the rule
+
+**Date:** 2026-09-14
+**Context:** F.63 makes `PROJECT_PLAN.md` fully generated. On 2026-09-14 it
+gained an acceptance criterion, dictated by the operator, requiring that every
+dangling or wrong id in the migrated content be corrected during migration:
+
+> `pnpm check:ids` must pass against the generated file with NO NEW ALLOWLIST
+> ENTRIES, and the existing deferred-fix entry for DEV.38 in PROJECT_PLAN.md
+> (scripts/id-reference-allowlist.json, tracked: F.63) must be REMOVED as part of this task rather than left behind.
+
+**Found by `verifier`, reviewing the commit that added it: that criterion could
+not be met.** The allowlist entry is scoped by `(id, file)`, and it covers three
+citation sites in `PROJECT_PLAN.md`, not one:
+
+| Line | What it is                                                                  |
+| ---- | --------------------------------------------------------------------------- |
+| 90   | the wrong citation F.63 exists to fix                                       |
+| 285  | **generated** from F.63's own notes, which name DEV.38 to say it is missing |
+| 292  | **generated** from F.72's notes, same                                       |
+
+Remove the entry and lines 285 and 292 — legitimate deliberate mentions, written
+into the plan by the very task doing the removing — become newly dangling, and
+`check:ids` fails. The criterion required an outcome its own wording forbade.
+
+**Resolution:** the criterion now requires the entry to be **converted** from
+`kind: deferred-fix` to `kind: deliberate-mention` rather than deleted, and the
+allowlist's reason now describes all three sites instead of only the first.
+
+**The irony is the reason this entry exists, and the operator asked for it to be
+recorded as such.** The whole argument for _not_ overruling the Stage A–E rule
+two hours earlier was that DEV.112's overrule had been forced by genuine
+unsatisfiability, and that treating "two checks in tension" as grounds for bypass
+would erode §10.3. That argument was correct. Then the criterion written to
+enforce that discipline was itself unsatisfiable — and would have presented the
+next person with exactly the bind DEV.112 was granted for, manufactured rather
+than inherited.
+
+**What the near-miss actually demonstrates, and why it is worth more than the
+fix:** the failure mode survives knowing about it. Everyone involved had the
+concept in hand, had just finished reasoning about it explicitly, and wrote the
+defect anyway — because the criterion was checked for _intent_ and not
+_executed_. A rule is satisfiable or not as a matter of fact, and the only way to
+know which is to run it. Neither the author nor the operator who dictated it
+caught this; a reviewer running the actual command did.
+
+**Impact:** none shipped. The criterion was corrected before F.63 began. Had it
+not been, F.63 would have hit a criterion it could not satisfy, at which point
+the cheapest resolution would have looked like a one-time overrule — the precise
+erosion the surrounding decision was protecting against.
+
+**Resolution status:** corrected in F.63's notes and in
+`scripts/id-reference-allowlist.json`. No process change is proposed, because the
+mechanism that caught it already exists and worked: the closeout runs `verifier`
+before the PR opens, and `verifier` reads the artefact rather than the intent.

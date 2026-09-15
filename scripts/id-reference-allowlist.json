@@ -46,7 +46,7 @@
       "id": "DEV.38",
       "file": "DEVIATIONS.md",
       "kind": "deliberate-mention",
-      "reason": "DEV.128 records that DEV.38 was cited without an entry and what it turned out to mean. Naming the missing id is the content of that record — the entry exists to say the id does not."
+      "reason": "Every site names DEV.38 in the course of recording, or quoting text that records, that the id has no entry — which is why naming it is the point and correcting it is not possible. Enumerated rather than counted: DEVIATIONS.md:4767 (\"DEV.38, DEV.41 and DEV.42 were cited as real in 13, 4 and 1 places respectively\"), :4771 and :4773 (a quoted operator instruction, and the finding, in DEV.128 — \"three cited DEV ids had no entries\"), :4835 (a quoted acceptance criterion naming the deferred-fix entry for DEV.38 in PROJECT_PLAN.md) and :4845 (a table row reading \"from F.63's own notes, which name DEV.38 to say it is missing\"), the last two inside DEV.129. Line numbers are the reading taken when this was written; the stable form is \"every mention inside DEV.128 and DEV.129\"."
     },
     {
       "id": "DEV.41",
