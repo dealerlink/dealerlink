@@ -110,7 +110,22 @@ export function parseTasks(raw: string): StageFTask[] {
 
   const seen = new Set<string>();
   return tasks.map((t, i) => {
+    if (t == null || typeof t !== 'object' || Array.isArray(t)) {
+      throw new Error(`stage-f-tasks.json: task[${i}] is not an object`);
+    }
     const task = t as Partial<StageFTask>;
+    // completedDate and notes are typed `string | null` and were copied through
+    // unchecked, so a number, boolean, array or object reached cell() and threw
+    // a bare "value.replace is not a function" naming neither file nor field.
+    for (const field of ['completedDate', 'notes'] as const) {
+      const value = task[field];
+      if (value != null && typeof value !== 'string') {
+        throw new Error(
+          `stage-f-tasks.json: task[${i}] (${String(task.id ?? 'no id')}) has a non-string ` +
+            `"${field}" — expected a string or null, got ${typeof value}`,
+        );
+      }
+    }
     for (const field of ['id', 'task', 'subPhase', 'days', 'status'] as const) {
       const value = task[field];
       if (typeof value !== 'string' || value === '') {
@@ -119,7 +134,11 @@ export function parseTasks(raw: string): StageFTask[] {
     }
     const status = task.status as string;
     const id = task.id as string;
-    if (!(status in STATUS_SYMBOLS)) {
+    // Object.hasOwn, NOT `in`: `in` walks the prototype chain, so a status of
+    // "toString", "constructor", "__proto__" or "valueOf" passed validation and
+    // rendered a native function into the Status cell — while being counted in
+    // the total and appearing in no per-status summary row.
+    if (!Object.hasOwn(STATUS_SYMBOLS, status)) {
       throw new Error(
         `stage-f-tasks.json: task ${id} has unknown status "${status}". ` +
           `Expected one of: ${Object.keys(STATUS_SYMBOLS).join(', ')}`,
@@ -161,7 +180,42 @@ export function parseTasks(raw: string): StageFTask[] {
  */
 function cell(value: string | null): string {
   if (value == null || value === '') return '—';
-  return value.replace(/\|/g, '\\|').replace(/<!--/g, '&lt;!--').replace(/\r?\n/g, ' ').trim();
+  return sanitize(value).replace(/\|/g, '\\|').replace(/<!--/g, '&lt;!--').trim();
+}
+
+/**
+ * Collapse every control character to a space.
+ *
+ * `/\r?\n/` was not enough, and the way it failed is worth keeping:
+ *
+ *  - A LONE `\r` does not match it, and Prettier normalises `\r` to `\n`
+ *    AFTER this guard runs — so the newline reappeared in the output, split the
+ *    table row in two and emitted a bogus extra row, with `plan:check` staying
+ *    green because the file genuinely equalled the render. Worse,
+ *    `subPhase: 'x\r## Changelog'` put a REAL `## Changelog` heading into the
+ *    generated document with sync and check both reporting success — a second
+ *    route to the banned section, which `assertTemplateUsable()` cannot see
+ *    because it inspects only the template.
+ *  - A NUL in any field passed straight through into `PROJECT_PLAN.md`, making
+ *    search tools classify the file as binary: bare `grep` then exits 1 with no
+ *    output. That is the silent false negative of DEV.115 / DEV.117 / DEV.118,
+ *    reintroduced into the very file F.63 had just cleaned of one.
+ *
+ * U+2028 and U+2029 are included because they are line terminators to a
+ * JavaScript parser even though Markdown treats them as text.
+ */
+function sanitize(value: string): string {
+  // Written as a code-point test rather than a character class: a regex
+  // containing \x00-\x1f trips eslint's no-control-regex, and disabling that
+  // rule to write the shorter version would be trading a real warning for
+  // brevity.
+  let out = '';
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    const isControl = code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029;
+    out += isControl ? ' ' : ch;
+  }
+  return out;
 }
 
 /**
@@ -171,7 +225,7 @@ function cell(value: string | null): string {
 function subPhaseHeading(subPhase: string, tasks: StageFTask[]): string {
   // Heading text bypasses cell(), so neutralise the comment opener here too —
   // this is the one field that could still inject a marker into the output.
-  const label = subPhase.replace(/<!--/g, '&lt;!--').replace(/\r?\n/g, ' ').trim();
+  const label = sanitize(subPhase).replace(/<!--/g, '&lt;!--').trim();
   const days = tasks
     .flatMap((t) => t.days.split(/[–-]/).map((d) => Number(d.trim())))
     .filter((n) => Number.isFinite(n));

@@ -90,9 +90,13 @@ them:
   no sync step and no deny rule. Do not report an edit to it as a containment
   failure.
 - The `## Changelog` section **must not return** to either file. In
-  `PROJECT_PLAN.md` it now cannot appear by hand — the file is generated — so
-  the residual risk is the TEMPLATE growing one; in `PROJECT_HISTORY.md` the
-  assertion is the only thing standing in the way.
+  `PROJECT_PLAN.md` it cannot appear by hand — the file is generated — but
+  "generated" removed only the hand-edit route, and adversarial review found
+  two more: the HEADER TEMPLATE, and the JSON, where a control character in a
+  `subPhase` value planted a real heading in the output with `plan:check`
+  reporting "in sync". Both are closed in the renderer now
+  (`assertTemplateUsable()` and `sanitize()`). In `PROJECT_HISTORY.md` there is
+  no renderer, so the test assertion is the only thing standing in the way.
   `scripts/sync-project-plan.test.ts` checks all three surfaces (plan,
   template, history) with a heading-anchored match, so a reappearance fails the
   `test` job in CI as well. If you see one, FAIL and say so.

@@ -4960,7 +4960,10 @@ Stage B's floor was also wrong, twice over, and the second reading corrects
 the first: it was 20 from a counter that subtracted a fixed header count, then
 17 from a counter that mistook a stray `|      |` line — pre-existing on main
 and migrated verbatim — for an extra table. Stage B has FOUR tables and 18
-rows, which the file's own Progress Summary states independently. The stray
+rows, which the file's own Progress Summary also states — though that table is
+unreliable in general and identically so on main (it gives Stage D as 4 against
+6 rows, and a total of 62 against a column sum of 53), so the count was taken
+independently rather than read off it. The stray
 line is removed (a normal edit to a now-hand-maintained file, which is the
 point of the move), the counter now identifies data rows exactly rather than
 arithmetically, and the floors are each section's true migrated count. A floor
@@ -4993,7 +4996,38 @@ comment in a note vanished from the rendered table. Tested from all five
 fields. The lesson is narrower than "sweep further": validating the OUTPUT for
 markers, which is what closed the smuggled-template hole, is what opened this
 one, and the commit that wrote the first fix described that mechanism without
-following it to its consequence. That is weaker than byte-identity and it is the
+following it to its consequence.
+
+**FOUR MORE, from an adversarial pass that went looking rather than reading.**
+Escaping `<!--` closed one route into the rendered document and left three
+open, which is the useful shape of this whole sequence:
+
+1. A LONE `\r` in any field. `/\r?\n/` does not match it, and Prettier
+   normalises `\r` to `\n` AFTER the guard runs, so the newline came back,
+   split the table row and emitted a bogus extra row — the exact malformed-row
+   class removed from the history file one commit earlier. `plan:check` stayed
+   green throughout, because the file genuinely equalled the render. And
+   `subPhase: 'x\r## Changelog'` planted a REAL Changelog heading in
+   `PROJECT_PLAN.md` with sync and check both reporting success. So consequence
+   2 above named the wrong residual surface: the template was one route, the
+   JSON was another.
+2. A NUL in any field passed through into the plan, making search tools
+   classify it as binary — bare `grep` exits 1 with no output. That is
+   DEV.115/117/118 reintroduced into the file F.63 had just cleaned of one.
+3. `status in STATUS_SYMBOLS` walks the PROTOTYPE CHAIN, so `toString`,
+   `__proto__`, `constructor` and `valueOf` passed validation and rendered a
+   native function into the Status cell, counted in the total and absent from
+   every per-status row. `Object.hasOwn` closes it. The existing test used
+   `'almost'`, which is not on the chain.
+4. `completedDate` and `notes` are typed `string | null` and were copied
+   through unchecked, so a number or object threw a bare
+   "value.replace is not a function", and `tasks: [null]` threw
+   "Cannot read properties of null" — neither naming the file, the task or the
+   field. Both now refuse with the message style the JSON-parse fix introduced.
+
+All four are closed at source — control characters collapsed to spaces in both
+cell and heading paths — with twelve tests, and all four re-probed through the
+real CLI afterwards. That is weaker than byte-identity and it is the
 deliberate price of the rule becoming satisfiable.
 
 **Carried in with the migration, because porting them verbatim would have

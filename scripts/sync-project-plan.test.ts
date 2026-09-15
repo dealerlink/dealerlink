@@ -346,6 +346,66 @@ describe('a task field cannot inject a marker into the output', () => {
   });
 });
 
+describe('control characters and bad field types cannot reach the output', () => {
+  // All four found by adversarial review AFTER the marker-injection fix, which
+  // is the point: escaping `<!--` closed one route into the rendered document
+  // and left three open.
+  const CR = String.fromCharCode(13);
+  const NUL = String.fromCharCode(0);
+  const LS = String.fromCharCode(0x2028);
+
+  it('collapses a lone CR, which /\\r?\\n/ did not match', () => {
+    const out = renderPlan(header, [{ ...sample, notes: `alpha${CR}beta` }]);
+    // Prettier normalises CR to LF AFTER the render, so an unsanitised CR
+    // reappeared as a newline and split the row in two.
+    expect(out).not.toContain(CR);
+    expect(out).toContain('alpha beta');
+  });
+
+  it('stops a CR in subPhase from planting a real heading in the plan', async () => {
+    const out = await formatBlock(
+      renderPlan(header, [{ ...sample, subPhase: `SP0${CR}## Changelog` }]),
+    );
+    expect(out).not.toMatch(/^ {0,3}#{1,6}[ \t]+Changelog\b/im);
+  });
+
+  it('keeps NUL bytes out of the rendered plan', () => {
+    const out = renderPlan(header, [{ ...sample, notes: `a${NUL}b`, id: `F${NUL}1` }]);
+    // A NUL makes search tools classify the file as binary and bare grep exits
+    // 1 with no output — DEV.115/117/118, in the file F.63 had just cleaned.
+    expect(out).not.toContain(NUL);
+  });
+
+  it('collapses U+2028, a line terminator to a JS parser', () => {
+    expect(renderPlan(header, [{ ...sample, notes: `a${LS}b` }])).not.toContain(LS);
+  });
+
+  it.each(['toString', '__proto__', 'constructor', 'valueOf'])(
+    'rejects the prototype-chain status %s',
+    (status) => {
+      const raw = JSON.stringify({ tasks: [{ ...sample, status }] });
+      // `status in STATUS_SYMBOLS` accepted these and rendered a native
+      // function into the Status cell. Object.hasOwn does not.
+      expect(() => parseTasks(raw)).toThrow(/unknown status/);
+    },
+  );
+
+  it.each(['completedDate', 'notes'])('rejects a non-string %s naming the field', (field) => {
+    const raw = JSON.stringify({ tasks: [{ ...sample, [field]: 42 }] });
+    expect(() => parseTasks(raw)).toThrow(
+      new RegExp(`stage-f-tasks\\.json.*non-string "${field}"`),
+    );
+  });
+
+  it('rejects a null task rather than throwing a bare TypeError', () => {
+    expect(() => parseTasks(JSON.stringify({ tasks: [null] }))).toThrow(/is not an object/);
+  });
+
+  it('names the file when the JSON does not parse', () => {
+    expect(() => parseTasks('{ not json')).toThrow(/stage-f-tasks\.json: not valid JSON/);
+  });
+});
+
 describe('a generated file is always repairable — no hand edit, ever', () => {
   // The docs used to list two plan:sync refusal modes that protected authored
   // content: a malformed marker pair, and an unowned Stage F heading. Neither
@@ -554,6 +614,33 @@ describe('docs/PROJECT_HISTORY.md keeps its substance, not just its headings', (
       expect((m?.[1] ?? '').trim().length, `B.${day} day cell`).toBeGreaterThan(0);
       expect((m?.[2] ?? '').trim().length, `B.${day} deliverable cell`).toBeGreaterThan(0);
     }
+  });
+
+  it('has no malformed table rows', async () => {
+    // Nine existed at migration, inherited verbatim from PROJECT_PLAN.md: three
+    // Stage B rows with a trailing empty cell and six risk rows missing one.
+    // Normalised without changing any cell's text. This keeps them that way —
+    // and a malformed row is what made the row counter miscount Stage B.
+    const history = await readFile(REAL_HISTORY, 'utf8');
+    const lines = history.split('\n');
+    const isSeparator = (l: string | undefined): boolean =>
+      l != null && /^\|[\s|:-]+\|?\s*$/.test(l);
+    const malformed: string[] = [];
+    let expected: number | null = null;
+    lines.forEach((line, i) => {
+      if (!/^\|/.test(line)) {
+        if (line.trim() !== '') expected = null;
+        return;
+      }
+      if (isSeparator(lines[i + 1])) {
+        expected = (line.match(/\|/g) ?? []).length;
+        return;
+      }
+      if (isSeparator(line)) return;
+      const pipes = (line.match(/\|/g) ?? []).length;
+      if (expected != null && pipes !== expected) malformed.push(`${i + 1}: ${line.slice(0, 40)}`);
+    });
+    expect(malformed).toEqual([]);
   });
 
   it('still records the pilot tenant by name', async () => {
