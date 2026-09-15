@@ -81,10 +81,19 @@ C6b. NO UNEARNED PRECISION — in a notes field, a DEV entry, an ADR, or a
      a count fails silently.
 
      THE TEST THAT SETTLES IT — delete the clause. If the sentence still means
-     what it meant, the clause was decoration. The operator's summary of the
-     nine verifier rounds on PR #27: "In all nine rounds, deleting the clause
-     left the sentence's meaning intact. A clause that cannot be load-bearing
-     can only be wrong."
+     what it meant, the clause was decoration, and the operator's formulation
+     applies: "A clause that cannot be load-bearing can only be wrong."
+
+     AND THE CONVERSE, which the same PR demonstrated and which decides whether
+     this rule is even the right one to reach for: if deleting the clause
+     CHANGES the meaning, it is load-bearing, and deleting it is not the fix —
+     verifying it is. Two of PR #27's findings were of that kind, not this one:
+     the pg-boss retry figure — e3dd539: "That is wrong in exactly the way that
+     misleads someone checking Sentry for a specific render and counting
+     events" — and the trackEvent Axiom/pino mechanism, which f165352 calls
+     "the most consequential error on this branch, because it is load-bearing
+     for the fix F.73 asks for". C6b governs DECORATION. A load-bearing claim is C6a's
+     habit — run the command — applied to prose.
 
      WHY THIS IS A SEPARATE RULE from C6a rather than a note under it: it
      targets the category that per-command discipline cannot reach. Claims
@@ -94,14 +103,14 @@ C6b. NO UNEARNED PRECISION — in a notes field, a DEV entry, an ADR, or a
      have no command unless you write one, and writing one feels like
      ceremony. The operator's count of PR #27: "three failures were counts
      about your own process, where no command exists unless you write one" —
-     two of them inside sentences whose purpose was to establish that the
-     checking had been done.
+     and per a37eed3, which enumerates all three, "Every one sits in a sentence
+     whose purpose was to establish that the checking was done".
 
      INHERITED TEXT IS NOT VERIFIED TEXT. On PR #27 the trackEvent
      Axiom/pino mechanism and the "PR #25 was docs-only" claim both arrived
      from main (664d39e) and were rewritten AROUND without being re-read,
-     because text already in the file reads as already-checked. If you are editing a paragraph, the claims you did not
-     write are now yours.
+     because text already in the file reads as already-checked. If you are
+     editing a paragraph, the claims you did not write are now yours.
 C7. git switch -c day-<N>-<slug>
     git add -A && git commit -m "feat(<scope>): day N — <summary>"
     git push -u origin day-<N>-<slug>
