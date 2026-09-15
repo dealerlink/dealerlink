@@ -29,7 +29,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   BLOCK_SENTINEL,
+  assertRenderedOk,
   assertTemplateUsable,
+  malformedTableRows,
   MARKER_END,
   MARKER_START,
   findMarkers,
@@ -406,6 +408,82 @@ describe('control characters and bad field types cannot reach the output', () =>
   });
 });
 
+describe('post-render invariants — properties of the OUTPUT, not of a path', () => {
+  // Guarding input paths one at a time kept failing here: escaping the comment
+  // opener closed the marker route and left control characters open;
+  // assertTemplateUsable closed the Changelog route through the template and
+  // left the JSON open. These are checked on the rendered document, so they
+  // hold for any route, including ones not yet thought of.
+  const CR = String.fromCharCode(13);
+
+  it('the real generated plan satisfies them', async () => {
+    const plan = await readFile(REAL_PLAN, 'utf8');
+    expect(malformedTableRows(plan)).toEqual([]);
+    expect(() => assertRenderedOk(plan)).not.toThrow();
+  });
+
+  it.each(['## Changelog', '## Change Log', '## Change-Log', '<h2>Changelog</h2>'])(
+    'refuses a rendered document containing %s',
+    (form) => {
+      expect(() => assertRenderedOk(`# x\n\n${form}\n`)).toThrow(/Changelog heading/);
+    },
+  );
+
+  it('refuses a rendered document with a malformed table row', () => {
+    const doc = `# x\n\n| a | b |\n| --- | --- |\n| 1 | 2 | 3 |\n`;
+    expect(() => assertRenderedOk(doc)).toThrow(/malformed table row/);
+  });
+
+  it('names both sources, since the output cannot say which one it came from', () => {
+    expect(() => assertRenderedOk(`# x\n\n## Changelog\n`)).toThrow(
+      /docs\/project-plan-header\.md and docs\/stage-f-tasks\.json/,
+    );
+  });
+
+  it('counts delimiters escape-aware — a quoted regex is not a malformed row', () => {
+    // Counting raw pipes reported false positives on any note quoting a regex,
+    // which is how one attempt at this check "found" a defect that was not there.
+    const escapedPipe = '\\' + '|'; // one backslash, then a pipe
+    const doc = ['| a | b |', '| --- | --- |', `| /${escapedPipe}/g | x |`, ''].join('\n');
+    expect(malformedTableRows(doc)).toEqual([]);
+    // and the unescaped form IS a malformed row, so the check is not vacuous
+    expect(
+      malformedTableRows(['| a | b |', '| --- | --- |', '| /|/g | x |', ''].join('\n')),
+    ).not.toEqual([]);
+  });
+
+  it('keeps an unpaired surrogate out, so plan:check stays satisfiable', () => {
+    // writeFile transcodes a lone surrogate to U+FFFD, so the file on disk
+    // could never equal the render: plan:sync wrote on every run and plan:check
+    // was red forever — the unsatisfiable gate F.63 exists to remove.
+    const lone = JSON.parse(String.raw`"\ud83d"`);
+    const out = renderPlan(header, [{ ...sample, notes: `progress ${lone}` }]);
+    // The status symbols are emoji, i.e. valid surrogate PAIRS, so a blanket
+    // /[\ud800-\udfff]/ assertion fires on correct output. Only a LONE
+    // surrogate is the defect.
+    const lonePair = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+    expect(out).not.toMatch(lonePair);
+    expect(`x${lone}y`).toMatch(lonePair); // the matcher is not vacuous
+  });
+
+  it('keeps a VALID surrogate pair intact', () => {
+    const out = renderPlan(header, [{ ...sample, notes: `ok \u{1f504} pair` }]);
+    expect(out).toContain(`\u{1f504}`);
+  });
+
+  it('escapes backslashes before pipes, so a quoted regex cannot split a row', () => {
+    const out = renderPlan(header, [{ ...sample, notes: String.raw`regex /\|/g here` }]);
+    expect(malformedTableRows(out)).toEqual([]);
+  });
+
+  it('does not create a heading from a control character in subPhase', async () => {
+    const out = await formatBlock(
+      renderPlan(header, [{ ...sample, subPhase: `SP0${CR}## Changelog` }]),
+    );
+    expect(() => assertRenderedOk(out)).not.toThrow();
+    expect(out).not.toMatch(/^ {0,3}#{1,6}[ \t]+Change/im);
+  });
+});
 describe('a generated file is always repairable — no hand edit, ever', () => {
   // The docs used to list two plan:sync refusal modes that protected authored
   // content: a malformed marker pair, and an unowned Stage F heading. Neither
@@ -542,7 +620,7 @@ describe('docs/PROJECT_HISTORY.md keeps its substance, not just its headings', (
   // assertions are the rest.
   //
   // PER-SECTION, and that is the whole point. A single whole-file floor does
-  // NOT catch an emptied stage: Stage C is 6 rows of 125, so deleting all of
+  // NOT catch an emptied stage: Stage C is 6 data rows of 98, so deleting all
   // them leaves the total comfortably above any global floor. The closeout
   // review proved exactly that against an earlier version of this block, which
   // claimed to catch a silently emptied stage table and did not.

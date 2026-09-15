@@ -180,7 +180,11 @@ export function parseTasks(raw: string): StageFTask[] {
  */
 function cell(value: string | null): string {
   if (value == null || value === '') return '—';
-  return sanitize(value).replace(/\|/g, '\\|').replace(/<!--/g, '&lt;!--').trim();
+  return sanitize(value)
+    .replace(/\\/g, '\\\\') // FIRST, or a value's own \| becomes \\| — an escaped
+    .replace(/\|/g, '\\|') //   backslash followed by a LIVE pipe, splitting the row
+    .replace(/<!--/g, '&lt;!--')
+    .trim();
 }
 
 /**
@@ -213,7 +217,16 @@ function sanitize(value: string): string {
   for (const ch of value) {
     const code = ch.codePointAt(0) ?? 0;
     const isControl = code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029;
-    out += isControl ? ' ' : ch;
+    // An UNPAIRED SURROGATE is the worst of these because it does not corrupt
+    // the output — it makes the output unreachable. writeFile with utf8
+    // transcodes a lone \ud83d to U+FFFD, so the file on disk can never equal
+    // the string it was compared against: plan:sync writes on every run and
+    // plan:check is red forever, unsatisfiable by the one command meant to fix
+    // it. That is the unsatisfiable-gate condition F.63 exists to remove
+    // (DEV.112, DEV.130), recreated inside the generated file. JSON.stringify
+    // emits one whenever a string carrying an emoji is sliced mid-pair.
+    const isLoneSurrogate = code >= 0xd800 && code <= 0xdfff;
+    out += isControl || isLoneSurrogate ? ' ' : ch;
   }
   return out;
 }
@@ -407,6 +420,92 @@ function renderSummary(tasks: StageFTask[]): string {
 }
 
 /**
+ * How the banned section can be spelled. "Change Log" and "Change-Log" are the
+ * same section under DEV.110's ban, and an HTML heading is a heading.
+ */
+const CHANGELOG_NAME_BODY = 'Change[ \\t-]*Log\\b';
+
+/** Changelog heading matchers, in every form Markdown and HTML allow. */
+function changelogHeadings(): RegExp[] {
+  return [
+    new RegExp('^ {0,3}#{1,6}[ \\t]+' + CHANGELOG_NAME_BODY, 'im'),
+    new RegExp('^ {0,3}' + CHANGELOG_NAME_BODY + '[ \\t]*\\n {0,3}[=-]+[ \\t]*$', 'im'),
+    new RegExp('<h[1-6][^>]*>\\s*' + CHANGELOG_NAME_BODY, 'i'),
+  ];
+}
+
+/**
+ * Invariants of the RENDERED document, checked before it is written.
+ *
+ * Guarding each input path separately is what kept failing: escaping `<!--`
+ * closed the marker route through the JSON and left control characters open;
+ * `assertTemplateUsable()` closed the Changelog route through the template and
+ * left the JSON open — `subPhase: 'x\\r## Changelog'` planted a real heading
+ * with `plan:check` reporting "in sync". These are properties of the OUTPUT, so
+ * they are checked there, once, and hold for any route including ones not yet
+ * thought of. The message names both sources, because the output cannot say
+ * which one it came from.
+ */
+export function assertRenderedOk(rendered: string): void {
+  const sources = 'Check docs/project-plan-header.md and docs/stage-f-tasks.json.';
+  if (changelogHeadings().some((re) => re.test(rendered))) {
+    throw new Error(
+      'REFUSING TO WRITE: the rendered document contains a Changelog heading. ' +
+        'That section was deleted on Day 24 (DEV.110) and must not return. ' +
+        sources,
+    );
+  }
+  const malformed = malformedTableRows(rendered);
+  if (malformed.length > 0) {
+    throw new Error(
+      'REFUSING TO WRITE: the rendered document has ' +
+        malformed.length +
+        ' malformed table row(s), first at line ' +
+        malformed[0] +
+        '. A cell value probably carries an unescaped delimiter. ' +
+        sources,
+    );
+  }
+}
+
+/**
+ * Line numbers of table rows whose delimiter count differs from their header's.
+ *
+ * Escape-aware: an escaped pipe inside a cell is content, not a delimiter.
+ * Counting raw pipe characters reports false positives on any note quoting a
+ * regex — which is how one attempt at this check "found" a defect that was not
+ * there.
+ */
+export function malformedTableRows(markdown: string): number[] {
+  const lines = markdown.split('\n');
+  const isSeparator = (l: string | undefined): boolean => l != null && /^\|[\s|:-]+\|?\s*$/.test(l);
+  const delimiters = (line: string): number => {
+    let count = 0;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] !== '|') continue;
+      let backslashes = 0;
+      for (let k = i - 1; k >= 0 && line[k] === '\\'; k--) backslashes++;
+      if (backslashes % 2 === 0) count++;
+    }
+    return count;
+  };
+  const bad: number[] = [];
+  let expected: number | null = null;
+  lines.forEach((line, i) => {
+    if (!/^\|/.test(line)) {
+      if (line.trim() !== '') expected = null;
+      return;
+    }
+    if (isSeparator(lines[i + 1])) {
+      expected = delimiters(line);
+      return;
+    }
+    if (isSeparator(line)) return;
+    if (expected != null && delimiters(line) !== expected) bad.push(i + 1);
+  });
+  return bad;
+}
+/**
  * Reject a header template that would corrupt the rendered document.
  *
  * Both of these were live holes before F.63's closeout review found them:
@@ -425,11 +524,7 @@ function renderSummary(tasks: StageFTask[]): string {
  *    then aborts with "malformed markers" instead of anything useful.
  */
 export function assertTemplateUsable(header: string): void {
-  const atxChangelog = /^ {0,3}#{1,6}[ \t]+Changelog\b/im;
-  // CommonMark: a setext underline is one or more = or -, and the text line may
-  // itself be indented up to 3 spaces. `Changelog\n=` is a valid h1.
-  const setextChangelog = /^ {0,3}Changelog[ \t]*\n {0,3}[=-]+[ \t]*$/im;
-  if (atxChangelog.test(header) || setextChangelog.test(header)) {
+  if (changelogHeadings().some((re) => re.test(header))) {
     throw new Error(
       'REFUSING TO RENDER: the header template contains a Changelog heading. ' +
         'That section was deleted on Day 24 (DEV.110) and must not return — ' +
@@ -541,6 +636,7 @@ export async function run(argv: string[]): Promise<RunResult> {
   if (findMarkers(next) == null) {
     throw new Error('REFUSING TO RENDER: the rendered document has no STAGE_F_TASKS markers.');
   }
+  assertRenderedOk(next);
   const current = await readFile(PLAN_PATH, 'utf8').catch(() => '');
   const changed = next !== current;
 

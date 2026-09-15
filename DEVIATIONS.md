@@ -5027,7 +5027,41 @@ open, which is the useful shape of this whole sequence:
 
 All four are closed at source — control characters collapsed to spaces in both
 cell and heading paths — with twelve tests, and all four re-probed through the
-real CLI afterwards. That is weaker than byte-identity and it is the
+real CLI afterwards.
+
+**TWO MORE, and then a change of approach.** A further adversarial pass found:
+
+5. An UNPAIRED SURROGATE in any field — what `JSON.stringify` emits whenever a
+   string carrying an emoji is sliced mid-pair. It does not corrupt the output;
+   it makes the output UNREACHABLE. `writeFile` with utf8 transcodes a lone
+   `\ud83d` to U+FFFD, so the file on disk can never equal the string it was
+   compared against: `plan:sync` writes on every run, `plan:check` is red
+   forever, and the one command meant to fix it cannot. **That is the
+   unsatisfiable-gate condition this entry exists to record the removal of,
+   recreated inside the generated file** — and it would have committed clean,
+   because the bytes are stable and `git status` stays quiet.
+6. `cell()` escaped `|` without escaping `\`, so a value's own `\|` became an
+   escaped backslash followed by a LIVE pipe and split the row. Reachable in one
+   edit: a note quoting a regex that matches a pipe — which is what the escaping
+   code inside `cell()` itself looks like.
+
+THE CHANGE OF APPROACH, which is the part worth keeping. Six defects in three
+rounds all had the same shape: a guard on ONE INPUT PATH, and the next route in
+was through a different field, a different character class, or a different
+spelling. So the invariants that matter are now asserted on the OUTPUT, once,
+in `assertRenderedOk()`: no Changelog heading in any form Markdown or HTML
+allows — ATX, indented ATX, setext, `<h2>`, and "Change Log" or "Change-Log"
+spelled apart — and no malformed table row, counted escape-aware so a quoted
+regex is not a false positive. Those hold for any route, including ones nobody
+has thought of, and the message names both sources because the output cannot
+say which one it came from. The per-source guard stays as well, because an early
+error naming the template is more useful than a late one naming both.
+
+Two of my own probes were wrong before the code was: a pipe counter that was
+not escape-aware reported four broken fields when one was, and a blanket
+surrogate assertion fired on the status emoji, which are valid pairs. Both are
+now written so they fail when the property is absent — a test that cannot fail
+is the same defect as a claim nobody checked. That is weaker than byte-identity and it is the
 deliberate price of the rule becoming satisfiable.
 
 **Carried in with the migration, because porting them verbatim would have
