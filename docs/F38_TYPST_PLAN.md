@@ -38,7 +38,7 @@ template. Do not touch the render-pdf consumer. Do not remove Chromium.
 If you find yourself editing apps/workers/src/jobs/render-pdf.ts, stop.
 
 PRELIMINARY:
-P.1. Read CLAUDE.md, docs/PDF_PIPELINE.md, ADR-013 in docs/DECISIONS.md,
+P.1. Read CLAUDE.md, docs/PDF_PIPELINE.md, ADR-013 in DECISIONS.md,
      docs/STAGE_F_BUILD_v3.md section 5, and DEV.37 (why "Page X of Y" fell
      back to Chromium's footerTemplate) and DEV.70 (state names displayed,
      codes stored).

@@ -1,0 +1,74 @@
+{
+  "$comment": "Sites that cite a docs/ path which does not resolve, on purpose. Every entry needs a reason and a kind. deliberate-mention: the text names the path in order to say it moved or never existed, so removing the mention would destroy the record. planned-deliverable: the path is what a PENDING task will create, must name that task, and expires automatically when the task completes. See scripts/check-path-references.mjs.",
+  "allow": [
+    {
+      "path": "docs/DECISIONS.md",
+      "file": "docs/DOC_AUDIT_2026-09-08.md",
+      "kind": "deliberate-mention",
+      "reason": "The audit names this path in order to report that it is WRONG — 'The file is /DECISIONS.md at repo root; docs/DECISIONS.md does not exist.' Naming the bad path is the content of the finding. Worth knowing that this check exists because of this entry: the audit recorded the defect on 2026-09-08, README.md and docs/F38_TYPST_PLAN.md still carried it when check:paths was written, and nothing re-read the audit. Both citations are now corrected; the audit's record of them stays."
+    },
+    {
+      "path": "docs/STAGE_F_BUILD_v2.md",
+      "file": "docs/DOC_AUDIT_2026-09-08.md",
+      "kind": "deliberate-mention",
+      "reason": "Named to report that it does not exist. v2 was replaced by v3 on Day 22."
+    },
+    {
+      "path": "docs/STAGE_F_BUILD_v2.md",
+      "file": "docs/STAGE_F_BUILD_v3.md",
+      "kind": "deliberate-mention",
+      "reason": "v3's own header says it supersedes v2 and names the file it replaced. A superseding document that cannot name its predecessor is less useful, and the deletion is the point."
+    },
+    {
+      "path": "docs/STAGE_F_BUILD_v2.md",
+      "file": "docs/TAX_INVOICE_AUDIT.md",
+      "kind": "deliberate-mention",
+      "reason": "A plan-reference note recording that the plan this audit was written against was replaced. Correcting the path would falsify which document the audit actually read."
+    },
+    {
+      "path": "docs/PLUGIN_ROADMAP.md",
+      "file": "PROJECT_PLAN.md",
+      "kind": "planned-deliverable",
+      "task": "F.30",
+      "reason": "F.30's deliverable IS this file, and F.30 is pending. The citation is generated from the task's own title, so it cannot be edited independently of the task. Expires automatically when F.30 completes."
+    },
+    {
+      "path": "docs/PLUGIN_ROADMAP.md",
+      "file": "docs/stage-f-tasks.json",
+      "kind": "planned-deliverable",
+      "task": "F.30",
+      "reason": "The source of the generated citation above — F.30's task title names the file it will create."
+    },
+    {
+      "path": "docs/PLUGIN_ROADMAP.md",
+      "file": "docs/PHASE_2_PLAN_v2.md",
+      "kind": "planned-deliverable",
+      "task": "F.30",
+      "reason": "The Phase 2 plan states this file plus an ADR as the deliverable, with 'No plugin code' — which is what F.30 tracks."
+    },
+    {
+      "path": "docs/PLUGIN_ROADMAP.md",
+      "file": "scripts/path-reference-allowlist.json",
+      "kind": "deliberate-mention",
+      "reason": "This file names the paths it allows. Mirrors the four self-referential entries in scripts/id-reference-allowlist.json, whose reason is \"This file names the ids it allows.\""
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "file": "scripts/path-reference-allowlist.json",
+      "kind": "deliberate-mention",
+      "reason": "This file names the paths it allows."
+    },
+    {
+      "path": "docs/STAGE_F_BUILD_v2.md",
+      "file": "scripts/path-reference-allowlist.json",
+      "kind": "deliberate-mention",
+      "reason": "This file names the paths it allows."
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "file": "scripts/check-path-references.mjs",
+      "kind": "deliberate-mention",
+      "reason": "The checker's own docblock uses this wrong path as the worked example of why the check exists — docs/DOC_AUDIT_2026-09-08.md recorded it on 2026-09-08 and README.md still carried it months later. Mirrors the entry covering scripts/check-id-references.mjs, whose docstring names its own worked example for the same reason. (Stated without naming that id: check:ids reads this reason and would flag the citation, because the id in question deliberately has no entry. The two checks cross-check each other, which is worth knowing.)"
+    }
+  ]
+}

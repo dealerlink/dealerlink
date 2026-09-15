@@ -104,6 +104,17 @@ jobs:
       - name: check:ids
         run: pnpm check:ids
 
+      # The inverse gap the id check left open: it validates that a cited ID has
+      # an entry, and nothing validated that a cited PATH has a file. Same
+      # failure shape, and likelier during a docs restructure — `git mv` moves
+      # the file and leaves every citation behind. docs/DOC_AUDIT_2026-09-08.md
+      # recorded one such wrong path on 2026-09-08 and it was still wrong when
+      # this check was written, because nothing re-read the audit.
+      # Deliberate exceptions live in scripts/path-reference-allowlist.json;
+      # a `planned-deliverable` entry expires when its task completes.
+      - name: check:paths
+        run: pnpm check:paths
+
       - name: typecheck
         run: pnpm typecheck
 

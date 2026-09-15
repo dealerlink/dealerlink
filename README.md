@@ -49,7 +49,7 @@ pgAdmin runs at http://localhost:5050
 ## Documentation
 
 - **`CLAUDE.md`** — implementation guide (read this before contributing)
-- **`docs/DECISIONS.md`** — architecture decision records
+- **`DECISIONS.md`** — architecture decision records
 - **`docs/Dealerlink Detailed BRD v1.0.docx`** — business requirements
 - **`docs/dealerlink-architecture-v4.html`** — visual architecture
 
