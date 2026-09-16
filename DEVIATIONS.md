@@ -5326,3 +5326,99 @@ and `check:paths` all exit 0.
 
 **Resolution:** (1) and (2) are closed by being recorded — the sourcing is
 correct and now traceable. (3) is F.80. (4) is applied. (5) is closed by §6.
+
+## DEV.133 — "facts and pointers only" needed a line drawn between fact and reasoning; this is where I drew it
+
+**Date:** 2026-09-16
+**Scope:** `docs/CLIENT_CONTEXT.md`, `docs/STAGE_F_BUILD_v3.md` §7. Documentation only.
+
+**Spec said:** the operator ruling closing F.80 — both files stay, with a stated
+relationship, and "CLIENT_CONTEXT.md cites section 7 as its source and
+duplicates no reasoning: facts and pointers only."
+
+**Built:** the rule is recorded in both files, and `docs/CLIENT_CONTEXT.md` was
+rewritten to comply — multi-sentence rationale became a one-line fact plus a
+section pointer.
+
+**The survival of the facts was CHECKED, not asserted, and the check found
+losses.** Every rupee amount, percentage, voucher number, serial format,
+evidence filename, task id, date and inline code span was enumerated out of the
+pre-rewrite file and looked up in the rewrite. Seven tokens did not appear.
+Three were the same string re-rendered — `₹0.46` survives inside
+`ROUND OFFS 0.46`, and `SALE @ 5% - LOCAL` and `SALES @ 18% - LOCAL` survive in
+the turnover table without their backticks — so they are present and the
+matcher, not the file, was wrong about them. (Enumerated rather than counted for
+the rest, per C6b: naming which three is checkable, "three" alone is not.) **Two were genuine losses and are restored**: the CGST/SGST figures
+from `docs/client-evidence/4.png` — ₹13,671.00 at 2.5% and ₹211.50 at 9.0% —
+which are client-document facts and the very figures F.3 and F.4 render against.
+**Two were dropped on purpose and stay dropped**: `cancelOrder` and
+`createDispatch`, which appear only inside the cost argument for the _rejected_
+serial-capture alternative, and that argument is reasoning that now lives behind
+a pointer to §7, Finding 4.
+
+The enumeration is in `scripts/`-adjacent throwaway form rather than committed,
+so the durable part is the method, not the script: **take the complete token set
+out of the old file and look each one up in the new one.** An eyeball pass over
+a rewrite this size would have reported "nothing lost" and been wrong twice —
+which is the whole argument for affirmative enumeration over inference from a
+clean read.
+
+**Why this entry exists.** The ruling is unambiguous about the goal and silent
+about the boundary, and the boundary is a judgement I made dozens of times in
+one pass. A later reader who disagrees with a particular call should be able to
+see the rule I applied rather than reverse-engineer it from a diff.
+
+**THE TEST I APPLIED, stated so it can be argued with:** _a sentence is reasoning
+if deleting it leaves the reader able to act correctly but not to argue the
+case._ Facts and instructions survive that test; justifications do not.
+
+**Kept as fact:**
+
+| Category                                            | Example kept                                                                       |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Numbers, names, dates, identifiers                  | the voucher table, `MA/26-27/1079`, the ledger balances, `NSMG26080006959`         |
+| Arithmetic                                          | both blocks — the ₹557.02 split and the round-off closing on ₹13,744.00            |
+| Decisions of record                                 | swap-on-scan; the three settled rejection cases; go-live scope                     |
+| Open questions, with any recorded recommendation    | both serial-scan decisions, including "recommendation on record: reject"           |
+| Legal facts                                         | no IRN ⇒ treated as not issued; recipient loses ITC; the 180-day e-way bill window |
+| **Operational instructions for client-facing work** | "Never claim Swipe lacks Tally sync"                                               |
+| **Qualifications that change what a fact means**    | the CGST leg being inferred rather than quoted                                     |
+
+The last two are the contestable ones and are called out as such. "Never claim
+Swipe lacks Tally sync" reads like an argument and is a **rule** — it is exactly
+what a session needs in hand before a client call, and a pointer to it would be
+read after the call. The inference flag stays because deleting it would present
+an inference as record, which is the failure DEV.132 §1 and §2 exist to prevent.
+
+**Moved to a pointer:**
+
+- the provenance narrative of the screenshot renumbering → §7
+- why the four-ledger structure cannot be reconciled from one collapsed figure →
+  §7, Finding 1
+- why e-invoicing is a compliance item rather than a feature → §0
+- the rejected serial-capture alternative and the condition that would revive it
+  → §7, Finding 4
+- why F.4 and F.6 are one piece of work → F.4's notes in
+  `docs/stage-f-tasks.json`
+
+**THE COST, recorded because the entry is otherwise one-sided.** The file is
+shorter and more quotable, and it is also **more dependent**: several sections
+are now only fully usable with §7 open. A session that reads only
+`docs/CLIENT_CONTEXT.md` will know **what** is true and not **why** — which is
+right before a client call and wrong before a design decision. That is the trade
+the ruling asks for; it is not free, and anyone who finds themselves re-deriving
+an argument from the working reference should go read the evidence record
+instead of thickening the copy.
+
+**One thing the ruling settled that none of the filed options had.** F.80
+recorded three options — CLIENT_CONTEXT becomes the home, §7 stays the home, or
+keep both and accept the duplication. The ruling is a fourth: **keep both with a
+stated relationship and an anti-drift rule**, which is stronger than option (c)
+because it says what each file is for and which one wins. Recorded on F.80 as
+such rather than filed under the nearest option it resembles.
+
+**Impact:** documentation only. No schema, no application code, no
+`packages/tax`, no RLS policy, no spec.
+
+**Resolution:** F.80 complete. The rule lives in both files, so it survives
+either one being read alone.
