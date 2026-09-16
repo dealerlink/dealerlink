@@ -5422,3 +5422,80 @@ such rather than filed under the nearest option it resembles.
 
 **Resolution:** F.80 complete. The rule lives in both files, so it survives
 either one being read alone.
+
+## DEV.134 — the note documenting the renderer hazard was corrupted by the renderer hazard, and named only half of it
+
+**Date:** 2026-09-16
+**Scope:** F.78 item 6 in `docs/stage-f-tasks.json`, and what the hazard actually is.
+
+**Spec said:** the operator's third ruling of the day — add the asterisk/emphasis
+renderer hazard to F.78. DEV.132 §6 had recorded it as: a bare asterisk in a
+notes field pairs with another one in the same rendered table cell, the renderer
+emits the pair as emphasis, "both delimiters come out as underscores".
+
+**Found by `verifier`, reading the rendered output rather than the source, on
+the commit that added the item:** the item's own text was corrupted by the thing
+it describes. It wrote the `PILOT` glob twice with a trailing underscore; both
+render in `PROJECT_PLAN.md` as an asterisk. Verified new to that branch —
+absent from `main` at 51a5b04, present twice in the rendered plan at 8757f2d.
+
+**So the mechanism as recorded was half of one.** It is symmetric: a bare
+**underscore** at a word boundary pairs the same way and comes out as an
+**asterisk**. DEV.132 §6 and the first F.78 item both named only the asterisk
+direction, and the prescribed fix — "collapse or escape asterisks" — would
+therefore have shipped, passed its own tests, and left the route that had just
+been used wide open.
+
+**Three corrections, each of which narrows or relocates the problem:**
+
+1. **The hazard is delimiter POSITION, not the character.** Intraword
+   underscores are inert in CommonMark, which is why `PILOT_GETTING_STARTED` and
+   every other filename constant in the file render correctly while a
+   trailing-underscore glob does not. The fix does not need to touch every
+   underscore, only the ones at a word boundary.
+2. **The transform is Prettier**, called in `formatBlock()` in
+   `scripts/sync-project-plan.ts`, and it runs **after** `sanitize()`. That is
+   the structural reason a per-input guard cannot catch it, and it independently
+   confirms the fix shape F.63's review already arrived at: assert on the output
+   in `assertRenderedOk()`.
+3. **The exposure was measured rather than assumed.** Of the underscore-bearing
+   tokens in `docs/stage-f-tasks.json`, exactly one **distinct** token fails to
+   survive into the rendered plan. Before the correction it appeared three
+   times: once inherited, in F.37's notes, and twice introduced by item 6's own
+   first version. After the correction the two new instances are gone and the
+   inherited one remains — which is the pre-existing corruption item 6 already
+   describes as live on `main`, and the same token the asterisk-direction
+   failure paired with.
+
+   **A distinct-token count cannot be used to verify this fix, and the rule
+   generalises.** The sweep deduplicates, so removing two of three instances of
+   the same token does not move its output by one. A measurement that is
+   invariant across the change it is meant to confirm confirms nothing — state
+   WHICH token and WHERE it comes from, which is re-derivable, rather than how
+   many there are, which is not a check.
+
+**THE MEASUREMENT IS THE PART WORTH KEEPING, because the obvious way to take it
+is vacuous.** A substring test — "is this token present in the rendered file" —
+reports a trailing-underscore token as PRESENT, because it is a prefix of a
+longer identifier that is present. The corrupted token and a healthy one produce
+identical output, and the sweep reports zero problems with complete confidence.
+The lookup has to be **boundary-aware**, and the run has to carry a control that
+proves the instrument can still say "absent". This is the C6c family — alongside
+DEV.124, where a reading of the present was used as evidence about the past, and
+C6c's own worked case, where a scanner was validated from a tree in which it was
+untracked: **a real command with real output is not evidence until you know what
+result would have falsified it.** Here the
+falsifying case is a token that genuinely is not there; without a control for
+it, "0 corrupted" means nothing.
+
+**Impact:** none shipped — the corrupted item was caught before the PR opened.
+Had it merged, F.78 would have carried a description that sends its implementer
+after the wrong character class, and the "measured exposure" line would have
+been a number produced by an instrument that cannot detect the defect it counts.
+
+**Resolution:** F.78 item 6 rewritten to state both directions, name the
+transform and its call site, record the position refinement, and carry the
+measurement with the instruction to re-run it boundary-aware. Its own text no
+longer contains a word-boundary underscore or asterisk. The underlying renderer
+fix stays F.78's, unimplemented, per CLAUDE.md §11.2 — this entry corrects the
+record of the bug, not the bug.
