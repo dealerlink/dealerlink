@@ -1440,8 +1440,9 @@ gh pr merge --squash                  # merge once green (this DEPLOYS — see R
 
 ## R24 — The subagent roster (`.claude/agents/`)
 
-**Established Stage F Day 23.** Six project subagents live in
+**Established Stage F Day 23.** Seven project subagents live in
 `.claude/agents/*.md`, with shared permission rules in `.claude/settings.json`.
+(`prompt-drafter` was added in SP0.5; the other six date from Day 23.)
 Both are committed. `.claude/settings.local.json` is gitignored and is your own
 per-machine file — nothing here touches it.
 
@@ -1452,7 +1453,7 @@ the Day 22 CI log digs and the drizzle changelog review each burned a large
 amount of the main thread's window and then sat there for the rest of the
 session. Those investigations move out; the verdict comes back.
 
-**Five of the six agents are read-only.** Only `plan-keeper` writes, and only to
+**Six of the seven agents are read-only.** Only `plan-keeper` writes, and only to
 `docs/stage-f-tasks.json`. Implementation stays on the main thread, because this
 build's correctness comes from one thread holding every constraint at once —
 money read from stored columns, `gstRate` arriving as a string so grouping must
@@ -1465,16 +1466,17 @@ its findings**, and to **say plainly when it cannot determine something** rather
 than infer. That last rule is why Day 19 and Day 22 went well: the agent said "I
 cannot read this" instead of guessing.
 
-### The six
+### The seven
 
-| Agent             | Tools                | Invoke it when                                                                 | It must never                                                                                  |
-| ----------------- | -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `ci-investigator` | Bash, Read, Grep     | one named, completed Actions run needs a root cause                            | fix, re-run, cancel, merge, push, or change a repo setting                                     |
-| `code-auditor`    | Read, Grep, Glob     | you need "does X exist, where, what is missing" before planning work on X      | edit anything; give a verdict other than EXISTS / DOES NOT EXIST / PARTIAL / UNDETERMINED      |
-| `flake-triager`   | Bash, Read           | one named spec has failed and timing-vs-state is genuinely unknown             | edit a spec or config, raise a timeout, add a wait, skip, or mark anything flaky               |
-| `verifier`        | Bash, Read           | the day is closing, before the PR is opened or merged                          | fix what it finds, commit, merge, or deploy                                                    |
-| `doc-auditor`     | Read, Grep, Bash(ro) | at a sub-phase boundary, or before planning from a document                    | fix drift; run anything that writes, migrates, seeds or deploys; print a secret value          |
-| `plan-keeper`     | Read, Edit, Bash     | a Stage F task needs its status, days or notes changed, or a new task appended | edit any file but `docs/stage-f-tasks.json`; hand-edit `PROJECT_PLAN.md`; commit; renumber ids |
+| Agent             | Tools                | Invoke it when                                                                 | It must never                                                                                         |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `ci-investigator` | Bash, Read, Grep     | one named, completed Actions run needs a root cause                            | fix, re-run, cancel, merge, push, or change a repo setting                                            |
+| `code-auditor`    | Read, Grep, Glob     | you need "does X exist, where, what is missing" before planning work on X      | edit anything; give a verdict other than EXISTS / DOES NOT EXIST / PARTIAL / UNDETERMINED             |
+| `flake-triager`   | Bash, Read           | one named spec has failed and timing-vs-state is genuinely unknown             | edit a spec or config, raise a timeout, add a wait, skip, or mark anything flaky                      |
+| `verifier`        | Bash, Read           | the day is closing, before the PR is opened or merged                          | fix what it finds, commit, merge, or deploy                                                           |
+| `doc-auditor`     | Read, Grep, Bash(ro) | at a sub-phase boundary, or before planning from a document                    | fix drift; run anything that writes, migrates, seeds or deploys; print a secret value                 |
+| `plan-keeper`     | Read, Edit, Bash     | a Stage F task needs its status, days or notes changed, or a new task appended | edit any file but `docs/stage-f-tasks.json`; hand-edit `PROJECT_PLAN.md`; commit; renumber ids        |
+| `prompt-drafter`  | Read, Grep, Glob     | the next day needs a prompt for one named Stage F task                         | decide anything; write code, a diff or a migration; schedule work the task does not name; save a file |
 
 Descriptions are written **narrow on purpose**. Auto-delegation fires on the
 `description` field, so a vague one ("checks whether things exist") triggers
@@ -1482,7 +1484,9 @@ constantly and costs context instead of saving it. If an agent starts firing
 when it should not, tighten its description before anything else.
 
 There is deliberately **no doc-writer agent** and **no agent that writes code,
-migrations or tests**. `USER_MANUAL.md` work (F.27) is ~35 days out; an agent
+migrations or tests**. `prompt-drafter` is not an exception to that: it drafts a
+day prompt as its RETURN VALUE, saves nothing, and is required to leave every
+open choice open for the operator rather than settle it. `USER_MANUAL.md` work (F.27) is ~35 days out; an agent
 shaped now against a task that does not exist yet would be shaped wrong.
 
 ### Invoking one
@@ -1497,12 +1501,21 @@ says to.
 **`.claude/settings.json` takes effect immediately** — a permission edit is live
 on the next tool call, verified on Day 23.
 
-**`.claude/agents/*.md` does NOT.** The agent registry is built when the session
-starts. A newly added or renamed agent is not invocable until the session
-restarts; the error is `Agent type '<name>' not found`. Edits to an existing
-agent's prompt are subject to the same caveat — assume a restart is needed. Plan
-roster changes for a session boundary, the same way `docs/RUNBOOKS.md` R23 plans
-a devcontainer rebuild for a day boundary.
+**`.claude/agents/*.md` — assume NOT, but it has been seen to.** The rule as
+established on Day 23 (DEV.96, resolved in DEV.107) is that the agent registry is
+built when the session starts, so a newly added or renamed agent is not invocable
+until the session restarts; the error is `Agent type '<name>' not found`. Edits
+to an existing agent's prompt were taken to be subject to the same caveat.
+
+**Counter-observation, SP0.5:** `prompt-drafter` was added mid-session and the
+harness announced the new agent type without a restart. One observation, on one
+harness build. It does not establish that the registry now reloads in general,
+and it does not establish that the old rule was wrong when it was written — both
+readings fit, and nothing in the observation separates them. So the guidance is
+unchanged: **assume a restart is needed and plan roster changes for a session
+boundary**, the same way R23 plans a devcontainer rebuild for a day boundary. The
+cost of assuming a restart and being wrong is nil; the cost of the reverse is an
+agent that silently is not there.
 
 ### The permissions layer — what it is, and what it is not
 
