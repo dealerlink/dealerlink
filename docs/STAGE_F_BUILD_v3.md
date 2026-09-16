@@ -242,6 +242,12 @@ Validate before submission rather than failing at the API.
 Files in `docs/client-evidence/`. Prospect: Maharudra Agencies, running Swipe +
 TallyPrime Silver.
 
+> **Also consolidated in `docs/CLIENT_CONTEXT.md`**, together with the turnover
+> and threshold figures from §0 and the e-way bill window from §6. That file is
+> derived; this section is the origin and wins on any disagreement. Which of the
+> two should be the home, and which the pointer, is open as **F.80** — settle it
+> before F.37 moves either file.
+
 ### Citations in this document refer to FILENAMES, not to the original screenshot numbers
 
 This document originally cited the client's screenshots by a delivery-order

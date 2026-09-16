@@ -18,6 +18,7 @@ For most tasks, this file alone is sufficient. For specific deep dives, see:
 - `docs/DEPLOYMENT.md` — DigitalOcean App Platform setup
 - `docs/BUILD_TIMELINE.md` — 18-day Stage B plan
 - `docs/STANDARDS.md` — coding standards, security checklist, Definition of Done
+- `docs/CLIENT_CONTEXT.md` — the prospect: the Rs 557.02 voucher, the client-evidence filename mapping, the e-invoicing threshold, and the open asks
 
 Files in `docs/` that already existed (`DECISIONS.md`, `BUILD_PROMPTS.md`, etc.) are unchanged.
 
@@ -421,8 +422,8 @@ parallelise the build. Investigation that would otherwise fill the main thread's
 window — a codebase audit, a CI log dig, a changelog review — happens in a
 subagent's window and comes back as a written verdict.
 
-**Implementation stays on the main thread.** Five of the six agents are
-read-only; the sixth (`plan-keeper`) writes exactly one JSON file. This is
+**Implementation stays on the main thread.** Six of the seven agents are
+read-only; the seventh (`plan-keeper`) writes exactly one JSON file. This is
 deliberate. The correctness of this build has come from one thread holding every
 constraint at once — money read from stored columns and never recomputed,
 `gstRate` arriving from the driver as a string so any grouping must normalise to
@@ -522,6 +523,149 @@ narrower limits live in its own system prompt and are convention.
 The real enforcement is branch protection and the required status checks on
 `main`.
 
+## 11. Decision Policy — settled rulings
+
+§10.1 lists what the main thread must stop and ask about. This section is its
+counterpart: questions already answered during Stage F. **Apply these and
+report; do not re-open them.** Each names the deviation it came from, because
+the entry carries the reasoning and this list carries only the conclusion — if
+a ruling looks wrong in a new situation, read the entry before arguing with the
+rule.
+
+### 11.1 Standing rulings
+
+**1 — Never skip, disable, `fixme`, or extend a spec to make a gate pass.**
+Not `test.skip`, not `test.fixme`, not `@flaky`, not a longer timeout, not "run
+it again and see". If a spec is genuinely environment-dependent, leave it
+failing and report it. _From:_ DEV.93 — Day 22's first red CI run, where the
+failing spec was put through five escalating reproductions and left untouched,
+and the answer turned out to be that there was nothing in it to fix; DEV.101 —
+"No spec was skipped, disabled, `fixme`-d or retried harder, and no timeout was
+raised, to get this PR green"; DEV.102, which turned it into F.52's third
+acceptance criterion so that the runtime criterion could not be met by weakening
+what is tested. `flake-triager`'s hard limits encode the same rule for the one
+agent positioned to breach it.
+
+_The boundary, because DEV.102 sits on it._ Raising `globalTimeout` 20 → 40 min
+in that same entry was **not** a breach. It was argued on its own merits — zero
+tests failed in the run that provoked it — and the entry states explicitly that
+the raise does **not** satisfy F.52's runtime criterion. A limit changed for a
+reason that survives the gate being removed is a different act from a limit
+changed to get green.
+
+**2 — Never overrule the `verifier` except on demonstrated unsatisfiability.**
+"Demonstrated" means executed: run the thing and show the failure. _From:_
+DEV.112, the one operator overrule of a FAIL, granted for PR #7 only and
+justified on a rule no commit could satisfy; DEV.116, which records that
+DEV.112's own claim about that rule was overclaimed; DEV.129, where the
+criterion written to enforce this discipline was itself unsatisfiable, and which
+names the mechanism — it "was checked for _intent_ and not _executed_", by an
+author and an operator who had just finished reasoning about this exact failure
+mode; and DEV.130, which dissolved the unsatisfiable rule so that the overrule
+cannot recur. §10.3 and `docs/RUNBOOKS.md` R24 both state the convention, and
+both say plainly that nothing enforces it — which is why it is restated here.
+
+**3 — Measure before keeping a change intended to improve something.**
+"It should be faster" is a hypothesis. _From:_ DEV.105 — the e2e warm-up pass,
+implemented exactly as the day prompt specified, made the suite **slower**
+(21.3 min against an 18.8 min baseline), and only the pairing that was actually
+measured across five full-suite runs earned its place. The entry's own framing:
+"Had that been landed without measuring, F.52 would have shipped a regression
+while reporting a fix." The converse is DEV.108, which declined to raise CI
+parallelism and reports that as what it is — "Not raised, not measured at 2 or
+3" — rather than dressing a decision as a finding.
+
+**4 — Fix the seed rather than exclude a field from tests.**
+_From:_ DEV.121, on the non-reproducible serial fragment: "A snapshot that skips
+the serial fragment leaves the product's core data permanently untested.
+Deterministic seed data is the fix." DEV.122 then applied the same argument to
+dates instead of stripping them — "Dates appear on every document and are
+legally relevant, so excluding them leaves a visible field permanently
+untested" — and the fix was `packages/db/src/seeds/clock.ts`, one pinned instant
+overridable with `SEED_EPOCH`. Carry DEV.121's narrower lesson with the rule:
+**"deterministic" is a property of the whole input, not of the renderer.**
+
+**5 — Report a state bug before fixing it.**
+Classify, report the evidence, then let the operator decide. A fix applied
+before the classification is on record destroys the evidence that would have
+told the two apart. _From:_ DEV.93, which established the discrimination — a
+state bug fails identically every run and gets no further on retry; a timing
+flake does not — against a handed-over working hypothesis that turned out to be
+wrong; and DEV.98, where `flake-triager` returned NOT REPRODUCED rather than the
+TIMING FLAKE its invocation expected, declining to round an unobserved failure
+to the convenient verdict. Its prompt ends: "Report the classification and the
+evidence. Do not report a fix."
+
+**6 — Correct wrong ids and paths during a migration; never port them
+verbatim.** A `git mv` that carries a citation forward carries the defect
+forward with it, and re-baselines it as though it had been checked. _From:_
+DEV.130 — "Carried in with the migration, because porting them verbatim would
+have regenerated the defects": `PROJECT_PLAN.md:3` carried a standing
+instruction to append to a changelog deleted on Day 24, corrected in the
+template rather than ported, and `PROJECT_PLAN.md:90` cited a DEV id whose entry
+was never written, corrected in the migrated content. DEV.128 is why it matters:
+"a wrong id is not self-correcting, because every downstream citation looks
+exactly as authoritative as a right one." `pnpm check:ids` and `pnpm check:paths`
+exist for the two halves of it, and F.37's move sequence requires the citation
+fixes to land **in the same commit as the `git mv`**.
+
+**7 — Prefer affirmative enumeration over inference from a clean search.**
+"X is absent from this list, which I read in full" is evidence a
+silently-failing search cannot fabricate. "No hits for X" is not: it is
+inference from silence, and a broken instrument produces exactly the same output
+as a true absence. _From:_ DEV.117, where the tax-invoice DOES-NOT-EXIST verdict
+was re-derived on affirmative enumerations — the complete list of `nextCounter`
+call sites, of `documentType:` literals, of `prefixes[...]` read keys, plus full
+directory listings — rather than re-trusted; DEV.118, which wrote the method
+into `code-auditor`'s prompt; and DEV.121, where "no test asserted on a serial
+literal" was established by enumerating every `DSP13-` occurrence in the
+repository "rather than by a clean grep". C6b applies the same preference to
+prose: an enumeration fails visibly when it drifts, a count fails silently.
+
+**8 — Plain `grep` is corroboration only, never the sole basis for a negative.**
+Order: `git grep -n` first; `rg -na` for files git does not track (the `-a`
+matters); `node -e '…readFileSync…'` when you need exact byte or line facts;
+bare `grep` last and only to corroborate. Name the instrument that produced any
+negative-existence claim. _From:_ DEV.115 (silent false negatives observed),
+DEV.117 (root cause: a deliberate NUL byte in `scripts/sync-project-plan.ts` —
+on a NUL-bearing file the shim exits 1 with no output and no warning, which is
+indistinguishable from a true negative), and DEV.118, which corrects the
+attribution: the broken instrument is the **Claude Code `grep` shim**,
+ugrep-backed and session-scoped, not GNU grep, and it does not exist in CI.
+DEV.130 removed the NUL from that file. **That does not make the habit stale** —
+it costs nothing when there is no NUL to hit, and it is the only thing that
+would catch the next one.
+
+### 11.2 Meta-work rule — a task may add rows to the plan, never a branch
+
+**A process improvement discovered mid-task gets FILED, never done.**
+
+Concretely: you may append a task to `docs/stage-f-tasks.json` (through
+`plan-keeper`), and you may write a deviation entry describing what you found.
+You may **not** open a branch for it, fold it into the branch you are on, or
+treat it as in scope because it is small and you are already standing there.
+This is §10.1's "Record it and ask; do not fold it in" restated as a rule about
+work rather than about permission, because the failure mode here is recursive
+rather than disobedient: process work generates process work, and each
+generation looks locally justified.
+
+**The evidence is F.75, F.76 and F.77.** All three were filed rather than folded
+in during the review rounds of PR #27, whose own title records "nine rounds of
+correcting F.73/F.74" (`gh pr view 27`; 10 commits). Two of them exist only
+because that review generated findings about its own output — the review found
+unearned precision, filing it produced the C6b rule, and applying C6b produced a
+backlog sweep that produced findings of its own. (F.77's subject, the duplicate
+`## DEV.64` heading, predates all of it and is reported by `verifier` on every
+run; what the cycle generated was the decision to file it rather than fix it in
+passing.) F.75's own notes carry the operator's verdict on where that ends:
+auditing historical notes fields "has no reader and would generate its own
+claims", and the task "may correctly stay unaudited forever".
+
+**The test.** If the improvement is worth doing, it is worth a row somebody
+schedules deliberately. If it is not worth a row, it was not worth doing
+mid-task either. A row costs a line of JSON. A branch costs a PR, a CI run, a
+`verifier` pass, a deviation entry, and an operator's merge decision.
+
 ---
 
-_Last updated: September 2026 · Architecture v4 · Phase 1 spec · §10 added Stage F Day 23_
+_Last updated: September 2026 · Architecture v4 · Phase 1 spec · §10 added Stage F Day 23 · §11 added Stage F SP0.5_
