@@ -242,11 +242,25 @@ Validate before submission rather than failing at the API.
 Files in `docs/client-evidence/`. Prospect: Maharudra Agencies, running Swipe +
 TallyPrime Silver.
 
-> **Also consolidated in `docs/CLIENT_CONTEXT.md`**, together with the turnover
-> and threshold figures from §0 and the e-way bill window from §6. That file is
-> derived; this section is the origin and wins on any disagreement. Which of the
-> two should be the home, and which the pointer, is open as **F.80** — settle it
-> before F.37 moves either file.
+> **THIS SECTION IS THE EVIDENCE RECORD. `docs/CLIENT_CONTEXT.md` IS THE WORKING
+> REFERENCE.** Operator ruling, 2026-09-16, closing F.80 — both files exist, with
+> a stated relationship rather than a duplicate.
+>
+> This section holds **provenance and reasoning**: where a figure came from, how
+> a citation was verified, why a decision went the way it did. It is written once
+> and rarely changes. `docs/CLIENT_CONTEXT.md` holds the **facts and pointers** a
+> session needs before a client-facing task — the voucher figures, the filename
+> mapping, the turnover and threshold, the open asks, the open decisions — and it
+> changes as asks close and decisions land. It cites this section as its source
+> and **duplicates no reasoning**.
+>
+> **If the two disagree, THIS SECTION WINS and the copy is the bug.** Fix it
+> there, not here. The failure mode being guarded against is the one this section
+> already demonstrates below: a wrong citation propagates, and every downstream
+> copy of it looks exactly as authoritative as a right one.
+>
+> It also carries the turnover and threshold figures from §0 and the e-way bill
+> window from §6, under the same rule.
 
 ### Citations in this document refer to FILENAMES, not to the original screenshot numbers
 
