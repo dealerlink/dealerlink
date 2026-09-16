@@ -89,14 +89,21 @@ that their sync collapses ₹222.94 + ₹334.08 into one ledger line.
 ### The round-off, and why it belongs to the same document
 
 The voucher also carries `ROUND OFFS 0.46`, and the two facts close on each
-other — checked here by arithmetic on the figures above, because it is the
-reason F.4 and F.6 are one piece of work rather than two:
+other, which is the reason F.4 and F.6 are one piece of work rather than two:
 
 ```
 12,629.50 + 557.02 (CGST) + 557.02 (SGST)  =  13,743.54
                                  + 0.46 round-off
                                  =  13,744.00   ← the voucher total
 ```
+
+**One figure in that sum is inferred, and is flagged rather than presented as
+record.** §7 states only the `SGST - OUTPUT` line of ₹557.02. The CGST figure is
+not quoted anywhere; it is taken as equal because this is an intra-state sale,
+where CGST and SGST are each half the rate. The arithmetic is the corroboration:
+an equal CGST reproduces the voucher total to the paisa, including the ₹0.46
+round-off. If you need the CGST line as evidence rather than as inference, read
+it off `docs/client-evidence/1.png` directly.
 
 Without a round-off ledger the voucher will not balance. F.4 (multi-rate
 summary) and F.6 (round-off row) land in the same renderer component, and

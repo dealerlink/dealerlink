@@ -5252,8 +5252,19 @@ MERGED, ran zero CI and never reached `main`.
 application code, no spec, no `packages/tax`, no RLS policy. The roster grows by
 one read-only agent (`prompt-drafter`), so `CLAUDE.md` §10 and `docs/RUNBOOKS.md`
 R24 were corrected from six agents to seven and from "five of the six are
-read-only" to "six of the seven". Per R24, a newly added agent is not invocable
-until the session restarts.
+read-only" to "six of the seven".
+
+**And R24's reload rule did not hold here, which is recorded as an observation
+and not as a mechanism.** R24 says a newly added agent is not invocable until the
+session restarts (DEV.96, resolved in DEV.107). In THIS session
+`prompt-drafter` became available without one: the harness announced the new
+agent type shortly after the file was written, with no restart. That is one
+observation, on one harness build, of the present — not a claim that the reload
+rule was always wrong, and not a claim it will hold next time. Both readings fit
+it and nothing here distinguishes them, which is the DEV.124 shape. R24 now
+carries the same caveat. **Plan roster changes for a session boundary anyway**;
+the cost of assuming a restart is needed and being wrong is nil, and the cost of
+the reverse is an agent that silently is not there.
 
 **Resolution:** (1) and (2) are closed by being recorded — the sourcing is
 correct and now traceable. (3) is F.80. (4) is applied. (5) is open and belongs

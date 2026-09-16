@@ -1501,12 +1501,21 @@ says to.
 **`.claude/settings.json` takes effect immediately** — a permission edit is live
 on the next tool call, verified on Day 23.
 
-**`.claude/agents/*.md` does NOT.** The agent registry is built when the session
-starts. A newly added or renamed agent is not invocable until the session
-restarts; the error is `Agent type '<name>' not found`. Edits to an existing
-agent's prompt are subject to the same caveat — assume a restart is needed. Plan
-roster changes for a session boundary, the same way `docs/RUNBOOKS.md` R23 plans
-a devcontainer rebuild for a day boundary.
+**`.claude/agents/*.md` — assume NOT, but it has been seen to.** The rule as
+established on Day 23 (DEV.96, resolved in DEV.107) is that the agent registry is
+built when the session starts, so a newly added or renamed agent is not invocable
+until the session restarts; the error is `Agent type '<name>' not found`. Edits
+to an existing agent's prompt were taken to be subject to the same caveat.
+
+**Counter-observation, SP0.5:** `prompt-drafter` was added mid-session and the
+harness announced the new agent type without a restart. One observation, on one
+harness build. It does not establish that the registry now reloads in general,
+and it does not establish that the old rule was wrong when it was written — both
+readings fit, and nothing in the observation separates them. So the guidance is
+unchanged: **assume a restart is needed and plan roster changes for a session
+boundary**, the same way R23 plans a devcontainer rebuild for a day boundary. The
+cost of assuming a restart and being wrong is nil; the cost of the reverse is an
+agent that silently is not there.
 
 ### The permissions layer — what it is, and what it is not
 
