@@ -13,6 +13,15 @@
 > determined, and the limits of the method as actually run.
 > **Companion docs:** `CLAUDE.md` §5, `docs/STAGE_F_BUILD_v3.md` §7,
 > `docs/CLIENT_CONTEXT.md` §3, `docs/TAX_INVOICE_AUDIT.md`.
+>
+> **Revision, 2026-09-17 (second pass, operator instruction).** §8.1 was
+> originally "NOT EXECUTED" — the `numeric(5,2)` read-back format was the one
+> load-bearing inference in the whole document. It has been **resolved by
+> measurement** against a real Postgres 16.15 and the application's own driver
+> stack, and §3.2, §3.3, §8.1 and §8.2 are updated accordingly. The inference
+> was correct; the exposed site in §3.3 is **confirmed**, not dissolved. Nothing
+> else in the audit changed. The findings themselves remain audit output — the
+> spec is still the operator's.
 
 ---
 
@@ -21,17 +30,17 @@
 Each is expanded below with its evidence. Findings marked **[spec-affecting]**
 change what a spec written against the current task notes would say.
 
-| #   | Finding                                                                                                                                                                                                                  | §        |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
-| 1   | **[spec-affecting]** The component F.4 and F.6 both name — `templates/_components/TaxSummary.tsx` — is **dead code**. The live single-rate block is `templates-typst/quotation.typ:97-110`.                              | §1.2     |
-| 2   | On a mixed-rate document the PDF **drops the rate label to an empty string**, printing `IGST ` / `CGST ` with a trailing space. Amounts stay correct.                                                                    | §1.3     |
-| 3   | On screen, the quotation builder prints the literal word **`mixed`** — "CGST @ mixed". It is the only surface in the repo that acknowledges multiple rates at all.                                                       | §1.4     |
-| 4   | **No rate-keyed or HSN-keyed tax aggregation exists anywhere**, established against the closed set of all 22 `GROUP BY` / `.groupBy()` keys in the repo.                                                                 | §2       |
-| 5   | **[spec-affecting]** The `'18'` vs `'18.00'` hazard is **not currently live for document reads** — all four rate columns are `decimal(5,2)` and every document query `Number()`s. One product-catalogue site is exposed. | §3       |
-| 6   | **`packages/tax` throws on 3% at runtime**, while all four DB CHECK constraints accept it. A 3% line is insertable and then un-renderable.                                                                               | §3.4, §4 |
-| 7   | **No HSN/SAC summary exists**; HSN is display-only everywhere — never a key, never summed, never in a `WHERE` or `GROUP BY`.                                                                                             | §5       |
-| 8   | **The seed corpus cannot exercise multi-rate at all** — every seeded product is 18% / HSN `85414300` — and no reference-PDF case is mixed-rate.                                                                          | §7.3     |
-| 9   | `CLAUDE.md` §5 documents a `calculateGST(...): TaxBreakdown` API. **Neither symbol exists.**                                                                                                                             | §8       |
+| #   | Finding                                                                                                                                                                                                                                                                                                                      | §        |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | **[spec-affecting]** The component F.4 and F.6 both name — `templates/_components/TaxSummary.tsx` — is **dead code**. The live single-rate block is `templates-typst/quotation.typ:97-110`.                                                                                                                                  | §1.2     |
+| 2   | On a mixed-rate document the PDF **drops the rate label to an empty string**, printing `IGST ` / `CGST ` with a trailing space. Amounts stay correct.                                                                                                                                                                        | §1.3     |
+| 3   | On screen, the quotation builder prints the literal word **`mixed`** — "CGST @ mixed". It is the only surface in the repo that acknowledges multiple rates at all.                                                                                                                                                           | §1.4     |
+| 4   | **No rate-keyed or HSN-keyed tax aggregation exists anywhere**, established against the closed set of all 22 `GROUP BY` / `.groupBy()` keys in the repo.                                                                                                                                                                     | §2       |
+| 5   | **[spec-affecting, MEASURED]** The `'18'` vs `'18.00'` hazard **cannot arise from these four columns** — they are `decimal(5,2)`, so the driver returns the canonical `'18.00'` for every input spelling and the two collapse to one `Set` member. One product-catalogue site is exposed and is **confirmed a real defect**. | §3, §8.1 |
+| 6   | **[MEASURED] `packages/tax` throws on 3% at runtime**, while all four DB CHECK constraints accept it. A 3% line is insertable and then un-renderable.                                                                                                                                                                        | §3.4, §4 |
+| 7   | **No HSN/SAC summary exists**; HSN is display-only everywhere — never a key, never summed, never in a `WHERE` or `GROUP BY`.                                                                                                                                                                                                 | §5       |
+| 8   | **The seed corpus cannot exercise multi-rate at all** — every seeded product is 18% / HSN `85414300` — and no reference-PDF case is mixed-rate.                                                                                                                                                                              | §7.3     |
+| 9   | `CLAUDE.md` §5 documents a `calculateGST(...): TaxBreakdown` API. **Neither symbol exists.**                                                                                                                                                                                                                                 | §8       |
 
 ---
 
@@ -374,11 +383,12 @@ canonical, so two rows cannot disagree with each other. The hazard is therefore
 not "two DB rows form two groups" but "a DB string compared against a
 non-DB string".
 
-> **This paragraph rests on the column declaration plus documented Postgres
-> semantics, NOT on an executed read-back.** No Postgres server is available in
-> this environment (§8.1), and no test in the repo asserts the format that comes
-> back out of the driver (§8.2). Treat it as a strong inference, not a
-> measurement. It is the single load-bearing assumption in §3.
+> **MEASURED 2026-09-17 — this is no longer an inference.** The original audit
+> stated this paragraph as a strong inference and flagged it as the single
+> load-bearing assumption in §3. The operator asked for it to be resolved by
+> measurement rather than inferred a second time. It was, on a real Postgres
+> 16.15 server reading through the application's own driver stack, and **the
+> inference was correct.** Full result and method in §8.1.
 
 ### 3.3 Sites exposed to the hazard
 
@@ -422,16 +432,19 @@ direct reads:
   `{[0, 5, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}`
   (`:259-263`), i.e. option values `'0' '5' '12' '18' '28'`.
 
-If the driver returns `'18.00'`, no option matches and the select renders with
-nothing selected — a user opening "edit pricing" on an 18% product does not see
-18% selected. **Partial mitigation:** `:238` submits `Number(form.gstRate)`, so
-saving without touching the select still persists `18`. The defect is in what is
-displayed and what the user is led to pick, not in what is stored.
+The driver returns `'18.00'` (measured — §8.1), so no option matches and the
+select renders with nothing selected: a user opening "edit pricing" on an 18%
+product does not see 18% selected. **Partial mitigation:** `:238` submits
+`Number(form.gstRate)`, so saving without touching the select still persists
+`18`. The defect is in what is displayed and what the user is led to pick, not
+in what is stored.
 
-**This finding is conditional on §3.2's unexecuted assumption**, and sharply so:
-seeded products are written as `'18'` (`day5.ts:270`), so if Postgres did _not_
-normalise, the select would match and there would be no defect at all. It stands
-or falls on the read-back format.
+**CONFIRMED BY MEASUREMENT, 2026-09-17.** The original audit filed this as
+conditional on §3.2's then-unexecuted assumption, and noted it cut both ways —
+seeded products are written as `'18'` (`day5.ts:270`), so had Postgres not
+normalised, the select would have matched and there would have been no defect at
+all. It does normalise. The decisive comparison, executed:
+`['0','5','12','18','28'].includes('18.00')` → **`false`**. The defect is real.
 
 #### Adjacent, same root cause, display-only
 
@@ -442,13 +455,18 @@ to the same un-normalised `queries/products.ts`: `catalog/page.tsx:165`,
 
 ### 3.4 Finding 6 — 3% is accepted by the database and thrown on by the engine
 
+**Both halves were executed on 2026-09-17, not only read** (§8.1 for the method).
+
 - **The DB accepts it.** All four CHECK constraints read
   `IN (0, 3, 5, 12, 18, 28)` — `product.ts:72`, `quotation.ts:171`,
   `performa-invoice.ts:175`, `order.ts:172`, widened by migration
-  `0017_friendly_logan.sql`.
+  `0017_friendly_logan.sql`. **Measured:** inserting `'3'` into a
+  `numeric(5,2)` column carrying that CHECK succeeds and reads back as `3.00`.
 - **The engine throws on it.** `packages/tax/src/compute.ts:7` declares
-  `VALID_GST_RATES = [0, 5, 12, 18, 28]` and `:135-140` throws
-  `TaxComputationError('INVALID_GST_RATE', ...)`.
+  `VALID_GST_RATES = [0, 5, 12, 18, 28]` and `:135-140` throws.
+  **Measured**, against the real engine source:
+  `gstRate: 3 -> THREW TaxComputationError code=INVALID_GST_RATE: Line L1: gstRate 3 not in {0,5,12,18,28}`,
+  while 5, 12 and 18 all compute normally.
 
 **This upgrades what DEV.100 recorded.** That entry noted the omission in the
 `GstRate` _type union_ (`types.ts:7`) — a compile-time gap. The runtime list at
@@ -886,28 +904,99 @@ ruling 4, the fixture, not the assertion, is where that gap lives.
 
 Stated plainly rather than inferred.
 
-### 8.1 The driver's read-back format for `numeric(5,2)` — NOT EXECUTED
+### 8.1 The driver's read-back format for `numeric(5,2)` — RESOLVED BY MEASUREMENT
 
-§3.2's claim that Postgres normalises `'18'` and `'18.00'` to one canonical
-returned string rests on the column declaration plus documented Postgres
-semantics. **It was not executed.** There is no Postgres **server** in this
-environment — `psql` 16.15 is present as a client, `pg_isready` reports no
-response on `localhost:5432`, `docker` is not installed, and
-`/usr/lib/postgresql/16/bin/` contains client utilities only (no `initdb`,
-`pg_ctl` or `postgres`).
+**This section originally read "NOT EXECUTED" and is now the opposite.** The
+operator's instruction was to resolve it by measurement and not to infer it
+twice, because §3.3's exposed site depends on it in both directions and the whole
+of `CLAUDE.md` §5's `gstRate` guidance turns on it.
 
-This matters because §3.3's single exposed site depends on it in both
-directions: seeded products are written as `'18'` (`day5.ts:270`), so **if
-Postgres did not normalise, the `<select>` would match and there would be no
-defect at all.** The finding stands or falls on that one unmeasured fact.
+**How the environment was solved.** No container runtime exists here (`docker`,
+`podman`, `nerdctl` all absent) and there is no root or `sudo`, so the compose
+instance was not an option. The server was obtained without privileges: refresh
+apt's lists into a job-local state dir, `apt-get download postgresql-16`
+(**16.15-1.pgdg12+2**, the exact version matching the already-installed client),
+`dpkg-deb -x` into a local prefix, `initdb` a throwaway cluster, and start it on
+port 55432 with a job-local socket dir.
+
+**Half one — the server.** A table was created with the exact declaration the
+real migration uses, `gst_rate numeric(5, 2) NOT NULL` plus
+`CHECK (gst_rate IN (0, 3, 5, 12, 18, 28))`, and six rows inserted:
+
+| inserted  | read back as |
+| --------- | ------------ |
+| `'18'`    | `18.00`      |
+| `'18.00'` | `18.00`      |
+| `18`      | `18.00`      |
+| `'18.0'`  | `18.00`      |
+| `'3'`     | `3.00`       |
+| `'5.00'`  | `5.00`       |
+
+**Postgres normalises every input form to the declared scale.** (`'3'` inserting
+cleanly also confirms first-hand that the CHECK permits 3 — §4.3.)
+
+**Half two — the driver.** Read back through the application's own stack,
+resolved by absolute path out of the workspace store: **postgres.js 3.4.9** and
+**drizzle-orm 0.45.2**, with the column declared exactly as the four real ones
+are, `decimal('gst_rate', { precision: 5, scale: 2 })`.
+
+- Raw postgres.js: `value="18.00"`, `typeof=string` — for all four spellings.
+- Through Drizzle: `value="18.00"`, `typeof=string` — unchanged.
+
+**The decisive comparisons, executed:**
+
+```
+stored as the literal '18', read back as "18.00"
+  value === '18'                          -> false
+  value === '18.00'                       -> true
+  Number(value)                           -> 18
+  [0,5,12,18,28].includes(value)          -> false
+  [0,5,12,18,28].includes(Number(value))  -> true
+  ['0','5','12','18','28'].includes(value)-> false   <-- the <select> at :255
+  new Set(['18'-row, '18.00'-row]).size   -> 1
+```
+
+**What this settles.**
+
+1. `CLAUDE.md` §5's premise **holds**: the driver returns a string, not a number.
+2. §3.2's inference **was correct**, and is now measured: the two spellings
+   cannot form separate groups from these four columns — the `Set` size is **1**,
+   not 2. The hazard as §5 phrases it ("`'18'` and `'18.00'` silently become two
+   separate groups") **cannot arise from a `decimal(5,2)` column read.** It can
+   arise from a rate that reaches a grouping site from anywhere else.
+3. §3.3's one exposed site is **confirmed as a real defect**, not dissolved.
+
+**An additional result that was not sought.** The same probe ran the raw DB
+string through the real engine. `packages/tax/src/compute.ts:135` is
+`VALID_GST_RATES.includes(line.gstRate)` — `includes()` on a number array with no
+adjacent `Number()` — and it throws:
+
+```
+gstRate '18.00' -> THREW TaxComputationError code=INVALID_GST_RATE:
+                   Line L1: gstRate 18.00 not in {0,5,12,18,28}
+```
+
+The audit called this site "theoretical only", on the grounds that all five
+`as GstRate` call sites coerce first. **That remains true and the
+characterisation holds** — but it is now measured rather than reasoned, and the
+failure mode is confirmed as the safe one: a loud throw, not a silent
+double-count. Filed against F.55, not fixed; `packages/tax` is protected.
+
+The cluster was a throwaway under the job's tmp directory and was stopped and
+removed afterwards. Nothing in the repository was touched by the measurement.
 
 ### 8.2 No test pins the read-back format either
 
 Searching `packages/db/tests`, `apps/web/tests` and `packages/tax` for `'18'` /
 `'18.00'` returns 9 hits, and **all nine are insert values**, not read-back
 assertions: `dispatch.test.ts:91,151`, `orders.test.ts:120,175,350,397`,
-`payments.test.ts:127`, `quotation.test.ts:178,325`. So the repo contains no
-evidence either way about the format the driver returns.
+`payments.test.ts:127`, `quotation.test.ts:178,325`.
+
+**This remains true after §8.1's measurement, and is the more useful finding of
+the two.** The format is now known — `'18.00'`, a string — but **nothing in the
+repository asserts it**, so a future driver upgrade, a `mode: 'number'` added to
+one of the four columns, or a change of scale would move it silently. §8.1
+measured the behaviour on 2026-09-17; it did not pin it.
 
 ### 8.3 Whether any existing reference PDF is incidentally mixed-rate
 

@@ -5499,3 +5499,150 @@ measurement with the instruction to re-run it boundary-aware. Its own text no
 longer contains a word-boundary underscore or asterisk. The underlying renderer
 fix stays F.78's, unimplemented, per CLAUDE.md §11.2 — this entry corrects the
 record of the bug, not the bug.
+
+---
+
+## DEV.135 — the one inference in the F.3/F.4 audit was measured, and it changed the shape of the hazard CLAUDE.md §5 describes
+
+**Date:** 2026-09-17
+**Scope:** `docs/F3_F4_AUDIT.md` (§3.2, §3.3, §3.4, §8.1, §8.2 revised),
+`docs/stage-f-tasks.json` (F.4, F.6, F.55 notes corrected; F.81 added). No
+application code changed.
+
+**Spec said:** three operator follow-ups after PR #36 merged — resolve §8.1 by
+measurement ("Do not infer it twice"), correct the task notes that point at dead
+code and settle which round-off insertion point is authoritative, and file the
+multi-rate seed gap as a task sequenced before F.3, plus the 3% mismatch.
+
+**Built:** the measurement, the note corrections, one new task, one task update.
+
+### The measurement, and why it needed an unprivileged Postgres
+
+`docs/F3_F4_AUDIT.md` §8.1 originally read "NOT EXECUTED". The audit had reasoned
+that `decimal(5,2)` means Postgres normalises on write, so `'18'` and `'18.00'`
+cannot be two distinct stored values — and then said plainly that this was the
+single load-bearing inference in §3 and that §3.3's one exposed site depended on
+it **in both directions**: seeded products are written as `'18'`
+(`day5.ts:270`), so had Postgres not normalised, the `<select>` would have
+matched and there would have been no defect at all.
+
+The environment made this awkward rather than impossible, and the awkwardness is
+worth recording because it will recur: there is **no container runtime** here
+(`docker`, `podman`, `nerdctl` all absent) and **no root or `sudo`**, so
+`docker-compose.yml` was not usable. The route that worked, with no privileges:
+refresh apt's lists into a job-local state dir with
+`-o Dir::State::Lists=…`, `apt-get download postgresql-16` — which resolved
+**16.15-1.pgdg12+2**, the exact version of the already-installed client, because
+the pgdg repo was already configured — `dpkg-deb -x` into a local prefix,
+`initdb` a throwaway cluster, and start it on port 55432 with a job-local socket
+directory.
+
+**Both halves were then measured, on the real stack rather than a proxy for it.**
+Server side: a table with the exact declaration the migration uses,
+`gst_rate numeric(5, 2) NOT NULL` plus `CHECK (gst_rate IN (0, 3, 5, 12, 18, 28))`.
+Driver side: postgres.js **3.4.9** and drizzle-orm **0.45.2**, resolved by
+absolute path out of the workspace store, with the column declared exactly as the
+four real ones are.
+
+Every input spelling — `'18'`, `'18.00'`, `18`, `'18.0'` — reads back as the
+string `'18.00'`, `typeof string`, identically through raw postgres.js and
+through Drizzle.
+
+### What it settled, including one thing it settled against the audit's framing
+
+1. **`CLAUDE.md` §5's premise holds.** The driver returns a string.
+2. **The inference was correct** — and is now measured.
+   `new Set([the '18'-written row, the '18.00'-written row]).size` is **1**.
+3. **§3.3's exposed site is confirmed, not dissolved.**
+   `['0','5','12','18','28'].includes('18.00')` is `false`, so the controlled
+   `<select>` at `product-detail-sections.tsx:255` really does render with
+   nothing selected for an 18% product.
+
+**And the thing worth arguing about.** `CLAUDE.md` §5 says any code grouping by
+rate must normalise "or `'18'` and `'18.00'` silently become two separate groups
+and the summary double-counts". That sentence is now known to be **imprecise in
+one direction and silent in another**. It cannot happen from a read of these four
+`decimal(5,2)` columns — the database emits one canonical spelling and the two
+collapse to a single `Set` member, measured. Where the hazard actually lives is
+the comparison of a DB string against a **non-DB** string: a React `<option>`
+value, a hand-written literal, a form default. The audit's §3.3 found exactly one
+live instance and it is of that second kind, not the first.
+
+This matters because the guidance is load-bearing for F.3, F.4 and F.9, all of
+which group by rate, and because a warning that names the wrong mechanism sends
+the reader to guard the wrong line. **Not corrected here.** `CLAUDE.md` is
+main-thread-editable but this was outside the operator's three follow-ups, and
+the instruction ended "Then stop." Recorded and raised rather than folded in,
+per §11.2.
+
+**It is also FILED, as F.82 — and the first draft of this entry stopped one step
+short of that.** This paragraph originally ended "recorded, raised, and left for
+the operator", which reads as compliance with §11.2 and is not. §11.2's remedy
+is a row **or** a deviation entry, and only the entry existed: `F.56`
+(`CLAUDE.md` accuracy pass) enumerates specific `DOC_AUDIT` findings and does not
+cover this one, so nothing scheduled the correction. Worse, `F.55` — which is
+itself sequenced before F.3 — **restates the imprecise §5 framing verbatim** in
+its own notes, so the wrong mechanism would have reached the next reader through
+a second door. Caught by closeout verification, not by the author; the row was
+added and this paragraph corrected rather than left to read better than the facts
+warranted. The distinction worth keeping: "I wrote it down" and "somebody will
+see it" are different claims, and only the second needs a row.
+
+### An additional result that was not sought
+
+The same probe pushed the raw DB string through the real engine.
+`packages/tax/src/compute.ts:135` is `VALID_GST_RATES.includes(line.gstRate)` —
+`includes()` on a number array with no adjacent `Number()` — and it throws:
+`INVALID_GST_RATE: Line L1: gstRate 18.00 not in {0,5,12,18,28}`.
+
+The audit called that site "theoretical only" because all five `as GstRate` call
+sites coerce first. **That characterisation holds** — no traced path reaches it
+with a string — but it is now executed rather than reasoned, and the failure mode
+is confirmed to be the safe one: a loud throw, not a silent double-count. The
+practical consequence is that the guard's correctness rests entirely on every
+caller coercing, which is a property that should survive whatever F.55 does.
+
+The 3% case was executed in the same pass:
+`gstRate: 3 -> THREW TaxComputationError code=INVALID_GST_RATE`, while 5, 12 and
+18 compute normally; and `'3'` inserts cleanly into the CHECK-constrained column
+and reads back as `3.00`. So the mismatch is measured from both ends now.
+
+### The dead-code corrections, and which round-off record wins
+
+F.4 and F.6 both named
+`apps/workers/src/templates/_components/TaxSummary.tsx` as the component the work
+lands in. It has been unreachable since ADR-015 (Day 27). Both notes were
+**corrected in place rather than annotated around**, per §11.1 ruling 6 — a wrong
+path that is merely commented on stays wrong for whoever greps it next.
+
+There were **two competing records of where the round-off row goes**, and the
+operator asked which is authoritative. It is
+`apps/workers/src/templates-typst/_lib/chrome.typ:337-346`, because it is a
+comment in live, on-render-path code, and F.6's note is the one that was wrong.
+But the mechanism has a wrinkle that a careless read of that comment would get
+backwards, so it is recorded on the task: `totals-block()` is **caller-driven**,
+so **no edit to `chrome.typ` is required at all** — the row is added to the
+`rows:` argument built by the caller, in `quotation.typ` between `:107` and
+`:108`. That is also precisely where F.4's multi-rate rows land, which is the
+mechanical reason the two tasks are one piece of work rather than two in
+sequence.
+
+### On not filing a duplicate
+
+The operator asked me to file the 3%-mismatch. **It was already filed as F.55**,
+raised Day 24 during F.52, already carrying "Sequence it BEFORE F.3". Filing a
+second row would have split the evidence across two ids and made the older one
+look stale. F.55 was **updated** with the measured evidence instead, including
+the finding that the omission is not in one place but nine — the complete
+enumeration of rate-list constants in the repo — which is the reason it is not
+the one-line fix its title implies.
+
+The seed gap was genuinely new and is **F.81** (max id was F.80; appended, not
+renumbered).
+
+**Why this entry exists.** Mostly for the first section. "Do not infer it twice"
+was the right instruction and the audit was right to flag the inference rather
+than bury it — but the payoff was not confirmation, it was discovering that the
+documented hazard and the real one are different mechanisms that happen to share
+a symptom. An audit that had simply asserted §3.2 would have been _correct_ and
+would still have left `CLAUDE.md` §5 pointing future work at the wrong line.
