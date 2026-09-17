@@ -5646,3 +5646,285 @@ than bury it — but the payoff was not confirmation, it was discovering that th
 documented hazard and the real one are different mechanisms that happen to share
 a symptom. An audit that had simply asserted §3.2 would have been _correct_ and
 would still have left `CLAUDE.md` §5 pointing future work at the wrong line.
+
+---
+
+## DEV.136 — the baseline recipe written to prevent a vacuous check was itself vacuous, one level down
+
+**Date:** 2026-09-17
+**Scope:** `docs/F81_DAY_PROMPT.md` A.0 (the baseline recipe). No application
+code, no seed, no reference PDF.
+
+**Spec said:** 927fb40, an operator instruction, made installing the pinned
+`typst` binary F.81's first action and required **two** baselines rather than
+one. Its reasoning is exactly right and worth quoting, because the defect is
+that the recipe underneath it does not implement it: "A post-change render that
+passes proves the renders work, not that they are unchanged, which is the actual
+question. Without a pre-change run there is nothing to compare against and
+'green afterwards' silently substitutes for 'identical before and after'."
+
+**Found before running it:** the command the recipe gives for both sides is
+
+```
+sha256sum docs/pdf-references/*.pdf | sort -k2 > /tmp/f81-pre-e32c350.sha
+```
+
+`docs/pdf-references/` holds 14 **git-tracked, read-only** PDFs. The complete set
+of references to that directory under `apps/workers/` is three reads and no
+writes — `tests/pdf-snapshots.test.ts:46`, `scripts/compare-typst.mjs:35`,
+`scripts/compare-figures.mjs:23` (enumerated in full, per CLAUDE.md §11.1 ruling
+7, not inferred from a clean search). Nothing on the render path writes there;
+the Chromium pipeline that produced those files was deleted on Day 27 and its
+capture script is filed absent as F.83.
+
+So those hashes are invariant under a reseed, under the `day8.ts` change, and
+under anything else this day could do. **The pre/post diff is empty by
+construction.** Had e32c350 moved every one of the 14 rendered documents, the
+recipe would have printed the same empty diff and the day would have recorded
+"render-neutral, measured".
+
+**This is the third member of the C6c / DEV.124 family**, and it is the sharpest
+of the three because it occurs _inside_ a correction written to prevent the
+identical error. DEV.124: a reading of the **present** used as evidence about
+the **past** — real API call, real output, no control. C6c: a scanner validated
+from a tree in which it was **untracked**, so it could not reach its own files —
+real command, real output, no control. Here: a hash of the **inputs** standing
+in for a hash of the **outputs** — real command, real output, no control. The
+family rule, already written at C6c and in DEV.134's entry, states it: **a real
+command with real output is not evidence until you know what result would have
+falsified it.**
+
+Naming what generalises, since three instances is enough to stop calling it an
+anecdote: the failure is not carelessness about paths. In all three the author
+was _specifically attending to the risk of a vacuous check_ — that is what
+927fb40, C6c and DEV.124 are each about — and the vacuity entered through the
+instrument rather than through the intent. The question that catches it is not
+"is this command correct?" but "what output would this command produce if the
+thing I am checking for were true?" Asked of A.0, it answers itself in one step,
+because the file list never changes.
+
+**What was actually run instead**, both sides, per side into a fresh directory:
+
+```
+pnpm exec tsx scripts/render-typst.ts --manifest scripts/typst-matrix.json --out /tmp/f81-render-<side>
+( cd /tmp/f81-render-<side> && sha256sum *.pdf | sort -k2 )
+```
+
+The recipe as written was **also** run, so the correction rests on a comparison
+rather than on an argument: it produced an empty diff, as predicted, and so did
+the rendered-output diff. Same verdict, but only the second one could have
+produced a different one.
+
+**Result — e32c350 is render-neutral, now measured rather than argued.** Both
+sides: `determinism-check` MATCH against the recorded
+`determinism-expected.json` (unmodified), `pnpm --filter workers test` 56/56
+with `pdf-snapshots.test.ts` 17/17, 14 documents rendered. Rendered-hash diff
+empty. That closes the gap e32c350's own commit message flagged as NOT VERIFIED
+HERE.
+
+A third run on the unchanged tree recorded Baseline 2 as an independent reseed;
+its rendered hashes are identical to the post side, so the corpus is
+reseed-stable **before** any seed work. That is a control rather than a
+ceremony: without it, an empty post-seed diff is consistent both with "the seed
+module moved nothing" and with "reseed nondeterminism happens to be quiet
+today", and the day could not tell them apart.
+
+**Impact:** none shipped. The defect was in a day prompt, caught before the
+measurement it governs was taken, and the measurement it was supposed to produce
+was taken correctly the same morning.
+
+**Resolution:** A.0 rewritten to render into a fresh directory per side and hash
+that, with the reasoning stated inline so the next reader cannot restore the
+shorter command by tidying. Baseline 2 is now specified as a second independent
+reseed, which the original left implicit. **`docs/RUNBOOKS.md` needed no change**
+— R25's rebuild recipe already renders into `/tmp/typst-out` and compares
+renders, and R26 carries no baseline recipe at all; `git grep -n "sha256sum" --
+docs/ *.md` returns exactly two hits, both in `F81_DAY_PROMPT.md`, and the second
+is Phase B's, which was correct all along and is what A.0 now mirrors.
+
+---
+
+## DEV.137 — e32c350 fixed the rounding model and left the substrate; the seed and the engine still disagree by a paisa
+
+**Date:** 2026-09-17
+**Scope:** F.81. `packages/db/src/seeds/multi-rate.ts` (new, uses `computeTax`),
+`packages/db/package.json` (seed chain), `packages/db/tests/multi-rate-corpus.test.ts`
+(new), `docs/SEED_DATA.md`, `docs/F81_DAY_PROMPT.md`. **No file under
+`packages/tax/`, no migration, no schema file, nothing under
+`docs/pdf-references/`, and no matrix entry.**
+
+**Spec said:** F.81's STOP AND ASK carried this item — "If the day needs
+`computeTax` imported from `@dealerlink/tax` after all — **it should not, since
+Q4 fixes `computeTotals` in place** — say so before doing it." The parenthetical
+is the part that turned out to be wrong, and it was load-bearing: it is why the
+day was scoped as though the totals question had already been answered.
+
+**Found while choosing the numbers for the new documents.** `e32c350` (Q4)
+changed `day8.ts`'s `computeTotals` from document-level to per-line rounding,
+and that was correct — it aligned the seed's ROUNDING MODEL with
+`packages/tax/src/round.ts`, which documents line-level rounding as the Indian
+GST convention. It did not change the ARITHMETIC SUBSTRATE. `computeTotals`
+still computes on IEEE-754 doubles through
+`round2 = Math.round(n * 100) / 100`, while `packages/tax` computes on
+`decimal.js` because its own docstring says "All money math runs on `Decimal` —
+never native floats".
+
+Probed on the four candidate shapes for this day's documents, before any of them
+were seeded:
+
+| Candidate                             | float `computeTotals` | Decimal `computeTax` | parity     |
+| ------------------------------------- | --------------------- | -------------------- | ---------- |
+| intra `MH→MH`, 18/5/12/5, no discount | CGST 10073.01         | CGST 10073.01        | agree      |
+| intra, same lines, 5% discount        | CGST 9569.**34**      | CGST 9569.**35**     | **DIFFER** |
+| inter `MH→KA`, 18/5/18, no discount   | IGST 18488.25         | IGST 18488.25        | agree      |
+| inter, same lines, 2.5% discount      | IGST 18026.04         | IGST 18026.04        | agree      |
+
+**The whole difference is one line, and naming it matters more than naming
+"floating point".** On the diverging document, line 1 has taxable 11827.50 at
+18%, so its CGST is the 9% half-rate: exactly **1064.475**. The nearest double
+is **1064.4749999999999091** — _below_ the half-paisa tie — so `Math.round`
+rounds DOWN where `Decimal.ROUND_HALF_UP` rounds UP. The other three lines are
+exact and agree. `quotation-engine-parity.test.ts` asserts exact string equality
+on all seven header money columns, so a document of that shape does not produce
+a rounding debate, it produces a red test.
+
+**Why the 18%-only corpus could never have shown this.** Divergence needs a
+value that lands exactly on a half-paisa tie. Reaching one in practice took
+mixed rates _and_ a document discount — precisely the combination F.81 exists to
+introduce and that no previously seeded document contains.
+
+**Operator ruling: import `computeTax` into `multi-rate.ts` only.** Use, not
+modification; `packages/tax` and `day8.ts` are both untouched. Production writes
+exactly these columns from `computeTax`
+(`apps/web/lib/actions/quotations/helpers.ts:172,191-194`), so this is Q4's own
+stated principle — the seed produces what production produces — carried to its
+conclusion rather than approximated.
+
+**The cost, and the operator's correction to how I first stated it.** Calling
+the engine makes `quotation-engine-parity.test.ts` a round-trip for these
+documents rather than a check between two implementations. I reported that as a
+real if acceptable loss. The operator's framing is better and is the one to
+keep: **the independence being given up is independence from code that its own
+package forbids.** An independent check against an implementation known to be
+wrong is not a second opinion, it is a coin that has been landing heads. Recorded
+in `multi-rate.ts`'s header so nobody later "restores" the independence as an
+improvement.
+
+### F.86 — the real fix, measured before it was filed rather than after
+
+The operator directed that the blast radius be measured _while the harness was
+warm_, on the grounds that both baselines had just been established and it would
+never be cheaper. Converting `computeTotals` to Decimal on a throwaway branch,
+with a full reseed from scratch on each side:
+
+- **Money: nothing moved.** All 260 rows and 1548 numeric fields across
+  `quotations`, `quotation_lines`, `performa_invoices`,
+  `performa_invoice_lines`, `orders` and `order_lines` byte-identical — 938 of
+  those are header money values across 134 documents. The instrument was every
+  `numeric` column on those six tables, enumerated from `information_schema`
+  rather than listed by hand, keyed by document number and line number so two
+  independent reseeds are comparable.
+
+  **On the "182 money values" `e32c350` reports: I did not reproduce that
+  number and do not claim to have.** My dump covers the same six tables and
+  every numeric column on them, and I first wrote that it was "a strict superset
+  of the 182" — that was an inference, not a measurement, and it does not
+  survive a check: the obvious candidate subset, quotation headers at seven
+  money columns each, gives 238 here, not 182. So the two counts are not
+  reconciled and the relationship between the sets is unknown. What IS
+  established is the thing the measurement was for: on the set I enumerated,
+  which is broader in column coverage than any reading of 182, nothing moved.
+
+- **Renders: nothing moved.** All 14 Typst cases byte-identical, compared as
+  hashes of rendered output into a fresh directory (DEV.136).
+- `determinism-check` MATCH, `pnpm --filter workers test` 56/56,
+  `pnpm --filter @dealerlink/db test` 172/172 including the parity test.
+
+So F.86 is a zero-diff change and the row is sized rather than open-ended.
+
+**What the measurement says about ordering, since it was asked directly.**
+`docs/F3_F4_SPEC.md` §4 invariant 5 requires exact equality between grouped
+totals and a direct `SUM` over the line table, and the worry was that
+float-derived stored totals checked against a Decimal-derived regrouping would
+fail it — the seed being wrong rather than F.3. **The measurement says that
+worry does not bind today.** Float and Decimal agree _exactly_ on the current
+corpus; that is what the zero-diff result means. So F.3 is not gated on F.86,
+and recording it as a blocker would be recording a fear rather than a finding.
+The real trigger is different and worth stating so it is recognised when it
+arrives: divergence needs a half-paisa tie, which needs a mixed-rate document,
+and in practice a discount too. `day8`'s corpus is single-rate by construction,
+so no `day8` document can produce one; F.81's mixed-rate documents come from
+`computeTax` and are consistent by construction. **F.86 becomes urgent when
+someone adds a discount-bearing mixed-rate document through `day8`'s `PLANS`** —
+an event unrelated to F.3 landing.
+
+### What the day produced, and the evidence for each claim
+
+Four products per tenant (`MR-MOD-555` 5% `85414300`, `MR-MOD-585` 5%
+`85414300`, `MR-INV-5K` 12% `85044090`, `MR-ISO-40A` 18% `85359090`), taking the
+catalogue from 21 products / 2 HSN / **1 rate** to 25 / 4 / **3**. Two document
+chains per tenant, both tenants:
+
+- **Chain A**, intra-state, lines `18 / 5 / 12 / 5`. Not ascending by rate, so a
+  missing sort fails instead of passing by accident. **Two lines at 5%**, which
+  is the shape the operator required and the reason is worth keeping: 5% is the
+  only rounding-sensitive rate here under the CGST/SGST split, and with a single
+  5% line the per-line and document-level models agree trivially — a regression
+  of `e32c350` would pass silently. With two they do not. The seeded document
+  carries CGST **10073.01** where document-level rounding would give
+  **10073.00**.
+- **Chain B**, inter-state (IGST), lines `18 / 5 / 18`, where a pre-existing
+  panel on HSN `85414300` at 18% sits alongside the new module on the **same
+  HSN** at 5%. The HSN partition and the rate partition therefore differ, which
+  is the mistake an HSN table implemented as a rate grouping makes — three rows
+  where there should be two — and which Chain A structurally cannot detect.
+  Carries the mixed-rate order, in `confirmed` rather than `pending` because
+  `gstSummaryReport` counts only the four supply statuses
+  (`apps/web/lib/reports/gst-summary.ts:23-28`); a `pending` order would be
+  invisible to the report it exists to exercise.
+
+**The new test was given a control.** `packages/db/tests/multi-rate-corpus.test.ts`
+adds 7 assertions. Running them with the multi-rate rows deleted fails **all
+7**, not one — so none of them is satisfied by the pre-existing corpus, and the
+file cannot go quietly green if a future change flattens the catalogue back to
+one rate. This is the C6c habit applied to a test rather than to a scanner: a
+green run is not evidence until the red run has been seen.
+
+**The existing corpus did not move, on all three of the day's separate
+measures.** 14 of 14 reference cases pass text comparison
+(`pdf-snapshots.test.ts` 17/17, `pnpm --filter workers test` 56/56);
+`determinism-check` MATCH with `determinism-expected.json` unmodified; and all
+14 renders byte-identical both against the pre-seed-work baseline **and** across
+two independent full reseeds. `long-serial-fixture.sql` still resolves
+ORD-2026-0019 — the new order is ORD-2026-0022, allocated after `day13` because
+the module runs last.
+
+**Not fixed, deliberately, and reported instead — with the defect now OBSERVED
+rather than predicted.** Audit §1.3 says the rate label on the totals block
+degrades to an empty string on a mixed-rate document. That has never been
+visible, because no mixed-rate document existed. Rendering the new
+QT-2026-0016 through the production path and extracting the text gives the
+contrast directly:
+
+| Document                   | Totals block          |
+| -------------------------- | --------------------- |
+| QT-2026-0001 (single-rate) | `CGST 9% 1,05,300.00` |
+| QT-2026-0016 (mixed-rate)  | `CGST 10,073.01`      |
+
+The rate qualifier is simply gone on the mixed-rate document — there is no
+single rate to name, and nothing replaces it. The numbers are right
+(`10,073.01` × 2 = `20,146.02`, matching the line-table GST total) and the
+per-line GST column is correct at every rate; it is the summary that cannot
+express more than one. That is exactly the rate-wise block F.4 builds, and it
+was left untouched.
+
+The `<select>` defect at `product-detail-sections.tsx:255` now has a product
+that exposes it too: the option values are the literals `[0, 5, 12, 18, 28]`
+rendering as `value="5"`, while `apps/web/lib/queries/products.ts:14,63` returns
+`gstRate` as the string `'5.00'`, so `MR-MOD-555` opens with no option selected
+— the same shape CLAUDE.md §5 records for the 18% products. That is F.3's.
+Neither was touched. No `ORDER BY` was added to the unordered selects in the
+earlier seed modules; `multi-rate.ts` orders its own reads, which is not the same
+thing as hardening theirs.
+
+**Impact:** none on production. Seed, fixture and documentation only.
