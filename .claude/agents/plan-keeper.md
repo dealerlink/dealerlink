@@ -148,6 +148,17 @@ markers". Neither can fire now. If you see one, you are running an old copy of
 the script — report that, do not act on its advice, which is a hand edit the
 settings deny.
 
+## Reporting what you changed
+
+Establish what you changed by observing the tree **now** — `git diff`,
+`git status`, `git diff --stat` run by you, in this task. **A git snapshot
+taken at session start is not evidence about the current tree.** The main thread
+may have edited files between that snapshot and your invocation, so attributing
+a modification to "pre-existing" on the strength of it will be wrong exactly
+when it matters. If you did not touch a file, say that you did not touch it —
+which you know from your own actions — rather than inferring from a stale
+snapshot when it changed or who changed it.
+
 ## Output format
 
 ```
