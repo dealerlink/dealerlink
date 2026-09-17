@@ -257,7 +257,22 @@ Rules:
   - The rationale is recorded in **ADR-012** (`DECISIONS.md`); the original "Bill-To only" simplification was a single-dealer artefact corrected on Day 11.
 - **TDS on Purchase**: optional deduction at order level (e.g., 0.1%).
 - **Round-off**: applied at grand total, not per line. Handle ±0.99 paise per BRD reference PO.
-- **`gstRate` is a STRING out of the DB.** The `gst_rate` column is Postgres `numeric`, which the driver returns as a **string** (`'18'`, `'18.00'`, `'3'`). Any code that **groups or keys by rate** (e.g. a multi-rate GST summary — Day 26) MUST normalise to a number first (`Number(gstRate)` / a canonical numeric key), or `'18'` and `'18.00'` silently become two separate groups and the summary double-counts. The allowed rates are `0, 3, 5, 12, 18, 28` (the `*_gst_rate_chk` constraints).
+- **`gstRate` is a STRING out of the DB — and the hazard is not where this rule used to say it was.** The `gst_rate` column is Postgres `numeric`, and the driver returns a **string**, not a number. That premise is confirmed by measurement. Any code that **compares, keys or groups by rate** MUST still normalise to a number first (`Number(gstRate)` / a canonical numeric key) — but normalise for the **right reason**, because the wrong reason sends you to guard the wrong line.
+
+  **What CANNOT happen.** All four rate columns are `decimal(5, 2)` — `product.ts:38`, `quotation.ts:157`, `performa-invoice.ts:162`, `order.ts:155` — so Postgres normalises on write. Rows written `'18'`, `'18.00'`, `18` and `'18.0'` **all read back as the single canonical string `'18.00'`**, and a `Set` of them has size **1**. Two DB rows cannot disagree on spelling, so a rate-keyed grouping over these columns **cannot split into two groups and cannot double-count**. This rule previously warned that it could; that warning named a mechanism the schema rules out, and it has been repeated into day prompts since Day 20, pointing every reader at the wrong line.
+
+  **What DOES happen.** The live hazard is a DB-read rate string compared against a **hand-written literal** — a React `<option value>`, a form default, a constant array — where the two spellings are genuinely different strings:
+
+  ```ts
+  ['0', '5', '12', '18', '28'].includes('18.00'); // false
+  [0, 5, 12, 18, 28].includes('18.00'); // false — wrong type, never matches
+  ```
+
+  That is a real shipped defect, not a hypothetical: the controlled `<select>` at `apps/web/app/(app)/catalog/[id]/product-detail-sections.tsx:255` renders with **no option selected** for an 18% product, because `apps/web/lib/queries/products.ts:14,63` is the one query module that does not `Number()` the rate. Guard the boundary between a DB value and a literal, not the boundary between two DB values.
+
+  **Provenance.** Measured 2026-09-17 on a real Postgres 16.15 through the application's own stack (postgres.js 3.4.9 + drizzle-orm 0.45.2), using the migration's exact DDL. Method, full output and the enumeration of all 12 comparison/keying sites: `docs/F3_F4_AUDIT.md` §3.3 and §8.1. Reasoning and why the correction took a task rather than a drive-by edit: **DEV.135**, closed as **F.82**.
+
+  The allowed rates are `0, 3, 5, 12, 18, 28` (the `*_gst_rate_chk` constraints).
 
 ### When tax recalculates
 

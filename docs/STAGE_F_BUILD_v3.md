@@ -436,8 +436,14 @@ backlog more than any technical finding.
   `critical-path.spec.ts` are protected. No refactor without an explicit
   instruction.
 - Place of supply is Ship-To for goods, IGST Act §10, ADR-012.
-- `gstRate` returns as a **string**. Any grouping by rate must normalise to
-  numeric first, or `'18'` and `'18.00'` become separate groups.
+- `gstRate` returns as a **string**. Any comparison, keying or grouping by rate
+  must normalise to numeric first. **The reason is not the one this line used to
+  give.** `'18'` and `'18.00'` cannot become separate groups — the four rate
+  columns are `decimal(5, 2)`, so Postgres returns one canonical `'18.00'` for
+  every written form (measured; DEV.135). The live hazard is a DB-read rate
+  string compared against a hand-written literal. **Single source:
+  `CLAUDE.md` §5** — read it there rather than relying on this summary, which
+  exists to point, not to restate.
 - Money is read from stored columns, never recomputed.
 - From Day 23, days land via branch and PR with green CI. No direct pushes to
   `main`.
