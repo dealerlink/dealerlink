@@ -15,17 +15,45 @@ render, and the acceptance criteria below are mechanical rather than visual.
 
 ---
 
-## 1. Prerequisites — both must land first
+## 1. Prerequisites — in this order
 
-|     | Task                                                | Why it blocks                                                                                                                 |
-| --- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **F.81** — multi-rate seed                          | 20 seeded products, all 18% / HSN 85414300, and no mixed-rate reference case. F.3 cannot be tested against the current corpus |
-| 2   | **F.55** — 3% missing from nine rate-list constants | Rate lists are touched throughout this work. Fixing it after means editing the same nine constants twice                      |
+Both land before F.3. **F.81 first, then F.55** — operator decision, 2026-09-17.
+F.81 needs only rates from `{0, 5, 12, 18, 28}`, every one of which all nine
+rate-list constants already accept, so it does not depend on F.55. The
+dependency would only reverse if a 3% product were wanted, and it is not wanted
+yet: F.55 widens a union on a protected surface, so it lands first and a
+separate filed row then adds the 3% fixture, giving the widened union a fixture
+the same day something can exercise it.
 
-F.81 must produce: at least one product at 5% with a distinct HSN, one at 18%,
-both purchasable onto one document, and a reference case exercising the result.
+|     | Task                                                | Why it blocks                                                                                                     |
+| --- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 1   | **F.81** — multi-rate seed                          | 21 seeded products, all 18%, and no mixed-rate document anywhere. F.3 cannot be tested against the current corpus |
+| 2   | **F.55** — 3% missing from nine rate-list constants | Rate lists are touched throughout this work. Fixing it after means editing the same nine constants twice          |
+
+**F.81 ships SEED DATA ONLY.** It must produce, per tenant:
+
+- at least one product at 5% with a distinct HSN, and one at 18%;
+- a **mixed-rate quotation**, its **PI**, and a **mixed-rate ORDER**. The order
+  is not optional: §7's report grouping reads `orders` only
+  (`apps/web/lib/reports/gst-summary.ts:83`), so without one, half of F.3 is as
+  untestable as F.4 is today.
+
 A third rate is preferable — three groups catch ordering and pluralisation bugs
-that two do not.
+that two do not — and must come from `{0, 12, 28}` until F.55 lands.
+
+**F.81 does NOT add a reference case.** The 14 files in `docs/pdf-references/`
+are a _cross-renderer contract_: Chromium output that the Typst templates must
+match. A Typst self-capture is a _regression freeze_ — a different guarantee —
+and filing both in the same directory at equal status is a category error. A
+mixed-rate baseline captured before F.4 would also freeze the audit §1.3 defect
+(the empty rate label) as though it were correct. **F.4 creates the mixed-rate
+golden file, as a Typst snapshot, once the rendering is right**, landing with
+the snapshot tests that assert on it.
+
+Note for whoever schedules the capture: `apps/workers/scripts/capture-references.ts`,
+which `docs/pdf-references/README.md:21-22` and `docs/RUNBOOKS.md:1667` both
+name as the capture tool, **no longer exists** — it went with the Chromium
+pipeline on Day 27. R25's recipe is unrunnable as written; filed separately.
 
 ---
 
@@ -166,9 +194,17 @@ records its status.
 - Apply to quotation, PI and dispatch note as the audit's site list dictates.
   The tax invoice does not exist yet (F.6).
 
-**Determinism holds throughout.** Snapshot tests assert on bytes; new reference
-cases from F.81's seed must reproduce across two reseeds before they become a
-baseline.
+**Determinism holds throughout.** Snapshot tests assert on bytes. The
+mixed-rate golden file is created **here, by F.4**, not by F.81 — see §1 — and
+it is a Typst snapshot (a regression freeze against this repo's own renderer),
+not a member of the Chromium cross-renderer contract in `docs/pdf-references/`.
+Record which of the two it is where it lands, so a later reader does not assume
+one provenance for all of them. It must reproduce byte-identically across two
+independent full reseeds before it counts as a baseline, and the capture must
+run through the production path (`renderTypstPdf` + `buildViewModel` +
+`resolveGeneratedAt`, as `apps/workers/scripts/determinism-check.ts:51-70`
+does) rather than through `scripts/render-typst.ts`, whose view model is a
+duplicate that can drift from what the snapshot test renders.
 
 ---
 
