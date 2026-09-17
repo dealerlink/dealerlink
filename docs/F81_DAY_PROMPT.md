@@ -62,13 +62,17 @@ groups catch ordering and pluralisation bugs two do not.
 ### A.0 — Install `typst`, then establish TWO baselines. Before any seed work.
 
 **The first action of this day is installing the `typst` binary.** Nothing else
-starts until `pnpm --filter workers test` can actually render. The binary is
+starts until `pnpm --filter workers test` can actually render. The binary may be
 absent from the dev container — `resolveTypstBinary`
 (`apps/workers/src/pdf/typst.ts:44`) throws "typst binary not found. Set
-`TYPST_BIN` or put `typst` on PATH". The workers image installs it; the pinned
-version is in `docs/RUNBOOKS.md` R26. **Use that pinned version** — a different
-one re-baselines every reference case for reasons that have nothing to do with
-this task.
+`TYPST_BIN` or put `typst` on PATH". `pnpm typst:install` installs the pinned
+version to `~/.local/bin/typst` and `pnpm typst:check` confirms it; the version
+is pinned in `scripts/install-typst.mjs` and documented in `docs/RUNBOOKS.md`
+R26. **Use that pinned version** — a different one re-baselines every reference
+case for reasons that have nothing to do with this task. Note that
+`~/.local/bin` is not necessarily on `PATH`: if `command -v typst` comes back
+empty after installing, export it or set `TYPST_BIN`, or every render below
+fails at the first step.
 
 **Why this is first and not later.** A post-change run that passes proves the
 renders _work_. It does not prove they are _unchanged_, which is the actual
@@ -83,25 +87,44 @@ but **its effect on the rendered PDFs was never measured**, because `typst` was
 unavailable when it was made. Close that gap first:
 
 ```
-git stash push packages/db/src/seeds/day8.ts   # or check out e32c350^ for that file alone
+git checkout e32c350^ -- packages/db/src/seeds/day8.ts    # pre side
 pnpm db:seed
 psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f apps/workers/scripts/long-serial-fixture.sql
 cd apps/workers && pnpm exec tsx scripts/determinism-check.ts     # expect MATCH
-pnpm --filter workers test                                        # 14/14 green
-sha256sum docs/pdf-references/*.pdf | sort -k2 > /tmp/f81-pre-e32c350.sha
-# restore the change, then repeat the four commands above into
-# /tmp/f81-post-e32c350.sha and diff the two. Empty diff => e32c350 is render-neutral.
+pnpm --filter workers test                                        # pdf-snapshots 17/17 green
+# HASH THE RENDERED OUTPUT, NOT docs/pdf-references/.
+pnpm exec tsx scripts/render-typst.ts --manifest scripts/typst-matrix.json --out /tmp/f81-pre
+( cd /tmp/f81-pre && sha256sum *.pdf | sort -k2 ) > /tmp/f81-pre.sha
+# restore the change (git checkout HEAD -- packages/db/src/seeds/day8.ts), repeat
+# into /tmp/f81-post.sha, and diff the two. Empty diff => e32c350 is render-neutral.
 ```
+
+**Hash the renders, not the references.** `docs/pdf-references/*.pdf` is 14
+git-tracked, read-only input: `pdf-snapshots.test.ts:46`, `compare-typst.mjs:35`
+and `compare-figures.mjs:23` read that directory and **nothing writes it** — that
+is the complete set of references to it under `apps/workers/`. Its hashes are
+therefore invariant under a reseed and under any change to `day8.ts`, so a
+pre/post diff over them is empty by construction and cannot answer the question
+this section asks: the falsifying result, a moved document, could not have
+appeared in that output. Render into a fresh directory per side and hash that,
+which is the shape Phase B already uses. (DEV.136 — the C6c / DEV.124 family: a
+real command with real output is not evidence until you know what result would
+have falsified it.)
 
 If that diff is **not** empty, stop and report it. It means the rounding fix
 moved a rendered document, which contradicts the database evidence and is a
 finding, not something to re-baseline.
 
 **Baseline 2 — the pre-seed-work baseline for this task.** With `day8` back in
-its committed state, record the same hashes again as the _before_ set that this
-day's own seed changes will be measured against. Re-run the full sequence after
-the seed module lands and diff. Any movement in any of the 14 is a finding, not
-a re-baseline (CLAUDE.md §11.1 rulings 1 and 4).
+its committed state, record the same rendered hashes again as the _before_ set
+that this day's own seed changes will be measured against. Re-run the full
+sequence after the seed module lands and diff. Any movement in any of the 14 is
+a finding, not a re-baseline (CLAUDE.md §11.1 rulings 1 and 4).
+
+Record Baseline 2 as a **second independent reseed** of the unchanged tree. It
+costs one extra run and buys a control: if the 14 renders are already stable
+across two reseeds before any seed work, a later movement is attributable to the
+seed module rather than to reseed nondeterminism.
 
 ### A.1 — New seed module, running AFTER every document-producing module
 
@@ -437,6 +460,8 @@ totals are produced (Q4 → A.3). What remains:
 
 ## Open questions for the operator
 
+**Q1 — The third rate. SETTLED: 12%.** Operator, 2026-09-17. Groups 5/12/18. 0% is filed as **F.87** — it is not blocked on F.55, but whether a zero-tax group renders as a row or is suppressed is a decision F.3/F.4 have not taken, and seeding it would freeze one answer blind. Original question follows.
+
 **Q1 — The third rate.** Spec §1 prefers three groups. 5 and 18 are certain. The
 third must come from `{0, 12, 28}`; all three are accepted by every rate list on
 the render path, so none of them depends on F.55. `docs/SEED_DATA.md:22` names
@@ -447,6 +472,8 @@ eventually (a zero-tax group that must still appear, or must not) but it
 interacts with rendering decisions F.3/F.4 have not made, so it is the wrong one
 to introduce blind. If the answer is "two rates only", F.3/F.4 lose the ordering
 and pluralisation coverage §1 asks for and nothing else.
+
+**Q2 — HSN assignment. SETTLED: (a) for the primary document, (b) as the second.** Operator, 2026-09-17. Both are built, because Q5 puts a mixed-rate order in scope anyway. (b) catches an HSN grouping implemented by grouping on rate, which (a) structurally cannot. The 8535 product is an isolator switch. **The product-to-rate mapping is fixture realism and asserts no statutory rate.** Original question follows.
 
 **Q2 — HSN assignment, and whether HSN should be 1:1 with rate.** Spec §2's
 reference table is 1:1 (85414300 → 5%, 85359090 → 18%), taken from the client's
@@ -484,11 +511,15 @@ consistent wrong data only because the 18%-only corpus hides it. Full
 instruction, the measured no-op evidence, and the rate-sensitivity table are in
 **A.3 rule 2**.
 
+**Q5 — SETTLED: both tenants.** Operator, 2026-09-17. The inter-state mixed-rate document from `sample` is what F.3's IGST path needs. Original question follows.
+
 **Q5 — Both tenants, or only `demo`?** Every other seed module loops over active
 tenants. Only `demo` carries the reference cases that matter here.
 _Recommendation: both_, for symmetry and because `sample` is where RLS and
 cross-tenant tests read from; note that this also gives F.3 an inter-state
 mixed-rate document for free (`sample` is `KA`, `index.ts:75`).
+
+**Q6 — SETTLED: `multi-rate.ts`.** Operator, 2026-09-17. Original question follows.
 
 **Q6 — Module name and placement.** `packages/db/src/seeds/multi-rate.ts`, added
 to the `db:seed` chain between `day13.ts` and `pin-created-at.ts`. The existing
@@ -504,6 +535,15 @@ has widened the union so the widened type acquires a fixture the same day
 something can exercise it. Recorded in `docs/F3_F4_SPEC.md` §1 and on both task
 rows.
 
-**Still open — settle on the morning of:** Q1 (third rate — `{0, 12, 28}`;
-drafter recommends 12), Q2 (HSN 1:1 with rate, or deliberately not), Q5 (both
-tenants or only `demo`), Q6 (module name; the chain position is fixed by A.1).
+**All questions settled 2026-09-17** — Q1 12%, Q2 both shapes, Q5 both tenants,
+Q6 `multi-rate.ts`. Settled ON THE DAY, above each original question rather than
+in place of it, so the reasoning that was weighed stays readable.
+
+**One STOP AND ASK fired and was resolved against this document's own premise.**
+The note above says the day should not need `computeTax` "since Q4 fixes
+`computeTotals` in place". That premise is false, and the measurement is in
+DEV.137: Q4 fixed the rounding MODEL, not the float SUBSTRATE, and the two
+still diverge by a paisa on a mixed-rate document with a discount. The operator
+approved importing `computeTax` into `multi-rate.ts` (use, not modification);
+converting `computeTotals` to Decimal is filed as **F.86**, measured as a
+zero-diff change on the existing corpus.
