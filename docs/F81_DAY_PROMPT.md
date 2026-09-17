@@ -268,9 +268,9 @@ rendering is right, landing with the snapshot tests that assert on it.
 Two consequences for this day:
 
 - `apps/workers/tests/pdf-snapshots.test.ts:57` reads the matrix and `:129`
-  reads `docs/pdf-references/<label>.pdf` for every case. Since no case is
-  added, **all 14 existing cases must still pass unchanged** — any movement in
-  any of them is a finding, not a re-baseline.
+  reads the PDF named by each case's label, from `docs/pdf-references/`. Since
+  no case is added, **all 14 existing cases must still pass unchanged** — any
+  movement in any of them is a finding, not a re-baseline.
 - The capture tool both `docs/pdf-references/README.md:21-22` and
   `docs/RUNBOOKS.md:1667` name, `apps/workers/scripts/capture-references.ts`,
   **does not exist** — it went with the Chromium pipeline on Day 27. Filed as
