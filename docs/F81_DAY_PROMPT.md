@@ -59,19 +59,49 @@ groups catch ordering and pluralisation bugs two do not.
 
 ## Phase A — the work
 
-### A.0 — Establish the baseline before changing anything
+### A.0 — Install `typst`, then establish TWO baselines. Before any seed work.
 
-Reseed from scratch, apply the long-serial fixture, run the snapshot suite, and
-record a sha256 per rendered case. You need a _before_ set to prove the _after_
-is unchanged. Do not skip this; "the tests were green afterwards" is a weaker
-claim than "these 14 hashes are the same before and after".
+**The first action of this day is installing the `typst` binary.** Nothing else
+starts until `pnpm --filter workers test` can actually render. The binary is
+absent from the dev container — `resolveTypstBinary`
+(`apps/workers/src/pdf/typst.ts:44`) throws "typst binary not found. Set
+`TYPST_BIN` or put `typst` on PATH". The workers image installs it; the pinned
+version is in `docs/RUNBOOKS.md` R26. **Use that pinned version** — a different
+one re-baselines every reference case for reasons that have nothing to do with
+this task.
+
+**Why this is first and not later.** A post-change run that passes proves the
+renders _work_. It does not prove they are _unchanged_, which is the actual
+question. Without a pre-change run there is nothing to compare against, and
+"green afterwards" silently substitutes for "identical before and after".
+
+**Baseline 1 — verify commit `e32c350`, which was never render-checked.**
+That commit switched `day8`'s `computeTotals` to per-line rounding (Q4, option
+d). It was verified against the database — all 182 money values byte-identical,
+a control run proving zero tables differ because of it, 172 db tests green —
+but **its effect on the rendered PDFs was never measured**, because `typst` was
+unavailable when it was made. Close that gap first:
 
 ```
+git stash push packages/db/src/seeds/day8.ts   # or check out e32c350^ for that file alone
 pnpm db:seed
 psql "$DATABASE_DIRECT_URL" -v ON_ERROR_STOP=1 -f apps/workers/scripts/long-serial-fixture.sql
 cd apps/workers && pnpm exec tsx scripts/determinism-check.ts     # expect MATCH
-pnpm --filter workers test                                        # 14/14 snapshot cases green
+pnpm --filter workers test                                        # 14/14 green
+sha256sum docs/pdf-references/*.pdf | sort -k2 > /tmp/f81-pre-e32c350.sha
+# restore the change, then repeat the four commands above into
+# /tmp/f81-post-e32c350.sha and diff the two. Empty diff => e32c350 is render-neutral.
 ```
+
+If that diff is **not** empty, stop and report it. It means the rounding fix
+moved a rendered document, which contradicts the database evidence and is a
+finding, not something to re-baseline.
+
+**Baseline 2 — the pre-seed-work baseline for this task.** With `day8` back in
+its committed state, record the same hashes again as the _before_ set that this
+day's own seed changes will be measured against. Re-run the full sequence after
+the seed module lands and diff. Any movement in any of the 14 is a finding, not
+a re-baseline (CLAUDE.md §11.1 rulings 1 and 4).
 
 ### A.1 — New seed module, running AFTER every document-producing module
 
