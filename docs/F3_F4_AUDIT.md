@@ -887,6 +887,21 @@ the main thread — returns **20 products** (7 Premier + 6 Adani + 7 Vikram), an
 `hsnCode: '85414300'` (`:269`, `:294`, `:319`). A sweep of every `gstRate:`
 literal across `packages/db/src/seeds` returns only `'18'` and `'18.00'`.
 
+> **CORRECTION, 2026-09-17 (main thread, operator-directed).** The product count
+> and the HSN claim above are **one short**. `generateProducts()` does return 20
+> products at one rate and one HSN, but `packages/db/src/seeds/day13.ts:173-182`
+> inserts a **twenty-first** product per tenant — name `'Day13 Dispatch Panel 540W'`,
+> `hsnCode: '85414011'`, `gstRate: '18.00'`. After a full `pnpm db:seed` the
+> catalogue is therefore **21 products carrying two distinct HSN codes and one
+> rate**. The finding this section exists to establish is **unaffected** — the
+> day13 product is also 18%, so no seeded document can be multi-rate, and the
+> `gstRate:` sweep quoted above stands. But "a distinct HSN does not exist in the
+> catalogue" is **false today**, and any work that assumes a single HSN will be
+> surprised. Both source ranges were read in full to confirm this. The original
+> text is left standing above rather than rewritten, because this document is
+> evidence rather than a decision (CLAUDE.md §10.4); the same correction is
+> recorded on F.81 in `docs/stage-f-tasks.json`.
+
 **No reference-PDF case is mixed-rate either.** `apps/workers/scripts/typst-matrix.json`,
 read in full on the main thread, holds **14 cases**: four quotations, two PIs, one
 payment receipt, three dispatches, and four branded re-captures. They vary by

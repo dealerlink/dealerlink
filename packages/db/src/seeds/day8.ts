@@ -239,8 +239,11 @@ function computeTotals(args: {
   placeOfSupply: string;
 }) {
   const isInterState = args.tenantState.toUpperCase() !== args.placeOfSupply.toUpperCase();
+  // Line-level rounding, matching packages/tax/src/round.ts: each line's
+  // subtotal is rounded to 2dp and the document subtotal is the sum of those.
+  const lineSubtotals = args.lines.map((l) => round2(l.quantity * l.unitPrice));
   let subtotal = 0;
-  for (const l of args.lines) subtotal += l.quantity * l.unitPrice;
+  for (const ls of lineSubtotals) subtotal += ls;
   subtotal = round2(subtotal);
 
   let discountAmount = 0;
@@ -257,17 +260,21 @@ function computeTotals(args: {
   let cgst = 0;
   let sgst = 0;
   let igst = 0;
-  for (const l of args.lines) {
-    const lineGross = l.quantity * l.unitPrice;
-    const lineAfter = lineGross * (1 - discountRatio);
+  // Each line's tax is rounded to 2dp and the document totals are the SUM of
+  // those rounded per-line values (packages/tax/src/round.ts) — never a
+  // re-rounded aggregate of unrounded line taxes.
+  args.lines.forEach((l, i) => {
+    const lineSubtotal = lineSubtotals[i]!;
+    const lineDiscount = round2(lineSubtotal * discountRatio);
+    const lineTaxable = lineSubtotal - lineDiscount;
     const rate = l.gstRate / 100;
     if (isInterState) {
-      igst += lineAfter * rate;
+      igst += round2(lineTaxable * rate);
     } else {
-      cgst += lineAfter * (rate / 2);
-      sgst += lineAfter * (rate / 2);
+      cgst += round2(lineTaxable * (rate / 2));
+      sgst += round2(lineTaxable * (rate / 2));
     }
-  }
+  });
   cgst = round2(cgst);
   sgst = round2(sgst);
   igst = round2(igst);
