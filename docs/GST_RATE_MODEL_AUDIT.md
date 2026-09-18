@@ -515,16 +515,81 @@ that 18% is the sensible default; and the absence of any as-of/version concept
 Concrete and enumerable, because shape-only validation makes currently-invalid
 rates valid:
 
-| test                                      | asserts today                              | under A                                                                                    |
-| ----------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| `packages/db/tests/dealers.test.ts:153`   | "product check rejects GST rate of 10"     | 10 becomes **valid** — test inverts                                                        |
-| `packages/db/tests/quotation.test.ts:152` | rejects `'9.00'`                           | 9 becomes **valid** — test inverts                                                         |
-| `packages/tax/tests/compute.test.ts:324`  | `computeTax(… 10 …)` → `INVALID_GST_RATE`  | inverts                                                                                    |
-| `packages/tax/tests/compute.test.ts:328`  | `computeTax(… 100 …)` → `INVALID_GST_RATE` | **boundary decision**: `<= 100` makes 100 valid and inverts this; `< 100` keeps it failing |
+| test                                      | asserts today                              | under A                                                             |
+| ----------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------- |
+| `packages/db/tests/dealers.test.ts:153`   | "product check rejects GST rate of 10"     | 10 becomes **valid** — test inverts                                 |
+| `packages/db/tests/quotation.test.ts:152` | rejects `'9.00'`                           | 9 becomes **valid** — test inverts                                  |
+| `packages/tax/tests/compute.test.ts:324`  | `computeTax(… 10 …)` → `INVALID_GST_RATE`  | inverts                                                             |
+| `packages/tax/tests/compute.test.ts:328`  | `computeTax(… 100 …)` → `INVALID_GST_RATE` | inverts **only if** Option A introduces a `<= 100` bound — see 5.4a |
 
-That last row is a genuine design question Option A must answer rather than a
-mechanical consequence, and it is the kind of thing that is cheaper to decide now
-than to discover in a test run.
+The first three rows are mechanical. The fourth is not, and the reason needs
+stating precisely, because the earlier wording of this section implied something
+false.
+
+#### 5.4a — There is no 100-bound today; the operator ruled that Option A adds none
+
+**Correction to this section's first version, which called `compute.test.ts:328` a
+"boundary decision" and thereby implied the repository had chosen 100 as a
+bound. It has not.** Established by reading every `100` in the engine
+(`packages/tax/src/compute.ts`, four occurrences): `:58` and `:164` are
+`dividedBy(100)` conversions, and `:148`/`:151` are the **discount** percent
+bound (`'Discount percent must be 0-100'`) — a different quantity. **No bound on
+a GST rate exists anywhere.** `compute.test.ts:324` and `:328` pass because 10
+and 100 are not enum members; the two values are arbitrary out-of-set examples,
+not a chosen limit. So a `<= 100` bound under Option A would **introduce** a
+bound that has never existed, not preserve one.
+
+**Measured: nothing in the arithmetic depends on any bound.** Through the
+engine's own `Decimal` model, taxable ₹10,000.00 intra-state:
+
+| rate    | half-label | tax       | total      |
+| ------- | ---------- | --------- | ---------- |
+| 40%     | 20%        | 4,000.00  | 14,000.00  |
+| 99%     | 49.5%      | 9,900.00  | 19,900.00  |
+| 100%    | 50%        | 10,000.00 | 20,000.00  |
+| 101%    | 50.5%      | 10,100.00 | 20,100.00  |
+| 204%    | 102%       | 20,400.00 | 30,400.00  |
+| 999.99% | 499.995%   | 99,999.00 | 109,999.00 |
+
+Nothing throws and nothing overflows. Two incidental facts: **a shape bound
+already exists and nobody chose it** — `numeric(5,2)` caps at 999.99, so "no
+bound" was never the alternative; and the half-rate label degrades cosmetically
+at both extremes, giving `499.995%` at the ceiling and `0.125%` at 0.25%.
+
+**OPERATOR RULING, 2026-09-18 — under Option A, decline to encode a bound.**
+Recorded here as a sub-decision _within_ Option A's shape. **It does not select
+Option A**; §5 still recommends no option. The reasoning, in the operator's
+terms: `numeric(5,2)` already caps at 999.99, that cap was never chosen, needs
+no owner and makes no statutory claim, whereas `<= 100` adds a bound that has
+never existed. And the typo argument does not survive measurement — the
+realistic fat-finger classes are `5 → 50`, `12 → 120`, `18 → 180`, and a
+`<= 100` bound catches the extra-digit errors while **missing `5 → 50`, the
+commonest one**. It buys staleness risk without buying protection.
+
+Consequence for the table above: `compute.test.ts:328` **inverts** under Option
+A as ruled, because 100 becomes valid. All four rows are then mechanical.
+
+#### 5.4b — On Option A's ledger: typo-catching becomes a WARNING, not a rejection
+
+**This is a cost of Option A and is recorded as one, so it is not discovered
+later.** Declining to encode a bound removes the only thing that would have
+caught an implausible rate at the boundary, so the protection has to move — and
+the operator's constraint on where it moves is specific:
+
+> Typo-catching moves to the catalogue form as a **warning on unusual values,
+> not a rejection. A rejection is a bound wearing different clothes.**
+
+That distinction is the whole point. A rejection threshold is a statutory claim
+about which rates exist, with the same staleness and the same absent owner as the
+list in §5.2 — it would reintroduce the defect at a different number and in a
+different file. A warning asserts nothing about the law; it says only that a
+value is unusual for this catalogue, and it leaves the tenant's classification
+authority intact, which is the premise of the whole reframe (§5.1).
+
+Unscoped and unbuilt — the catalogue form is
+`apps/web/app/(app)/catalog/new/new-product-form.tsx` and the pricing editor is
+`catalog/[id]/product-detail-sections.tsx`, and neither has any warning
+affordance today. Noted as a ledger item against Option A, not as work.
 
 ### 5.5 Option C tends toward Option A by accretion
 
@@ -592,3 +657,38 @@ constraint: of the claimed-live rates, only `{0, 5, 18}` are reachable today, an
 Options 2 and 3 make the fixture change depend on §5's outcome. Option 1 depends
 on an F.3/F.4 rendering decision. Option 4 is available immediately and trades
 away test coverage. **Reported, not recommended.**
+
+---
+
+## 7. Observation — compensation cess is not a GST rate, and no bound would catch it
+
+**Recorded as an observation, not as work.** Operator instruction, 2026-09-18.
+
+Compensation cess is a **separate levy from the GST rate**, and on some goods it
+has historically run far above 100% ad valorem. It therefore sits outside every
+rate set discussed in this audit, current or claimed-abolished.
+
+The reason it is worth recording here rather than nowhere: **no bound in any
+plausible range would catch cess conflated into `gst_rate`.** A `<= 100` bound
+would not (cess can exceed 100); a bound at the top slab would reject a
+legitimate value in the same breath as an illegitimate one, and there is no
+threshold that separates "a high cess entered in the wrong column" from "a rate
+this audit's claim says does not exist". So this is not an argument for or
+against any bound, and §5.4a's ruling is unaffected.
+
+**The actual fix is a separate column, and it does not exist.** §3.7's
+enumeration of all 23 schema modules found no cess column, no cess table and no
+cess concept; §1.2's enumeration found exactly four rate columns, all
+`gst_rate`. So if a tenant ever needs to bill cess, today the only place to put
+it is the GST rate column, which would be wrong in a way nothing detects and
+which would then flow into `cgst_amount`/`sgst_amount`/`igst_amount` as though it
+were GST.
+
+**Domain caveat, the same one that governs this whole audit.** The claim that
+cess is separate and can exceed 100% is the main thread's, from training data,
+with no statutory source in this repository. It carries the same status as the
+slab set in the caveat at the top of this file and belongs in the same
+conversation with the accountant.
+
+No row is filed for this. It is an observation about a gap, and whether Phase 1
+should model cess at all is a product question nobody has asked yet.
