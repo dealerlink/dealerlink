@@ -67,11 +67,15 @@ test.describe('F.55 — GST rate is shape-validated tenant data', () => {
     await expect(page.getByText('40', { exact: false }).first()).toBeVisible();
   });
 
-  test('a rate already in the catalogue saves with no warning at all', async ({ page }) => {
+  test('a rate already in the catalogue raises no warning', async ({ page }) => {
     await loginAs(page, 'demo', 'admin');
     await skipIfPasswordRotation(page);
     await page.goto('/catalog/new');
 
+    // Renamed 2026-09-19: the title said "saves with no warning", and this body
+    // never clicks Save — it asserts the warning is absent on input. The assertion
+    // was always sound; the name over-claimed (F.84 drafting, R-3).
+    //
     // 18 is in the seeded catalogue, so nothing unusual to warn about. This is the
     // control: without it, a warning that fired on EVERY value would pass the
     // test above and be indistinguishable from a correct one.
