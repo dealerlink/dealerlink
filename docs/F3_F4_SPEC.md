@@ -174,6 +174,17 @@ quotation builder, PI view, order detail and the saved quotation view.
   `product-detail-sections.tsx:255` — a DB-read rate compared against a literal
   option list. It is the only confirmed instance of the real hazard.
 
+  > **NOTE — 2026-09-18 (F.55 D-2).** This item is expected to be **dissolved
+  > rather than fixed**, and the line above is kept rather than deleted so the
+  > record shows why. F.55 (`docs/F55_SPEC.md` §3) replaces **both** catalogue
+  > `<select>`s with a numeric input plus per-tenant suggestions, which removes
+  > this `<select>` — and with it the mismatch between `value={form.gstRate}`
+  > (the raw DB string `'18.00'`) and the integer option literals. **Removing
+  > the affordance is not the same as fixing the comparison**, so if F.55 lands
+  > first, F.3 should confirm the defect is gone rather than assume it, and
+  > should not re-add a `<select>` to fix it. If F.55 does not land first, this
+  > item stands as written.
+
 ---
 
 ## 6. PDF rendering (F.4)
