@@ -131,7 +131,11 @@ describe('quotation schema', () => {
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it('CHECK rejects gst_rate outside the allowed set', async () => {
+  // ── F.55: INVERTED and rewritten. The CHECK is shape-only now, so a rate
+  // merely absent from the old enum is accepted; what it rejects is a value
+  // that cannot be a rate. The /gst_rate_chk/ matcher below is kept, which
+  // is also why the migration kept the constraint NAMES unchanged.
+  it('CHECK rejects a NEGATIVE gst_rate (shape), not one absent from an enum', async () => {
     const id = await insertTestQuote({
       tenantId: demoId,
       quoteNumber: `TEST-${Date.now()}-rate`,
@@ -149,7 +153,7 @@ describe('quotation schema', () => {
           quantity: '1.000',
           unitOfMeasure: 'Nos',
           unitPrice: '100.00',
-          gstRate: '9.00', // not in (0, 5, 12, 18, 28)
+          gstRate: '-9.00', // negative — cannot be a rate at all
           lineTotal: '100.00',
         });
       }),

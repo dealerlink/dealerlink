@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { gstRateSchema } from './product';
 import { stateCodeInputSchema } from './states';
 
 export const QUOTATION_STATUSES = [
@@ -39,9 +40,9 @@ export const quotationLineInputSchema = z.object({
   quantity: z.coerce.number().positive().max(999_999),
   unitOfMeasure: trimmed.min(1).max(16).optional(),
   unitPrice: z.coerce.number().nonnegative().max(99_999_999),
-  gstRate: z.coerce.number().refine((n) => [0, 5, 12, 18, 28].includes(n), {
-    message: 'GST rate must be 0, 5, 12, 18, or 28',
-  }),
+  // Shape, not membership — the single definition in `./product`, reused here so
+  // the quotation-line rule cannot drift from the product rule (F.55 §1).
+  gstRate: gstRateSchema,
   description: trimmed.max(500).optional().or(z.literal('')),
   notes: trimmed.max(500).optional().or(z.literal('')),
 });

@@ -4,8 +4,6 @@ import { isInterState } from './state';
 import { TaxComputationError } from './types';
 import type { TaxComputationInput, TaxComputationOutput, TaxLineOutput } from './types';
 
-const VALID_GST_RATES = [0, 5, 12, 18, 28];
-
 /**
  * The authoritative GST computation for Dealerlink (CLAUDE.md §6, BRD §4).
  *
@@ -132,10 +130,25 @@ function validateInput(input: TaxComputationInput): void {
         `Line ${line.lineId}: unitPrice must be >= 0`,
       );
     }
-    if (!VALID_GST_RATES.includes(line.gstRate)) {
+    // SHAPE, NOT MEMBERSHIP (F.55, `docs/F55_SPEC.md` §1). A rate is tenant
+    // data; the engine rejects only what cannot be a rate at all.
+    //
+    // The `typeof` check is load-bearing and is NOT redundant with the type.
+    // The predecessor was `[0, 5, 12, 18, 28].includes(gstRate)` over a NUMBER
+    // array, so it threw on the raw driver string '18.00' — which guaranteed
+    // every caller coerced before calling. Six call sites widen a DB-read value
+    // into `GstRate` with `as`, which is compile-time only: nothing at runtime
+    // stops a string arriving here. Written `Number(x) < 0` this guard would
+    // silently ACCEPT '18.00' and lose that property (day prompt D-3).
+    //
+    // The upper bound is the `numeric(5,2)` column's own magnitude, not a
+    // statutory claim: no `<= 100`, no `<= 40` (spec §1).
+    const rate: unknown = line.gstRate;
+    if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0 || rate > 999.99) {
       throw new TaxComputationError(
         'INVALID_GST_RATE',
-        `Line ${line.lineId}: gstRate ${String(line.gstRate)} not in {0,5,12,18,28}`,
+        `Line ${line.lineId}: gstRate ${String(line.gstRate)} is not a valid rate — ` +
+          'expected a finite number >= 0 and <= 999.99 (the numeric(5,2) column bound)',
       );
     }
   }

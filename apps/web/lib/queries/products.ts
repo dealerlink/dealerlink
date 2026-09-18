@@ -126,3 +126,54 @@ export async function searchProducts(tenantId: string, query: string, limit = 10
       .limit(limit);
   });
 }
+
+/**
+ * The distinct GST rates already present in this tenant's own catalogue.
+ *
+ * Feeds the catalogue form's rate SUGGESTIONS (F.55, `docs/F55_SPEC.md` §3).
+ * Suggestions are a convenience and never a constraint — any shape-valid rate
+ * may be typed. Nothing is hardcoded, so nothing goes stale, and the list is
+ * correct per tenant by construction.
+ *
+ * ── TENANT SCOPING IS THE WHOLE POINT OF THIS FUNCTION'S SHAPE ──────────────
+ *
+ * A suggestion list that leaked another tenant's rates would be a quiet
+ * cross-tenant read: nothing would error, the UI would simply offer rates the
+ * tenant never set, and the leak would be invisible in any test that only
+ * checks the list is non-empty. So this goes through the SAME path as every
+ * other query in this module and takes both belts:
+ *
+ *   1. `withTenant(tenantId, …)` sets `app.tenant_id` inside the transaction,
+ *      which is what the RLS policy on `products` reads (CLAUDE.md §4). Rows
+ *      belonging to other tenants are not visible to this statement at all.
+ *   2. An explicit `eq(products.tenantId, tenantId)` in the WHERE clause, as
+ *      `listProducts` and `searchProducts` both do. Redundant while RLS holds,
+ *      and the point is that it stops being redundant the moment RLS does not.
+ *
+ * It is deliberately NOT a raw `SELECT DISTINCT gst_rate FROM products`.
+ *
+ * ── The string/number boundary ─────────────────────────────────────────────
+ *
+ * `gst_rate` is `decimal(5,2)`, so the driver returns `'5.00'` / `'18.00'`
+ * (CLAUDE.md §5, DEV.135). Comparing those against a typed or hand-written
+ * literal is the live hazard that section names — `['5','18'].includes('18.00')`
+ * is `false`. This function is the single boundary: it returns NUMBERS, so no
+ * caller has to remember to coerce, and the deduplication happens after
+ * coercion rather than over driver strings (`'5.0'` and `'5.00'` would dedupe as
+ * two distinct strings but one number).
+ */
+export async function listTenantGstRates(tenantId: string): Promise<number[]> {
+  return withTenant(tenantId, async (tx) => {
+    const rows = await tx
+      .selectDistinct({ gstRate: products.gstRate })
+      .from(products)
+      .where(eq(products.tenantId, tenantId));
+
+    const seen = new Set<number>();
+    for (const r of rows) {
+      const n = Number(r.gstRate);
+      if (Number.isFinite(n)) seen.add(n);
+    }
+    return [...seen].sort((a, b) => a - b);
+  });
+}

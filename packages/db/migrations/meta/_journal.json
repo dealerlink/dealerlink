@@ -127,6 +127,13 @@
       "when": 1788718964858,
       "tag": "0017_friendly_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789712219334,
+      "tag": "0018_smiling_bill_hollister",
+      "breakpoints": true
     }
   ]
 }

@@ -1,10 +1,24 @@
 import { Decimal } from 'decimal.js';
 
 /**
- * Canonical GST rates per CLAUDE.md §6 and the BRD. Any other value is
- * rejected by the engine — there is no "default" or "nearest" coercion.
+ * A GST rate as a percentage.
+ *
+ * SHAPE, NOT MEMBERSHIP (F.55, `docs/F55_SPEC.md` §1). This was the union
+ * `0 | 5 | 12 | 18 | 28` — an enumeration of the slabs that existed when it was
+ * written, which is a statutory claim and went stale in both directions: it never
+ * carried 3% (which the DB CHECK accepted from 2026-09-07), and it still carried
+ * 12% and 28% after the September 2025 rationalisation removed them.
+ *
+ * A rate is now TENANT DATA rather than application knowledge. The engine holds
+ * no opinion about which rates exist; it rejects only values that cannot be a
+ * rate at all — see `validateInput` in `compute.ts`, which enforces
+ * non-negative and within the `numeric(5,2)` column's own magnitude.
+ *
+ * The alias is kept rather than replaced by `number` at each site: it documents
+ * intent at the six call sites that widen a DB-read value into it, and renaming
+ * it would have been churn rather than a change.
  */
-export type GstRate = 0 | 5 | 12 | 18 | 28;
+export type GstRate = number;
 
 export type TaxLineInput = {
   /** Unique line identifier — passed through to output for reconciliation. */
@@ -13,7 +27,7 @@ export type TaxLineInput = {
   quantity: number | string | Decimal;
   /** Unit price in INR (decimal, 2-3 places typical). */
   unitPrice: number | string | Decimal;
-  /** GST rate as a percentage (0, 5, 12, 18 or 28). */
+  /** GST rate as a percentage. Shape-validated, not enumerated — see `GstRate`. */
   gstRate: GstRate;
 };
 

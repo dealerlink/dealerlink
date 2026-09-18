@@ -150,12 +150,67 @@ describe('Search via pg_trgm — fuzzy ILIKE works on dealers + products', () =>
 });
 
 describe('Constraint enforcement', () => {
-  it('product check rejects GST rate of 10 (not in {0,5,12,18,28})', async () => {
+  // ── F.55: this INVERTED, and is rewritten rather than deleted ─────────────
+  //
+  // It asserted a rate of 10 is rejected — not because 10 is implausible, but
+  // because it was absent from the `IN (0, 3, 5, 12, 18, 28)` enum the CHECK
+  // used to be. That enum encoded a statutory claim and went stale in both
+  // directions. The constraint is now shape-only (`gst_rate >= 0`), so 10 is
+  // accepted and the boundary worth testing moved rather than disappeared.
+  it('product check accepts a rate merely absent from the old enum (10)', async () => {
+    // Rolled back. This INSERT now SUCCEEDS, so unlike the enum-era version it
+    // would otherwise leave a row in the SHARED dev database — which then blocks
+    // any later attempt to re-narrow the constraint, including F.55's own
+    // non-vacuity control. Measured: it did exactly that once.
+    await expect(
+      asTenant(demoId, async (tx) => {
+        await tx.execute(
+          sql`INSERT INTO products (tenant_id, sku, name, hsn_code, gst_rate)
+              VALUES (${demoId}, 'RATE-10', 'Test', '85414300', 10)`,
+        );
+        await tx.execute(sql`ROLLBACK`);
+      }),
+    ).resolves.not.toThrow();
+  });
+
+  it('product check accepts 3, 40 and 0.25 — rates the enum could not express', async () => {
+    for (const [sku, rate] of [
+      ['RATE-3', '3'],
+      ['RATE-40', '40'],
+      ['RATE-025', '0.25'],
+    ] as const) {
+      await expect(
+        asTenant(demoId, async (tx) => {
+          await tx.execute(
+            sql`INSERT INTO products (tenant_id, sku, name, hsn_code, gst_rate)
+                VALUES (${demoId}, ${sku}, 'Test', '85414300', ${rate})`,
+          );
+          await tx.execute(sql`ROLLBACK`); // leave nothing in the shared dev DB
+        }),
+        `rate ${rate} should be accepted`,
+      ).resolves.not.toThrow();
+    }
+  });
+
+  it('product check still rejects a NEGATIVE rate — the shape bound that remains', async () => {
     await expect(
       asTenant(demoId, async (tx) =>
         tx.execute(
           sql`INSERT INTO products (tenant_id, sku, name, hsn_code, gst_rate)
-              VALUES (${demoId}, 'BAD-GST', 'Test', '85414300', 10)`,
+              VALUES (${demoId}, 'RATE-NEG', 'Test', '85414300', -1)`,
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('the column, not the CHECK, supplies the upper bound (1000 overflows numeric(5,2))', async () => {
+    // Deliberately no `<= 100` or `<= 40` in the constraint — those would be
+    // statutory claims that go stale. 999.99 is the column's own magnitude.
+    await expect(
+      asTenant(demoId, async (tx) =>
+        tx.execute(
+          sql`INSERT INTO products (tenant_id, sku, name, hsn_code, gst_rate)
+              VALUES (${demoId}, 'RATE-1000', 'Test', '85414300', 1000)`,
         ),
       ),
     ).rejects.toThrow();

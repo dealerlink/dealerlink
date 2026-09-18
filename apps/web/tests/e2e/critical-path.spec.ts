@@ -163,7 +163,10 @@ test.describe('Critical path — new distributor order, fulfilled and paid', () 
       await page.getByLabel('SKU').fill(SKU);
       await page.getByLabel('Name', { exact: false }).first().fill(PRODUCT_NAME);
       await page.getByLabel('HSN code').fill('85414300');
-      await page.getByLabel('GST rate').selectOption({ label: '18%' });
+      // F.55 (D-8): the <select> became a numeric input with per-tenant
+      // suggestions, so selectOption no longer applies. THIS LINE ONLY —
+      // critical-path.spec.ts is protected (docs/STAGE_F_BUILD_v3.md:436).
+      await page.getByLabel('GST rate').fill('18');
       await page.getByLabel('Default purchase price', { exact: false }).fill(String(UNIT_COST));
       await page.getByLabel('Default selling price', { exact: false }).fill(String(UNIT_PRICE));
       // Serial-tracked: required so procurement creates trackable inventory_items.

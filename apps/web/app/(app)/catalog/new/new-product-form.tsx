@@ -20,7 +20,8 @@ const INITIAL = {
   manufacturer: '',
   model: '',
   hsnCode: '',
-  gstRate: '18',
+  // No hardcoded default: a default rate is a small statutory claim of its own.
+  gstRate: '',
   category: 'Solar Panel',
   subcategory: '',
   mrp: '',
@@ -30,15 +31,36 @@ const INITIAL = {
   unitOfMeasure: 'Nos',
 };
 
-export function NewProductForm() {
+/**
+ * `knownGstRates` is the distinct set already present in THIS tenant's catalogue
+ * (`listTenantGstRates`). They are SUGGESTIONS, never a constraint — F.55 replaced
+ * a hardcoded `[0, 5, 12, 18, 28]` `<select>` with a numeric input precisely so the
+ * application stops asserting which rates exist. A brand-new tenant gets an empty
+ * array, types its own rates, and sees them thereafter.
+ */
+export function NewProductForm({ knownGstRates = [] }: { knownGstRates?: number[] }) {
   const router = useRouter();
   const [form, setForm] = useState(INITIAL);
   const [specs, setSpecs] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // D-6: an unusual rate gets an inline WARNING and requires a second, explicit
+  // click. Never a rejection — a rejection threshold is a bound wearing different
+  // clothes and would reintroduce the staleness F.55 removes.
+  const [rateAcknowledged, setRateAcknowledged] = useState(false);
 
   const set = (k: keyof typeof INITIAL, v: string | boolean) =>
     setForm((f) => ({ ...f, [k]: v as never }));
+
+  // Compared as NUMBERS. `knownGstRates` is already numeric (the query coerces at
+  // the boundary); comparing the input string against DB strings is the
+  // `'18.00'` vs `'18'` hazard CLAUDE.md §5 names.
+  const rateIsUnusual = useMemo(() => {
+    const t = form.gstRate.trim();
+    if (t === '' || knownGstRates.length === 0) return false;
+    const n = Number(t);
+    return Number.isFinite(n) && !knownGstRates.includes(n);
+  }, [form.gstRate, knownGstRates]);
 
   const suggested = useMemo(() => {
     const list = SUGGESTED_SPEC_FIELDS[form.category] ?? [];
@@ -48,6 +70,11 @@ export function NewProductForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // D-6: warn once, then let it through on an explicit second click.
+    if (rateIsUnusual && !rateAcknowledged) {
+      setRateAcknowledged(true);
+      return;
+    }
     setSaving(true);
     try {
       // Numeric specs come in as strings; pass through — Zod accepts them.
@@ -116,18 +143,40 @@ export function NewProductForm() {
             onChange={(e) => set('hsnCode', e.target.value)}
           />
         </Lbl>
-        <Lbl label="GST rate *">
-          <select
+        <Lbl label="GST rate (%) *">
+          <Input
+            required
+            type="number"
+            inputMode="decimal"
+            min="0"
+            max="999.99"
+            step="0.01"
+            list="gst-rate-suggestions"
+            aria-label="GST rate"
+            placeholder={knownGstRates.length > 0 ? String(knownGstRates[0]) : 'e.g. 18'}
             value={form.gstRate}
-            onChange={(e) => set('gstRate', e.target.value)}
-            className="border-line h-[34px] w-full rounded-[5px] border bg-white px-2 text-[13px]"
-          >
-            {[0, 5, 12, 18, 28].map((r) => (
-              <option key={r} value={r}>
-                {r}%
-              </option>
-            ))}
-          </select>
+            onChange={(e) => {
+              set('gstRate', e.target.value);
+              setRateAcknowledged(false);
+            }}
+          />
+          {knownGstRates.length > 0 && (
+            <datalist id="gst-rate-suggestions">
+              {knownGstRates.map((r) => (
+                <option key={r} value={r} />
+              ))}
+            </datalist>
+          )}
+          {rateIsUnusual && (
+            <p
+              data-testid="gst-rate-warning"
+              className="mt-1 text-[12px] leading-snug text-amber-700"
+            >
+              {rateAcknowledged
+                ? `Using ${form.gstRate}% — click Save again to confirm.`
+                : `${form.gstRate}% is not a rate this catalogue already uses. Check it, then click Save again to continue.`}
+            </p>
+          )}
         </Lbl>
         <Lbl label="MRP (₹)">
           <Input
