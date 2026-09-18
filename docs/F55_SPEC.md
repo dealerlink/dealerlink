@@ -55,12 +55,35 @@ The audit enumerates eight constants and four CHECK constraints. By kind:
 | **Write validation** (Zod enums) | Replace the enum with a shape refinement per §1 |
 | **DB CHECK constraints** | **Must change too.** Currently an enum of six values, so the DB is the binding constraint and a tenant still could not enter 40%. Replace with `>= 0`; `numeric(5,2) NOT NULL` already supplies the rest |
 | **Engine guard** (`VALID_GST_RATES` + throw) | Remove the enum check. Keep a shape guard throwing `INVALID_GST_RATE` on a genuinely malformed value — negative, NaN, out of column range |
-| **Read validation** (the five §3.3 sites) | **Delete.** Under §1 these become vacuous by construction: a code check no stricter than the column can never fire on stored data. This is what makes a historical 12% document render, convert and total |
+| **Read validation** (the §3.3 sites) | **Delete the two that are validation** — the `VALID_GST_RATES` arrays plus `toGstRate` in the two worker templates. Under §1 these become vacuous by construction: a code check no stricter than the column can never fire on stored data. This is what makes a historical 12% document render, convert and total. **See the correction below — the other three are not deletable.** |
 | **UI dropdown** | See §3 |
 
 `packages/tax` is a protected surface. No existing fixture may change, and no
 number on any existing document may move. The engine's behaviour changes only
 for rates it previously rejected.
+
+> **CORRECTION — 2026-09-18 (D-9).** The row above originally read *"Read
+> validation (the five §3.3 sites) — **Delete.**"* **That was wrong, and it was
+> my error as the author of this spec.** It is true of **two** of the five: the
+> `VALID_GST_RATES` arrays and `toGstRate` in
+> `apps/workers/src/templates/quotation.tsx` and `performa-invoice.tsx`. The
+> other three — `apps/web/lib/actions/pi/helpers.ts:62`,
+> `apps/web/lib/quotation/preview.ts:83` and
+> `apps/web/lib/actions/quotations/helpers.ts:179` — are `as GstRate` type
+> widens with **no runtime effect**, so there is nothing there to delete.
+>
+> **Do not delete the try/catch blocks at `pi/helpers.ts:77-80` and
+> `quotations/helpers.ts:184-189`.** They route `EMPTY_LINES`,
+> `NEGATIVE_QUANTITY`, `NEGATIVE_UNIT_PRICE`, `NEGATIVE_DISCOUNT`,
+> `DISCOUNT_EXCEEDS_SUBTOTAL`, `DISCOUNT_PERCENT_OUT_OF_RANGE` and
+> `EMPTY_STATE` to `AppError('VALIDATION')`. Deleting them would silently drop
+> six unrelated validation paths — a worse defect than the one this task fixes,
+> **and one that would have passed review because the spec said delete.** Leave
+> the casts as harmless no-ops.
+>
+> Found by `prompt-drafter` reading the sites rather than this spec's summary of
+> them (C-4 in the day prompt). Corrected here rather than rewritten silently,
+> because the original wording is the reason the finding was worth recording.
 
 ---
 
@@ -96,9 +119,25 @@ Add a mechanical test asserting it:
   **enumeration** of the sites the audit lists, not by search — plain grep is
   corroboration only, per the standing ruling)
 - The DB CHECK on all four columns is shape-only
-- Any value the DB accepts, the code accepts
+- Every value that can be **read back out of** a rate column is accepted by
+  every code layer — Zod, the engine, and the render path
 
 A note in a runbook is what failed last time. This is the replacement.
+
+> **CORRECTION — 2026-09-18 (D-10).** The third bullet originally read *"Any
+> value the DB accepts, the code accepts"*. **Unsatisfiable as written, and my
+> error.** Postgres **accepts the input** `0.125` and stores `0.13`
+> (`GST_RATE_MODEL_AUDIT.md` §0.2, measured), while §1's two-decimal rule makes
+> Zod reject it — so the two criteria contradict **at the input boundary** and
+> agree **over the stored domain**. The bullet is restated over the stored
+> domain, which is the satisfiable form and the one the invariant actually needs.
+>
+> The alternative — dropping §1's 2dp rule so the code matches Postgres's input
+> tolerance — was rejected: it would make the application silently round a tax
+> rate, which is worse than rejecting it.
+>
+> This wording decides the invariant test in §4 and acceptance criterion 1. It
+> was settled before the test was written rather than after.
 
 ---
 
