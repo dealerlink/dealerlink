@@ -5928,3 +5928,196 @@ earlier seed modules; `multi-rate.ts` orders its own reads, which is not the sam
 thing as hardening theirs.
 
 **Impact:** none on production. Seed, fixture and documentation only.
+
+---
+
+## DEV.138 — four instances of one signature: a passing negative result is not evidence until something shows it could have failed
+
+**Date:** 2026-09-18
+**Scope:** the framing. No code change is attributed to this entry; the four
+instances it names are recorded in DEV.124, C6c, DEV.136 and in DEV.139 (F.55's
+own entry).
+
+**Operator instruction, closing out F.55:** make the signature the subject, not
+the mechanism of any single instance. The mechanisms differ every time and are
+the least transferable part.
+
+**The four.**
+
+| # | The passing result | What it could not have detected |
+| - | ------------------ | ------------------------------- |
+| 1 | `delete_branch_on_merge: true` plus every merged head branch still present — read as "the setting was always on and never fired" (DEV.124) | That the setting had been enabled *between* the two merges. A reading of the **present** used as evidence about the **past**, with no control. |
+| 2 | `check:paths` green over 58 paths, probed by moving a cited file (C6c) | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**. |
+| 3 | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136) | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction. |
+| 4 | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139) | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back. |
+
+**The shape, which is the only part worth carrying:** a real command, real
+output, a plausible mechanism connecting them, and **no demonstration that the
+negative case could have been reached.** In all four the author was attending to
+correctness — #1 was a verification request, #2 was a probe *for* non-vacuity,
+#3 was a correction written to prevent a vacuous check, #4 was a control
+written because the test asserts something can never fire. Vacuity entered
+through the **instrument**, not through inattention. That is why "be careful"
+does not help and a rule is needed.
+
+**The rule.** C6c states it for scanners: stage the tool before validating it.
+DEV.134 states it for measurements: a count that cannot move across the change
+it verifies confirms nothing. The general form covers all four:
+
+> **A passing negative result is not evidence until something demonstrates it
+> could have failed.**
+
+The operative question is not "is this command correct?" but **"what output
+would this command produce if the thing I am checking for were true?"** If the
+answer is "the same output", the check is decoration. Asked of each of the four,
+it answers itself in one step.
+
+**How to satisfy it, from #4's own resolution.** Do not reason that the control
+would work — **run the failing case and show the failure.** F.55's invariant test
+was narrowed twice on purpose, once on each side of the invariant it protects,
+and each run's red output is recorded in DEV.139. Two directions rather than one,
+because a test watching only the database would have stayed green while the code
+narrowed underneath it — which is precisely how the 3% gap survived nine months.
+
+**What this entry does not claim.** It is not a new rule; it is the general form
+of one already written down three times in three specific shapes. Its value is
+that the next instance will not look like any of the four, so recognising it
+requires the signature rather than the examples.
+
+---
+
+## DEV.139 — F.55: shape-only rate validation, and a control that silently never ran
+
+**Date:** 2026-09-18
+**Scope:** migration `0018_smiling_bill_hollister` (four CHECK constraints),
+`packages/tax/src/{types,compute}.ts` + `tests/compute.test.ts`,
+`packages/schemas/src/{product,quotation}.ts` + `product.test.ts` +
+`quotation.test.ts` (new), `apps/workers/src/templates/{quotation,performa-invoice}.tsx`,
+`apps/web` catalogue form + pricing editor + their pages + `lib/queries/products.ts`,
+`packages/db/tests/{gst-rate-invariant (new),dealers,quotation}.test.ts`,
+`apps/web/tests/e2e/{verify-day-f55 (new),critical-path}.spec.ts`, `CLAUDE.md` §5.
+
+**Spec said:** `docs/F55_SPEC.md` — Option A, shape-only validation. Run per
+`docs/F55_DAY_PROMPT.md`, D-1 to D-11 settled, three protected-surface
+authorisations scoped.
+
+**Built as specified.** All four constraints are `gst_rate >= 0`; `GstRate`
+widened to `number`; the engine's enum guard replaced by D-3's shape guard
+verbatim; `GST_RATES` deleted after confirming zero importers; both Zod sites
+share **one** `gstRateSchema`, because two copies of a rule are two things to
+re-narrow independently and that is how the 3% gap opened; both worker read
+gates deleted; both catalogue `<select>`s replaced by a numeric input with
+per-tenant suggestions and a D-6 warning.
+
+### The control that never ran, which is this entry's reason to exist
+
+`docs/F55_SPEC.md` §4 requires the invariant test to fail if either side is
+narrowed. The first attempt narrowed `products_gst_rate_chk` back to the enum,
+ran the test, and the test **passed** — which I nearly reported as the control
+succeeding in the sense of "no false positive". It was nothing of the kind: the
+narrowing had not happened. Only reading `pg_get_constraintdef` afterwards showed
+the constraint still `>= 0`.
+
+**Why it had not happened, and this is the part worth six months from now: my own
+rewritten tests were leaking rows into the shared dev database.** F.55 inverted
+`dealers.test.ts`'s "product check rejects GST rate of 10" — and in the enum era
+that INSERT was *rejected*, so the test never had to clean up. Rewritten to assert
+acceptance, the INSERT now **succeeds**, and it left `RATE-10`, `RATE-40` and
+`RATE-025` behind. `BAD-GST` at 10.00 was left by the *original* test running once
+after the migration and before the rewrite. Those rows violate the enum, so
+re-adding it aborted — and because `psql -c` wraps multiple statements in one
+implicit transaction, the preceding `DROP` rolled back with it and the constraint
+was left untouched.
+
+**So the test disabled the control meant to validate it.** Not a coincidence of
+two bugs: the same change that made the control necessary also made it
+impossible, through a side effect nothing in the change looked like.
+
+Fixed by rolling both accepting INSERTs back inside their own transaction — the
+pattern `gst-rate-invariant.test.ts` already used, which is why *its* probes left
+nothing behind. Verified: **0 products outside the old enum after a full
+`pnpm --filter @dealerlink/db test` run.** The day prompt's C2-before-C4 warning
+was about exactly this and would have caught it at closeout with no explanation
+attached.
+
+### The control, then executed, in both directions
+
+- **DB side narrowed** to `IN (0, 3, 5, 12, 18, 28)`: **5 failed | 15 passed** —
+  the `pg_get_constraintdef` assertion plus four probe values (`0.25`, `40`,
+  `100`, `999.99`). Restored; 20/20.
+- **Code side narrowed** by adding `<= 100` to `gstRateSchema` — the exact bound
+  the operator declined: **1 failed | 19 passed**, on `999.99`. Restored; 20/20,
+  `git diff` clean.
+
+The second matters more. The invariant is `code shape ⊇ DB constraint`, and a
+test watching only the database stays green while the code narrows underneath it.
+That is how the 3% gap survived nine months.
+
+### C-1 was wrong about one of the five, and the error ran the safe way
+
+The day prompt predicted five inverting tests. Four inverted. The fifth,
+`product.test.ts:48-56`, **went vacuous instead** — its fixture used `sku: 'X'`
+and `name: 'X'`, both one character against `min(2)`, so `safeParse` failed on SKU
+and name and the test stayed **green without touching the rate**. Measured: the
+issues were "SKU is required" and "Name is required", and the same fixture with a
+valid sku/name accepts 10.
+
+A green test that no longer tests its subject is worse than a red one. Every
+rewritten case now varies **only** the rate against an otherwise-valid fixture and
+asserts the *reason*, with a control proving a valid rate raises no rate issue.
+
+**Swept for the same shortcut, on the operator's instruction, since it usually
+appears more than once.** Three more tests use it — the two HSN cases and
+"rejects negative MRP". **None is currently vacuous:** each subject does raise an
+issue alongside sku/name, measured. But all three assert only
+`r.success === false`, never *which* field failed, so all three would pass
+unchanged if HSN or MRP validation were deleted. **Latently** vacuous. Out of
+F.55's scope (their subjects are untouched) and filed as **F.93**.
+
+### Reported, not fixed
+
+- **`pnpm verify` reported 1 flaky.** `critical-path.spec.ts` failed once at
+  `moveDealTo`'s post-reload assertion (`:125`, called from `:292` for the
+  `verbal_commit` stage) and passed on retry #1. **Not attributed to this day, and
+  not classified either.** The discrimination I can make: the failure is
+  *downstream* of my only change to that file (`:166`, product creation), so the
+  test had already executed my line to reach `:292`; and it got further on retry,
+  which DEV.93's method separates from a state bug. What I have **not** done is
+  establish the classification by repetition, which is the only thing that would
+  settle it. No timeout was raised, nothing was skipped, and no spec was retried
+  harder to get green (ruling 1). Filed as **F.94**. Day 24's own line applies —
+  it "registers as new signal rather than a known-flake shrug".
+- **`CLAUDE.md` §5 still describes the `<select>` defect at
+  `product-detail-sections.tsx:255` as live, and that `<select>` no longer
+  exists.** D-7 scoped the CLAUDE.md edit to the allowed-rates sentence, so the
+  paragraph was left alone rather than widened into on the most-read document in
+  the repo. Filed as **F.95**.
+- **F.89** (the loaders' bare `Error`) is now unreachable for shape-valid rates
+  and its class is untouched, per spec §6.
+
+### Acceptance criterion 5 is unmet by design
+
+D-1 places render and request coverage in F.84, so **no A.8 render check and no
+matrix entry were added** — `apps/workers/tests/` gains nothing this day. Adding
+seed data here would have been the one thing that can move a rendered document,
+and measurement 2 below would then have been unattributable. F.55's row says so
+plainly and F.84 is re-scoped in the same closeout.
+
+### The three measurements, which are three statements
+
+1. **TEXT against the Chromium contract** — `pdf-snapshots.test.ts` 17/17, workers
+   56/56. All 14 reference cases still match on extracted text.
+2. **BYTES against the pre-change render** — `diff` of the A.0 pre-change hashes
+   against the post-change render: **empty**, all 14 byte-identical.
+3. **BYTES across two independent reseeds** — **empty**, all 14 byte-identical.
+
+Plus `determinism-check` MATCH with `determinism-expected.json` unmodified, and
+nothing under `docs/pdf-references/` or in `typst-matrix.json` changed. The A.0
+baseline itself carried a control: two reseeds of the **unchanged** tree already
+agreed, so a later movement would have been attributable to this day.
+
+**Impact:** a tenant can now classify its own products at any rate its accountant
+gives it, without a code change, and a document issued at a rate later withdrawn
+still renders, converts and totals. The statutory claim the code used to make is
+gone.
+

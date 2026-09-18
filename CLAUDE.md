@@ -272,7 +272,29 @@ Rules:
 
   **Provenance.** Measured 2026-09-17 on a real Postgres 16.15 through the application's own stack (postgres.js 3.4.9 + drizzle-orm 0.45.2), using the migration's exact DDL. Method, full output and the enumeration of all 12 comparison/keying sites: `docs/F3_F4_AUDIT.md` §3.3 and §8.1. Reasoning and why the correction took a task rather than a drive-by edit: **DEV.135**, closed as **F.82**.
 
-  The allowed rates are `0, 3, 5, 12, 18, 28` (the `*_gst_rate_chk` constraints).
+  **There is no allowed-rate list. A rate is validated by SHAPE, not by membership**
+  — F.55, `docs/F55_SPEC.md` §1. This sentence used to read "The allowed rates are
+  `0, 3, 5, 12, 18, 28` (the `*_gst_rate_chk` constraints)", which was accurate about
+  the constraints at the time and became false with migration
+  `0018_smiling_bill_hollister`: all four `*_gst_rate_chk` constraints are now
+  `gst_rate >= 0`, and `numeric(5,2)` supplies the upper bound of 999.99.
+
+  The rule lives in two places and nowhere else — `gstRateSchema` in
+  `packages/schemas/src/product.ts` (reused by the quotation-line schema, so the two
+  cannot drift) and `validateInput` in `packages/tax/src/compute.ts`: non-negative,
+  at most two decimal places, at most 999.99. **No bound beyond the column's own** —
+  `<= 100` would introduce one that never existed and would still miss `5` typed as
+  `50`; `<= 40` is the old enum compressed into one number, going stale on the same
+  schedule with the same absent owner.
+
+  **Why the list went rather than being corrected:** a rate is the TENANT's
+  classification of its own product, not application knowledge, and a hardcoded list
+  is a statutory claim that goes stale whenever the GST Council meets — it was stale
+  in both directions when F.55 began. The decisive argument was commercial: a
+  tenant's accountant is unavailable until their deal closes, so any design that must
+  know their slab set cannot be built. Full reasoning in
+  `docs/GST_RATE_MODEL_AUDIT.md` §5. The invariant that matters going forward is
+  **code shape ⊇ DB constraint**, enforced by a test rather than by a note.
 
 ### When tax recalculates
 

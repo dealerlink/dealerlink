@@ -18,7 +18,7 @@ const KA = 'Karnataka';
 function oneLine(
   quantity: number | string,
   unitPrice: number | string,
-  gstRate: 0 | 5 | 12 | 18 | 28,
+  gstRate: number,
   opts: Partial<Pick<TaxComputationInput, 'tenantState' | 'placeOfSupply' | 'discount'>> = {},
 ): TaxComputationInput {
   return {
@@ -148,7 +148,7 @@ describe('Suite 3 — mixed GST rates in one quotation', () => {
     expect(r.totalAmount.toFixed(2)).toBe('300000.00');
   });
 
-  it('all four GST rates (5, 12, 18, 28) in one quotation, intra-state', () => {
+  it('four different GST rates (5, 12, 18, 28) in one quotation, intra-state', () => {
     const r = computeTax({
       tenantState: MH,
       placeOfSupply: MH,
@@ -320,12 +320,51 @@ describe('Suite 6 — validation errors', () => {
     expectCode(() => computeTax(oneLine(1, -1000, 18)), 'NEGATIVE_UNIT_PRICE');
   });
 
-  it('invalid GST rate (10) → INVALID_GST_RATE', () => {
-    expectCode(() => computeTax(oneLine(1, 1000, 10 as unknown as 18)), 'INVALID_GST_RATE');
+  // ── F.55: these two INVERTED, and were rewritten rather than deleted ──────
+  //
+  // Both previously asserted INVALID_GST_RATE for 10 and 100 — not because
+  // anyone had chosen a bound, but because neither was a member of the
+  // `[0, 5, 12, 18, 28]` enum. Under shape-only validation both are valid
+  // rates, so the assertions flipped. Rewritten to assert the boundary that
+  // now exists (spec §1: non-negative, <= the numeric(5,2) magnitude) rather
+  // than removed, because a deleted test stops testing the boundary entirely.
+  it('accepts a rate that was merely absent from the old enum (10)', () => {
+    const out = computeTax(oneLine(1, 1000, 10));
+    expect(out.cgstAmount.toFixed(2)).toBe('50.00');
+    expect(out.sgstAmount.toFixed(2)).toBe('50.00');
+    expect(out.totalAmount.toFixed(2)).toBe('1100.00');
   });
 
-  it('invalid GST rate (100) → INVALID_GST_RATE', () => {
-    expectCode(() => computeTax(oneLine(1, 1000, 100 as unknown as 18)), 'INVALID_GST_RATE');
+  it('accepts 100 — no <= 100 bound was ever encoded, and none is added', () => {
+    const out = computeTax(oneLine(1, 1000, 100));
+    expect(out.cgstAmount.toFixed(2)).toBe('500.00');
+    expect(out.sgstAmount.toFixed(2)).toBe('500.00');
+    expect(out.totalAmount.toFixed(2)).toBe('2000.00');
+  });
+
+  it('accepts 3 and 40 — the rates the old enum could not express', () => {
+    expect(computeTax(oneLine(1, 1000, 3)).cgstAmount.toFixed(2)).toBe('15.00');
+    expect(computeTax(oneLine(1, 1000, 40)).cgstAmount.toFixed(2)).toBe('200.00');
+    // Inter-state levies the full rate as IGST.
+    expect(
+      computeTax(oneLine(1, 1000, 40, { placeOfSupply: KA })).igstAmount.toFixed(2),
+    ).toBe('400.00');
+  });
+
+  it('still rejects what cannot be a rate: negative, NaN, and above the column bound', () => {
+    expectCode(() => computeTax(oneLine(1, 1000, -1)), 'INVALID_GST_RATE');
+    expectCode(() => computeTax(oneLine(1, 1000, Number.NaN)), 'INVALID_GST_RATE');
+    expectCode(() => computeTax(oneLine(1, 1000, 1000)), 'INVALID_GST_RATE');
+    expectCode(() => computeTax(oneLine(1, 1000, Number.POSITIVE_INFINITY)), 'INVALID_GST_RATE');
+  });
+
+  // The fail-loud property the old number-array `includes()` gave for free, and
+  // which the `typeof` check in the shape guard preserves deliberately (D-3):
+  // a raw driver string must NOT be silently accepted. Six call sites widen a
+  // DB-read value with `as GstRate`, which is compile-time only.
+  it('still rejects the raw driver string, so every caller must coerce', () => {
+    expectCode(() => computeTax(oneLine(1, 1000, '18.00' as unknown as number)), 'INVALID_GST_RATE');
+    expectCode(() => computeTax(oneLine(1, 1000, '18' as unknown as number)), 'INVALID_GST_RATE');
   });
 
   it('negative discount → NEGATIVE_DISCOUNT', () => {

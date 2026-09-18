@@ -2,7 +2,9 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import { impersonationTenantId } from '@/lib/tenant/context';
 import { getAuthContext } from '@/lib/auth/session';
+import { listTenantGstRates } from '@/lib/queries/products';
 
 import { NewProductForm } from './new-product-form';
 
@@ -12,6 +14,16 @@ export default async function NewProductPage() {
   const ctx = await getAuthContext();
   if (!ctx) redirect('/login');
   if (ctx.user.role !== 'admin') redirect('/catalog');
+
+  // Rate SUGGESTIONS from this tenant's own catalogue (F.55 §3). Tenant-scoped
+  // through `withTenant` + an explicit tenant predicate — see the query's own
+  // comment: a suggestion list leaking another tenant's rates is a quiet
+  // cross-tenant read that no "is the list non-empty" test would catch.
+  // Same accessor the catalogue list uses, so operator impersonation resolves
+  // to the impersonated tenant rather than to nothing (apps/web/app/(app)/catalog/page.tsx).
+  const tenantId = ctx.user.tenantId ?? impersonationTenantId();
+  if (!tenantId) redirect('/login');
+  const knownGstRates = await listTenantGstRates(tenantId);
 
   return (
     <div className="mx-auto max-w-[720px] px-8 py-12">
@@ -25,10 +37,11 @@ export default async function NewProductPage() {
         <div className="titlecaps mb-1">New product</div>
         <h1 className="text-[26px] font-semibold tracking-[-0.02em]">Create a product</h1>
         <p className="text-mute mt-1 text-[13px]">
-          SKU must be unique within the tenant. HSN: 4-8 digits. GST rate: 0, 5, 12, 18, or 28.
+          SKU must be unique within the tenant. HSN: 4-8 digits. GST rate: any percentage
+          your catalogue uses — rates already in use are suggested as you type.
         </p>
       </div>
-      <NewProductForm />
+      <NewProductForm knownGstRates={knownGstRates} />
     </div>
   );
 }

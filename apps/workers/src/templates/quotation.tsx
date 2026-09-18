@@ -21,7 +21,7 @@ import {
   type DrizzleTx,
 } from '@dealerlink/db';
 import { formatStateLabel } from '@dealerlink/schemas';
-import { computeTax, serializeOutput, type GstRate, type TaxDiscount } from '@dealerlink/tax';
+import { computeTax, serializeOutput, type TaxDiscount } from '@dealerlink/tax';
 import { asc, eq } from 'drizzle-orm';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -41,18 +41,6 @@ export interface BuiltQuotationHtml {
   filename: string;
   /** Chromium footer template — repeated on every printed page. */
   footerTemplate: string;
-}
-
-const VALID_GST_RATES: GstRate[] = [0, 5, 12, 18, 28];
-
-/** Coerce a DB numeric GST rate to the engine's `GstRate` union. */
-function toGstRate(raw: string | number): GstRate {
-  const n = Number(raw);
-  const rate = VALID_GST_RATES.find((r) => r === n);
-  if (rate === undefined) {
-    throw new Error(`quotation template: unexpected GST rate "${String(raw)}"`);
-  }
-  return rate;
 }
 
 /** Drop null/empty parts and join into clean address lines. */
@@ -204,7 +192,18 @@ export async function loadQuotationPdfData(
         lineId: l.id,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
-        gstRate: toGstRate(l.gstRate),
+          // READ VALIDATION REMOVED (F.55, spec §2). This was
+          // `toGstRate(l.gstRate)`, which checked a STORED rate against
+          // `[0, 5, 12, 18, 28]` and threw a bare `Error` if it missed — so a
+          // document issued at a rate later dropped from that list stopped
+          // rendering. A rate read back out of the database is HISTORY, not
+          // input: the write path validates, the read path does not.
+          //
+          // `Number()` is still required and is not decoration: the driver
+          // returns `'18.00'` for a decimal(5,2) column, and the engine's shape
+          // guard rejects a string on purpose (D-3). The rendered line coerces
+          // the same way a few lines below.
+          gstRate: Number(l.gstRate),
       })),
     }),
   );

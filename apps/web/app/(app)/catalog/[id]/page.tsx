@@ -5,7 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
 import { getAuditTrail } from '@/lib/queries/audit';
-import { getProductById } from '@/lib/queries/products';
+import { getProductById, listTenantGstRates } from '@/lib/queries/products';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
 import { DealerActivity } from '../../dealers/[id]/dealer-activity';
@@ -34,6 +34,9 @@ export default async function ProductDetailPage({ params }: PageProps) {
   const { product, inventorySummary } = result;
 
   const activity = await getAuditTrail(tenantId, 'products', params.id, 50);
+  // Rate suggestions from this tenant's own catalogue (F.55 §3), tenant-scoped
+  // through withTenant + an explicit tenant predicate.
+  const knownGstRates = await listTenantGstRates(tenantId);
 
   const canEdit = ctx.user.role === 'admin';
 
@@ -61,6 +64,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
       </div>
 
       <ProductDetailSections
+        knownGstRates={knownGstRates}
         product={{
           id: product.id,
           sku: product.sku,

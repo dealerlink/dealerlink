@@ -114,15 +114,36 @@ function Field({
 export function ProductDetailSections({
   product,
   canEdit,
+  knownGstRates = [],
 }: {
   product: ProductView;
   canEdit: boolean;
+  /**
+   * Distinct rates already in THIS tenant's catalogue — suggestions only (F.55 §3).
+   * Editing a product to a NEW rate is R8's actual use case and the reason the old
+   * hardcoded `<select>` made that runbook structurally unable to do its job.
+   */
+  knownGstRates?: number[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(product);
+  // D-6: warn on an unusual rate, never reject. Second explicit click confirms.
+  const [rateAcknowledged, setRateAcknowledged] = useState(false);
+
+  // NOTE: `form.gstRate` is the raw DB string (`'18.00'`) — `ProductView.gstRate`
+  // is typed `string` and `lib/queries/products.ts` does not coerce it. That is the
+  // very mismatch that made the old `<select value={form.gstRate}>` select NOTHING
+  // for an 18% product, because its options rendered integer literals (CLAUDE.md
+  // §5). Comparison here is numeric on both sides, which is what fixes it.
+  const rateIsUnusual = (() => {
+    const t = String(form.gstRate ?? '').trim();
+    if (t === '' || knownGstRates.length === 0) return false;
+    const n = Number(t);
+    return Number.isFinite(n) && !knownGstRates.includes(n);
+  })();
 
   const set = <K extends keyof ProductView>(k: K, v: ProductView[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -232,8 +253,14 @@ export function ProductDetailSections({
           setForm(product);
         }}
         onCancel={() => setEditing(null)}
-        onSave={() =>
-          saveSection({
+        onSave={() => {
+          // D-6: an unusual rate warns once and requires a second explicit save.
+          // Never a rejection — see the warning text below.
+          if (rateIsUnusual && !rateAcknowledged) {
+            setRateAcknowledged(true);
+            return;
+          }
+          return saveSection({
             hsnCode: form.hsnCode,
             gstRate: Number(form.gstRate),
             mrp: form.mrp ? Number(form.mrp) : null,
@@ -241,8 +268,8 @@ export function ProductDetailSections({
               ? Number(form.defaultPurchasePrice)
               : null,
             defaultSellingPrice: form.defaultSellingPrice ? Number(form.defaultSellingPrice) : null,
-          })
-        }
+          });
+        }}
         saving={saving}
       >
         {editing === 'pricing' ? (
@@ -251,17 +278,37 @@ export function ProductDetailSections({
               <Input value={form.hsnCode} onChange={(e) => set('hsnCode', e.target.value)} />
             </Lbl>
             <Lbl label="GST rate (%)">
-              <select
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                max="999.99"
+                step="0.01"
+                list="gst-rate-suggestions-edit"
+                aria-label="GST rate"
                 value={form.gstRate}
-                onChange={(e) => set('gstRate', e.target.value)}
-                className="border-line h-[34px] w-full rounded-[5px] border bg-white px-2 text-[13px]"
-              >
-                {[0, 5, 12, 18, 28].map((r) => (
-                  <option key={r} value={r}>
-                    {r}%
-                  </option>
-                ))}
-              </select>
+                onChange={(e) => {
+                  set('gstRate', e.target.value);
+                  setRateAcknowledged(false);
+                }}
+              />
+              {knownGstRates.length > 0 && (
+                <datalist id="gst-rate-suggestions-edit">
+                  {knownGstRates.map((r) => (
+                    <option key={r} value={r} />
+                  ))}
+                </datalist>
+              )}
+              {rateIsUnusual && (
+                <p
+                  data-testid="gst-rate-warning"
+                  className="mt-1 text-[12px] leading-snug text-amber-700"
+                >
+                  {rateAcknowledged
+                    ? `Using ${String(form.gstRate)}% — save again to confirm.`
+                    : `${String(form.gstRate)}% is not a rate this catalogue already uses. Check it, then save again to continue.`}
+                </p>
+              )}
             </Lbl>
             <Lbl label="MRP (₹)">
               <Input value={form.mrp ?? ''} onChange={(e) => set('mrp', e.target.value)} />
