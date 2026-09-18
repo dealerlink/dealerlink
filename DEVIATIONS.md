@@ -5931,18 +5931,19 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — four instances of one signature: a passing negative result is not evidence until something shows it could have failed
+## DEV.138 — five instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
-**Scope:** the framing. No code change is attributed to this entry; the four
+**Scope:** the framing. No code change is attributed to this entry; the five
 instances it names are recorded in DEV.124, C6c, DEV.136 and in DEV.139 (F.55's
-own entry).
+own entry, which carries two of them).
 
 **Operator instruction, closing out F.55:** make the signature the subject, not
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The four.**
+**The five.** Four are vacuous PASSES. The fifth is a false STOP, and it is in the
+table because it has the same cause and the opposite polarity.
 
 | # | The passing result | What it could not have detected |
 | - | ------------------ | ------------------------------- |
@@ -5950,10 +5951,11 @@ the least transferable part.
 | 2 | `check:paths` green over 58 paths, probed by moving a cited file (C6c) | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**. |
 | 3 | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136) | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction. |
 | 4 | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139) | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back. |
+| **5** | **A FALSE STOP, not a vacuous pass.** `git grep -n "GST_RATES" -- apps/` printed four hits and I read them as "CONSUMER FOUND — STOP", blocking D-4's deletion (DEV.139) | That all four hits were **`VALID_GST_RATES`** — a longer identifier the substring matched — in the two worker templates, which are independently-declared locals that the same day deletes. A word-boundary grep showed the real answer: the declaration and its own refine, **zero importers**. |
 
 **The shape, which is the only part worth carrying:** a real command, real
 output, a plausible mechanism connecting them, and **no demonstration that the
-negative case could have been reached.** In all four the author was attending to
+negative case could have been reached.** In all five the author was attending to
 correctness — #1 was a verification request, #2 was a probe *for* non-vacuity,
 #3 was a correction written to prevent a vacuous check, #4 was a control
 written because the test asserts something can never fire. Vacuity entered
@@ -5962,15 +5964,26 @@ does not help and a rule is needed.
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all four:
+it verifies confirms nothing. The general form covers all five:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
 
 The operative question is not "is this command correct?" but **"what output
 would this command produce if the thing I am checking for were true?"** If the
-answer is "the same output", the check is decoration. Asked of each of the four,
-it answers itself in one step.
+answer is "the same output", the check is decoration. Asked of each of the four
+vacuous passes, it answers itself in one step.
+
+**The fifth needs the question asked the other way round, which is why it earns a
+row.** A false stop produces no green to be suspicious of — it produces a halt that
+*looks like diligence*. Nothing about "CONSUMER FOUND — STOP" invites a second
+look; it reads as the check doing its job, and the cost is invisible because the
+work simply does not happen. The corresponding question is **"could this
+instrument report a hit for a reason other than the one I am testing for?"** For a
+substring match against an identifier the answer is always yes, because any longer
+identifier containing it matches. Had that stop been accepted, D-4 would have been
+reported as blocked by a consumer that does not exist, and the row would have
+looked correctly cautious.
 
 **How to satisfy it, from #4's own resolution.** Do not reason that the control
 would work — **run the failing case and show the failure.** F.55's invariant test
@@ -5981,7 +5994,7 @@ narrowed underneath it — which is precisely how the 3% gap survived nine month
 
 **What this entry does not claim.** It is not a new rule; it is the general form
 of one already written down three times in three specific shapes. Its value is
-that the next instance will not look like any of the four, so recognising it
+that the next instance will not look like any of the five, so recognising it
 requires the signature rather than the examples.
 
 ---
