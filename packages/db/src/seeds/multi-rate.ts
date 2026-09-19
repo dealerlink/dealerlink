@@ -107,17 +107,28 @@ const SKU_PREFIX = 'MR-';
 const QUOTE_TAG = 'multi-rate-seed-quotation';
 const PI_TAG = 'multi-rate-seed-pi';
 const ORDER_TAG = 'multi-rate-seed-order';
+// F.84's 3% rows carry their own tags: the cleanup below removes them, and the
+// corpus test can find them without depending on a document number.
+const TP_QUOTE_TAG = 'multi-rate-seed-3pc-quotation';
+const TP_PI_TAG = 'multi-rate-seed-3pc-pi';
 
 /**
  * The new catalogue entries, one set per tenant.
  *
- * Three rates — 5, 12 and 18 — settled by the operator on 2026-09-17. Three
- * groups rather than two because ordering and pluralisation bugs need a
- * non-trivial middle element to show up. 3% is excluded because `computeTax`
- * throws on it until F.55 widens the union (fixture filed as F.84); 0% is
- * excluded because whether a zero-tax group renders as a row or is suppressed
- * is a decision F.3/F.4 have not taken yet, and seeding it would freeze one
- * answer blind (filed as F.87).
+ * Rates 5, 12 and 18 were settled by the operator on 2026-09-17 — three groups
+ * rather than two, because ordering and pluralisation bugs need a non-trivial
+ * middle element to show up.
+ *
+ * **3% WAS ADDED BY F.84 ON 2026-09-19.** This comment previously said 3% was
+ * excluded "because `computeTax` throws on it until F.55 widens the union", and
+ * that is no longer true: F.55 replaced every enumerated rate list with a shape
+ * rule, so 3% is valid at the DB CHECK, at both Zod layers, in the engine and on
+ * the render path. The 3% product and its chain are below, and the sentence is
+ * corrected rather than deleted so the sequencing is still legible.
+ *
+ * 0% remains excluded, and for a different reason that still holds: whether a
+ * zero-tax group renders as a row or is suppressed is a decision F.3/F.4 have not
+ * taken, and seeding it would freeze one answer blind (filed as F.87).
  */
 const NEW_PRODUCTS = [
   {
@@ -146,6 +157,25 @@ const NEW_PRODUCTS = [
     sellingPrice: '41500.00',
     manufacturer: 'Growatt',
     category: 'Inverter',
+  },
+  {
+    // F.84. 3% is the rate this fixture exists for. HSN 71131900 is a new code
+    // for this catalogue — the four already in use are 85414300, 85414011,
+    // 85044090 and 85359090 — so the 3% group is also a new HSN group.
+    //
+    // FIXTURE REALISM, ASSERTING NO STATUTORY RATE, exactly as the other four
+    // entries here. The operator's recorded position (F.55) is that 3% is the
+    // gold and precious-metals rate and does not apply to solar equipment at
+    // all; the rate is worth supporting because CLAUDE.md §1 makes the product
+    // tenant-agnostic, not because this catalogue would ever bill it. The
+    // product is named so a reader is not misled into thinking otherwise.
+    sku: `${SKU_PREFIX}ASSAY-KIT`,
+    name: 'Assay Reference Kit (fixture-only, non-solar)',
+    hsnCode: '71131900',
+    gstRate: '3.00',
+    sellingPrice: '4165.00',
+    manufacturer: 'Fixture Co',
+    category: 'Fixture',
   },
   {
     // Heading 8535 is switching and protective apparatus; the client's own
@@ -373,6 +403,29 @@ async function seedTenant(
       spec(`${SKU_PREFIX}ISO-40A`, 6, 4150),
     ];
 
+    // ── Chain C — F.84: SINGLE-RATE 3%, intra-state ──────────────────────────
+    //
+    // BOTH PROPERTIES ARE REQUIRED BY THE ACCEPTANCE CRITERION, not stylistic.
+    // The half-rate label the render check asserts on (`1.5%`) exists only when
+    // the document carries ONE rate — `quotation.tsx` sets `gstRateLabel` to null
+    // otherwise and `view-model.ts` then renders an empty string — and only the
+    // intra-state branch of `quotation.typ` emits a half at all; inter-state
+    // prints the full rate as IGST. A mixed or inter-state 3% document would
+    // make that criterion unsatisfiable (F.84 day prompt R-1).
+    //
+    // TWO LINES, BOTH WITH ODD INTEGER-RUPEE SUBTOTALS. 3% halves to 1.5%, and
+    // 1.5% of an odd integer lands on a half-paisa, so per-line and
+    // document-level rounding diverge and a regression of the per-line model is
+    // visible rather than silent. Measured before these prices were chosen:
+    // 3 x 4165 = 12495 and 7 x 3571 = 24997 give CGST 562.39 per-line against
+    // 562.38 document-level, while an even-subtotal control (2 x 4166,
+    // 4 x 3570) gives 339.18 either way — so the divergence comes from the odd
+    // choice and not from coincidence. Same argument as Chain A's two 5% lines.
+    const chainCLines: LineSpec[] = [
+      spec(`${SKU_PREFIX}ASSAY-KIT`, 3, 4165),
+      spec(`${SKU_PREFIX}ASSAY-KIT`, 7, 3571),
+    ];
+
     let quotationCount = 0;
     let piCount = 0;
     let orderCount = 0;
@@ -388,7 +441,22 @@ async function seedTenant(
       label: string,
       lines: LineSpec[],
       dealer: { id: string; state: string | null },
-      opts: { withOrder: boolean; daysAgoIssued: number },
+      opts: {
+        withOrder: boolean;
+        daysAgoIssued: number;
+        /**
+         * F.84 / D-7. When false the chain stops at the quotation, leaving it
+         * `accepted` and UNCONVERTED so the e2e has an explicit precondition to
+         * convert. The alternative — letting the spec re-convert an
+         * already-converted quotation — would make it depend on the absence of a
+         * guard in `convert-quotation-to-pi.ts` that nobody has decided should
+         * be absent.
+         */
+        withPi?: boolean;
+        /** Overrides for the F.84 rows so cleanup can find them by tag. */
+        quoteTag?: string;
+        piTag?: string;
+      },
     ) {
       const placeOfSupply = dealer.state ?? tenantState;
       const totals = totalsFor(lines, tenantState, placeOfSupply);
@@ -425,7 +493,7 @@ async function seedTenant(
           sentAt: new Date(quoteDate.getTime() + 60_000),
           sentVia: 'email',
           acceptedAt: new Date(quoteDate.getTime() + 2 * 86_400_000),
-          notes: QUOTE_TAG,
+          notes: opts.quoteTag ?? QUOTE_TAG,
           createdBy: actorId,
           updatedBy: actorId,
         })
@@ -478,6 +546,11 @@ async function seedTenant(
         },
       ]);
 
+      if (opts.withPi === false) {
+        console.log(`  · ${label}: ${quoteNumber} (accepted, deliberately unconverted)`);
+        return;
+      }
+
       const piDate = daysAgo(opts.daysAgoIssued - 3);
       const piSeq = await nextCounter(tx, tenantId, 'performa_invoice', fy);
       const [pi] = await tx
@@ -505,7 +578,7 @@ async function seedTenant(
           status: 'confirmed',
           sentAt: new Date(piDate.getTime() + 60_000),
           confirmedAt: new Date(piDate.getTime() + 86_400_000),
-          notes: PI_TAG,
+          notes: opts.piTag ?? PI_TAG,
           createdBy: actorId,
           updatedBy: actorId,
         })
@@ -646,6 +719,37 @@ async function seedTenant(
       daysAgoIssued: 34,
     });
 
+    // ── F.84's chains go HERE, STRICTLY AFTER CHAIN B. THE ORDER IS LOAD-BEARING.
+    //
+    // Document numbers come from `nextCounter`, so a chain allocated before an
+    // existing one renumbers it. Several existing numbers are pinned by name
+    // elsewhere and would break silently: `apps/workers/scripts/typst-matrix.json`
+    // names QT-2026-0001, QT-2026-0006, QT-2026-0010, PI-2026-0001, PI-2026-0002,
+    // PAY-2026-0007 and DSP-2026-0005, and
+    // `apps/workers/scripts/long-serial-fixture.sql` resolves ORD-2026-0019 by
+    // name and raises if it is missing.
+    //
+    // THIS ORDERING IS ALSO WHAT MAKES IT SAFE FOR A TEST TO ADDRESS A DOCUMENT
+    // BY NUMBER AT ALL. F.84's render check uses `resolveDocument` with a
+    // document number, the same way the 14 reference cases do, and that is only
+    // sound because appending here leaves every prior allocation fixed. If a
+    // future chain is inserted above this point, those numbers move and both the
+    // matrix and that test re-point silently. Append below, never above.
+    await buildChain('Chain C (intra, single-rate 3%)', chainCLines, intraDealer, {
+      withOrder: false,
+      daysAgoIssued: 28,
+      quoteTag: TP_QUOTE_TAG,
+      piTag: TP_PI_TAG,
+    });
+    // D-7: accepted and deliberately NOT converted, so the e2e has an explicit
+    // precondition rather than relying on a missing guard.
+    await buildChain('Chain D (intra, 3%, unconverted)', chainCLines, intraDealer, {
+      withOrder: false,
+      withPi: false,
+      daysAgoIssued: 22,
+      quoteTag: TP_QUOTE_TAG,
+    });
+
     void tenantSlug;
     return {
       products: NEW_PRODUCTS.length,
@@ -666,7 +770,9 @@ async function main() {
   // every line table references products with ON DELETE RESTRICT.
   await client.unsafe(`DELETE FROM orders WHERE notes = '${ORDER_TAG}';`);
   await client.unsafe(`DELETE FROM performa_invoices WHERE notes = '${PI_TAG}';`);
+  await client.unsafe(`DELETE FROM performa_invoices WHERE notes = '${TP_PI_TAG}';`);
   await client.unsafe(`DELETE FROM quotations WHERE notes = '${QUOTE_TAG}';`);
+  await client.unsafe(`DELETE FROM quotations WHERE notes = '${TP_QUOTE_TAG}';`);
   await client.unsafe(`DELETE FROM products WHERE sku LIKE '${SKU_PREFIX}%';`);
 
   const fy = fiscalYearOf(seedNow());

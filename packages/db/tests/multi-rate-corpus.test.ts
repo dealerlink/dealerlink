@@ -264,3 +264,185 @@ describe('F.81 multi-rate seed corpus', () => {
     }
   });
 });
+
+/**
+ * F.84 — the 3% fixture's shape.
+ *
+ * Appended to F.81's file rather than given its own (D-5), because the seed that
+ * produces these rows is F.81's module extended rather than a new one (D-1) and
+ * the test's provenance should match the seed's.
+ *
+ * WHAT EACH ASSERTION IS FOR. Two of them exist because F.84's acceptance
+ * criterion 5 — the render check — is only satisfiable on a document that is
+ * BOTH single-rate AND intra-state. `quotation.tsx` sets `gstRateLabel` to null
+ * when a document carries more than one rate, `view-model.ts` then renders the
+ * half-rate label as an empty string, and only the intra-state branch of
+ * `quotation.typ` emits a half at all. So "there is a 3% document somewhere" is
+ * not enough: if the corpus ever flattens to a mixed-only 3% document, the render
+ * test starts failing on a fixture problem that looks like a renderer problem.
+ * These assertions make that fail HERE, where the name says what it is about.
+ */
+describe('F.84 3% fixture corpus', () => {
+  it('gives every tenant a 3% product on its own HSN code', async () => {
+    for (const t of tenantIds) {
+      await asTenant(t.id, async (tx) => {
+        const rows = await tx
+          .select({ sku: products.sku, hsn: products.hsnCode, rate: products.gstRate })
+          .from(products)
+          .where(eq(products.tenantId, t.id));
+
+        // Set membership, never a count: a count of N is satisfied by any N rates
+        // and would not notice 3 being swapped for something else.
+        expect(distinct(rows, 'rate'), `${t.slug} catalogue rates`).toContain('3.00');
+
+        const threePct = rows.filter((r) => r.rate === '3.00');
+        expect(threePct.length, `${t.slug} 3% products`).toBeGreaterThan(0);
+        // Its HSN must not collide with the four already in the catalogue, or the
+        // 3% group stops being a distinct HSN group for F.3/F.4 to exercise.
+        for (const r of threePct) {
+          expect(
+            ['85414300', '85414011', '85044090', '85359090'],
+            `${t.slug}: 3% product ${r.sku} should carry a NEW hsn, not a reused one`,
+          ).not.toContain(r.hsn);
+        }
+      });
+    }
+  });
+
+  it('has an INTRA-STATE quotation whose every line is 3% — criterion 5 needs both', async () => {
+    for (const t of tenantIds) {
+      await asTenant(t.id, async (tx) => {
+        const quotes = await tx
+          .select({
+            id: quotations.id,
+            number: quotations.quoteNumber,
+            tenantState: quotations.tenantStateAtIssue,
+            pos: quotations.placeOfSupply,
+          })
+          .from(quotations)
+          .where(and(eq(quotations.tenantId, t.id), like(quotations.quoteNumber, 'QT-%')));
+
+        const qualifying: string[] = [];
+        for (const q of quotes) {
+          if (q.tenantState !== q.pos) continue; // intra-state only: CGST/SGST split
+          const lines = await tx
+            .select({ rate: quotationLines.gstRate })
+            .from(quotationLines)
+            .where(eq(quotationLines.quotationId, q.id));
+          if (lines.length === 0) continue;
+          const rates = distinct(lines, 'rate');
+          // SINGLE-rate: exactly one distinct rate, and it is 3.00.
+          if (rates.length === 1 && rates[0] === '3.00') qualifying.push(q.number);
+        }
+        expect(
+          qualifying.length,
+          `${t.slug}: intra-state quotations whose every line is 3.00`,
+        ).toBeGreaterThan(0);
+      });
+    }
+  });
+
+  it('carries a PI at 3% whose rate set matches its quotation', async () => {
+    for (const t of tenantIds) {
+      await asTenant(t.id, async (tx) => {
+        const pis = await tx
+          .select({
+            id: performaInvoices.id,
+            number: performaInvoices.piNumber,
+            q: performaInvoices.quotationId,
+          })
+          .from(performaInvoices)
+          .where(eq(performaInvoices.tenantId, t.id));
+
+        let matched = 0;
+        for (const pi of pis) {
+          const piLines = await tx
+            .select({ rate: performaInvoiceLines.gstRate })
+            .from(performaInvoiceLines)
+            .where(eq(performaInvoiceLines.performaInvoiceId, pi.id));
+          const piRates = distinct(piLines, 'rate');
+          if (!(piRates.length === 1 && piRates[0] === '3.00')) continue;
+          const qLines = await tx
+            .select({ rate: quotationLines.gstRate })
+            .from(quotationLines)
+            .where(eq(quotationLines.quotationId, pi.q));
+          expect(piRates, `${pi.number} rates vs its quotation`).toEqual(distinct(qLines, 'rate'));
+          matched += 1;
+        }
+        expect(matched, `${t.slug}: single-rate 3% PIs`).toBeGreaterThan(0);
+      });
+    }
+  });
+
+  it('leaves an accepted 3% quotation with NO PI, for the request-layer spec', async () => {
+    // D-7. The e2e converts this one. Without it the spec would have to re-convert
+    // an already-converted quotation, which works only because
+    // convert-quotation-to-pi.ts happens not to forbid a second PI — a guard
+    // nobody has decided should be absent.
+    for (const t of tenantIds) {
+      await asTenant(t.id, async (tx) => {
+        const quotes = await tx
+          .select({ id: quotations.id, number: quotations.quoteNumber, status: quotations.status })
+          .from(quotations)
+          .where(and(eq(quotations.tenantId, t.id), like(quotations.quoteNumber, 'QT-%')));
+
+        const unconverted: string[] = [];
+        for (const q of quotes) {
+          if (q.status !== 'accepted') continue;
+          const lines = await tx
+            .select({ rate: quotationLines.gstRate })
+            .from(quotationLines)
+            .where(eq(quotationLines.quotationId, q.id));
+          const rates = distinct(lines, 'rate');
+          if (!(rates.length === 1 && rates[0] === '3.00')) continue;
+          const [pi] = await tx
+            .select({ id: performaInvoices.id })
+            .from(performaInvoices)
+            .where(eq(performaInvoices.quotationId, q.id))
+            .limit(1);
+          if (!pi) unconverted.push(q.number);
+        }
+        expect(
+          unconverted.length,
+          `${t.slug}: accepted single-rate 3% quotations with no PI`,
+        ).toBeGreaterThan(0);
+      });
+    }
+  });
+
+  it('puts TWO 3% lines with ODD rupee subtotals on one document — the rounding case', async () => {
+    // 3% halves to 1.5%, and 1.5% of an odd integer lands on a half-paisa, so
+    // per-line and document-level rounding diverge. With one line, or with even
+    // subtotals, the two models agree and a regression of the per-line model would
+    // pass unnoticed. Measured when the prices were chosen: odd subtotals give
+    // CGST 562.39 per-line against 562.38 document-level, an even-subtotal control
+    // gives 339.18 either way.
+    for (const t of tenantIds) {
+      await asTenant(t.id, async (tx) => {
+        const quotes = await tx
+          .select({ id: quotations.id, number: quotations.quoteNumber })
+          .from(quotations)
+          .where(and(eq(quotations.tenantId, t.id), like(quotations.quoteNumber, 'QT-%')));
+
+        let found = 0;
+        for (const q of quotes) {
+          const lines = await tx
+            .select({ rate: quotationLines.gstRate, lineTotal: quotationLines.lineTotal })
+            .from(quotationLines)
+            .where(eq(quotationLines.quotationId, q.id));
+          const threes = lines.filter((l) => l.rate === '3.00');
+          if (threes.length < 2) continue;
+          const allOdd = threes.every((l) => {
+            const n = Number(l.lineTotal);
+            return Number.isInteger(n) && n % 2 !== 0;
+          });
+          if (allOdd) found += 1;
+        }
+        expect(
+          found,
+          `${t.slug}: documents with 2+ 3% lines at odd integer subtotals`,
+        ).toBeGreaterThan(0);
+      });
+    }
+  });
+});

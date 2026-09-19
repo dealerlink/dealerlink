@@ -5945,18 +5945,18 @@ the least transferable part.
 **The five.** Four are vacuous PASSES. The fifth is a false STOP, and it is in the
 table because it has the same cause and the opposite polarity.
 
-| # | The passing result | What it could not have detected |
-| - | ------------------ | ------------------------------- |
-| 1 | `delete_branch_on_merge: true` plus every merged head branch still present — read as "the setting was always on and never fired" (DEV.124) | That the setting had been enabled *between* the two merges. A reading of the **present** used as evidence about the **past**, with no control. |
-| 2 | `check:paths` green over 58 paths, probed by moving a cited file (C6c) | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**. |
-| 3 | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136) | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction. |
-| 4 | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139) | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back. |
+| #     | The passing result                                                                                                                                                       | What it could not have detected                                                                                                                                                                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | `delete_branch_on_merge: true` plus every merged head branch still present — read as "the setting was always on and never fired" (DEV.124)                               | That the setting had been enabled _between_ the two merges. A reading of the **present** used as evidence about the **past**, with no control.                                                                                                                                                   |
+| 2     | `check:paths` green over 58 paths, probed by moving a cited file (C6c)                                                                                                   | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**.                                                                                                                                                          |
+| 3     | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136)                                                                                                   | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction.                                                                                                                                                                                         |
+| 4     | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139)            | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back.                                                                                                                                                             |
 | **5** | **A FALSE STOP, not a vacuous pass.** `git grep -n "GST_RATES" -- apps/` printed four hits and I read them as "CONSUMER FOUND — STOP", blocking D-4's deletion (DEV.139) | That all four hits were **`VALID_GST_RATES`** — a longer identifier the substring matched — in the two worker templates, which are independently-declared locals that the same day deletes. A word-boundary grep showed the real answer: the declaration and its own refine, **zero importers**. |
 
 **The shape, which is the only part worth carrying:** a real command, real
 output, a plausible mechanism connecting them, and **no demonstration that the
 negative case could have been reached.** In all five the author was attending to
-correctness — #1 was a verification request, #2 was a probe *for* non-vacuity,
+correctness — #1 was a verification request, #2 was a probe _for_ non-vacuity,
 #3 was a correction written to prevent a vacuous check, #4 was a control
 written because the test asserts something can never fire. Vacuity entered
 through the **instrument**, not through inattention. That is why "be careful"
@@ -5976,7 +5976,7 @@ vacuous passes, it answers itself in one step.
 
 **The fifth needs the question asked the other way round, which is why it earns a
 row.** A false stop produces no green to be suspicious of — it produces a halt that
-*looks like diligence*. Nothing about "CONSUMER FOUND — STOP" invites a second
+_looks like diligence_. Nothing about "CONSUMER FOUND — STOP" invites a second
 look; it reads as the check doing its job, and the cost is invisible because the
 work simply does not happen. The corresponding question is **"could this
 instrument report a hit for a reason other than the one I am testing for?"** For a
@@ -6034,9 +6034,9 @@ the constraint still `>= 0`.
 **Why it had not happened, and this is the part worth six months from now: my own
 rewritten tests were leaking rows into the shared dev database.** F.55 inverted
 `dealers.test.ts`'s "product check rejects GST rate of 10" — and in the enum era
-that INSERT was *rejected*, so the test never had to clean up. Rewritten to assert
+that INSERT was _rejected_, so the test never had to clean up. Rewritten to assert
 acceptance, the INSERT now **succeeds**, and it left `RATE-10`, `RATE-40` and
-`RATE-025` behind. `BAD-GST` at 10.00 was left by the *original* test running once
+`RATE-025` behind. `BAD-GST` at 10.00 was left by the _original_ test running once
 after the migration and before the rewrite. Those rows violate the enum, so
 re-adding it aborted — and because `psql -c` wraps multiple statements in one
 implicit transaction, the preceding `DROP` rolled back with it and the constraint
@@ -6047,7 +6047,7 @@ two bugs: the same change that made the control necessary also made it
 impossible, through a side effect nothing in the change looked like.
 
 Fixed by rolling both accepting INSERTs back inside their own transaction — the
-pattern `gst-rate-invariant.test.ts` already used, which is why *its* probes left
+pattern `gst-rate-invariant.test.ts` already used, which is why _its_ probes left
 nothing behind. Verified: **0 products outside the old enum after a full
 `pnpm --filter @dealerlink/db test` run.** The day prompt's C2-before-C4 warning
 was about exactly this and would have caught it at closeout with no explanation
@@ -6077,13 +6077,13 @@ valid sku/name accepts 10.
 
 A green test that no longer tests its subject is worse than a red one. Every
 rewritten case now varies **only** the rate against an otherwise-valid fixture and
-asserts the *reason*, with a control proving a valid rate raises no rate issue.
+asserts the _reason_, with a control proving a valid rate raises no rate issue.
 
 **Swept for the same shortcut, on the operator's instruction, since it usually
 appears more than once.** Three more tests use it — the two HSN cases and
 "rejects negative MRP". **None is currently vacuous:** each subject does raise an
 issue alongside sku/name, measured. But all three assert only
-`r.success === false`, never *which* field failed, so all three would pass
+`r.success === false`, never _which_ field failed, so all three would pass
 unchanged if HSN or MRP validation were deleted. **Latently** vacuous. Out of
 F.55's scope (their subjects are untouched) and filed as **F.93**.
 
@@ -6093,7 +6093,7 @@ F.55's scope (their subjects are untouched) and filed as **F.93**.
   `moveDealTo`'s post-reload assertion (`:125`, called from `:292` for the
   `verbal_commit` stage) and passed on retry #1. **Not attributed to this day, and
   not classified either.** The discrimination I can make: the failure is
-  *downstream* of my only change to that file (`:166`, product creation), so the
+  _downstream_ of my only change to that file (`:166`, product creation), so the
   test had already executed my line to reach `:292`; and it got further on retry,
   which DEV.93's method separates from a state bug. What I have **not** done is
   establish the classification by repetition, which is the only thing that would
@@ -6134,3 +6134,205 @@ gives it, without a code change, and a document issued at a rate later withdrawn
 still renders, converts and totals. The statutory claim the code used to make is
 gone.
 
+---
+
+## DEV.140 — F.84: an acceptance criterion that named a document shape it did not require
+
+**Date:** 2026-09-19
+**Scope:** `docs/F84_DAY_PROMPT.md` acceptance criterion 5 (wording only). No code.
+
+**Spec said:** `docs/F55_DAY_PROMPT.md` A.8 sizes a render check as "render a
+seeded document at a novel rate through the production chain and assert the rate
+and the half-rate appear". F.84's own notes, inherited from that sizing, repeat
+it. Neither states what kind of document.
+
+**The finding.** The criterion is satisfiable on exactly one of the three fixture
+shapes that were on the table, and nothing in either source said so. Established
+at source rather than by trying it:
+
+- `apps/workers/src/templates/quotation.tsx:233-234` sets `gstRateLabel` to
+  `null` unless the document carries exactly one distinct rate;
+- `apps/workers/src/pdf/view-model.ts:131-133` renders that `null` as `''`;
+- `apps/workers/src/templates-typst/quotation.typ:104-106` emits a half-rate at
+  all only on the intra-state branch.
+
+So a **mixed-rate** document has no rate label to assert, and an **inter-state**
+document has no half. A criterion demanding "the rate and the `1.5%` half" is
+therefore unsatisfiable on a mixed-rate fixture and on an inter-state one, and
+F.81's two existing chains are one of each.
+
+**Why this is a deviation and not a note.** Had the fixture been built to either
+of the other two shapes — both defensible, and (b) was the richer-looking
+option — the day would have discovered the constraint by writing a test that
+could not pass, and the likely repair under time pressure is to weaken the
+assertion until it goes green. That is precisely the move CLAUDE.md §11.1
+ruling 1 forbids, arrived at honestly. The preconditions were written **into
+criterion 5 itself** before the day started, not left as surrounding prose, and
+D-2 selects the shape that satisfies them.
+
+**Generalisation, which is the part worth keeping.** An acceptance criterion that
+quotes a rendered string is implicitly a claim about which code branch produces
+it. Ours quoted `1.5%` while three separate files decided whether any such string
+exists. The criterion looked like a statement about output and was in fact a
+statement about a branch condition, and that is not visible from reading it.
+
+---
+
+## DEV.141 — F.84: a test name that claimed an assertion the body never made
+
+**Date:** 2026-09-19
+**Scope:** `apps/web/tests/e2e/verify-day-f55.spec.ts:70` (title + comment).
+Corrected in `d6db383`, ahead of the F.84 build day.
+
+**The finding.** The case was titled _"a rate already in the catalogue saves with
+no warning at all"_. Its body logs in, opens `/catalog/new`, fills the GST rate
+with `18`, and asserts `gst-rate-warning` has count 0. **It never clicks Save.**
+
+**The assertion was always sound** — and it is load-bearing, because it is the
+control for the case above it: a warning that fired on _every_ value would
+satisfy "an unusual rate warns" and be indistinguishable from a correct
+implementation. Only this case separates the two. What was wrong was the name.
+
+**Why a wrong name is worth an entry when the assertion is right.** A reader
+auditing coverage reads titles, not bodies — that is what titles are for. This
+one asserts save-path coverage for a novel rate that no spec in the suite
+provides, and it reads as authoritative: it sits in a `verify-day-` file, which
+is the convention for a day's own acceptance evidence. The same shape as
+DEV.128's wrong id — the false claim is not self-correcting, because a reader has
+no reason to open the body of a test whose name already answers their question.
+
+Renamed to _"a rate already in the catalogue raises no warning"_, with a comment
+recording what the name used to say and that the body is unchanged. The comment
+matters: without it the rename looks like a tidy-up, and the next person to want
+save-path coverage has no signal that it was never there.
+
+---
+
+## DEV.142 — F.84: a 3% fixture, and the coverage it deliberately stops short of
+
+**Date:** 2026-09-19
+**Scope:** `packages/db/src/seeds/multi-rate.ts` (Chains C and D appended),
+`packages/db/tests/multi-rate-corpus.test.ts` (+5 cases),
+`apps/workers/tests/three-percent-render.test.ts` (new),
+`apps/web/tests/e2e/verify-day-f84.spec.ts` (new). No migration, nothing under
+`packages/tax/`, no matrix entry, no file under `docs/pdf-references/`,
+`critical-path.spec.ts` untouched.
+
+**Spec said:** `docs/F84_DAY_PROMPT.md`, status APPROVED, D-1 to D-8 settled.
+Three things rather than one, per DEV.139's closeout: the fixture as originally
+scoped, plus the render check F.55's A.8 specified and did not ship, plus
+request-layer coverage for the two hops that reach `computeTax` with no Zod in
+front of them: the browser preview, which calls it directly at
+`apps/web/lib/quotation/preview.ts:122`, and the PI conversion, which reaches it
+**indirectly** — `apps/web/lib/actions/pi/convert-quotation-to-pi.ts:86` calls
+`computeDocumentTotals`, which calls `computeTax` at
+`apps/web/lib/actions/pi/helpers.ts:55`. The indirection is worth naming because
+the rate is never seen by a schema on either route: `confirmPiSchema` is
+`z.object({ id: z.string().uuid() })`, so grepping the conversion file for
+`computeTax` finds nothing and the hop looks guarded when it is not.
+
+**Built as specified.** `MR-ASSAY-KIT` on HSN `71131900` at `'3.00'`, named as
+fixture-only and non-solar so nobody reads it as a statutory claim about solar
+goods. Chain C is a single-rate intra-state quotation converting to a PI; Chain D
+is an accepted quotation with no PI, which is what the request-layer spec needs to
+convert for itself. Both chains for both tenants. Totals come from
+`computeTax` via `serializeOutput`, never from a second implementation.
+
+### The ordering is what makes the test addresses safe
+
+D-3 overruled the drafter and kept `resolveDocument` addressing by document
+number, on the grounds that the append-after-Chain-B discipline is the protection.
+That discipline held, and it was checked rather than assumed. F.81 holds
+`QT-2026-0016` (Chain A) and `QT-2026-0017` (Chain B); F.84 took `QT-2026-0018`
+and `QT-2026-0019`, and `PI-2026-0032`. Every document the reference matrix
+addresses still resolves to the same entity with the same totals —
+`QT-2026-0001`, `QT-2026-0006`, `QT-2026-0010`, `PI-2026-0001`, `PI-2026-0002`,
+`PAY-2026-0007`, `DSP-2026-0005` — and the 14 text snapshots passing is the
+stronger form of that check, since a moved address would fail them.
+
+### D-4's rounding property, with the control that makes it a property
+
+3% halves to 1.5%, so an odd integer-rupee subtotal produces a half-paisa tie.
+Chain C's two lines are 12495 and 24997, both odd: per-line CGST is `562.39`
+against `562.38` document-level, and the render test asserts the first is present
+and the second absent. The control is an **even**-subtotal pair (8332, 14280),
+where per-line and document-level agree at `339.16`/`339.18` respectively and the
+assertion could not discriminate. Without that control, "the fixture proves
+per-line rounding" would have been a claim about arithmetic that happened to be
+true rather than one the fixture tests.
+
+### Both controls were executed, not designed
+
+- **A.3, selective deletion:** with the 3% rows removed, **five** of the corpus
+  cases go red and **seven** stay green. A blanket failure would have meant the
+  suite was asserting on the seed's existence rather than on its rate.
+- **A.4, wrong document:** pointed at `QT-2026-0001` (single-rate 18%), **two**
+  cases fail. That control is now permanent rather than a one-off run: the fourth
+  case in the file asserts an 18% document carries `CGST9%` and **not**
+  `CGST1.5%`, so the half-rate assertion cannot silently start passing for the
+  wrong reason.
+
+### F.55's acceptance criterion 5 is now met
+
+DEV.139 recorded it unmet by design, because seed data is the only thing that can
+move a rendered document and mixing it with a validation change would have made
+the byte comparison unattributable. `three-percent-render.test.ts` closes it:
+`loadQuotationPdfData` → `buildViewModel` → `renderTypstPdf` on a seeded 3%
+document, no throw, and the extracted text carries `3%`, `CGST1.5%` and
+`SGST1.5%` with no `IGST`. The preconditions that make it satisfiable are
+DEV.140.
+
+### R-4's correction, carried rather than repeated
+
+F.84's older notes listed "the products CHECK accepting 3" among the things the
+fixture demonstrates. F.55 already covers that at
+`packages/db/tests/gst-rate-invariant.test.ts:72,149-168` and
+`packages/db/tests/dealers.test.ts:176-193`. What the fixture adds that nothing
+else can is a **persisted** 3% document, which
+`packages/db/tests/quotation-engine-parity.test.ts:51-101` (it sweeps every
+seeded `QT-%`), the render path and the corpus paths can see. The narrower claim
+is the true one.
+
+### The three measurements
+
+1. **TEXT against the Chromium reference contract** — 14 reference-document cases
+   plus 3 property cases, enumerated by name from a verbose run rather than
+   counted: all 17 pass.
+2. **BYTES against the pre-change render** — `diff f84-pre.sha f84-post.sha`
+   empty; 14 files, 14 distinct hashes on each side.
+3. **BYTES across two independent reseeds** — `diff f84-post.sha f84-post2.sha`
+   empty.
+
+Plus `determinism-check` MATCH on both passes with `determinism-expected.json`
+unmodified, and `git status --porcelain` clean for `docs/pdf-references/`,
+`typst-matrix.json` and the snapshot directory.
+
+**Every render went into a fresh `mktemp -d`.** The reference PDFs are read-only
+input and were never the hash target — the A.0 recipe originally hashed them,
+which is DEV.136.
+
+### The negatives carry a control, because otherwise they are not evidence
+
+DEV.138's signature says a passing negative is not evidence until something
+demonstrates it could have failed. Measurements 2 and 3 are both empty diffs. The
+first control attempted was the wrong one: comparing today's render against a
+render from before `e32c350` also produced no diff, because those 14 documents are
+byte-stable across every commit in that range — which is the contract working, and
+tests the instrument not at all. The control that does work: copy the rendered
+set, flip one byte in `BRANDED__dispatch__DSP-2026-0005.pdf` at offset 9000, rehash,
+and the same `sha256sum | sort | diff` pipeline reports the changed line. So the
+empty diffs are the instrument saying nothing moved, not the instrument saying
+nothing.
+
+### What this fixture does NOT cover, recorded so nobody assumes otherwise
+
+**The 3% fixture stops at the PI, per D-2 and D-6. 3% coverage does NOT reach
+orders.** There is no 3% order row, no 3% dispatch and no 3% tax invoice. A later
+task needing a 3% order is a separate fixture addition with its own counter
+allocation — not a tweak to this one, because adding a row mid-chain is exactly
+what the append-after-Chain-B discipline forbids. Read "3% coverage exists" as
+"through quotation and PI" and nothing further.
+
+**Impact:** the rate that F.55 made legal everywhere is now exercised by data, by
+a render through the production chain, and through the two request paths that had
+no schema in front of them.
