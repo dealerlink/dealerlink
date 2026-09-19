@@ -126,8 +126,51 @@ placement follow the audit's enumeration of the tax package.
 
 **Money rules**
 
-- Read from stored per-line columns. **Never recompute tax from rate × taxable
-  value.** `CLAUDE.md` §19.
+- **Money is derived through `computeTax` over the stored line rows** — the
+  production pattern already used on every PDF render — and the grouped result
+  **must reconcile exactly to the stored header totals.** Never re-derive from
+  header totals, and never recompute a line’s tax from rate × an approximated
+  taxable value. The stored-money rule is `CLAUDE.md`:465, in §10.
+
+  > **CORRECTION — 2026-09-19, operator-approved. THE ORIGINAL RULE WAS
+  > UNFOLLOWABLE, AND THE ERROR IS THIS SPEC’S.** The bullet above previously
+  > read _"Read from stored per-line columns. **Never recompute tax from rate ×
+  > taxable value.** `CLAUDE.md` §19."_ Two things were wrong with it.
+  >
+  > **First, the columns it names do not exist.** Enumerated in full on
+  > 2026-09-19 from `information_schema`, all three line tables —
+  > `quotation_lines`, `performa_invoice_lines`, `order_lines` — store
+  > `hsn_code`, `quantity`, `unit_price`, `gst_rate` and `line_total`, and **no
+  > per-line tax, taxable-value or discount column at any grain.** Tax is stored
+  > only on the header (`subtotal`, `discount_amount`, `taxable_amount`,
+  > `cgst_amount`, `sgst_amount`, `igst_amount`, `total_amount`). The rule was
+  > written for a computation that reads HEADER totals, where it is correct and
+  > remains in force. **It does not survive contact with grouping**, because a
+  > rate-wise or HSN-wise breakdown is stored at no grain at all.
+  >
+  > **Second, recomputing through the engine is not the departure the rule feared.**
+  > `apps/workers/src/templates/quotation.tsx:186-196` already calls `computeTax`
+  > over the stored line rows on **every PDF render**, so this is the established
+  > production path and not a new licence. And it reconciles by construction:
+  > `computeTax` rounds **per line** (`packages/tax/src/compute.ts:64-69`) and the
+  > document totals are sums of those rounded per-line figures
+  > (`compute.ts:90-92`), so grouping its `lines[]` output sums back to the stored
+  > headers **exactly**. That is the property F.84 pinned at CGST `562.39`
+  > per-line against `562.38` document-level, with an even-subtotal control
+  > showing the two agreeing where they cannot discriminate (DEV.142).
+  >
+  > What the rule was actually protecting against still holds and is restated
+  > above: deriving a group’s tax as rate × some re-derived taxable value. That
+  > is wrong on any discounted document, because the discount is allocated
+  > proportionally and rounded per line (`compute.ts:54-55`).
+  >
+  > **The consequence is bigger than this spec and is filed separately:** because
+  > no per-line tax is stored, EVERY consumer recomputes, which is safe only
+  > while the engine’s rounding never changes. That is **F.99**, filed 2026-09-19
+  > and cross-referenced with **F.92** — same shape, engine version rather than rate
+  > regime, and both reduce to "a historical document should be reproducible as
+  > billed, not as-if-billed-today."
+
 - Round-off is computed **once at document level**, never per group. Rounding
   per group and summing drifts by paise and will break the parity test.
 - All four rate columns are `decimal(5,2)` and read back as normalised strings
