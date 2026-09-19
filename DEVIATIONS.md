@@ -5931,27 +5931,30 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — five instances of one signature: the instrument, not the reasoning
+## DEV.138 — six instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
 **Scope:** the framing. No code change is attributed to this entry; the five
-instances it names are recorded in DEV.124, C6c, DEV.136 and in DEV.139 (F.55's
-own entry, which carries two of them).
+instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
+own entry, which carries two of them) and in DEV.142.
 
 **Operator instruction, closing out F.55:** make the signature the subject, not
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The five.** Four are vacuous PASSES. The fifth is a false STOP, and it is in the
-table because it has the same cause and the opposite polarity.
+**The six.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+because it has the same cause and the opposite polarity. The sixth is an invalid
+instrument that nonetheless reached the RIGHT conclusion, and it is the first of
+the family caught before it shipped.
 
-| #     | The passing result                                                                                                                                                       | What it could not have detected                                                                                                                                                                                                                                                                  |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1     | `delete_branch_on_merge: true` plus every merged head branch still present — read as "the setting was always on and never fired" (DEV.124)                               | That the setting had been enabled _between_ the two merges. A reading of the **present** used as evidence about the **past**, with no control.                                                                                                                                                   |
-| 2     | `check:paths` green over 58 paths, probed by moving a cited file (C6c)                                                                                                   | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**.                                                                                                                                                          |
-| 3     | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136)                                                                                                   | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction.                                                                                                                                                                                         |
-| 4     | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139)            | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back.                                                                                                                                                             |
-| **5** | **A FALSE STOP, not a vacuous pass.** `git grep -n "GST_RATES" -- apps/` printed four hits and I read them as "CONSUMER FOUND — STOP", blocking D-4's deletion (DEV.139) | That all four hits were **`VALID_GST_RATES`** — a longer identifier the substring matched — in the two worker templates, which are independently-declared locals that the same day deletes. A word-boundary grep showed the real answer: the declaration and its own refine, **zero importers**. |
+| #     | The passing result                                                                                                                                                                                                                                                                         | What it could not have detected                                                                                                                                                                                                                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `delete_branch_on_merge: true` plus every merged head branch still present — read as "the setting was always on and never fired" (DEV.124)                                                                                                                                                 | That the setting had been enabled _between_ the two merges. A reading of the **present** used as evidence about the **past**, with no control.                                                                                                                                                     |
+| 2     | `check:paths` green over 58 paths, probed by moving a cited file (C6c)                                                                                                                                                                                                                     | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**.                                                                                                                                                            |
+| 3     | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136)                                                                                                                                                                                                                     | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction.                                                                                                                                                                                           |
+| 4     | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139)                                                                                                                              | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back.                                                                                                                                                               |
+| **5** | **A FALSE STOP, not a vacuous pass.** `git grep -n "GST_RATES" -- apps/` printed four hits and I read them as "CONSUMER FOUND — STOP", blocking D-4's deletion (DEV.139)                                                                                                                   | That all four hits were **`VALID_GST_RATES`** — a longer identifier the substring matched — in the two worker templates, which are independently-declared locals that the same day deletes. A word-boundary grep showed the real answer: the declaration and its own refine, **zero importers**.   |
+| **6** | **AN INVALID INSTRUMENT THAT REACHED THE RIGHT ANSWER.** `prettier --check` run on `/tmp` copies of `DEVIATIONS.md` to decide whether the file was a formatting fixed point — clean/unclean verdicts, and a simulation showing an append "would reformat history" (F.84 closeout; DEV.142) | That `.prettierrc` does not resolve outside the repo, so every run used **default config** — different `singleQuote`, different `printWidth`. The verdicts described a file nobody has. Re-run with `--config` inside the repo, the conclusion held; the evidence for it did not exist until then. |
 
 **The shape, which is the only part worth carrying:** a real command, real
 output, a plausible mechanism connecting them, and **no demonstration that the
@@ -5964,7 +5967,7 @@ does not help and a rule is needed.
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all five:
+it verifies confirms nothing. The general form covers all six:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
@@ -5991,6 +5994,33 @@ was narrowed twice on purpose, once on each side of the invariant it protects,
 and each run's red output is recorded in DEV.139. Two directions rather than one,
 because a test watching only the database would have stayed green while the code
 narrowed underneath it — which is precisely how the 3% gap survived nine months.
+
+**The sixth is the first of this family caught before shipping, and that is the
+only reason it reads differently from the other five.** It was found by its own
+author, mid-report, while writing up a finding that depended on it — the draft
+already said the reformat "does not recur on future appends" on the strength of a
+simulation that had run under the wrong config. Nothing external caught it. What
+caught it was an output that did not fit: the simulation reported historic lines
+changing in a way the stated mechanism (emphasis markers and table padding) could
+not produce — it rewrote `'...'` to `"..."` inside a fenced code block, which is a
+`singleQuote` difference and therefore a CONFIG difference, not a content one.
+
+**Why a right conclusion still counts as an instance.** The conclusion survived
+re-running with `--config` inside the repo, so no reported fact was wrong. But
+"the answer happened to be right" is not a property of the method, and the
+signature is about methods: three separate claims — that `origin/main` was
+unclean, that four named revisions were unclean, that an append would rewrite
+history — had all been produced by an instrument configured differently from the
+one the repo uses, and any of them could have come out the other way. **A check
+that reads a file outside the tree that configures it is measuring a different
+file.** The general rule already covers it: nothing in those runs demonstrated
+what a wrong answer would have looked like.
+
+**The transferable form,** since `.prettierrc` is one instance of a large class:
+lint, format, typecheck and test configuration is resolved **from the file's own
+path upward**. Copying a file to `/tmp` to inspect it silently strips every
+config that governs it. The habit is to probe in place, or pass the config
+explicitly and say that you did.
 
 **What this entry does not claim.** It is not a new rule; it is the general form
 of one already written down three times in three specific shapes. Its value is
