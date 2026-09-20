@@ -163,6 +163,58 @@ describe('gstSummaryReport', () => {
     expect(Number(r.totals!.taxable)).toBeCloseTo(Number(direct!.taxable), 2);
   });
 
+  /**
+   * F.3 — the rate and HSN axes (day prompt D-4).
+   *
+   * These arms deliberately carry NO tax columns. That is the report contract
+   * at the top of `gst-summary.ts`: it reads stored columns and must not call
+   * `@dealerlink/tax`, and a per-rate tax amount is stored at no grain (F.99),
+   * so producing one would mean recomputing. The tests below assert the absence
+   * rather than leaving it implied — an absent column is exactly the kind of
+   * thing a later change adds back without noticing the contract.
+   */
+  it('groupBy rate buckets by GST rate and carries NO tax columns', async () => {
+    const r = await gstSummaryReport(tenantId, { ...range, groupBy: 'rate' });
+    expect(r.rows.length).toBeGreaterThan(0);
+
+    const keys = r.columns.map((c) => c.key);
+    expect(keys).toContain('bucket');
+    expect(keys).toContain('lineValue');
+    for (const forbidden of ['cgst', 'sgst', 'igst', 'taxable']) {
+      expect(keys, `rate arm must not expose ${forbidden}`).not.toContain(forbidden);
+    }
+
+    // Every bucket reads as a percentage, and more than one rate is present —
+    // without the second assertion a single-rate corpus would satisfy the first
+    // trivially and the grouping would be untested.
+    for (const row of r.rows) expect(String(row.bucket)).toMatch(/^\d+(\.\d+)?%$/);
+    expect(new Set(r.rows.map((row) => row.bucket)).size).toBeGreaterThan(1);
+  });
+
+  it('groupBy hsn buckets by HSN code', async () => {
+    const r = await gstSummaryReport(tenantId, { ...range, groupBy: 'hsn' });
+    expect(r.rows.length).toBeGreaterThan(0);
+    expect(r.columns[0]!.label).toBe('HSN/SAC');
+    for (const row of r.rows) expect(String(row.bucket)).toMatch(/^\d{6,8}$/);
+    expect(new Set(r.rows.map((row) => row.bucket)).size).toBeGreaterThan(1);
+  });
+
+  it('leaves the orders total NULL on a bucketed axis rather than double-counting', async () => {
+    // An order appears under every rate it carries, so summing the per-bucket
+    // counts would exceed the real order count on a multi-rate order. There is
+    // no correct single number without a second query, so the cell is null.
+    const r = await gstSummaryReport(tenantId, { ...range, groupBy: 'rate' });
+    expect(r.totals!.orders).toBeNull();
+    expect(Number(r.totals!.lineValue)).toBeCloseTo(sumColumn(r, 'lineValue'), 2);
+  });
+
+  it('the default axis is unchanged — omitting groupBy still groups by state', async () => {
+    const implicit = await gstSummaryReport(tenantId, range);
+    const explicit = await gstSummaryReport(tenantId, { ...range, groupBy: 'state' });
+    expect(implicit.columns.map((c) => c.key)).toEqual(explicit.columns.map((c) => c.key));
+    expect(implicit.columns.map((c) => c.key)).toContain('cgst');
+    expect(implicit.rows.length).toBe(explicit.rows.length);
+  });
   it('classifies each row as intra- or inter-state', async () => {
     const r = await gstSummaryReport(tenantId, range);
     for (const row of r.rows) {

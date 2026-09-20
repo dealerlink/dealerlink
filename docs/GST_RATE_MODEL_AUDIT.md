@@ -18,7 +18,7 @@
 > unverified source, **not** verification, and it is recorded here only so the
 > operator knows the claim was not merely passed through unexamined.
 >
-> **Two things need professional confirmation before a spec is drawn:**
+> **Three things need professional confirmation before a spec is drawn:**
 >
 > 1. **The current slab set**, exactly — including whether 12% and 28% are
 >    abolished outright or retained for any residual category, and the precise
@@ -28,6 +28,20 @@
 >    remain storable, renderable and reportable. §3 below shows the codebase
 >    cannot currently express that distinction at all, so this answer sizes the
 >    work directly.
+> 3. **Whether GSTR-1 Table 12 requires the HSN summary per (HSN, rate) pair**,
+>    rather than one row per HSN. **Added 2026-09-20, from F.3.** The operator's
+>    understanding is that it does, and the main thread's training data agrees —
+>    which is again corroboration from a second unverified source, not
+>    verification, recorded the same way as the slab claim above.
+>
+>    **F.3 does NOT depend on this answer and was not built on it.**
+>    `docs/F3_F4_SPEC.md` §2 was corrected to the (HSN, rate) pair on a different
+>    and self-contained argument: one HSN can carry two rates in this system, a
+>    row whose rate is null cannot resolve a Tally ledger, and F.11 needs
+>    (rate × supply type) to resolve one. The CA answer would either corroborate
+>    that design or add a statutory reason for it; it cannot undermine the ledger
+>    argument. It is queued because the codebase should not carry an unverified
+>    statutory claim as a justification, not because anything is blocked on it.
 >
 > **§5 reframes the question** — the operator's challenge is that the defect is
 > not the list's CONTENT but the existence of a hardcoded list at all, since the

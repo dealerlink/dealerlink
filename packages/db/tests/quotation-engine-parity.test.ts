@@ -8,7 +8,7 @@
  *
  * Runs per-tenant because RLS scopes every query to `app.tenant_id`.
  */
-import { computeTax, type GstRate } from '@dealerlink/tax';
+import { computeTax, computeTaxSummary, type GstRate } from '@dealerlink/tax';
 import { and, asc, eq, like, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -98,5 +98,132 @@ describe('Day 9 tax engine — parity with Day 8 stored quotation totals', () =>
     }
 
     expect(checked, 'expected seeded QT- quotations to exist').toBeGreaterThan(0);
+  });
+
+  /**
+   * F.3 — the same parity invariant, EXTENDED to the two new groupings rather
+   * than duplicated into a parallel suite (`docs/F3_F4_SPEC.md` §4 item 5).
+   *
+   * **What this can and cannot catch.** Both sides come from `computeTax`: the
+   * grouped figures, and the stored headers the seed wrote with the same engine
+   * (`packages/db/src/seeds/multi-rate.ts:28-56`). So it catches a GROUPING error
+   * — a dropped line, a duplicated line, a mis-keyed group, a group-level
+   * rounding — and it CANNOT catch an engine error. Stated because "reconciles
+   * exactly to the stored totals" otherwise reads as though the engine were
+   * verified by it.
+   *
+   * The TAXABLE identity is asserted against the sum of PER-LINE taxables, not
+   * against the stored `taxable_amount`: those two legitimately differ by a paisa
+   * on a discounted document, because the engine derives the document discount at
+   * document level and allocates it per line. That is F.101. Asserting the stored
+   * column here would fail for a reason that has nothing to do with grouping.
+   *
+   * **If this test ever goes red on a one-paisa taxable mismatch, check F.101
+   * before suspecting the grouping.** The measured shape, from a 4-rate
+   * inter-state document at 12.5% with line subtotals 24997 / 119925 / 83000 /
+   * 12450: `discountAmount` 30046.50 against `sum(lineDiscount)` 30046.51, and
+   * `taxableAmount` 210325.50 against `sum(lineTaxable)` 210325.49. No seeded
+   * document triggers it today — every discounted seeded document is single-rate
+   * with cleanly-dividing subtotals — so a red here means either new seed data or
+   * a real grouping defect, and the sign of the delta tells them apart: F.101
+   * always leaves the per-line sum LOWER than the document figure, never higher.
+   */
+  it('groups every seeded QT- quotation to sums that reconcile exactly', async () => {
+    let checked = 0;
+    let multiRate = 0;
+    let oneHsnTwoRates = 0;
+
+    for (const tenantId of tenantIds) {
+      await asTenant(tenantId, async (tx) => {
+        const quotes = await tx
+          .select()
+          .from(quotations)
+          .where(and(eq(quotations.tenantId, tenantId), like(quotations.quoteNumber, 'QT-%')));
+
+        for (const q of quotes) {
+          const lines = await tx
+            .select()
+            .from(quotationLines)
+            .where(eq(quotationLines.quotationId, q.id))
+            .orderBy(asc(quotationLines.lineNumber));
+
+          const discount =
+            q.discountType && q.discountValue != null
+              ? { type: q.discountType, value: q.discountValue }
+              : null;
+          const engineLines = lines.map((l) => ({
+            lineId: l.id,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            gstRate: Number(l.gstRate) as GstRate,
+          }));
+
+          const summary = computeTaxSummary({
+            tenantState: q.tenantStateAtIssue,
+            placeOfSupply: q.placeOfSupply,
+            discount,
+            lines: engineLines.map((l, i) => ({ ...l, hsnCode: lines[i]!.hsnCode ?? '' })),
+          });
+
+          const where = `${q.quoteNumber} (tenant ${tenantId.slice(0, 8)})`;
+          const add = (xs: { toFixed: (n: number) => string }[]) =>
+            xs.reduce((a, x) => a + Number(x.toFixed(2)), 0).toFixed(2);
+
+          const perLineTaxable = add(
+            computeTax({
+              tenantState: q.tenantStateAtIssue,
+              placeOfSupply: q.placeOfSupply,
+              discount,
+              lines: engineLines,
+            }).lines.map((l) => l.lineTaxable),
+          );
+
+          // 1 + 2 — both partitions cover exactly the per-line taxable total.
+          expect(add(summary.byRate.map((g) => g.taxableValue)), `${where} byRate taxable`).toBe(
+            perLineTaxable,
+          );
+          expect(add(summary.byHsn.map((g) => g.taxableValue)), `${where} byHsn taxable`).toBe(
+            perLineTaxable,
+          );
+
+          // 3 + 4 — and both reconcile to the STORED tax columns exactly. Taxes
+          // are summed per line on both sides, so the F.101 delta cannot arise.
+          const storedTax = (
+            Number(q.cgstAmount) +
+            Number(q.sgstAmount) +
+            Number(q.igstAmount)
+          ).toFixed(2);
+          expect(
+            add(summary.byRate.map((g) => g.cgstAmount.plus(g.sgstAmount).plus(g.igstAmount))),
+            `${where} byRate tax vs stored`,
+          ).toBe(storedTax);
+          expect(add(summary.byHsn.map((g) => g.totalTax)), `${where} byHsn tax vs stored`).toBe(
+            storedTax,
+          );
+
+          // Shape facts, so a corpus that stopped exercising grouping is visible.
+          const rates = new Set(lines.map((l) => Number(l.gstRate)));
+          const hsns = new Set(lines.map((l) => l.hsnCode));
+          const pairs = new Set(lines.map((l) => `${l.hsnCode}|${Number(l.gstRate)}`));
+          expect(summary.byRate.length, `${where} rate group count`).toBe(rates.size);
+          expect(summary.byHsn.length, `${where} hsn row count`).toBe(pairs.size);
+          if (rates.size > 1) multiRate += 1;
+          if (pairs.size > hsns.size) oneHsnTwoRates += 1;
+          checked += 1;
+        }
+      });
+    }
+
+    expect(checked, 'expected seeded QT- quotations to exist').toBeGreaterThan(0);
+
+    // NON-VACUITY, asserted rather than assumed. Without a multi-rate document
+    // every grouping assertion above holds trivially with one group; without one
+    // HSN carrying two rates the two partitions are indistinguishable. F.81
+    // Chain A supplies the first, Chain B the second.
+    expect(multiRate, 'corpus must contain multi-rate quotations').toBeGreaterThan(0);
+    expect(
+      oneHsnTwoRates,
+      'corpus must contain a quotation where one HSN carries two rates',
+    ).toBeGreaterThan(0);
   });
 });

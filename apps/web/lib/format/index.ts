@@ -14,9 +14,9 @@ const CRORE = 10_000_000;
  * " Cr" scale suffixes are appended by callers, outside this helper, so they
  * are unaffected.
  */
-function groupedINR(value: number): string {
+function groupedINR(value: number, minDecimals = 0): string {
   return new Intl.NumberFormat('en-IN', {
-    minimumFractionDigits: 0,
+    minimumFractionDigits: minDecimals,
     maximumFractionDigits: 2,
   })
     .format(value)
@@ -75,15 +75,51 @@ export function formatINR(
 /**
  * Format a number with Indian grouping (no auto-scale, for table cells showing exact amounts).
  *
+ * `minDecimals` forces a minimum number of decimal places. It defaults to `0`,
+ * which is the behaviour every existing call site already had, so adding it
+ * changes nothing that does not ask for it.
+ *
+ * **Why it exists (F.3, `docs/UX_FINDINGS.md` P-8).** `groupedINR` uses
+ * `minimumFractionDigits: 0`, so a tax amount of 211.50 renders as `₹211.5` and
+ * 19929.20 as `₹19,929.2`. A tax figure that drops its second decimal is wrong on
+ * a document a customer reconciles against: a rate group can legitimately end in
+ * `.50`, and `docs/client-evidence/4.png` shows exactly that.
+ *
+ * **Why an option rather than changing `groupedINR`'s default:** `groupedINR`
+ * backs both `formatINR` and `formatINRExact`, which have 121 occurrences across
+ * 30 files. Forcing 2dp everywhere would repaint dealers, payments, catalogue,
+ * pipeline cards and dashboards inside a diff reviewed for tax grouping. That may
+ * well be the right end state — P-8 asks for it "throughout" — but it is its own
+ * change with its own review. Day prompt D-6 chose this option (c) for that
+ * reason. Note `apps/workers/src/lib/format.ts:9-12` already forces 2 decimals,
+ * so the PDFs were never affected; only the web app is inconsistent.
+ *
  * @example
- *   formatINRExact(14820000) → "₹1,48,20,000"
+ *   formatINRExact(14820000)                    → "₹1,48,20,000"
+ *   formatINRExact(211.5,  { minDecimals: 2 })  → "₹211.50"
+ *   formatINRExact(19929.2, { minDecimals: 2 }) → "₹19,929.20"
  */
 export function formatINRExact(
   value: number,
-  { symbol = true }: Pick<FormatINROptions, 'symbol'> = {},
+  {
+    symbol = true,
+    minDecimals = 0,
+  }: Pick<FormatINROptions, 'symbol'> & { minDecimals?: number } = {},
 ): string {
   const prefix = symbol ? '₹' : '';
-  return `${prefix}${groupedINR(value)}`;
+  return `${prefix}${groupedINR(value, minDecimals)}`;
+}
+
+/**
+ * Money on a tax document — always 2 decimal places.
+ *
+ * A thin, named wrapper over `formatINRExact(v, { minDecimals: 2 })` so that tax
+ * blocks and document totals read as a single decision at the call site rather
+ * than repeating an option object. Use it for anything a customer reconciles
+ * against a printed invoice.
+ */
+export function formatTaxAmount(value: number, { symbol = true } = {}): string {
+  return formatINRExact(value, { symbol, minDecimals: 2 });
 }
 
 /** Format a percentage for display (e.g., 68 → "68%") */

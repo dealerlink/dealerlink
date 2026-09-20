@@ -19,6 +19,18 @@ export {
 export { computeTax } from './compute';
 export { serializeOutput, type SerializedTaxOutput, type SerializedTaxLine } from './serialize';
 
+export {
+  computeTaxSummary,
+  computeRateSummary,
+  type RateSummary,
+  type SummaryLineInput,
+  type TaxSummaryInput,
+  type RateGroup,
+  type HsnGroup,
+  type TaxSummaryTotals,
+  type TaxSummary,
+} from './summary';
+
 export { toDecimal, sumDecimals, Decimal } from './decimal';
 export { round2 } from './round';
 export { isInterState } from './state';

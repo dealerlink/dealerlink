@@ -89,6 +89,9 @@ describe('renderQuotationHtml', () => {
     expect(html).toContain('QUOTATION');
   });
 
+  /**
+   * ⚠ ASSERTS ON A PRODUCTION-DEAD RENDERER. See the note on the case below.
+   */
   it('multi-line inter-state quotation with discount shows IGST, not CGST/SGST', () => {
     const html = renderQuotationHtml(
       makeData({
@@ -108,6 +111,30 @@ describe('renderQuotationHtml', () => {
     expect(html).toContain('INV-5KW');
   });
 
+  /**
+   * ⚠ ASSERTS ON A PRODUCTION-DEAD RENDERER — F.3 (day prompt D-7).
+   *
+   * `renderQuotationHtml` is not on any production path. `jobs/render-pdf.ts:31-34`
+   * imports only the four `load*PdfData` loaders and renders through
+   * `renderTypstPdf`; the live tax block is
+   * `apps/workers/src/templates-typst/quotation.typ:97-110`. This case and the one
+   * above are the only two callers of the HTML renderer that assert on tax, and
+   * they assert the SINGLE-RATE shape.
+   *
+   * **They are marked rather than deleted or ported, deliberately.** The
+   * behaviour they check is right and the Typst path needs equivalent coverage
+   * anyway, so deleting them loses coverage nothing replaces. Porting them is
+   * F.4, which is the day that makes the Typst block rate-wise. What F.3 must not
+   * do is leave them looking like current coverage in the meantime: a test that
+   * cannot fail for the right reason reads as coverage, which is worse than no
+   * test.
+   *
+   * **When F.4 lands, these two cases stop describing what ships.** Port the
+   * assertions to the Typst path then, and delete these. Do not delete the HTML
+   * path itself in passing — `renderQuotationHtml` and `loadQuotationPdfData` live
+   * in the SAME file, `templates/types.ts` is shared with the live loaders, and a
+   * second dead renderer is kept alive by `payment-receipt-template.test.ts:10`.
+   */
   it('single-line intra-state quotation shows CGST + SGST at half rate', () => {
     const html = renderQuotationHtml(
       makeData({

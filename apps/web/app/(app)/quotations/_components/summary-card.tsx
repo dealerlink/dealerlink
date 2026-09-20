@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 
-import { formatINRExact } from '@/lib/format';
+import { TaxSummaryBlock } from '@/components/tax/tax-summary-block';
+import { formatINRExact, formatTaxAmount } from '@/lib/format';
 import { computeQuotationTotals } from '@/lib/quotation/preview';
 
 import type { BuilderFormState } from './builder-types';
@@ -34,16 +35,6 @@ export function SummaryCard({ form, tenantState, placeOfSupply }: Props) {
     });
   }, [form.lines, form.discount, tenantState, placeOfSupply]);
 
-  const rateLabel = useMemo(() => {
-    const rates = new Set(form.lines.map((l) => l.gstRate));
-    if (rates.size === 0) return '—';
-    if (rates.size === 1) {
-      const r = Array.from(rates)[0]!;
-      return `${r}%`;
-    }
-    return 'mixed';
-  }, [form.lines]);
-
   return (
     <aside className="border-line sticky top-4 self-start rounded-[6px] border bg-white p-5">
       <div className="titlecaps text-mute mb-3">Totals</div>
@@ -73,27 +64,13 @@ export function SummaryCard({ form, tenantState, placeOfSupply }: Props) {
             mute
           />
         )}
-        <Row label="Taxable amount" value={formatINRExact(preview.taxableAmount)} />
-        {preview.isInterState ? (
-          <Row
-            label={`IGST @ ${rateLabel}`}
-            value={formatINRExact(preview.igst)}
-            data-testid="igst-row"
-          />
-        ) : (
-          <>
-            <Row
-              label={`CGST @ ${rateLabel === 'mixed' ? rateLabel : `${Number(rateLabel.replace('%', '')) / 2}%`}`}
-              value={formatINRExact(preview.cgst)}
-              data-testid="cgst-row"
-            />
-            <Row
-              label={`SGST @ ${rateLabel === 'mixed' ? rateLabel : `${Number(rateLabel.replace('%', '')) / 2}%`}`}
-              value={formatINRExact(preview.sgst)}
-              data-testid="sgst-row"
-            />
-          </>
-        )}
+        <Row label="Taxable amount" value={formatTaxAmount(preview.taxableAmount)} />
+        {/*
+          One row per distinct rate, replacing the single "CGST @ mixed" pair.
+          "mixed" was the defect, not a shorthand: it told the customer a rate
+          existed without naming it, on the one figure they reconcile against.
+        */}
+        <TaxSummaryBlock rows={preview.byRate} isInterState={preview.isInterState} />
       </dl>
 
       <div className="border-line mt-4 flex items-baseline justify-between border-t pt-3">

@@ -592,13 +592,87 @@ for a GSTR-1 filing (the actual GSTR-1 JSON export is Phase 2).
 1. Open **Reports → GST Summary** (admin or accounts).
 2. Pick the **Fiscal quarter** (Q1 Apr–Jun … Q4 Jan–Mar). Optionally filter to
    intra- or inter-state supplies.
-3. Each row is one place of supply: taxable amount, CGST, SGST, IGST — read
-   straight from the orders' stored tax columns. Only supplied orders
-   (`confirmed` / dispatched / `delivered`) are counted; `pending` orders are
-   not supplies.
-4. The totals row is what carries to the return. Cross-check against the
-   invariant query in the verification checklist if anything looks off.
-5. Download the CSV for the filing working papers.
+3. Pick the **Group by** axis. There are three, and **they do not carry the same
+   columns** (F.3):
+   - **Place of supply** (the default, and the one this runbook was written for) —
+     one row per state: taxable amount, CGST, SGST, IGST, read straight from the
+     orders' stored tax columns.
+   - **GST rate** — one row per rate per supply type.
+   - **HSN/SAC** — one row per HSN per supply type.
+
+   **The rate and HSN axes show NO tax amounts, and that is deliberate.** Per-rate
+   tax is not stored at any grain, so producing it would mean recomputing what was
+   billed — which this report must never do, because it is the GSTR-1 base and must
+   show what was actually charged. Use those axes to see **where the value sits**
+   by rate or commodity; take the tax figures from the Place-of-supply axis.
+
+   **Their money column is `Line value (pre-discount)`.** It sums the order lines
+   before any document-level discount, because allocating a discount across lines
+   is the tax engine's job. On an order with no discount it equals the taxable
+   amount; on a discounted order it is higher. The column label says so on screen
+   and in the CSV.
+
+4. Only supplied orders (`confirmed` / dispatched / `delivered`) are counted;
+   `pending` orders are not supplies. This is true on all three axes.
+5. The totals row is what carries to the return. Cross-check against the
+   **invariant queries below** if anything looks off. **On the rate and HSN axes
+   the Orders total is intentionally blank** — an order appears under every rate it
+   carries, so summing those counts would overstate it.
+6. Download the CSV for the filing working papers. The CSV follows the axis shown
+   on screen, so set **Group by** before downloading.
+
+### The invariant queries
+
+**Added by F.3, and they replace a pointer that never resolved.** Step 5 used to
+say "cross-check against the invariant query in the verification checklist". No
+such query existed — `docs/STAGE_F_HANDOFF.md` was read in full and has none, so
+the pointer had been dangling since it was written. The queries live here now
+rather than behind a third indirection.
+
+Run against the tenant's own connection so RLS scopes them
+(`SET LOCAL app.tenant_id`), substituting the same date range as the screen.
+
+**1 — the state axis must equal a direct SUM over the same orders.** This is the
+report's contract: it reads stored columns and never recomputes.
+
+```sql
+SELECT coalesce(sum(taxable_amount), 0) AS taxable,
+       coalesce(sum(cgst_amount), 0)    AS cgst,
+       coalesce(sum(sgst_amount), 0)    AS sgst,
+       coalesce(sum(igst_amount), 0)    AS igst
+FROM orders
+WHERE status IN ('confirmed','partially_dispatched','fully_dispatched','delivered')
+  AND order_date BETWEEN :from AND :to;
+```
+
+**2 — the rate axis must partition the same line value, with nothing lost.** The
+per-rate sums add up to the total over all lines. If they do not, a line is being
+dropped or double-counted by the grouping.
+
+```sql
+SELECT ol.gst_rate,
+       (o.tenant_state_at_issue <> o.place_of_supply) AS is_inter,
+       count(DISTINCT o.id) AS orders,
+       sum(ol.line_total)   AS line_value
+FROM orders o
+JOIN order_lines ol ON ol.order_id = o.id
+WHERE o.status IN ('confirmed','partially_dispatched','fully_dispatched','delivered')
+  AND o.order_date BETWEEN :from AND :to
+GROUP BY ol.gst_rate, is_inter
+ORDER BY ol.gst_rate, is_inter;
+```
+
+**3 — the HSN axis must partition the SAME total as the rate axis.** Two
+partitions of one set. Swap `ol.gst_rate` for `ol.hsn_code` in query 2; the
+`line_value` totals must match to the paisa. **They will differ in ROW COUNT, and
+that is correct** — one HSN can carry two rates, so the HSN axis can have more
+rows than there are distinct HSN codes.
+
+**Why `line_value` and not `taxable_amount` in 2 and 3:** `order_lines` has no
+per-line taxable column — no per-line tax is stored at any grain (F.99) — so
+`sum(line_total)` is pre-discount. On an undiscounted order the two coincide; on a
+discounted one the line sum is higher, and that is expected rather than a
+discrepancy to chase.
 
 ## R15 — Investigating a discrepancy between two reports
 
