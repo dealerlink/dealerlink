@@ -5945,9 +5945,11 @@ the least transferable part.
 **The seven.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
-the family caught before it shipped. The seventh is a SUCCESS-SHAPED REPORT FOR A
-STEP THAT NEVER RAN — the narrowest mechanism in the table and the most reusable,
-because it is a property of the shell rather than of any judgement.
+the family caught before it shipped.
+
+The seventh is a SUCCESS-SHAPED REPORT FOR A STEP THAT NEVER RAN — the narrowest
+mechanism in the table and the most reusable, because it is a property of the
+shell rather than of any judgement.
 
 | #     | The passing result                                                                                                                                                                                                                                                                         | What it could not have detected                                                                                                                                                                                                                                                                                  |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -6545,10 +6547,33 @@ that page.
 ### The append-only FAIL, and why the rule changed rather than the file
 
 `verifier` returned FAIL on this branch: **DEV.138 was edited in place** — heading
-`six`→`seven`, the scope line, `**The six.**`, the sentence introducing the
-instances, `covers all six:`, plus the new row and prettier's re-padding of the
-table. The finding is **correct**, it was flagged before `verifier` ran, and it was
-not overruled.
+`six`→`seven`, the scope line, `**The six.**`, `covers all six:`, plus the new
+table row and prettier's re-padding of the existing rows. The finding is
+**correct**, it was flagged before `verifier` ran, and it was not overruled.
+
+**It FAILED A SECOND TIME, on a narrower point, and that one was mine too.** The
+first version of this branch also appended the seventh instance's sentence onto the
+END of an existing line in the "**The N.**" paragraph (`DEVIATIONS.md:5948`,
+`the family caught before it shipped.`). That is a **discussion-paragraph edit**,
+which the bound written in the same commit explicitly excludes — so **the rule I
+wrote did not cover the whole of the breach it was written to permit**, and this
+entry's own list named five prose items against the bound's four. `verifier` caught
+the mismatch by classifying line by line, which is exactly what requiring it to
+name the covered lines is for.
+
+**Resolved by narrowing the diff, not by widening the bound.** The sentence now
+begins its own paragraph, so that line is byte-identical to `origin/main` and the
+paragraph is additions-only. The bound stays at four derived counts plus table
+rows. Widening it by a fifth item was the other option and was rejected: a bound
+that grows whenever it is inconvenient is the general permission it was written to
+avoid, and the fix here cost one line break.
+
+**One correction to `verifier`'s account, since the verdict was right.** It
+attributed the joined line to prettier reflowing the paragraph at 80 columns.
+Prettier did not do it — `.prettierrc` sets no `proseWrap`, so the default is
+`preserve` and prettier does not reflow markdown prose. **I wrote the line that
+way.** The distinction matters because "the formatter did it" would imply the bound
+needs to cover formatter behaviour, when what it needed was for me to break a line.
 
 **Why it was accepted rather than reverted, and why acceptance alone was not
 enough.** The amendment had been correctly flagged and operator-accepted **three
