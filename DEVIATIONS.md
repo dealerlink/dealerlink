@@ -6542,5 +6542,46 @@ was checked individually and none changed; and `SummaryCard`, the one component
 this day changed on that route tree, is imported by exactly one file which is not
 that page.
 
+### The append-only FAIL, and why the rule changed rather than the file
+
+`verifier` returned FAIL on this branch: **DEV.138 was edited in place** — heading
+`six`→`seven`, the scope line, `**The six.**`, the sentence introducing the
+instances, `covers all six:`, plus the new row and prettier's re-padding of the
+table. The finding is **correct**, it was flagged before `verifier` ran, and it was
+not overruled.
+
+**Why it was accepted rather than reverted, and why acceptance alone was not
+enough.** The amendment had been correctly flagged and operator-accepted **three
+times** — the fifth instance in `0661c97`, the sixth earlier this session (PR #48),
+and now the seventh. Each accept changed nothing. Three accepts of the same breach
+means the convention lives only in decisions nobody reading the repository can
+find, and **an expected FAIL is one that stops being read.** That is the cost, not
+the modified lines.
+
+So the rule was updated in the same PR: `.claude/agents/verifier.md` and
+`docs/BUILD_PROMPT_TEMPLATE.md` now carry **one bounded exception** — DEV.138's
+**instance table** and the four counts derived from it (heading, scope line,
+"The N", "covers all N") are a living index and may be edited in place.
+**Everything else in DEV.138 stays append-only, and no other entry has any
+exception.** The list is exhaustive rather than illustrative, on the operator's
+reasoning: _an exception to append-only that is not bounded becomes a general
+permission._ `verifier` is now required to name the lines it classified as covered,
+so the boundary is applied visibly rather than assumed.
+
+Note what this entry does **not** do: it adds no note to DEV.138 itself. A
+"this is a living index" paragraph would be a discussion edit, which the bound
+just written excludes — so the exception is recorded where the rule lives, and
+here, and on the plan row.
+
+**Where `verifier`'s reasoning was wrong, recorded because the verdict was right.**
+It argued the amendment "adds nothing the record needs" since DEV.143 already cites
+DEV.138. Both citations were checked: `:6366` invokes DEV.138's signature as a
+rule, `:6509` cites it for the falsifying control. **Neither registers a seventh
+instance.** A reader arriving at DEV.138 would still count six — and that entry's
+own closing paragraph turns on the enumeration being complete: "the next instance
+will not look like any of the [N], so recognising it requires the signature rather
+than the examples." Splitting the index would have bought rule compliance by giving
+up the property the entry exists for.
+
 **Impact:** a mixed-rate document now states what it charged, on every screen, one
 row per rate, with the second decimal it always owed the reader.

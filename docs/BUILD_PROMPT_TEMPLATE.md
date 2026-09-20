@@ -62,7 +62,9 @@ C5. Update the plan:
       `assertTemplateUsable()` refuses to render a template containing one.
 C6. Append the day's deviations to /DEVIATIONS.md
     (append-only; never edit historic entries; if a deviation is
-     resolved later, write a new RESOLVED entry referencing the original)
+     resolved later, write a new RESOLVED entry referencing the original.
+     ONE BOUNDED EXCEPTION — DEV.138's instance table and its derived
+     counts; see the Deviations log section below)
 C6a. CONFIRM EVERY NEW ID IS FREE before writing it — DEV entries, ADRs,
      Stage F tasks, runbook sections. One command each:
 
@@ -277,6 +279,44 @@ shows, a form submits). Deep behavioural coverage lives in Vitest.
 
 `/DEVIATIONS.md` is the append-only record of any time the implementation
 intentionally drifted from a daily prompt's spec.
+
+### The one bounded exception — DEV.138's instance table
+
+**DEV.138 is a living index** of one recurring signature ("a passing negative
+result is not evidence until something demonstrates it could have failed"), and
+its table is the only place the instances of that signature are enumerated. It
+may be **edited in place**, strictly limited to:
+
+- rows of the instance table, including a new row and prettier's mechanical
+  re-padding of the existing rows when one is added;
+- the four derived counts that must agree with it — the heading's instance count,
+  the scope line naming which entries carry the instances, the "**The N.**"
+  sentence, and the "covers all N" sentence.
+
+**Nothing else.** DEV.138's findings, its rule statement, its discussion
+paragraphs and its closing section are append-only like every other entry, and no
+other entry has any exception at all. **An exception to append-only that is not
+bounded becomes a general permission**, which is why the list above is exhaustive
+rather than illustrative, and why the `verifier` is required to name the lines it
+classified as covered.
+
+**Why it exists, which is the part worth keeping.** The amendment had been
+correctly flagged by `verifier` and operator-accepted three times — the fifth
+instance (`0661c97`), the sixth and the seventh (both 2026-09-20) — and each
+accept changed nothing. Three accepts of the same breach means the convention
+lives only in decisions nobody reading the repository can find, and **an expected
+FAIL is one that stops being read**. That is the real cost, not the handful of
+modified lines.
+
+**The alternative was considered and rejected.** Splitting the enumeration —
+leaving DEV.138 at six and carrying later instances in the new day's entry — would
+satisfy the rule exactly. It was rejected because DEV.138's own closing paragraph
+says "the next instance will not look like any of the [N], so recognising it
+requires the signature rather than the examples", which only works if the
+instances sit together. Citing DEV.138's _rule_ from a later entry, which the
+later entries do, is not the same as registering an instance in the index: a
+reader arriving at DEV.138 would still count six. Compliance would have been
+bought by giving up the property the entry exists for.
 
 **Check the id is free before you write it** — `grep -c '^## DEV.NN' DEVIATIONS.md`
 must print 0. The file is long, it is not sorted by id, and the highest id does
