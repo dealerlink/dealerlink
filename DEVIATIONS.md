@@ -5931,30 +5931,35 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — six instances of one signature: the instrument, not the reasoning
+## DEV.138 — seven instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
 **Scope:** the framing. No code change is attributed to this entry; the five
 instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
-own entry, which carries two of them) and in DEV.142.
+own entry, which carries two of them), in DEV.142 and in DEV.143.
 
 **Operator instruction, closing out F.55:** make the signature the subject, not
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The six.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+**The seven.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
 the family caught before it shipped.
 
-| #     | The passing result                                                                                                                                                                                                                                                                         | What it could not have detected                                                                                                                                                                                                                                                                    |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | `delete_branch_on_merge: true` plus every merged head branch still present — read as "the setting was always on and never fired" (DEV.124)                                                                                                                                                 | That the setting had been enabled _between_ the two merges. A reading of the **present** used as evidence about the **past**, with no control.                                                                                                                                                     |
-| 2     | `check:paths` green over 58 paths, probed by moving a cited file (C6c)                                                                                                                                                                                                                     | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**.                                                                                                                                                            |
-| 3     | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136)                                                                                                                                                                                                                     | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction.                                                                                                                                                                                           |
-| 4     | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139)                                                                                                                              | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back.                                                                                                                                                               |
-| **5** | **A FALSE STOP, not a vacuous pass.** `git grep -n "GST_RATES" -- apps/` printed four hits and I read them as "CONSUMER FOUND — STOP", blocking D-4's deletion (DEV.139)                                                                                                                   | That all four hits were **`VALID_GST_RATES`** — a longer identifier the substring matched — in the two worker templates, which are independently-declared locals that the same day deletes. A word-boundary grep showed the real answer: the declaration and its own refine, **zero importers**.   |
-| **6** | **AN INVALID INSTRUMENT THAT REACHED THE RIGHT ANSWER.** `prettier --check` run on `/tmp` copies of `DEVIATIONS.md` to decide whether the file was a formatting fixed point — clean/unclean verdicts, and a simulation showing an append "would reformat history" (F.84 closeout; DEV.142) | That `.prettierrc` does not resolve outside the repo, so every run used **default config** — different `singleQuote`, different `printWidth`. The verdicts described a file nobody has. Re-run with `--config` inside the repo, the conclusion held; the evidence for it did not exist until then. |
+The seventh is a SUCCESS-SHAPED REPORT FOR A STEP THAT NEVER RAN — the narrowest
+mechanism in the table and the most reusable, because it is a property of the
+shell rather than of any judgement.
+
+| #     | The passing result                                                                                                                                                                                                                                                                         | What it could not have detected                                                                                                                                                                                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `delete_branch_on_merge: true` plus every merged head branch still present — read as "the setting was always on and never fired" (DEV.124)                                                                                                                                                 | That the setting had been enabled _between_ the two merges. A reading of the **present** used as evidence about the **past**, with no control.                                                                                                                                                                   |
+| 2     | `check:paths` green over 58 paths, probed by moving a cited file (C6c)                                                                                                                                                                                                                     | Its own two files, which were still `??` in `git status`. A scanner enumerating `git ls-files` **cannot reach itself while untracked**.                                                                                                                                                                          |
+| 3     | `sha256sum docs/pdf-references/*.pdf` identical pre and post (DEV.136)                                                                                                                                                                                                                     | A moved document. Those 14 files are git-tracked **read-only input**; the diff is empty by construction.                                                                                                                                                                                                         |
+| 4     | `product.test.ts` "rejects GST rate not in {0,5,12,18,28}" green; and F.55's invariant-test control "passing" after a narrowing that never happened (DEV.139)                                                                                                                              | The rate, in the first case — the fixture failed on `sku`/`name` length. The narrowing, in the second — it had silently rolled back.                                                                                                                                                                             |
+| **5** | **A FALSE STOP, not a vacuous pass.** `git grep -n "GST_RATES" -- apps/` printed four hits and I read them as "CONSUMER FOUND — STOP", blocking D-4's deletion (DEV.139)                                                                                                                   | That all four hits were **`VALID_GST_RATES`** — a longer identifier the substring matched — in the two worker templates, which are independently-declared locals that the same day deletes. A word-boundary grep showed the real answer: the declaration and its own refine, **zero importers**.                 |
+| **6** | **AN INVALID INSTRUMENT THAT REACHED THE RIGHT ANSWER.** `prettier --check` run on `/tmp` copies of `DEVIATIONS.md` to decide whether the file was a formatting fixed point — clean/unclean verdicts, and a simulation showing an append "would reformat history" (F.84 closeout; DEV.142) | That `.prettierrc` does not resolve outside the repo, so every run used **default config** — different `singleQuote`, different `printWidth`. The verdicts described a file nobody has. Re-run with `--config` inside the repo, the conclusion held; the evidence for it did not exist until then.               |
+| **7** | **A SUCCESS-SHAPED REPORT FOR A STEP THAT NEVER RAN.** `cmd-a && cmd-b; rc=$?; echo "b exit=$rc"` printed `db test exit=1` for a test suite that was never invoked, because `cmd-a` failed and `&&` short-circuited — so `$?` reported the SCRIPT, not the suite (F.3, DEV.143)            | That the step it names did not execute at all. The same shape printed `exit=0` earlier in the same session for a `tsc` run whose real errors were visible two lines above, because `$?` had been taken after a `sed` in the pipeline. A status line that names a command is trusted as being ABOUT that command. |
 
 **The shape, which is the only part worth carrying:** a real command, real
 output, a plausible mechanism connecting them, and **no demonstration that the
@@ -5967,7 +5972,7 @@ does not help and a rule is needed.
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all six:
+it verifies confirms nothing. The general form covers all seven:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
@@ -6021,6 +6026,23 @@ lint, format, typecheck and test configuration is resolved **from the file's own
 path upward**. Copying a file to `/tmp` to inspect it silently strips every
 config that governs it. The habit is to probe in place, or pass the config
 explicitly and say that you did.
+
+**The seventh is the cheapest to fix and the easiest to keep making.** It has no
+judgement in it at all: `$?` is the exit status of the last command the shell
+ACTUALLY ran, and `;` after an `&&` chain silently changes which command that
+is. The output is real, the label is wrong, and the wrong label is the part a
+reader believes — `db test exit=1` reads as a failing suite, not as a suite that
+never started. It bit three times in one session in three different shapes
+(after a `sed`, after a `head`, after a short-circuited `&&`), each time
+attaching a status to the wrong referent.
+
+**The fix is to make the claim and the measurement the same statement:** capture
+the status immediately, on its own line, `out=$(cmd); rc=$?`, and report `rc`
+next to what produced it — or assert the thing directly rather than reporting a
+status at all. The general rule already covers it: nothing in
+`echo "b exit=$rc"` distinguishes "b failed" from "b never ran", which is
+exactly "what output would this produce if the thing I am checking for were
+true?" asked of a status line instead of a search.
 
 **What this entry does not claim.** It is not a new rule; it is the general form
 of one already written down three times in three specific shapes. Its value is
@@ -6366,3 +6388,225 @@ what the append-after-Chain-B discipline forbids. Read "3% coverage exists" as
 **Impact:** the rate that F.55 made legal everywhere is now exercised by data, by
 a render through the production chain, and through the two request paths that had
 no schema in front of them.
+
+---
+
+## DEV.143 — F.3: grouping is not computing, and two spec errors found by building on it
+
+**Date:** 2026-09-20
+**Scope:** `packages/tax/src/{summary.ts (new),index.ts}`,
+`packages/tax/tests/summary.test.ts` (new),
+`packages/db/tests/quotation-engine-parity.test.ts` (extended, not duplicated),
+`apps/web/components/tax/tax-summary-block.tsx` (new),
+`apps/web/lib/tax/document-summary.ts` (new), `apps/web/lib/format/index.ts`
+
+- `format.test.ts`, `apps/web/lib/quotation/preview.ts`, the four tax-rendering
+  screens, `docs/F3_F4_SPEC.md` §2 + §3 (two dated corrections),
+  `docs/GST_RATE_MODEL_AUDIT.md` (a third CA question).
+
+**Spec said:** `docs/F3_DAY_PROMPT.md`, status APPROVED, D-1 to D-8 settled.
+`packages/tax` authorised for an additive grouping module only, with an explicit
+stop condition: compose on the engine, never touch it.
+
+**Built as specified.** `computeTaxSummary` groups a document's stored lines into
+rate-wise and HSN-wise views; `computeRateSummary` is the same rate half for
+callers with no HSN. No behavioural change to `computeTax`, no existing fixture
+touched — `compute.test.ts` still reports its original 54 cases.
+
+### Two errors in my own spec, found by building on it rather than by reading it
+
+Both were written by me and both survived a full drafting pass, a staleness audit
+and an operator review. Building was what found them.
+
+**§3's money rule named columns that do not exist.** It said "read from stored
+per-line columns. Never recompute tax from rate × taxable value." Enumerated from
+`information_schema`: all three line tables store `hsn_code`, `quantity`,
+`unit_price`, `gst_rate` and `line_total`, and **no per-line tax, taxable-value or
+discount column at any grain.** The rule was correct for a computation reading
+HEADER totals and does not survive contact with grouping, because a rate-wise
+breakdown is stored at no grain at all. Corrected in place, dated, with the
+reason. The replacement derives through `computeTax` over the stored lines —
+which `apps/workers/src/templates/quotation.tsx:186-196` already does on **every
+PDF render**, so it was never the departure the rule feared.
+
+**§2's HSN table was incoherent on a document the seed already contains.** It said
+one row per distinct HSN, with scalar `centralRate` / `stateRate` /
+`integratedRate`. Chain B puts HSN `85414300` on both an 18% line and a 5% line,
+so no single value describes that row. The nullable repair — `centralRate: null`
+when mixed, mirroring `gstRateLabel` — was rejected by the operator on a reason
+worth keeping: **a row whose rate is null is unusable for the purpose the table
+exists to serve.** F.11 needs (rate × supply type) to resolve a Tally ledger and
+`null` resolves to nothing. The key is now the **(HSN, rate) pair**, every row
+carries a non-null rate, and Chain B correctly yields three HSN rows.
+
+### The paisa that is not F.3's
+
+`computeTax` derives `discountAmount` at document level (`compute.ts:36`) but
+allocates it per line with per-line rounding (`compute.ts:54`). Those disagree.
+Measured on a 4-rate inter-state document at 12.5%: `discountAmount` 30046.50
+against `sum(lineDiscount)` 30046.51; `taxableAmount` 210325.50 against
+`sum(lineTaxable)` 210325.49. Undiscounted, every delta is 0.00.
+
+**This makes the engine's own docstring false as written.** `compute.ts:13-18`
+promises that "printed line amounts always add up to the printed subtotal
+exactly" — true for `subtotal`, false for taxable, discount and total once a
+discount exists.
+
+It is **F.101**, sequenced before F.4 because F.4 prints the HSN table and the
+document total on one page, so a discounted mixed-rate document would disagree
+with itself by a paisa. F.3 was forbidden to fix it, so it asserts the identities
+exactly on undiscounted documents and **characterises** the delta on discounted
+ones, in a test that says in its own comment that it asserts a figure wrong by one
+paisa on purpose and must fail when F.101 lands.
+
+**The docstring is corrected by F.101, not before.** Fixing the words while the
+behaviour still contradicts them would make the file self-consistent and still
+wrong, which is worse than an obvious contradiction — the same reasoning that kept
+DEV.139's "NINE" sentence as a referent rather than overwriting it.
+
+**Why no seeded document exposes it:** 14 of 42 seeded quotations carry a
+discount, but every one is single-rate with cleanly-dividing subtotals, so the
+corpus cannot demonstrate the defect or its fix. A property test found it; a
+corpus test never would have.
+
+### Controls, both executed
+
+- **Grouping, unit level.** `byHsn` re-keyed on the HSN alone → **three tests
+  red**, including the size control that asserts 2 rate groups, 2 distinct HSN
+  codes and 3 pairs are three genuinely different numbers from the same three
+  lines. It cannot pass by coincidence. Restored, zero markers left.
+- **Non-vacuity, DB level.** The new parity test restricted to `QT-2026-0001`
+  (single-rate 18%) → red with `corpus must contain multi-rate quotations:
+expected 0 to be greater than 0`. Restored, 208 green.
+
+### Two designs chosen over the obvious one
+
+**`computeRateSummary` rather than a placeholder HSN.** The builder's
+`PreviewLine` carries no HSN. Passing a fabricated one into `computeTaxSummary`
+and ignoring `byHsn` would have put invented rows in a real return value, and a
+later reader believes a populated array. Five tests assert the two entry points
+cannot drift.
+
+**`minDecimals` as an option rather than changing `groupedINR`'s default.** P-8
+asks for 2 decimals "throughout", which is 121 call sites across 30 files. The
+option fixes exactly the surfaces P-8 names and keeps one formatter rather than
+two that will drift. **The evidence that the default really is unchanged is that
+all 30 pre-existing format tests pass untouched** — not that the diff looks safe.
+
+### The three measurements
+
+1. **TEXT against the Chromium reference contract** — 14 reference-document cases
+   plus 3 property cases, enumerated by name from a verbose run rather than
+   counted: all 17 pass.
+2. **BYTES against the pre-change render** — diff **empty**; 14 files, 14 distinct
+   hashes on each side.
+3. **BYTES across two independent reseeds** — diff **empty**.
+
+`determinism-check` MATCH on both passes with `determinism-expected.json`
+unmodified. Every render went into a fresh `mktemp -d`; the reference PDFs are
+read-only input and were never the hash target (DEV.136). The A.0 falsifying
+control was executed on the same pipeline before any change — one byte flipped at
+offset 7777 in `BRANDED__dispatch__DSP-2026-0005.pdf`, and the pipeline reported
+it — so the empty diffs are the instrument working rather than the instrument
+silent (DEV.138).
+
+### The 14 reference PDFs are byte-identical, and structurally rather than luckily
+
+Worth separating from the measurement, because the two are different claims. The
+measurement says they did not move. **The structure says they could not.** The only
+change anywhere under `apps/workers/` is `tests/quotation-template.test.ts`, **27
+insertions, 0 deletions, comments only** — D-7's marking, which is D-8's single
+stated exception. No template, no view model, no loader, no `render-typst.ts`;
+`docs/pdf-references/`, `typst-matrix.json` and `determinism-expected.json` all
+clean against HEAD.
+
+That is why a move there would have been a **finding** and never a re-baseline: it
+would not have meant the references were wrong, it would have meant something
+changed that I believed had not.
+
+### The flake is a second signature of a known family, not a new fault
+
+`pnpm verify`: 73 passed, 1 flaky. The flake is **not** F.68's signature —
+`critical-path.spec.ts:300`, step "13. convert quotation to a PI", locator
+`getByRole('heading', { name: /New PI from/ })`, against F.68's step 8 at
+`moveDealTo:125`. F.94's reopening condition named "a differing signature", which
+fired here on a difference of **location** when it was written to catch a
+difference of **cause**. The operator ruled it the same family — a
+navigation-or-render timeout on a page just committed to, recovering on retry, the
+F.52 shape — and **tightened the condition** to: a red CI run, two observations at
+the same site, or a failure that does not recover on retry. `flake-triager` was not
+run.
+
+**F.3 is not the cause, and the evidence is recorded on F.94 rather than here**
+because that is where someone chasing it will look: the heading is rendered by
+`convert-to-pi/page.tsx`, which this day did not modify; each of its five imports
+was checked individually and none changed; and `SummaryCard`, the one component
+this day changed on that route tree, is imported by exactly one file which is not
+that page.
+
+### The append-only FAIL, and why the rule changed rather than the file
+
+`verifier` returned FAIL on this branch: **DEV.138 was edited in place** — heading
+`six`→`seven`, the scope line, `**The six.**`, `covers all six:`, plus the new
+table row and prettier's re-padding of the existing rows. The finding is
+**correct**, it was flagged before `verifier` ran, and it was not overruled.
+
+**It FAILED A SECOND TIME, on a narrower point, and that one was mine too.** The
+first version of this branch also appended the seventh instance's sentence onto the
+END of an existing line in the "**The N.**" paragraph (`DEVIATIONS.md:5948`,
+`the family caught before it shipped.`). That is a **discussion-paragraph edit**,
+which the bound written in the same commit explicitly excludes — so **the rule I
+wrote did not cover the whole of the breach it was written to permit**, and this
+entry's own list named five prose items against the bound's four. `verifier` caught
+the mismatch by classifying line by line, which is exactly what requiring it to
+name the covered lines is for.
+
+**Resolved by narrowing the diff, not by widening the bound.** The sentence now
+begins its own paragraph, so that line is byte-identical to `origin/main` and the
+paragraph is additions-only. The bound stays at four derived counts plus table
+rows. Widening it by a fifth item was the other option and was rejected: a bound
+that grows whenever it is inconvenient is the general permission it was written to
+avoid, and the fix here cost one line break.
+
+**One correction to `verifier`'s account, since the verdict was right.** It
+attributed the joined line to prettier reflowing the paragraph at 80 columns.
+Prettier did not do it — `.prettierrc` sets no `proseWrap`, so the default is
+`preserve` and prettier does not reflow markdown prose. **I wrote the line that
+way.** The distinction matters because "the formatter did it" would imply the bound
+needs to cover formatter behaviour, when what it needed was for me to break a line.
+
+**Why it was accepted rather than reverted, and why acceptance alone was not
+enough.** The amendment had been correctly flagged and operator-accepted **three
+times** — the fifth instance in `0661c97`, the sixth earlier this session (PR #48),
+and now the seventh. Each accept changed nothing. Three accepts of the same breach
+means the convention lives only in decisions nobody reading the repository can
+find, and **an expected FAIL is one that stops being read.** That is the cost, not
+the modified lines.
+
+So the rule was updated in the same PR: `.claude/agents/verifier.md` and
+`docs/BUILD_PROMPT_TEMPLATE.md` now carry **one bounded exception** — DEV.138's
+**instance table** and the four counts derived from it (heading, scope line,
+"The N", "covers all N") are a living index and may be edited in place.
+**Everything else in DEV.138 stays append-only, and no other entry has any
+exception.** The list is exhaustive rather than illustrative, on the operator's
+reasoning: _an exception to append-only that is not bounded becomes a general
+permission._ `verifier` is now required to name the lines it classified as covered,
+so the boundary is applied visibly rather than assumed.
+
+Note what this entry does **not** do: it adds no note to DEV.138 itself. A
+"this is a living index" paragraph would be a discussion edit, which the bound
+just written excludes — so the exception is recorded where the rule lives, and
+here, and on the plan row.
+
+**Where `verifier`'s reasoning was wrong, recorded because the verdict was right.**
+It argued the amendment "adds nothing the record needs" since DEV.143 already cites
+DEV.138. Both citations were checked: `:6366` invokes DEV.138's signature as a
+rule, `:6509` cites it for the falsifying control. **Neither registers a seventh
+instance.** A reader arriving at DEV.138 would still count six — and that entry's
+own closing paragraph turns on the enumeration being complete: "the next instance
+will not look like any of the [N], so recognising it requires the signature rather
+than the examples." Splitting the index would have bought rule compliance by giving
+up the property the entry exists for.
+
+**Impact:** a mixed-rate document now states what it charged, on every screen, one
+row per rate, with the second decimal it always owed the reader.

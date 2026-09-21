@@ -24,7 +24,7 @@
  */
 import {
   Decimal,
-  computeTax,
+  computeRateSummary,
   round2,
   toDecimal,
   type GstRate,
@@ -49,6 +49,22 @@ export interface PreviewInput {
   discount: PreviewDiscount | null;
 }
 
+/**
+ * One rate group for the live preview. Numbers, not `Decimal` — this crosses to
+ * a Client Component. Shaped to match `TaxSummaryRow` in
+ * `components/tax/tax-summary-block.tsx` so the builder passes it straight
+ * through without a mapping layer that could drift.
+ */
+export interface PreviewRateGroup {
+  rate: number;
+  cgstRate: number | null;
+  cgstAmount: number;
+  sgstRate: number | null;
+  sgstAmount: number;
+  igstRate: number | null;
+  igstAmount: number;
+}
+
 export interface PreviewOutput {
   subtotal: number;
   discountAmount: number;
@@ -58,6 +74,15 @@ export interface PreviewOutput {
   igst: number;
   total: number;
   isInterState: boolean;
+  /**
+   * One entry per distinct GST rate present, ascending (F.3).
+   *
+   * The scalar `cgst` / `sgst` / `igst` fields above are RETAINED rather than
+   * replaced: they are the document totals, they are what the Total row and the
+   * Server Actions read, and `byRate` sums to them. Removing them would have
+   * rippled into every caller for no gain.
+   */
+  byRate: PreviewRateGroup[];
 }
 
 const toNum = (v: number | string): number => {
@@ -85,7 +110,10 @@ export function computeQuotationTotals(input: PreviewInput): PreviewOutput {
     .filter((l) => l.quantity > 0 && l.unitPrice >= 0);
 
   if (engineLines.length === 0) {
+    // An empty builder has no rate groups — NOT a zero-valued group. The tax
+    // block renders its empty state rather than a spurious "CGST @ 0%" row.
     return {
+      byRate: [],
       subtotal: 0,
       discountAmount: 0,
       taxableAmount: 0,
@@ -119,7 +147,11 @@ export function computeQuotationTotals(input: PreviewInput): PreviewOutput {
 
   // The engine only uses the two state strings for the inter/intra decision;
   // pass canonical non-empty sentinels so a half-filled state never throws.
-  const out = computeTax({
+  // `computeRateSummary` rather than `computeTax`: it returns the same document
+  // totals PLUS the rate groups, computed by the one module that owns grouping.
+  // The rate-only entry point is the right one here because `PreviewLine` carries
+  // no HSN — see `RateSummary` in `packages/tax/src/summary.ts`.
+  const summary = computeRateSummary({
     tenantState: 'INTRA',
     placeOfSupply: isInterState ? 'INTER' : 'INTRA',
     lines: engineLines,
@@ -127,14 +159,23 @@ export function computeQuotationTotals(input: PreviewInput): PreviewOutput {
   });
 
   return {
-    subtotal: out.subtotal.toNumber(),
-    discountAmount: out.discountAmount.toNumber(),
-    taxableAmount: out.taxableAmount.toNumber(),
-    cgst: out.cgstAmount.toNumber(),
-    sgst: out.sgstAmount.toNumber(),
-    igst: out.igstAmount.toNumber(),
-    total: out.totalAmount.toNumber(),
+    subtotal: summary.totals.subtotal.toNumber(),
+    discountAmount: summary.totals.discountAmount.toNumber(),
+    taxableAmount: summary.totals.taxableValue.toNumber(),
+    cgst: summary.totals.totalCgst.toNumber(),
+    sgst: summary.totals.totalSgst.toNumber(),
+    igst: summary.totals.totalIgst.toNumber(),
+    total: summary.totals.grandTotal.toNumber(),
     isInterState,
+    byRate: summary.byRate.map((g) => ({
+      rate: g.rate,
+      cgstRate: g.cgstRate,
+      cgstAmount: g.cgstAmount.toNumber(),
+      sgstRate: g.sgstRate,
+      sgstAmount: g.sgstAmount.toNumber(),
+      igstRate: g.igstRate,
+      igstAmount: g.igstAmount.toNumber(),
+    })),
   };
 }
 

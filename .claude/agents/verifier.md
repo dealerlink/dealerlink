@@ -110,6 +110,33 @@ them:
   additions only. Any deleted or modified existing line is a FAIL — historic
   entries are never edited; a resolution is a NEW entry that references the old
   one.
+- **ONE BOUNDED EXCEPTION: DEV.138's instance table.** DEV.138 is a **living
+  index** of one recurring signature, and its enumeration is the only place the
+  instances are counted. Editing it in place is **expected and is NOT a FAIL**,
+  strictly limited to:
+  - rows of the instance table itself, including a new row and the mechanical
+    re-padding prettier applies to the existing rows when one is added;
+  - the derived counts that must agree with it — the heading's instance count,
+    the scope line listing which entries carry the instances, the "**The N.**"
+    sentence, and the "covers all N" sentence.
+
+  **Everything else in DEV.138 is append-only like any other entry** — its
+  findings, its rule statement, its discussion paragraphs, its closing section. A
+  modified line inside DEV.138 that is not a table row or one of those four
+  derived counts is still a FAIL, and so is any in-place edit to any other entry.
+
+  **Report the exception when you take it**, naming the lines you classified as
+  covered, so a reader can see the boundary was applied rather than assumed. If a
+  DEV.138 edit falls outside the list above, FAIL and say which line.
+
+  Why this exists rather than being left as a recurring FAIL: the amendment had
+  been correctly flagged and operator-accepted three times (the fifth, sixth and
+  seventh instances), each accept changing nothing, which meant the convention
+  lived only in decisions nobody reading the repo could find — and an expected
+  FAIL is one that stops being read. The alternative, splitting the enumeration
+  across entries, was rejected because DEV.138's own closing paragraph turns on
+  the instances being in one place. See the plan row filed 2026-09-20.
+
 - New entries must continue the numbering without reusing an id.
 
 ### 4. Id integrity — duplicates AND dangling references

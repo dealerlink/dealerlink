@@ -28,11 +28,23 @@ export const GST_SUPPLY_STATUSES = [
   'delivered',
 ] as const;
 
+/**
+ * How the report is grouped (F.3, day prompt D-4).
+ *
+ * `state` is the original and the default — one row per place of supply, with the
+ * stored CGST/SGST/IGST columns. `rate` and `hsn` are the axis the prospect's
+ * Tally ledgers are organised on, and they carry **no tax amounts**; see
+ * `RATE_COLUMNS` for why that is a contract and not an omission.
+ */
+export type GstSummaryGroupBy = 'state' | 'rate' | 'hsn';
+
 export interface GstSummaryFilters {
   from: string;
   to: string;
   /** Restrict to a supply type. */
   supplyType?: 'intra' | 'inter' | undefined;
+  /** Default `'state'`. */
+  groupBy?: GstSummaryGroupBy | undefined;
 }
 
 interface GstRow extends Record<string, unknown> {
@@ -44,6 +56,44 @@ interface GstRow extends Record<string, unknown> {
   sgst: string;
   igst: string;
 }
+
+interface RateRow extends Record<string, unknown> {
+  bucket: string;
+  is_inter: boolean;
+  order_count: string;
+  line_value: string;
+}
+
+/**
+ * Columns for the `rate` and `hsn` arms.
+ *
+ * **There are deliberately NO tax columns here, and that is a contract rather
+ * than a gap.** This module must not call `@dealerlink/tax` — see the header
+ * comment; a per-rate tax amount is not a stored column at any grain (F.99), so
+ * producing one would mean recomputing, which is exactly what this report may not
+ * do. The report shows what was BILLED, which is what a GSTR-1 base must do.
+ * Rate-wise tax amounts come from `computeTaxSummary` in `@dealerlink/tax`, which
+ * is what F.11 consumes.
+ *
+ * **`line_value` is PRE-DISCOUNT, and the label says so.** It sums
+ * `order_lines.line_total`, which is `quantity × unit_price` before any
+ * document-level discount (`apps/web/lib/actions/pi/helpers.ts:223`). A
+ * post-discount figure per rate would require allocating the document discount
+ * across lines, which only the engine does. Two of 44 seeded orders carry a
+ * discount, so the two figures coincide on 42 of them — which is exactly why the
+ * column must be named honestly rather than left to be assumed equal.
+ */
+const RATE_COLUMNS: ReportColumn[] = [
+  { key: 'bucket', label: 'GST rate', type: 'text' },
+  { key: 'supplyType', label: 'Supply type', type: 'text' },
+  { key: 'orders', label: 'Orders', type: 'integer' },
+  { key: 'lineValue', label: 'Line value (pre-discount)', type: 'money' },
+];
+
+const HSN_COLUMNS: ReportColumn[] = [
+  { key: 'bucket', label: 'HSN/SAC', type: 'text' },
+  ...RATE_COLUMNS.slice(1),
+];
 
 const COLUMNS: ReportColumn[] = [
   { key: 'state', label: 'Place of supply', type: 'text' },
@@ -70,6 +120,63 @@ export async function gstSummaryReport(
       : filters.supplyType === 'inter'
         ? sql`AND o.tenant_state_at_issue <> o.place_of_supply`
         : sql``;
+
+  const groupBy = filters.groupBy ?? 'state';
+  if (groupBy !== 'state') {
+    // Joins order_lines, which the state arm never does — gst_rate and hsn_code
+    // are not otherwise in this query's scope at all.
+    const bucketExpr = groupBy === 'rate' ? sql`ol.gst_rate::text` : sql`ol.hsn_code`;
+    const rateRows = await withTenant(tenantId, async (tx) => {
+      const res = await tx.execute<RateRow>(sql`
+        SELECT ${bucketExpr} AS bucket,
+               (o.tenant_state_at_issue <> o.place_of_supply) AS is_inter,
+               count(DISTINCT o.id)::text AS order_count,
+               coalesce(sum(ol.line_total), 0)::text AS line_value
+        FROM orders o
+        JOIN order_lines ol ON ol.order_id = o.id
+        WHERE o.status IN (${statusList})
+          AND o.order_date BETWEEN ${from} AND ${to}
+          ${supplyClause}
+        GROUP BY bucket, is_inter
+        ORDER BY bucket, is_inter
+      `);
+      return res as unknown as RateRow[];
+    });
+
+    const rateDataRows: ReportRow[] = rateRows.map((r) => ({
+      bucket: groupBy === 'rate' ? `${Number(r.bucket)}%` : r.bucket,
+      supplyType: r.is_inter ? 'Inter-state' : 'Intra-state',
+      orders: Number(r.order_count),
+      lineValue: Number(r.line_value),
+    }));
+
+    const rateSum = (k: keyof ReportRow) =>
+      rateDataRows.reduce((acc, r) => acc + Number(r[k] ?? 0), 0);
+
+    return {
+      columns: groupBy === 'rate' ? RATE_COLUMNS : HSN_COLUMNS,
+      rows: rateDataRows,
+      totals: {
+        bucket: 'Total',
+        supplyType: null,
+        // NOT rateSum('orders'): an order appears under every rate it carries, so
+        // summing the per-bucket counts double-counts a multi-rate order. There is
+        // no correct single number here without a second query, so the cell is
+        // left null rather than filled with a wrong one.
+        orders: null,
+        lineValue: rateSum('lineValue'),
+      },
+      metadata: {
+        reportKey: 'gst-summary',
+        reportName: groupBy === 'rate' ? 'GST Summary by rate' : 'GST Summary by HSN',
+        generatedAt: new Date().toISOString(),
+        filterLabel: `${from} to ${to}${
+          filters.supplyType ? ` · ${filters.supplyType}-state only` : ''
+        } · grouped by ${groupBy} · line value is pre-discount`,
+        rowCount: rateDataRows.length,
+      },
+    };
+  }
 
   const rows = await withTenant(tenantId, async (tx) => {
     const res = await tx.execute<GstRow>(sql`

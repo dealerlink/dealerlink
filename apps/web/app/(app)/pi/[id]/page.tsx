@@ -4,7 +4,9 @@ import { notFound, redirect } from 'next/navigation';
 
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
-import { formatDate, formatINRExact } from '@/lib/format';
+import { formatDate, formatINRExact, formatTaxAmount } from '@/lib/format';
+import { summariseDocument } from '@/lib/tax/document-summary';
+import { TaxSummaryBlock } from '@/components/tax/tax-summary-block';
 import { getLatestGeneratedDocument } from '@/lib/queries/generated-documents';
 import { getPerformaInvoiceById } from '@/lib/queries/performa-invoices';
 import { impersonationTenantId } from '@/lib/tenant/context';
@@ -58,6 +60,18 @@ export default async function PiDetailPage({ params }: PageProps) {
 
   const pi = await getPerformaInvoiceById(tenantId, params.id);
   if (!pi) notFound();
+
+  // Rate-wise breakdown from the STORED lines, through the one tax engine (F.3,
+  // D-2). Null when the document has no line rows — F.97 records that 38 of 64
+  // seeded PIs are in exactly that state — in which case the stored header rows
+  // below render unchanged.
+  const taxSummary = summariseDocument({
+    tenantStateAtIssue: pi.tenantStateAtIssue,
+    placeOfSupply: pi.placeOfSupply,
+    discountType: pi.discountType,
+    discountValue: pi.discountValue,
+    lines: pi.lines,
+  });
 
   const isAdmin = ctx.user.role === 'admin';
   const canEdit = isAdmin || ctx.user.role === 'sales';
@@ -245,12 +259,25 @@ export default async function PiDetailPage({ params }: PageProps) {
               />
             )}
             <Row label="Taxable" value={formatINRExact(pi.taxableAmount)} />
-            {pi.igstAmount > 0 ? (
-              <Row label="IGST" value={formatINRExact(pi.igstAmount)} />
+            {/*
+
+              P-7: these rows used to read "CGST" / "SGST" / "IGST" with NO RATE, so a
+
+              customer could not verify what they were charged. One row per rate now,
+
+              each naming its rate, from the stored lines via the one tax engine.
+
+            */}
+
+            {taxSummary ? (
+              <TaxSummaryBlock rows={taxSummary.rows} isInterState={taxSummary.isInterState} />
+            ) : pi.igstAmount > 0 ? (
+              <Row label="IGST" value={formatTaxAmount(pi.igstAmount)} />
             ) : (
               <>
-                <Row label="CGST" value={formatINRExact(pi.cgstAmount)} />
-                <Row label="SGST" value={formatINRExact(pi.sgstAmount)} />
+                <Row label="CGST" value={formatTaxAmount(pi.cgstAmount)} />
+
+                <Row label="SGST" value={formatTaxAmount(pi.sgstAmount)} />
               </>
             )}
           </dl>

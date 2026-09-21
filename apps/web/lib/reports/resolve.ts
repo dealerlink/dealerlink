@@ -66,7 +66,13 @@ export async function runReport(
         params.supplyType === 'intra' || params.supplyType === 'inter'
           ? params.supplyType
           : undefined;
-      return gstSummaryReport(tenantId, { ...range, supplyType });
+      // R-9: parameter defaulting is duplicated between here and the page,
+      // because all four report pages call their report function directly and
+      // only the CSV action goes through runReport. A new param must land in
+      // BOTH or the exported CSV silently differs from the screen.
+      const groupBy =
+        params.groupBy === 'rate' || params.groupBy === 'hsn' ? params.groupBy : 'state';
+      return gstSummaryReport(tenantId, { ...range, supplyType, groupBy });
     }
   }
 }

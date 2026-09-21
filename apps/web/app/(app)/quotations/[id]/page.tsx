@@ -4,7 +4,9 @@ import { notFound, redirect } from 'next/navigation';
 
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
-import { formatDate, formatINRExact } from '@/lib/format';
+import { formatDate, formatINRExact, formatTaxAmount } from '@/lib/format';
+import { summariseDocument } from '@/lib/tax/document-summary';
+import { TaxSummaryBlock } from '@/components/tax/tax-summary-block';
 import { getLatestGeneratedDocument } from '@/lib/queries/generated-documents';
 import { getQuotationById, getQuotationRevisionChain } from '@/lib/queries/quotations';
 import { impersonationTenantId } from '@/lib/tenant/context';
@@ -53,6 +55,24 @@ export default async function QuotationDetailPage({ params }: PageProps) {
     q.parentQuotationId || q.revision > 1 ? await getQuotationRevisionChain(tenantId, q.id) : [];
 
   const latestPdf = await getLatestGeneratedDocument(tenantId, 'quotation', q.id);
+
+  // Rate-wise breakdown from the STORED lines, through the one tax engine
+
+  // (F.3, D-2). Null when the document has no line rows — F.97 — in which case
+
+  // the stored header rows below are rendered unchanged.
+
+  const taxSummary = summariseDocument({
+    tenantStateAtIssue: q.tenantStateAtIssue,
+
+    placeOfSupply: q.placeOfSupply,
+
+    discountType: q.discountType,
+
+    discountValue: q.discountValue,
+
+    lines: q.lines,
+  });
 
   return (
     <div className="mx-auto max-w-[1100px] px-8 py-10">
@@ -248,12 +268,25 @@ export default async function QuotationDetailPage({ params }: PageProps) {
               />
             )}
             <Row label="Taxable" value={formatINRExact(q.taxableAmount)} />
-            {q.igstAmount > 0 ? (
-              <Row label="IGST" value={formatINRExact(q.igstAmount)} />
+            {/*
+
+              P-7: these rows used to read "CGST" / "SGST" / "IGST" with NO RATE, so a
+
+              customer could not verify what they were charged. One row per rate now,
+
+              each naming its rate, from the stored lines via the one tax engine.
+
+            */}
+
+            {taxSummary ? (
+              <TaxSummaryBlock rows={taxSummary.rows} isInterState={taxSummary.isInterState} />
+            ) : q.igstAmount > 0 ? (
+              <Row label="IGST" value={formatTaxAmount(q.igstAmount)} />
             ) : (
               <>
-                <Row label="CGST" value={formatINRExact(q.cgstAmount)} />
-                <Row label="SGST" value={formatINRExact(q.sgstAmount)} />
+                <Row label="CGST" value={formatTaxAmount(q.cgstAmount)} />
+
+                <Row label="SGST" value={formatTaxAmount(q.sgstAmount)} />
               </>
             )}
           </dl>

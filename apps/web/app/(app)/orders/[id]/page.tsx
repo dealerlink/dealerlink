@@ -4,7 +4,9 @@ import { notFound, redirect } from 'next/navigation';
 
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAuthContext } from '@/lib/auth/session';
-import { formatDate, formatINRExact } from '@/lib/format';
+import { formatDate, formatINRExact, formatTaxAmount } from '@/lib/format';
+import { summariseDocument } from '@/lib/tax/document-summary';
+import { TaxSummaryBlock } from '@/components/tax/tax-summary-block';
 import { getDispatchesForOrder } from '@/lib/queries/dispatch';
 import { getOrderById, getReservationPreview } from '@/lib/queries/orders';
 import { getOrderPayments } from '@/lib/queries/payments';
@@ -62,6 +64,24 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
 
   const order = await getOrderById(tenantId, params.id);
   if (!order) notFound();
+
+  // Rate-wise breakdown from the STORED lines, through the one tax engine (F.3,
+  // D-2). Null when the document has no line rows — F.97 records that 38 of 64
+  // seeded PIs are in exactly that state — in which case the stored header rows
+  // below render unchanged.
+  const taxSummary = summariseDocument({
+    tenantStateAtIssue: order.tenantStateAtIssue,
+    placeOfSupply: order.placeOfSupply,
+    // OrderDetail exposes only the RESOLVED discountAmount, not the type and
+    // value the document was created with (`apps/web/lib/queries/orders.ts:148`).
+    // Passing it as an 'amount' reproduces the same allocation: `computeTax`
+    // converts a percent to an amount before allocating anyway
+    // (`packages/tax/src/compute.ts:176-179`), so a stored amount and the percent
+    // that produced it take the identical path from here on.
+    discountType: order.discountAmount > 0 ? 'amount' : null,
+    discountValue: order.discountAmount,
+    lines: order.lines,
+  });
 
   const tab: TabKey = TABS.some((t) => t.key === searchParams.tab)
     ? (searchParams.tab as TabKey)
@@ -204,12 +224,20 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
                   />
                 )}
                 <RowKV label="Taxable" value={formatINRExact(order.taxableAmount)} />
-                {order.igstAmount > 0 ? (
-                  <RowKV label="IGST" value={formatINRExact(order.igstAmount)} />
+                {/*
+                  P-7: these rows used to read "CGST" / "SGST" / "IGST" with NO
+                  RATE, so a customer could not verify what they were charged. One
+                  row per rate now, each naming its rate, from the stored lines via
+                  the one tax engine.
+                */}
+                {taxSummary ? (
+                  <TaxSummaryBlock rows={taxSummary.rows} isInterState={taxSummary.isInterState} />
+                ) : order.igstAmount > 0 ? (
+                  <RowKV label="IGST" value={formatTaxAmount(order.igstAmount)} />
                 ) : (
                   <>
-                    <RowKV label="CGST" value={formatINRExact(order.cgstAmount)} />
-                    <RowKV label="SGST" value={formatINRExact(order.sgstAmount)} />
+                    <RowKV label="CGST" value={formatTaxAmount(order.cgstAmount)} />
+                    <RowKV label="SGST" value={formatTaxAmount(order.sgstAmount)} />
                   </>
                 )}
               </dl>

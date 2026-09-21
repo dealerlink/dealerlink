@@ -73,7 +73,40 @@ SGST 9.0%       211.50
 
 Inter-state substitutes `IGST 5%` / `IGST 18%` for each pair.
 
-**HSN/SAC summary table** — one row per distinct HSN, plus a TOTAL row:
+**HSN/SAC summary table** — one row per distinct **(HSN, rate) pair**, plus a
+TOTAL row:
+
+> **CORRECTION — 2026-09-20, operator-approved. THIS SECTION SAID "one row per
+> distinct HSN", AND THAT WAS WRONG. The error is this spec's.** The original
+> wording, together with §3's `byHsn` shape carrying scalar `centralRate` /
+> `stateRate` / `integratedRate` fields, is **incoherent on any document where one
+> HSN carries two rates** — and the seed corpus contains exactly that case by
+> design: Chain B puts HSN `85414300` on both an 18% line and a 5% line
+> (`packages/db/src/seeds/multi-rate.ts:380-404`). With one row per HSN, no single
+> value describes that row's rate.
+>
+> The rejected repair was a nullable rate — `centralRate: null` when the HSN group
+> is mixed, mirroring how `gstRateLabel` goes `null` on a mixed-rate document.
+> **Rejected because a row whose rate is null is unusable for the purpose the table
+> exists to serve.** F.11 needs (rate × supply type) to resolve a Tally ledger
+> (`SALE @ 5% - LOCAL` and the rest), and a null rate resolves to nothing.
+>
+> So the grouping key is the **pair**, the `rate` column is **non-null on every
+> row**, and Chain B correctly yields **three** HSN rows — `85359090`@18,
+> `85414300`@5, `85414300`@18 — not two. §3's nullable scalars are dropped; rate
+> nullability now follows only the **supply type**, exactly as the rate-wise block
+> already does (central/state null inter-state, integrated null intra-state).
+>
+> **The reference document does not disconfirm this.** The table below is from
+> `docs/client-evidence/4.png`, where each HSN happens to carry one rate, so it is
+> consistent with both readings and settles neither.
+>
+> **One supporting belief is deliberately NOT relied on:** that GSTR-1 Table 12
+> requires the HSN summary per (HSN, rate) pair. That matches the operator's
+> understanding but is **unconfirmed** — it is queued for the CA, and the design
+> above stands on the F.11 ledger argument alone, which does not depend on it.
+
+Each row is one HSN at one rate:
 
 | HSN/SAC   | Taxable Value   | Central Rate | Central Amt   | State Rate | State Amt     | Total Tax     |
 | --------- | --------------- | ------------ | ------------- | ---------- | ------------- | ------------- |
@@ -82,7 +115,8 @@ Inter-state substitutes `IGST 5%` / `IGST 18%` for each pair.
 | **TOTAL** | **5,49,190.00** |              | **13,882.50** |            | **13,882.50** | **27,765.00** |
 
 Inter-state collapses the central/state pairs into a single Integrated Tax
-column pair. The audit records that SAC appears in zero source files; the column
+column pair. A `Rate` column is therefore part of the table's identity, not
+decoration: two rows can share an HSN and differ only by it. The audit records that SAC appears in zero source files; the column
 is labelled HSN/SAC because services may appear later, but no SAC handling is in
 scope.
 
@@ -101,7 +135,8 @@ placement follow the audit's enumeration of the tax package.
     igstRate, igstAmount
   }>,
   byHsn: Array<{
-    hsn, taxableValue,
+    hsn, rate,                       // the PAIR is the key — see the §2 correction
+    taxableValue,
     centralRate, centralAmount, stateRate, stateAmount,
     integratedRate, integratedAmount,
     totalTax
@@ -119,7 +154,8 @@ placement follow the audit's enumeration of the tax package.
   single-rate document produces one group — the existing case becomes a subset,
   not a special case. This is also why F.55 matters less than it would if the
   rate list were load-bearing here.
-- Order rate groups ascending by rate; order HSN rows by HSN ascending.
+- Order rate groups ascending by rate; order HSN rows by HSN ascending, then by
+  rate ascending within an HSN (two rows can share an HSN — §2 correction).
   Deterministic ordering is required for the snapshot tests.
 - Intra-state populates the CGST/SGST fields and leaves IGST null; inter-state
   the reverse. Never both.

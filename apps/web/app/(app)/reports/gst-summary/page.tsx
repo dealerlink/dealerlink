@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'GST Summary' };
 
 interface PageProps {
-  searchParams: { quarter?: string; supplyType?: string };
+  searchParams: { quarter?: string; supplyType?: string; groupBy?: string };
 }
 
 export default async function GstSummaryPage({ searchParams }: PageProps) {
@@ -42,8 +42,13 @@ export default async function GstSummaryPage({ searchParams }: PageProps) {
       ? searchParams.supplyType
       : undefined;
 
+  const groupBy =
+    searchParams.groupBy === 'rate' || searchParams.groupBy === 'hsn'
+      ? searchParams.groupBy
+      : 'state';
+
   const range = fiscalQuarterRange(fy, quarter);
-  const result = await gstSummaryReport(tenantId, { ...range, supplyType });
+  const result = await gstSummaryReport(tenantId, { ...range, supplyType, groupBy });
 
   const fields: FilterField[] = [
     {
@@ -52,6 +57,16 @@ export default async function GstSummaryPage({ searchParams }: PageProps) {
       label: 'Fiscal quarter',
       required: true,
       options: FISCAL_QUARTERS.map((q) => ({ value: q.key, label: q.label })),
+    },
+    {
+      kind: 'select',
+      name: 'groupBy',
+      label: 'Group by',
+      options: [
+        { value: 'state', label: 'Place of supply' },
+        { value: 'rate', label: 'GST rate' },
+        { value: 'hsn', label: 'HSN/SAC' },
+      ],
     },
     {
       kind: 'select',
@@ -76,17 +91,24 @@ export default async function GstSummaryPage({ searchParams }: PageProps) {
           </div>
           <h1 className="text-[28px] font-semibold tracking-[-0.02em]">GST Summary</h1>
           <p className="text-mute mt-1 text-[13px]">
-            FY {fy}–{fy + 1} · {result.metadata.filterLabel} · supplied orders only — figures read
-            from stored tax columns.
+            FY {fy}–{fy + 1} · {result.metadata.filterLabel} · supplied orders only —{' '}
+            {groupBy === 'state'
+              ? 'figures read from stored tax columns.'
+              : 'line values read from stored line columns; this axis carries no tax amounts.'}
           </p>
         </div>
-        <DownloadCsv report="gst-summary" params={{ quarter, supplyType: supplyType ?? '' }} />
+        {/* groupBy must be here too, or the CSV exports a different grouping
+            from the one on screen — R-9's third site. */}
+        <DownloadCsv
+          report="gst-summary"
+          params={{ quarter, supplyType: supplyType ?? '', groupBy }}
+        />
       </div>
 
       <FilterBar
         basePath="/reports/gst-summary"
         fields={fields}
-        values={{ quarter, supplyType: supplyType ?? '' }}
+        values={{ quarter, supplyType: supplyType ?? '', groupBy }}
       />
 
       <ReportTable result={result} />
