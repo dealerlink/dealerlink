@@ -1477,11 +1477,39 @@ their auth on every rebuild** (see the persistence note below) — so re-running
 both is the standard post-rebuild step, right after `gh auth login`:
 
 ```bash
-gh auth login          # GitHub.com → SSH (the repo remote is git@github.com) → browser
+gh auth login          # GitHub.com → HTTPS (the repo remote is https://) → browser
+gh auth setup-git      # make gh the git credential helper — see the note below
 gh auth status         # confirm
 doctl auth init        # paste a DO API token (Dashboard → API → Tokens)
 doctl account get      # confirm
 ```
+
+### HTTPS is deliberate, and why SSH could never have worked here
+
+The remote is `https://github.com/dealerlink/dealerlink.git`, and `gh auth login`
+should be answered **HTTPS**. This runbook said SSH until 2026-09-23.
+
+**The reason is structural, not preference.** `~/.ssh` is **not** among the
+persisted volumes. `.devcontainer/docker-compose.yml` mounts exactly four:
+`${HOME}/.dealerlink`, `pnpm-store`, `playwright-cache` and `claude-config`. So an
+SSH key generated inside the container is gone on the next rebuild, every time —
+SSH auth was not merely fragile here, it was **unable to survive a rebuild by
+construction**. `gh`'s token lives at `~/.config/gh/hosts.yml`, which is also lost
+on rebuild, but this runbook already tells you to restore it with `gh auth login`,
+and that one command restores git access along with it.
+
+**`gh auth setup-git` is part of the sequence for a separate reason.** Without it,
+git may be left using the credential helper VS Code injects, which lives at
+`/tmp/vscode-remote-containers-<uuid>.js` — a **session-scoped path**. It works
+while that session lives; after a restart git is pointed at a filename that no
+longer exists, and pushes fail with an authentication error that looks like a
+credentials problem rather than a missing file. `gh auth setup-git` points git at
+`gh` itself, which reads the on-disk token.
+
+**Symptom to recognise:** `git fetch` or `git push` failing while `gh pr view`
+still works. `gh` carries its own token and does not use git's transport, so a
+working `gh` alongside a broken `git` means the problem is git's remote or its
+credential helper, not your GitHub auth.
 
 `doctl` is used by `pnpm sync-spec:*` (R18) and to confirm App Platform
 deployments — e.g. `doctl apps list-deployments <app-id>` per component (web +
