@@ -6714,3 +6714,19 @@ four touches the tax block. CI is the gate.
 
 **Impact:** a shipped screen stopped violating WCAG 1.3.1, and the scan that
 should have caught it now scans a document that can fail.
+
+## DEV.145 — F.105: two symptoms of one defect, folded into one row rather than filed as two
+
+F.105 asked whether the production order path derives `place_of_supply` from the
+tenant's state rather than the ship-to's, and established that it does not — every
+write site, every derivation, the mapping between them and all the database
+measurements are in `docs/F105_AUDIT.md`, which this entry points at rather than
+repeats. The audit also found a second symptom on the same seed inserts —
+`tenant_state_at_issue` hardcoded `'MH'` against the `sample` tenant's actual `KA` —
+and the operator ruled that it be folded into F.103, with that row renamed, rather
+than filed as its own: it is the same eight literals in the same two files,
+separable only by which column you inspect, so two rows would have had to be fixed
+together or the data would stay wrong either way. That is a judgement about backlog
+shape rather than about the code, which is why it is recorded here and not only in
+the audit — a reader who later finds one row covering two columns should be able to
+see that the split was considered and declined, not overlooked.
