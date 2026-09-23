@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+
 import { formatTaxAmount } from '@/lib/format';
 
 /**
@@ -106,10 +108,22 @@ export function TaxSummaryBlock({
           />
         ) : (
           // Intra-state: a CGST and an SGST row per rate, each at HALF the rate.
-          // Rendered as a fragment rather than two sibling maps so the pair stays
-          // adjacent for a given rate — a reader reconciling a document reads
-          // CGST 2.5% / SGST 2.5% together, not all the CGSTs then all the SGSTs.
-          <div key={`intra-${r.rate}`} className="contents">
+          // A keyed FRAGMENT, not a wrapper element, so the pair stays adjacent for a
+          // given rate — a reader reconciling a document reads CGST 2.5% / SGST 2.5%
+          // together, not all the CGSTs then all the SGSTs.
+          //
+          // IT MUST EMIT NO DOM NODE, and that is an accessibility requirement rather
+          // than a preference. All four call sites render this block directly inside a
+          // `<dl>`. This file as shipped in 622d29b used
+          // `<div key={...} className="contents">` here — the comment above it already
+          // said "fragment", but a div is what it rendered. axe-core flattens exactly
+          // ONE level of `<div>` and does not recurse (axe.js:25337-25339), so the
+          // wrapper was unwrapped and each `Row`'s own div was exposed as direct `<dl>`
+          // content: `definition-list` (serious) plus `dlitem` (serious) on every
+          // `dt`/`dd` inside. `display: contents` meant there was NO VISUAL SYMPTOM,
+          // so review and three passing e2e cases walked past it. The inter-state
+          // branch below was never affected — it returns `<Row>` directly.
+          <Fragment key={`intra-${r.rate}`}>
             <Row
               label={`CGST @ ${rateLabel(r.cgstRate ?? r.rate / 2)}`}
               value={formatTaxAmount(Number(r.cgstAmount))}
@@ -120,7 +134,7 @@ export function TaxSummaryBlock({
               value={formatTaxAmount(Number(r.sgstAmount))}
               testId={`sgst-row-${r.rate}`}
             />
-          </div>
+          </Fragment>
         ),
       )}
     </>

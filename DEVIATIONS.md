@@ -6610,3 +6610,106 @@ up the property the entry exists for.
 
 **Impact:** a mixed-rate document now states what it charged, on every screen, one
 row per rate, with the second decimal it always owed the reader.
+
+---
+
+## DEV.144 — F.3 shipped a serious a11y violation through a green run, because the scan was not pinned
+
+**Date:** 2026-09-22
+**Scope:** `apps/web/components/tax/tax-summary-block.tsx` (the fix),
+`apps/web/tests/e2e/verify-day-16.spec.ts` (the pin, the non-vacuity guard, and a
+missing `closeDbConnection`). No other file. Branch cut off `main` at `a671bfe`,
+ahead of the F.101 scope PR so it can merge first.
+
+**What broke.** `verify-day-16.spec.ts`'s order-detail axe scan failed on PR #52 —
+a PR containing **no code at all**, three documentation files. `definition-list`
+(serious, 1 node) and `dlitem` (serious, 4 nodes), **both attempts**, `"flaky":0`.
+Failing identically every attempt and getting no further on retry is DEV.93's
+discriminator for a state bug rather than a timing flake. It is neither of F.94's
+two signatures and F.94 is **not** reopened by it.
+
+### The defect, and how a comment helped it survive review
+
+`TaxSummaryBlock`'s intra-state branch wrapped its CGST/SGST pair in
+`<div className="contents">`. All four call sites render the block directly inside
+a `<dl>`. **axe-core flattens exactly one level of `<div>` and does not recurse**
+(`axe-core@4.11.4/axe.js:25337-25339`), so the wrapper was unwrapped and each
+`Row`'s own `div` was exposed as direct `<dl>` content — neither `dt` nor `dd`, so
+`only-dlitems` fails, and the four `dt`/`dd` inside then fail `dlitem`.
+
+Three things kept it invisible:
+
+1. **`display: contents` means there is no visual symptom.** The page looked
+   correct, because the box the div created was already not rendered.
+2. **The comment above it said "fragment".** It described the intent — emit no
+   node, keep the pair adjacent — and the code rendered a `div`. A reader checking
+   the comment against the code would have caught it; a reader reading the comment
+   _as_ the code would not.
+3. **The inter-state branch was never affected**, because it returns `<Row>`
+   directly. So the violation existed on exactly half the documents.
+
+F.3's own three e2e cases passed, and still pass: they assert on the rate rows'
+labels and amounts, which are correct. Nothing in them looks at the DOM's
+relationship to its `<dl>` parent.
+
+### Why a green run on `main` let it through, which is the transferable part
+
+`verify-day-16.spec.ts` scanned **`.first()` row of `/orders`** — "whatever order
+sorts first". Neither list query has a unique tiebreaker
+(`lib/queries/orders.ts:70`, `quotations.ts:85`), and test-created rows carry the
+run date so they sort above every seeded one. **The document being scanned varied
+between runs**, and the violation exists only on the intra-state branch. F.3's own
+PR happened to scan a document that did not exhibit it; the next PR scanned one
+that did.
+
+**So the fix's own green run would have proved nothing either.** A scan that lands
+on an inter-state order passes whether or not the fix works, because that branch
+was never broken. **The pin is the fix's evidence, not a separate improvement** —
+which is why it is on this branch rather than filed. DEV.121's lesson applied to
+_selection_ rather than to rendering: fix the fixture, do not loosen the assertion.
+
+### The pin had to be strengthened once, and the reason is a second finding
+
+Pinning on `tenant_state_at_issue = place_of_supply` — the stored column — resolves
+to `ORD-2026-0003`, whose `place_of_supply` is `MH` while its **ship-to dealer is in
+`AS`**. That document renders CGST/SGST and would have exercised the branch, but it
+cannot honestly be called intra-state, and "the pinned order is intra-state" was
+the claim being made.
+
+The pin now requires `tenant_state_at_issue = place_of_supply = ship_to_dealer.state`
+and resolves to `ORD-2026-0012` — tenant `MH`, ship-to `Sharma Solar (MH)`,
+`place_of_supply` `MH`. Intra-state by every available test.
+
+**That disagreement is filed as F.103 and is not diagnosed here.** 34 of 68 seeded
+orders have `place_of_supply <> ship_to_dealer.state` — exactly half. Under ADR-012
+the ship-to state _is_ the place of supply for goods, so those documents may be
+classified wrongly. It is sequenced before F.4 because F.4 prints CGST/SGST against
+IGST on the PDF, and the reference contract cannot catch it: a wrong render would be
+compared against a baseline captured from the same wrong data.
+
+### The control, executed both ways
+
+- **RED**, with the `<div>` restored: `definition-list (serious) — 1 node(s)` and
+  `dlitem (serious) — 4 node(s)`, both attempts, on the pinned order.
+- **GREEN**, with the keyed `Fragment`: the pinned scan passes in 20.3s, and the run
+  reports **zero** `a11y violations` lines on any scanned page.
+
+Three conditions were required of the green half before it counted: that the axe
+assertion **executed** rather than being skipped; that the pinned order is
+intra-state **confirmed from its own data** (tenant state against ship-to state,
+not against the stored column that selected it); and zero serious or critical
+violations. All three hold.
+
+**Two earlier attempts at the green half were discarded rather than reported.** One
+timed out on a cold `webServer` navigation (`net::ERR_ABORTED`, then a 60s test
+timeout) without reaching its assertions. The other used the weaker pin, so a pass
+would not have been evidence. Neither was a result.
+
+**Four unrelated tests in that file failed locally**, all with
+`ERR_CONNECTION_REFUSED at http://localhost:3000` after 13 minutes on a cold cache —
+the dev server exiting under the devcontainer memory ceiling (DEV.87, DEV.91), which
+`docs/BUILD_PROMPT_TEMPLATE.md` records as not a reason to hold a merge. None of the
+four touches the tax block. CI is the gate.
+
+**Impact:** a shipped screen stopped violating WCAG 1.3.1, and the scan that
+should have caught it now scans a document that can fail.
