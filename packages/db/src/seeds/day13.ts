@@ -39,6 +39,7 @@ import {
   performaInvoices,
   products,
   quotations,
+  tenantSettings,
   tenants,
   users,
 } from '../schema';
@@ -154,17 +155,32 @@ async function seedTenant(
     await rawTx.execute(sql`SELECT set_config('app.user_id', ${actorId}, true)`);
     await rawTx.execute(sql`SELECT set_config('app.read_only', '', true)`);
 
-    const dealerRows = await tx
-      .select({ id: dealers.id })
-      .from(dealers)
-      .where(sql`tenant_id = ${tenantId} AND deleted_at IS NULL AND status = 'active'`);
+    // F.103: the ship-to state IS the place of supply (ADR-012), so the dealer
+    // row must carry it. A dealer with no state is dropped rather than given a
+    // substitute — inventing one is the defect this task removes.
+    const dealerRows = (
+      await tx
+        .select({ id: dealers.id, state: dealers.state })
+        .from(dealers)
+        .where(sql`tenant_id = ${tenantId} AND deleted_at IS NULL AND status = 'active'`)
+    ).filter((d): d is { id: string; state: string } => d.state !== null);
+
+    // The tenant's own state, read rather than assumed. day11.ts:175-179 is the
+    // precedent; the literal that used to stand here was wrong for every tenant
+    // not in Maharashtra (F.105 measured it against the KA tenant).
+    const [tenantStateRow] = await tx
+      .select({ state: tenantSettings.state })
+      .from(tenantSettings)
+      .where(sql`tenant_id = ${tenantId}`)
+      .limit(1);
+    const tenantState = tenantStateRow?.state?.toUpperCase();
     const [quote] = await tx
       .select({ id: quotations.id })
       .from(quotations)
       .where(sql`tenant_id = ${tenantId}`)
       .limit(1);
-    if (dealerRows.length === 0 || !quote) {
-      console.log('  · (missing dealers/quotations — skipping)');
+    if (!tenantState || dealerRows.length === 0 || !quote) {
+      console.log('  · (missing tenant state/dealers/quotations — skipping)');
       return { dispatches: 0, delivered: 0, returned: 0, inTransit: 0, partial: 0 };
     }
     const dealer = (i: number) => dealerRows[i % dealerRows.length]!;
@@ -215,6 +231,7 @@ async function seedTenant(
     for (let i = 0; i < PLANS.length; i++) {
       const plan = PLANS[i]!;
       const d = dealer(i);
+      const placeOfSupply = d.state.toUpperCase();
       const lineTotal = (unitPrice * plan.orderQty).toFixed(2);
 
       // Backing PI (confirmed) + order (confirmed, inventory reserved).
@@ -227,8 +244,8 @@ async function seedTenant(
           quotationId: quote.id,
           billToDealerId: d.id,
           shipToDealerId: d.id,
-          tenantStateAtIssue: 'MH',
-          placeOfSupply: 'MH',
+          tenantStateAtIssue: tenantState,
+          placeOfSupply,
           preparedBy: actorId,
           validUntil: isoDaysAgo(-30),
           subtotal: lineTotal,
@@ -251,8 +268,8 @@ async function seedTenant(
           quotationId: quote.id,
           billToDealerId: d.id,
           shipToDealerId: d.id,
-          tenantStateAtIssue: 'MH',
-          placeOfSupply: 'MH',
+          tenantStateAtIssue: tenantState,
+          placeOfSupply,
           orderDate: isoDaysAgo(plan.dispatchDaysAgo + 4),
           subtotal: lineTotal,
           taxableAmount: lineTotal,

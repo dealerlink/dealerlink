@@ -36,6 +36,7 @@ import {
   performaInvoices,
   products,
   quotations,
+  tenantSettings,
   tenants,
   users,
 } from '../schema';
@@ -105,10 +106,25 @@ async function seedTenant(
     await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     await tx.execute(sql`SELECT set_config('app.user_id', ${actorId}, true)`);
 
-    const dealerRows = await tx
-      .select({ id: dealers.id, name: dealers.displayName })
-      .from(dealers)
-      .where(sql`tenant_id = ${tenantId} AND deleted_at IS NULL AND status = 'active'`);
+    // F.103: the ship-to state IS the place of supply (ADR-012), so the dealer
+    // row must carry it. A dealer with no state is dropped rather than given a
+    // substitute — inventing one is the defect this task removes.
+    const dealerRows = (
+      await tx
+        .select({ id: dealers.id, name: dealers.displayName, state: dealers.state })
+        .from(dealers)
+        .where(sql`tenant_id = ${tenantId} AND deleted_at IS NULL AND status = 'active'`)
+    ).filter((d): d is { id: string; name: string; state: string } => d.state !== null);
+
+    // The tenant's own state, read rather than assumed. day11.ts:175-179 is the
+    // precedent; the literal that used to stand here was wrong for every tenant
+    // not in Maharashtra (F.105 measured it against the KA tenant).
+    const [tenantStateRow] = await tx
+      .select({ state: tenantSettings.state })
+      .from(tenantSettings)
+      .where(sql`tenant_id = ${tenantId}`)
+      .limit(1);
+    const tenantState = tenantStateRow?.state?.toUpperCase();
     const [product] = await tx
       .select({ id: products.id, sku: products.sku, name: products.name, hsn: products.hsnCode })
       .from(products)
@@ -119,8 +135,8 @@ async function seedTenant(
       .from(quotations)
       .where(sql`tenant_id = ${tenantId}`)
       .limit(1);
-    if (dealerRows.length === 0 || !product || !quote) {
-      console.log('  · (missing dealers/products/quotations — skipping)');
+    if (!tenantState || dealerRows.length === 0 || !product || !quote) {
+      console.log('  · (missing tenant state/dealers/products/quotations — skipping)');
       return { payments: 0, orders: 0, paidOrders: 0, overdue: 0 };
     }
     const dealer = (i: number) => dealerRows[i % dealerRows.length]!;
@@ -137,6 +153,7 @@ async function seedTenant(
     for (let i = 0; i < ORDER_PLANS.length; i++) {
       const plan = ORDER_PLANS[i]!;
       const d = dealer(i);
+      const placeOfSupply = d.state.toUpperCase();
       const total = plan.total.toFixed(2);
 
       const piSeq = await nextCounter(tx, tenantId, 'performa_invoice', fy);
@@ -148,8 +165,8 @@ async function seedTenant(
           quotationId: quote.id,
           billToDealerId: d.id,
           shipToDealerId: d.id,
-          tenantStateAtIssue: 'MH',
-          placeOfSupply: 'MH',
+          tenantStateAtIssue: tenantState,
+          placeOfSupply,
           preparedBy: actorId,
           validUntil: isoDaysAgo(-30),
           subtotal: total,
@@ -176,8 +193,8 @@ async function seedTenant(
           quotationId: quote.id,
           billToDealerId: d.id,
           shipToDealerId: d.id,
-          tenantStateAtIssue: 'MH',
-          placeOfSupply: 'MH',
+          tenantStateAtIssue: tenantState,
+          placeOfSupply,
           orderDate: isoDaysAgo(plan.daysAgo),
           subtotal: total,
           taxableAmount: total,
