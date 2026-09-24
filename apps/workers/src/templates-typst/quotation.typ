@@ -113,6 +113,39 @@
     grand: data.totalAmount,
   )
 
+  // F.4 — HSN/SAC summary (`docs/F3_F4_SPEC.md` §6). One row per distinct
+  // (HSN, rate) PAIR, ascending by HSN then rate, with a TOTAL row that sums this
+  // table's own rows. `Rate` is an explicit column (D-1): the pair is the grouping
+  // key, so two rows can share an HSN and differ only by it, and on an intra-state
+  // document the only other rate shown is the HALF rate.
+  //
+  // Guarded on presence, not on line count: a document with no line rows emits no
+  // `hsnTable` at all, and a zero-row table would render a header band and a TOTAL
+  // of 0.00 under a document whose header claims money.
+  if "hsnTable" in data {
+    v(px(14))
+    caps-label("HSN / SAC Summary")
+    v(px(5))
+    data-table(
+      // Widths sum to the content box (A4 less 18mm side margins) with the HSN
+      // column taking the slack. Explicit, for the reason the line table above
+      // gives: left to `auto`, Typst starves the first column and wraps.
+      columns: if data.isInterState {
+        (1fr, px(56), px(110), px(84), px(110), px(110))
+      } else {
+        (1fr, px(48), px(96), px(62), px(88), px(62), px(88), px(92))
+      },
+      aligns: if data.isInterState {
+        (left + top, right + top, right + top, right + top, right + top, right + top)
+      } else {
+        (left + top, right + top, right + top, right + top, right + top, right + top, right + top, right + top)
+      },
+      header: data.hsnTable.header,
+      rows: data.hsnTable.rows.map(r => r.map(c => text(size: px(9), font: mono-font, c))),
+      total-cells: data.hsnTable.total.map(c => text(size: px(9), weight: 700, font: mono-font, c)),
+    )
+  }
+
   footer-block(terms: data.termsAndConditions, bank: data.bank)
 }
 

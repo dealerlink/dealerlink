@@ -34,7 +34,7 @@ import { LineItemsTable } from './_components/LineItemsTable';
 import { PartyBlock } from './_components/PartyBlock';
 import { TaxSummary } from './_components/TaxSummary';
 import { QUOTATION_CSS } from './styles';
-import { buildTaxRateGroups } from './tax-groups';
+import { buildTaxGroups } from './tax-groups';
 import type { PdfBankDetails, QuotationPdfData } from './types';
 
 export interface BuiltQuotationHtml {
@@ -236,7 +236,7 @@ export async function loadQuotationPdfData(
 
   // F.4 — the rate-wise groups the totals block will render. Derived here rather
   // than in `buildViewModel` (D-3) so the byte-measurement harness sees it too.
-  const taxRateGroups = buildTaxRateGroups({
+  const { rateGroups: taxRateGroups, hsnGroups: taxHsnGroups } = buildTaxGroups({
     tenantState: quote.tenantStateAtIssue,
     placeOfSupply: quote.placeOfSupply,
     discount: discount,
@@ -320,6 +320,7 @@ export async function loadQuotationPdfData(
     igstAmount: Number(tax.igstAmount),
     gstRateLabel,
     taxRateGroups,
+    taxHsnGroups,
     totalAmount: Number(tax.totalAmount),
     amountInWords: amountInWords(tax.totalAmount),
     termsAndConditions: quote.termsAndConditions ?? settings?.defaultTerms ?? null,

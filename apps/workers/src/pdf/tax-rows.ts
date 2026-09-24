@@ -70,3 +70,113 @@ export function buildTaxRows(groups: TaxRateGroupInput[], isInterState: boolean)
         ],
   );
 }
+
+export type HsnGroupInput = {
+  hsn: string;
+  rate: number;
+  taxableValue: number;
+  centralRate: number | null;
+  centralAmount: number;
+  stateRate: number | null;
+  stateAmount: number;
+  integratedRate: number | null;
+  integratedAmount: number;
+  totalTax: number;
+};
+
+/** A ready-to-render HSN/SAC table: header, body rows, and the TOTAL row. */
+export type HsnTable = { header: string[]; rows: string[][]; total: string[] };
+
+/**
+ * Sum money in PAISE, then convert back.
+ *
+ * The amounts arriving here are `number`s already rounded to 2dp, and adding them as
+ * IEEE-754 doubles reintroduces the drift the rounding removed — 13671 + 211.5 + 211.5
+ * is exact, but a column of values ending in .1 or .2 is not, and the table's TOTAL row
+ * is a figure a customer reconciles against the totals block. Integer paise cannot
+ * drift. This is a SUM of values the engine already rounded, never a recomputation.
+ */
+function sumPaise(values: number[]): number {
+  return values.reduce((t, v) => t + Math.round(v * 100), 0) / 100;
+}
+
+/**
+ * The HSN/SAC summary table (F.4 §6, D-1).
+ *
+ * **Eight columns intra-state, six inter-state**, and `Rate` is an explicit column in
+ * both. The pair (HSN, rate) is the grouping key, so two rows can share an HSN and
+ * differ only by rate; on an intra-state document the only other rate shown is the
+ * HALF rate, and a reader cannot recover 18 from 9 without knowing the convention.
+ * `docs/F3_F4_SPEC.md` §2's prose already called the Rate column "part of the table's
+ * identity"; its illustrative table disagreed and was the stale half.
+ *
+ * The TOTAL row sums this table's OWN rows, so the table is internally consistent by
+ * construction. It is not read from the document header — if the two ever disagreed,
+ * that disagreement is a finding, and sourcing the total from the header would hide it.
+ */
+export function buildHsnTable(groups: HsnGroupInput[], isInterState: boolean): HsnTable {
+  const taxable = formatMoney(sumPaise(groups.map((g) => g.taxableValue)));
+  const totalTax = formatMoney(sumPaise(groups.map((g) => g.totalTax)));
+
+  if (isInterState) {
+    return {
+      header: [
+        'HSN/SAC',
+        'Rate',
+        'Taxable Value',
+        'Integrated Rate',
+        'Integrated Amt',
+        'Total Tax',
+      ],
+      rows: groups.map((g) => [
+        g.hsn,
+        rateLabel(g.rate),
+        formatMoney(g.taxableValue),
+        rateLabel(g.integratedRate ?? g.rate),
+        formatMoney(g.integratedAmount),
+        formatMoney(g.totalTax),
+      ]),
+      total: [
+        'Total',
+        '',
+        taxable,
+        '',
+        formatMoney(sumPaise(groups.map((g) => g.integratedAmount))),
+        totalTax,
+      ],
+    };
+  }
+
+  return {
+    header: [
+      'HSN/SAC',
+      'Rate',
+      'Taxable Value',
+      'Central Rate',
+      'Central Amt',
+      'State Rate',
+      'State Amt',
+      'Total Tax',
+    ],
+    rows: groups.map((g) => [
+      g.hsn,
+      rateLabel(g.rate),
+      formatMoney(g.taxableValue),
+      rateLabel(g.centralRate ?? g.rate / 2),
+      formatMoney(g.centralAmount),
+      rateLabel(g.stateRate ?? g.rate / 2),
+      formatMoney(g.stateAmount),
+      formatMoney(g.totalTax),
+    ]),
+    total: [
+      'Total',
+      '',
+      taxable,
+      '',
+      formatMoney(sumPaise(groups.map((g) => g.centralAmount))),
+      '',
+      formatMoney(sumPaise(groups.map((g) => g.stateAmount))),
+      totalTax,
+    ],
+  };
+}

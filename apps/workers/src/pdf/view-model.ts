@@ -20,7 +20,12 @@
  */
 import { formatDocDate, formatGeneratedAt, formatMoney } from '../lib/format';
 
-import { buildTaxRows, type TaxRateGroupInput } from './tax-rows';
+import {
+  buildHsnTable,
+  buildTaxRows,
+  type HsnGroupInput,
+  type TaxRateGroupInput,
+} from './tax-rows';
 
 export type RenderableKind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch';
 
@@ -143,6 +148,14 @@ export function buildViewModel(type: RenderableKind, data: unknown): Record<stri
   if (taxGroups) {
     vm['taxRows'] = buildTaxRows(
       taxGroups,
+      Boolean((data as { isInterState?: boolean }).isInterState),
+    );
+  }
+
+  const hsnGroups = (data as { taxHsnGroups?: HsnGroupInput[] }).taxHsnGroups;
+  if (hsnGroups && hsnGroups.length) {
+    vm['hsnTable'] = buildHsnTable(
+      hsnGroups,
       Boolean((data as { isInterState?: boolean }).isInterState),
     );
   }

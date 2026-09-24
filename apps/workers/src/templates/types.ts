@@ -68,6 +68,26 @@ export interface PdfTaxRateGroup {
   igstAmount: number;
 }
 
+/**
+ * One row of the HSN/SAC summary table, keyed on the **(HSN, rate) PAIR** — not on
+ * the HSN alone (F.4, D-1). A single HSN carrying two different GST rates yields two
+ * rows, which is why `rate` is non-null and is a column of its own: on an
+ * intra-state document only the half-rate is shown elsewhere, and a reader cannot
+ * recover 18 from 9 without knowing the convention.
+ */
+export interface PdfTaxHsnGroup {
+  hsn: string;
+  rate: number;
+  taxableValue: number;
+  centralRate: number | null;
+  centralAmount: number;
+  stateRate: number | null;
+  stateAmount: number;
+  integratedRate: number | null;
+  integratedAmount: number;
+  totalTax: number;
+}
+
 export interface QuotationPdfData {
   /** Banner title in the header, e.g. "QUOTATION" or "PERFORMA INVOICE". */
   documentTitle: string;
@@ -122,6 +142,11 @@ export interface QuotationPdfData {
    * (F.108).
    */
   taxRateGroups: PdfTaxRateGroup[];
+  /**
+   * One entry per distinct (HSN, rate) pair, ascending by HSN then rate (F.4, D-1).
+   * Longer than the number of distinct HSN codes whenever one HSN carries two rates.
+   */
+  taxHsnGroups: PdfTaxHsnGroup[];
   totalAmount: number;
   amountInWords: string;
 

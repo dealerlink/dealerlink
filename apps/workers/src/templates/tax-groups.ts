@@ -1,5 +1,5 @@
 /**
- * Rate-wise tax groups for the PDF templates (F.4, D-3).
+ * Rate-wise and HSN-wise tax groups for the PDF templates (F.4, D-3).
  *
  * Both loaders — `templates/quotation.tsx` and `templates/performa-invoice.tsx` —
  * derive their groups here rather than each rolling its own, because they already
@@ -13,13 +13,17 @@
  * and miss the third, which is the fork F.108 records and the false-negative the F.4 day
  * prompt opens with.
  *
+ * **One engine call yields both groupings.** `computeTaxSummary` returns `byRate` and
+ * `byHsn` together; calling it twice would run the same pure function over the same
+ * input for no reason and invite the two results to be taken from different calls.
+ *
  * This module GROUPS; it does not compute tax. `computeTaxSummary` in `@dealerlink/tax`
  * owns both (CLAUDE.md §7), and the money here is its output converted to `number` for
  * the view model — never re-derived.
  */
 import { computeTaxSummary, type TaxDiscount } from '@dealerlink/tax';
 
-import type { PdfTaxRateGroup } from './types';
+import type { PdfTaxHsnGroup, PdfTaxRateGroup } from './types';
 
 export type TaxGroupLine = {
   lineId: string;
@@ -30,17 +34,22 @@ export type TaxGroupLine = {
 };
 
 /**
- * One entry per distinct GST rate actually present, ascending.
+ * Rate-wise groups (one per distinct rate, ascending) and HSN-wise groups (one per
+ * distinct **(HSN, rate) pair**, ascending by HSN then rate).
+ *
+ * The pair is the HSN key, not the HSN — `packages/tax/src/summary.ts` documents why,
+ * and seed Chain B is the case that proves it: one HSN on both an 18% and a 5% line
+ * yields two rows, so this array can be longer than the number of distinct HSN codes.
  *
  * `Decimal` does not survive `JSON.stringify` as a 2dp string, so every amount is
  * converted to `number` here and formatted once, later, by the view builders (D-4).
  */
-export function buildTaxRateGroups(input: {
+export function buildTaxGroups(input: {
   tenantState: string;
   placeOfSupply: string;
   discount: TaxDiscount;
   lines: TaxGroupLine[];
-}): PdfTaxRateGroup[] {
+}): { rateGroups: PdfTaxRateGroup[]; hsnGroups: PdfTaxHsnGroup[] } {
   const summary = computeTaxSummary({
     tenantState: input.tenantState,
     placeOfSupply: input.placeOfSupply,
@@ -57,13 +66,29 @@ export function buildTaxRateGroups(input: {
     })),
   });
 
-  return summary.byRate.map((g) => ({
-    rate: g.rate,
-    cgstRate: g.cgstRate,
-    cgstAmount: Number(g.cgstAmount.toFixed(2)),
-    sgstRate: g.sgstRate,
-    sgstAmount: Number(g.sgstAmount.toFixed(2)),
-    igstRate: g.igstRate,
-    igstAmount: Number(g.igstAmount.toFixed(2)),
-  }));
+  const n = (d: { toFixed(dp: number): string }) => Number(d.toFixed(2));
+
+  return {
+    rateGroups: summary.byRate.map((g) => ({
+      rate: g.rate,
+      cgstRate: g.cgstRate,
+      cgstAmount: n(g.cgstAmount),
+      sgstRate: g.sgstRate,
+      sgstAmount: n(g.sgstAmount),
+      igstRate: g.igstRate,
+      igstAmount: n(g.igstAmount),
+    })),
+    hsnGroups: summary.byHsn.map((g) => ({
+      hsn: g.hsn,
+      rate: g.rate,
+      taxableValue: n(g.taxableValue),
+      centralRate: g.centralRate,
+      centralAmount: n(g.centralAmount),
+      stateRate: g.stateRate,
+      stateAmount: n(g.stateAmount),
+      integratedRate: g.integratedRate,
+      integratedAmount: n(g.integratedAmount),
+      totalTax: n(g.totalTax),
+    })),
+  };
 }

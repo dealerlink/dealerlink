@@ -22,7 +22,12 @@ import { config as loadEnv } from 'dotenv';
 
 import { formatDocDate, formatGeneratedAt, formatMoney } from '../src/lib/format';
 import { resolveGeneratedAt } from '../src/pdf/generated-at';
-import { buildTaxRows, type TaxRateGroupInput } from '../src/pdf/tax-rows';
+import {
+  buildHsnTable,
+  buildTaxRows,
+  type HsnGroupInput,
+  type TaxRateGroupInput,
+} from '../src/pdf/tax-rows';
 import { loadDispatchNotePdfData } from '../src/templates/dispatch-note';
 import { loadPaymentReceiptPdfData } from '../src/templates/payment-receipt';
 import { loadPerformaInvoicePdfData } from '../src/templates/performa-invoice';
@@ -247,6 +252,14 @@ async function main(): Promise<void> {
       if (taxGroups) {
         vm['taxRows'] = buildTaxRows(
           taxGroups,
+          Boolean((data as { isInterState?: boolean }).isInterState),
+        );
+      }
+
+      const hsnGroups = (data as { taxHsnGroups?: HsnGroupInput[] }).taxHsnGroups;
+      if (hsnGroups && hsnGroups.length) {
+        vm['hsnTable'] = buildHsnTable(
+          hsnGroups,
           Boolean((data as { isInterState?: boolean }).isInterState),
         );
       }

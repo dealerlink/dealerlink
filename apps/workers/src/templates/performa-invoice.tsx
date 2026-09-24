@@ -24,7 +24,7 @@ import { amountInWords } from '../lib/amount-in-words';
 import { formatGeneratedAt } from '../lib/format';
 
 import { renderQuotationHtml } from './quotation';
-import { buildTaxRateGroups } from './tax-groups';
+import { buildTaxGroups } from './tax-groups';
 import type { PdfBankDetails, PdfParty, QuotationPdfData } from './types';
 
 export interface BuiltPerformaInvoiceHtml {
@@ -164,7 +164,7 @@ export async function loadPerformaInvoicePdfData(
 
   // F.4 — the rate-wise groups the totals block will render. Derived here rather
   // than in `buildViewModel` (D-3) so the byte-measurement harness sees it too.
-  const taxRateGroups = buildTaxRateGroups({
+  const { rateGroups: taxRateGroups, hsnGroups: taxHsnGroups } = buildTaxGroups({
     tenantState: pi.tenantStateAtIssue,
     placeOfSupply: pi.placeOfSupply,
     discount: discount,
@@ -237,6 +237,7 @@ export async function loadPerformaInvoicePdfData(
     igstAmount: Number(tax.igstAmount),
     gstRateLabel,
     taxRateGroups,
+    taxHsnGroups,
     totalAmount: Number(tax.totalAmount),
     amountInWords: amountInWords(tax.totalAmount),
     termsAndConditions: pi.termsAndConditions ?? settings?.defaultTerms ?? null,
