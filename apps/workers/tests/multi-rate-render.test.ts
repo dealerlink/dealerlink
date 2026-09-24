@@ -31,6 +31,30 @@
  *
  * Extraction matches `pdf-snapshots.test.ts` and `three-percent-render.test.ts`
  * exactly, whitespace squash included, so all three agree about the same PDF.
+ *
+ * ## WHAT PROVES THESE ASSERTIONS DISCRIMINATE — and what does NOT
+ *
+ * F.4's acceptance criterion 5 says the multi-rate claims must go RED under the
+ * pre-change implementation, and that control WAS executed: `pdf/view-model.ts` was
+ * reverted to its pre-F.4 state and this file went red.
+ *
+ * **It proves a WEAKER thing than it looks like it proves, and the difference matters
+ * enough to write down.** It went red with a Typst COMPILE FAILURE, not an assertion
+ * mismatch, because `quotation.typ` dereferences `data.taxRows` unconditionally and
+ * the field was gone. So it establishes that the template cannot run without the new
+ * data. **It does not establish that these assertions would catch a WRONG value** — a
+ * document that renders but renders the wrong figures is a different failure, and a
+ * crash says nothing about it.
+ *
+ * That guarantee exists, but it comes from elsewhere: A.3's two controls on
+ * `pdf-snapshots.test.ts` — breaking the CGST label OUTSIDE the named segment and
+ * watching the intra-state snapshots fail, and making the segment name text absent
+ * from the page and watching all 8 fail — plus the golden file's two controls in this
+ * file, where one paisa in the text and one hex digit in the sha each failed
+ * independently. Those are value-level discriminations. Criterion 5 is not.
+ *
+ * Recorded so that a later reader does not cite criterion 5 as the source of a
+ * guarantee it does not supply.
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
