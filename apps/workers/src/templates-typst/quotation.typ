@@ -119,9 +119,13 @@
   // key, so two rows can share an HSN and differ only by it, and on an intra-state
   // document the only other rate shown is the HALF rate.
   //
-  // Guarded on presence, not on line count: a document with no line rows emits no
-  // `hsnTable` at all, and a zero-row table would render a header band and a TOTAL
-  // of 0.00 under a document whose header claims money.
+  // Guarded on presence. The guard is belt-and-braces rather than a live branch:
+  // both loaders throw on a document with no line items — `performa-invoice.tsx:111`
+  // is "Performa invoice <id> has no line items" — so a zero-group document never
+  // reaches a render. (38 seeded PIs are in exactly that state, F.97, and none of
+  // them can be rendered today.) The guard stays because a header band above a TOTAL
+  // of 0.00, on a document whose header claims money, is a worse failure than a
+  // missing section, and the cost of preventing it is one line.
   if "hsnTable" in data {
     v(px(14))
     caps-label("HSN / SAC Summary")
