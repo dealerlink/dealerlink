@@ -14,7 +14,9 @@ The verdict is stronger than "currently correct". `dealers.state` is nullable
 path refuses to produce the bad value rather than substituting one. The only
 `?? tenantState` fallbacks in the repository are in two seed derivations (D4, D6 below).
 
-**The 34/68 measurement that prompted this audit is real, and it is seed corruption:**
+**The 34-mismatching-orders measurement that prompted this audit is real, and it is
+seed corruption** (the "of 68" in the original framing was a wrong denominator — see
+the correction under Measurements):
 four hardcoded `'MH'` literals in two seed modules, plus four more on the adjacent
 `tenant_state_at_issue` column in the same inserts. The three document types do **not**
 share a derivation, so the blast radius is _data_, not _logic_.
@@ -170,14 +172,49 @@ All against the live development database, 2026-09-23.
 
 | Table                                | Agrees | Mismatch | Of the mismatches, how many carry tax |
 | ------------------------------------ | ------ | -------- | ------------------------------------- |
-| `orders`                             | 34     | **34**   | **0**                                 |
-| `performa_invoices`                  | 55     | **34**   | **0**                                 |
+| `orders`                             | 10     | **34**   | **0**                                 |
+| `performa_invoices`                  | 30     | **34**   | **0**                                 |
 | `quotations` (vs. the single dealer) | 49     | 4        | see below                             |
 
 The 34 mismatching orders are **17 order numbers × 2 tenants**, not 34 distinct
 documents — order numbers are per-tenant.
 
-### Why exactly half — measured, not inferred
+> **CORRECTION, 2026-09-23, made while fixing F.103.** The "agrees" column above
+> originally read 34 for `orders` and 55 for `performa_invoices`, and the finding was
+> described as "34 of 68" and "exactly half". **Those denominators were wrong.** They
+> were measured against a database carrying **db-test fixture rows on top of the seed**.
+> `pnpm db:seed` TRUNCATEs (`packages/db/src/seeds/index.ts:108`), so the corpus is
+> whatever the seed wrote plus whatever has been inserted since — and
+> `pnpm --filter @dealerlink/db test` inserts orders and PIs into the same shared
+> development database, which is DEV.91's known behaviour. Reproduced deterministically,
+> twice:
+>
+> | state                                     | orders | PIs    |
+> | ----------------------------------------- | ------ | ------ |
+> | clean reseed                              | 44     | 64     |
+> | after `pnpm --filter @dealerlink/db test` | **68** | **89** |
+> | clean reseed again                        | 44     | 64     |
+>
+> 68 and 89 are therefore a post-test-run corpus, not a seeded one. Re-measured by
+> reseeding with the pre-F.103 code on a truncated database and taking the counts before
+> running any suite: orders 34 mismatching against 10 agreeing, PIs 34 mismatching
+> against 30 agreeing.
+>
+> **The numerator 34 is unchanged and was right both times**, as are every derivation,
+> every write-site mapping and the verdict — none of which depends on the denominator.
+> What does not survive is the phrase **"exactly half"** and the inference it invited,
+> recorded in the original F.103 filing, that so clean a split "points at a code path
+> taken for one branch of a conditional and not the other". It does not. The real shape
+> is that 19 of each tenant's 22 orders are written by the two seed modules carrying the
+> hardcoded literal, and 17 of those 19 land on a non-MH ship-to. The symmetry was an
+> artefact of the extra rows.
+>
+> **The transferable lesson:** an absolute count taken against the shared development
+> database is only as good as the database's provenance. Every count in this document was
+> re-taken immediately after a reseed, before any suite ran. Where a claim needs a
+> denominator, say which state it was measured in.
+
+### Why 34 — measured, not inferred
 
 day12 writes 11 orders per tenant (`day12.ts:84-96`) and day13 writes 8
 (`day13.ts:120-132`), both assigning ship-to round-robin over active dealers while
