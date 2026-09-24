@@ -182,11 +182,23 @@ documents — order numbers are per-tenant.
 > **CORRECTION, 2026-09-23, made while fixing F.103.** The "agrees" column above
 > originally read 34 for `orders` and 55 for `performa_invoices`, and the finding was
 > described as "34 of 68" and "exactly half". **Those denominators were wrong.** They
-> were measured against a development database holding more rows than one clean seed
-> produces. `pnpm db:seed` TRUNCATEs (`packages/db/src/seeds/index.ts:108`), and a clean
-> run yields **44 orders and 64 performa invoices**, not 68 and 89. Re-measured by
-> reseeding with the pre-F.103 code on a truncated database: orders 34 mismatching
-> against 10 agreeing, PIs 34 mismatching against 30 agreeing.
+> were measured against a database carrying **db-test fixture rows on top of the seed**.
+> `pnpm db:seed` TRUNCATEs (`packages/db/src/seeds/index.ts:108`), so the corpus is
+> whatever the seed wrote plus whatever has been inserted since — and
+> `pnpm --filter @dealerlink/db test` inserts orders and PIs into the same shared
+> development database, which is DEV.91's known behaviour. Reproduced deterministically,
+> twice:
+>
+> | state                                     | orders | PIs    |
+> | ----------------------------------------- | ------ | ------ |
+> | clean reseed                              | 44     | 64     |
+> | after `pnpm --filter @dealerlink/db test` | **68** | **89** |
+> | clean reseed again                        | 44     | 64     |
+>
+> 68 and 89 are therefore a post-test-run corpus, not a seeded one. Re-measured by
+> reseeding with the pre-F.103 code on a truncated database and taking the counts before
+> running any suite: orders 34 mismatching against 10 agreeing, PIs 34 mismatching
+> against 30 agreeing.
 >
 > **The numerator 34 is unchanged and was right both times**, as are every derivation,
 > every write-site mapping and the verdict — none of which depends on the denominator.
@@ -196,6 +208,11 @@ documents — order numbers are per-tenant.
 > is that 19 of each tenant's 22 orders are written by the two seed modules carrying the
 > hardcoded literal, and 17 of those 19 land on a non-MH ship-to. The symmetry was an
 > artefact of the extra rows.
+>
+> **The transferable lesson:** an absolute count taken against the shared development
+> database is only as good as the database's provenance. Every count in this document was
+> re-taken immediately after a reseed, before any suite ran. Where a claim needs a
+> denominator, say which state it was measured in.
 
 ### Why 34 — measured, not inferred
 
