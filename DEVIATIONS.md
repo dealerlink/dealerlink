@@ -6730,3 +6730,32 @@ together or the data would stay wrong either way. That is a judgement about back
 shape rather than about the code, which is why it is recorded here and not only in
 the audit — a reader who later finds one row covering two columns should be able to
 see that the split was considered and declined, not overlooked.
+
+## DEV.146 — F.3 kept a field on a premise that was structurally false when it was written
+
+**The premise was the operator's**, recorded in F.3's closeout and still standing in
+the code: `apps/web/lib/tax/document-summary.ts:55-65` keeps `hsnRows` — a field with
+no consumer — "because F.4 is the next task and needs exactly this shape from exactly
+this call", with a docstring that names the four lines to delete if the shape turns out
+to be wrong. **It was not a forecast that later went stale; it could not have been true
+on the day it was written**, for two independent reasons: `apps/workers/package.json`
+declares `@dealerlink/db`, `@dealerlink/schemas` and `@dealerlink/tax` and has never
+declared a dependency on `apps/web`, so a workers module cannot import that file at
+all, and the adapter emits `toFixed(2)` strings (`:129-136`) where every money value on
+a PDF goes through `formatMoney` (`apps/workers/src/lib/format.ts:9-17`) — which the
+adapter's own docstring states at `:33`. **The correct reuse is `computeTaxSummary`
+from the `@dealerlink/tax` barrel** (`packages/tax/src/index.ts:22-32`), which workers
+already reaches for `computeTax` on every render
+(`apps/workers/src/templates/quotation.tsx:186-208`); **D-8 in `docs/F4_DAY_PROMPT.md`
+holds the disposition** — file a row rather than delete the field inside a PDF day, and
+correct the false docstring either way.
+
+**Why this is recorded here rather than left to F.4's closeout.** Until now its only
+record was a prompt for a day that had not run, and a prompt is not a durable home for
+a correction to something already shipped: if F.4 slips, is re-scoped, or writes a
+closeout focused on the render work, the correction evaporates and the next reader of
+`document-summary.ts` finds a dead field whose docstring confidently names a task that
+never consumed it.
+
+**Impact:** none on behaviour — the field has no consumer and never had one. The cost
+was a false premise sitting in a docstring as though it were a plan.
