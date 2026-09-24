@@ -108,11 +108,21 @@ TOTAL row:
 
 Each row is one HSN at one rate:
 
-| HSN/SAC   | Taxable Value   | Central Rate | Central Amt   | State Rate | State Amt     | Total Tax     |
-| --------- | --------------- | ------------ | ------------- | ---------- | ------------- | ------------- |
-| 85414300  | 5,46,840.00     | 2.5%         | 13,671.00     | 2.5%       | 13,671.00     | 27,342.00     |
-| 85359090  | 2,350.00        | 9%           | 211.50        | 9%         | 211.50        | 423.00        |
-| **TOTAL** | **5,49,190.00** |              | **13,882.50** |            | **13,882.50** | **27,765.00** |
+| HSN/SAC   | Rate | Taxable Value   | Central Rate | Central Amt   | State Rate | State Amt     | Total Tax     |
+| --------- | ---- | --------------- | ------------ | ------------- | ---------- | ------------- | ------------- |
+| 85414300  | 5%   | 5,46,840.00     | 2.5%         | 13,671.00     | 2.5%       | 13,671.00     | 27,342.00     |
+| 85359090  | 18%  | 2,350.00        | 9%           | 211.50        | 9%         | 211.50        | 423.00        |
+| **TOTAL** |      | **5,49,190.00** |              | **13,882.50** |            | **13,882.50** | **27,765.00** |
+
+> **CORRECTED 2026-09-24 by F.4 (D-1).** This table previously had seven columns and
+> **no `Rate` column**, contradicting the sentence two paragraphs below it — "A `Rate`
+> column is therefore part of the table's identity, not decoration". The prose was right
+> and the table was the stale half. Without it, an intra-state row shows only the HALF
+> rate, and a reader cannot recover 18 from 9 without knowing the convention. **Eight
+> columns intra-state, six inter-state**, implemented in
+> `apps/workers/src/pdf/tax-rows.ts`. The figures are the client's own PFI-2033
+> (`docs/client-evidence/4.png`); the rates were always implicit in them and are now
+> stated.
 
 Inter-state collapses the central/state pairs into a single Integrated Tax
 column pair. A `Rate` column is therefore part of the table's identity, not
@@ -221,6 +231,14 @@ placement follow the audit's enumeration of the tax package.
 
 These are the acceptance criteria that matter; everything else is presentation.
 
+> **NOTE ADDED 2026-09-24 by F.4.** Invariants 1 and 2 hold on an **undiscounted**
+> document. On a **discounted** one the per-line allocation can fall a paisa short of the
+> document figure, so `sum(byRate.taxableValue)` can be 0.01 under `totals.taxableValue`.
+> That is **F.101**, not a grouping defect, and F.4 neither causes nor fixes it — F.4's
+> own measurement found every discounted seeded document has a zero residual, so no
+> reference document exhibits it. When F.101 lands, invariants 1 and 2 become satisfiable
+> on discounted documents for the first time.
+
 1. `sum(byRate.taxableValue) === totals.taxableValue` exactly
 2. `sum(byHsn.taxableValue) === totals.taxableValue` exactly
 3. Sum of every tax amount across `byRate` equals `totals.totalTax` exactly
@@ -321,8 +339,27 @@ it here means F.11 consumes an existing aggregation rather than building one.
 - SAC handling
 - The `CHECK`-permits-3%-while-the-engine-rejects-it mismatch (F.55)
 
-**No number that appears on any existing document may change.** A single-rate
-document must render byte-identically before and after.
+**No number that appears on any existing document may change.** That sentence stands,
+and F.4 measured it: every existing figure on all 14 reference documents is unchanged.
+
+> **CORRECTED 2026-09-24 by F.4.** The sentence that used to follow — "A single-rate
+> document must render byte-identically before and after" — **is not satisfiable
+> alongside §6's instruction to add an HSN/SAC table**, which changes a single-rate
+> document's bytes by construction. Keeping both would have been a criterion no commit
+> could meet: the DEV.129 shape.
+>
+> **What replaces it**, and what F.4 was held to: the 14 references are partitioned into
+> 6 tax-neutral documents that must stay **byte-identical**, and 8 tax-bearing ones that
+> may move **only** by one named insertion — the expected segment must occur exactly
+> once, and the body with that occurrence removed must equal the reference body exactly,
+> with `footer` and page count left at exact equality. Measured: 6 unchanged, 8 moved, 0
+> tax-bearing unmoved, no page count changed. The rule lives in
+> `docs/F4_DAY_PROMPT.md` (R1, R2, D-5) and its enforcement in
+> `apps/workers/tests/pdf-snapshots.test.ts`.
+>
+> **A failure of that rule is never fixed by widening the segment** — that is how it
+> degrades into re-baselining with extra steps. And the references cannot be
+> re-baselined at all: they are a one-way door and the capture tool no longer exists.
 
 ---
 
