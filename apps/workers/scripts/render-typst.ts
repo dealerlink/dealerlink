@@ -22,6 +22,7 @@ import { config as loadEnv } from 'dotenv';
 
 import { formatDocDate, formatGeneratedAt, formatMoney } from '../src/lib/format';
 import { resolveGeneratedAt } from '../src/pdf/generated-at';
+import { buildTaxRows, type TaxRateGroupInput } from '../src/pdf/tax-rows';
 import { loadDispatchNotePdfData } from '../src/templates/dispatch-note';
 import { loadPaymentReceiptPdfData } from '../src/templates/payment-receipt';
 import { loadPerformaInvoicePdfData } from '../src/templates/performa-invoice';
@@ -236,6 +237,20 @@ async function main(): Promise<void> {
       const rateLabel = (data as { gstRateLabel?: string | null }).gstRateLabel ?? null;
       vm['halfRateLabel'] = rateLabel != null ? `${Number(rateLabel) / 2}%` : '';
       vm['fullRateLabel'] = rateLabel != null ? `${rateLabel}%` : '';
+
+      // F.4 — the rate-wise rows the totals block will render (A.2 consumes them).
+      // Derived in BOTH view builders from ONE shared function: this file and
+      // `scripts/render-typst.ts` are forks (F.108), and a derivation added to only
+      // one would leave the byte-measurement harness reporting the old output while
+      // production moved.
+      const taxGroups = (data as { taxRateGroups?: TaxRateGroupInput[] }).taxRateGroups;
+      if (taxGroups) {
+        vm['taxRows'] = buildTaxRows(
+          taxGroups,
+          Boolean((data as { isInterState?: boolean }).isInterState),
+        );
+      }
+
       const logoUrl = c.branded ? fixtureLogo() : null;
       const billFrom = vm['billFrom'] as Record<string, unknown> | undefined;
       if (billFrom) billFrom['logoUrl'] = logoUrl;

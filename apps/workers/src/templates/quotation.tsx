@@ -34,6 +34,7 @@ import { LineItemsTable } from './_components/LineItemsTable';
 import { PartyBlock } from './_components/PartyBlock';
 import { TaxSummary } from './_components/TaxSummary';
 import { QUOTATION_CSS } from './styles';
+import { buildTaxRateGroups } from './tax-groups';
 import type { PdfBankDetails, QuotationPdfData } from './types';
 
 export interface BuiltQuotationHtml {
@@ -192,18 +193,18 @@ export async function loadQuotationPdfData(
         lineId: l.id,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
-          // READ VALIDATION REMOVED (F.55, spec §2). This was
-          // `toGstRate(l.gstRate)`, which checked a STORED rate against
-          // `[0, 5, 12, 18, 28]` and threw a bare `Error` if it missed — so a
-          // document issued at a rate later dropped from that list stopped
-          // rendering. A rate read back out of the database is HISTORY, not
-          // input: the write path validates, the read path does not.
-          //
-          // `Number()` is still required and is not decoration: the driver
-          // returns `'18.00'` for a decimal(5,2) column, and the engine's shape
-          // guard rejects a string on purpose (D-3). The rendered line coerces
-          // the same way a few lines below.
-          gstRate: Number(l.gstRate),
+        // READ VALIDATION REMOVED (F.55, spec §2). This was
+        // `toGstRate(l.gstRate)`, which checked a STORED rate against
+        // `[0, 5, 12, 18, 28]` and threw a bare `Error` if it missed — so a
+        // document issued at a rate later dropped from that list stopped
+        // rendering. A rate read back out of the database is HISTORY, not
+        // input: the write path validates, the read path does not.
+        //
+        // `Number()` is still required and is not decoration: the driver
+        // returns `'18.00'` for a decimal(5,2) column, and the engine's shape
+        // guard rejects a string on purpose (D-3). The rendered line coerces
+        // the same way a few lines below.
+        gstRate: Number(l.gstRate),
       })),
     }),
   );
@@ -232,6 +233,21 @@ export async function loadQuotationPdfData(
   // A single rate across all lines → show it on the GST summary label.
   const distinctRates = Array.from(new Set(lines.map((l) => l.gstRate)));
   const gstRateLabel = distinctRates.length === 1 ? String(distinctRates[0]) : null;
+
+  // F.4 — the rate-wise groups the totals block will render. Derived here rather
+  // than in `buildViewModel` (D-3) so the byte-measurement harness sees it too.
+  const taxRateGroups = buildTaxRateGroups({
+    tenantState: quote.tenantStateAtIssue,
+    placeOfSupply: quote.placeOfSupply,
+    discount: discount,
+    lines: lineRows.map((l) => ({
+      lineId: l.id,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+      gstRate: Number(l.gstRate),
+      hsnCode: l.hsnCode,
+    })),
+  });
 
   const discountLabel =
     quote.discountType === 'percent' && quote.discountValue
@@ -303,6 +319,7 @@ export async function loadQuotationPdfData(
     sgstAmount: Number(tax.sgstAmount),
     igstAmount: Number(tax.igstAmount),
     gstRateLabel,
+    taxRateGroups,
     totalAmount: Number(tax.totalAmount),
     amountInWords: amountInWords(tax.totalAmount),
     termsAndConditions: quote.termsAndConditions ?? settings?.defaultTerms ?? null,
