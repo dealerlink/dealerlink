@@ -100,11 +100,15 @@
       ("Subtotal", data.subtotal),
       ..(if data.discountLabel != none { (("Discount (" + data.discountLabel + ")", "− " + data.discountAmount),) } else { () }),
       ("Taxable Amount", data.taxableAmount),
-      ..(if data.isInterState {
-        (("IGST " + data.fullRateLabel, data.igstAmount),)
-      } else {
-        (("CGST " + data.halfRateLabel, data.cgstAmount), ("SGST " + data.halfRateLabel, data.sgstAmount))
-      }),
+      // F.4 — one row per distinct GST rate actually present, ascending: an IGST
+      // row per rate inter-state, a CGST/SGST pair per rate intra-state. The rows
+      // arrive pre-labelled and pre-formatted from `pdf/tax-rows.ts`, which both
+      // view builders share, because a Typst template must not do arithmetic.
+      //
+      // They stay INSIDE `rows:` deliberately. F.6's round-off is appended as one
+      // more pair immediately after them and immediately before `grand:`; hoisting
+      // the tax rows into a block of their own would put Round Off above them.
+      ..data.taxRows.map(r => (r.label, r.amount)),
     ),
     grand: data.totalAmount,
   )
