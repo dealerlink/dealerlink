@@ -7050,3 +7050,63 @@ test, it would be a requirement that a tenant seeded from a client's real catalo
 carry fixture products the client does not sell.
 
 **Impact:** none on behaviour. A test now asserts what it was always for.
+
+## DEV.150 — an authorised correction that was read and not carried out
+
+**Not an instrument failure. Not a judgement that turned out wrong. An instruction
+that did not get executed**, which is why it is here rather than as a tenth row in
+DEV.138's table.
+
+F.101's day prompt carried a section headed **"ONE AUTHORISED CORRECTION TO
+`DEVIATIONS.md`, ALREADY DECIDED — do not treat it as a drive-by."** It named the
+file, the line range, the exact wrong word and the exact replacement: DEV.138's scope
+line read "the five instances" while the table beneath it had grown, and the prompt
+said to correct "five" to "seven", citing F.102's bounded exception as the authority
+and asking that the edited line be named to `verifier`.
+
+The day read that section — it is quoted in the day's own working notes — wrote
+DEV.148, ran every gate, and **left the scope line alone**. Nothing failed. `verifier`
+returned PASS. CI was green. The correction simply did not happen, and nothing in the
+process was looking for it.
+
+It surfaced four days later, only because a different task edited the same entry and
+the count had to be recomputed. By then the line read "five" against **eight** table
+rows.
+
+### Why the existing safeguards could not have caught it
+
+- **`verifier` checks invariants, not intentions.** It is deliberately told nothing
+  about what a day meant to do (§10.3), so an edit that was supposed to happen and did
+  not is invisible to it. That is the correct design, not a defect in it.
+- **`check:ids` and `plan:check` check that what IS written resolves**, not that what
+  was instructed got written.
+- **F.102's bounded exception is a PERMISSION, not an obligation.** It says which lines
+  of DEV.138 _may_ be edited. Nothing converts "may" into "must", so an authorised edit
+  that is skipped leaves no trace anywhere.
+
+That is the transferable point: **bounded authorisation protects against doing too
+much. It does nothing about doing too little.** Every mechanism this project has built
+around DEVIATIONS.md — append-only, the instance-table carve-out, naming the edited
+line to `verifier` — is shaped to stop an edit going further than it should. None of
+them notices an edit that never starts.
+
+### Why it is filed separately from DEV.138
+
+DEV.138's family is about **signals that did not mean what they appeared to** — a
+clean grep, a stale exit code, the last line of a multi-package run. Every instance
+there is a correct inference from a misleading input, and the countermeasure is to
+check the instrument.
+
+This is the opposite shape. **The input was unambiguous.** A named file, a named line,
+a named word, an explicit authority, and a warning not to treat it as a drive-by. No
+instrument misled anyone; a step in a multi-step instruction was dropped, and the
+absence of a step leaves nothing behind to notice.
+
+Filing it under DEV.138 would have blurred the one useful distinction between them:
+DEV.138 says **verify the instrument**; this says **verify that each named edit
+actually landed**. A reader looking for the second should not have to find it inside a
+table about the first.
+
+**Impact:** one stale derived count, live for four days and three intervening days of
+work, in the entry whose entire subject is derived counts going stale. Corrected in the
+same commit that added DEV.138's ninth instance.
