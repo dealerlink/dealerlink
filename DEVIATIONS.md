@@ -6867,3 +6867,116 @@ was corrected away from.
 **Impact:** the quotation and PI PDFs state a rate on every tax row for the first time,
 and carry an HSN/SAC summary; a mixed-rate document no longer prints a label with no
 rate in it; and the reference contract survived a day that was supposed to move it.
+
+## DEV.148 — F.101: a deliberately-wrong test came due, and the difference between two controls that both "passed"
+
+**The defect.** `computeTax` derived the document discount once at document level and
+then allocated it per line as `round2(lineSubtotal × discountAmount / subtotal)`, each
+line rounding independently. The errors did not cancel, so the per-line figures did not
+sum to the document figure — a printed invoice whose line amounts do not add up to its
+own total. Measured on a 4-rate 12.5% document with line subtotals 24997 / 119925 /
+83000 / 12450: `sum(lineDiscount)` 30046.51 against `discountAmount` 30046.50, leaving
+`sum(lineTaxable)` 210325.49 against `taxableAmount` 210325.50.
+
+**The fix is largest-remainder allocation, and the rejected fix matters as much.** The
+obvious repair — recompute the document figure as the sum of the per-line allocations —
+would have moved `discount_amount`, `taxable_amount` and `total_amount` on every
+historical discounted document, so a document would reproduce differently from the way
+it was billed. That is F.99's failure mode exactly. The document figure stays the
+authority; only the split changed. **No stored column moved: all 14 reference renders
+are byte-identical across the change, measured, with a one-byte-flip control showing the
+pipeline can report a difference.**
+
+### The first deliberately-wrong test on this project to come due
+
+`summary.test.ts` asserted `'210325.49'` — one paisa under the true figure — written by
+F.3 with the instruction: _"When F.101 lands and the per-line allocation sums exactly,
+this test MUST fail — that is its job. Do not 'fix' it by loosening the comparison."_
+
+It failed on exactly the assertion it named, on the first run after the allocation
+changed, and named its own successor task in the failure.
+
+**This validates the PATTERN, not just the instance, and the distinction is the whole
+point of writing it down.** The risk in a characterisation test is not that it fails —
+failing is its purpose. The risk is that a deliberately-wrong test drifts into looking
+like an ordinary bug and gets "fixed" by whoever trips over it first, at which point the
+pin is gone and nobody knows it was ever there. This one survived four months and two
+intervening days that both touched neighbouring code, and when it came due it produced
+an unambiguous signal carrying its own instructions. The pattern is worth reusing on
+that evidence.
+
+### Two controls, both "executed", and one is much weaker — say which
+
+Both F.4 and F.101 have an acceptance criterion 5 requiring the new assertions to go RED
+under the pre-change implementation. Both were executed. **They are not equivalent
+evidence and reporting them the same way would hide that.**
+
+- **F.4's went red with a Typst COMPILE FAILURE.** The template dereferences
+  `data.taxRows` unconditionally, so removing the field broke the render. That proves
+  the template cannot RUN without the new data. It proves nothing about whether the
+  assertions would catch a WRONG value — a document that renders with wrong figures is
+  a different failure, and a crash is silent about it. F.4's discrimination evidence
+  came from three other controls, and DEV.147 says so.
+- **F.101's went red with a VALUE-LEVEL MISMATCH**: `expected '210325.49' to be
+'210325.50'` and `expected '30046.51' to be '30046.50'`. Those are the exact figures
+  the row measured, produced by the old algorithm against the new assertions. That is a
+  genuine discrimination: the assertion distinguishes the two implementations by the
+  numbers they produce, not by one of them failing to execute.
+
+### The tie-break is a contract, and D-1 overruled the simpler answer
+
+Order: **remainder descending, then LARGER `lineSubtotal`, then input index.** The
+drafter recommended input index alone, on the evidence that every caller orders by
+`lineNumber`. That is a fact about today's callers, not a property the engine holds. An
+index-only rule makes the printed per-line figures a function of how a caller happened
+to order its lines, and a future caller loading by id would silently move which line
+carries the extra paisa. Sorting by subtotal makes the allocation a function of the
+document's CONTENT rather than its PRESENTATION; the index key then only separates lines
+that are genuinely indistinguishable by value. Both paths are asserted by naming which
+line receives the paisa.
+
+### What the corpus could not show, and what was built because of it
+
+**All 24 discounted seeded documents have a zero allocation residual** — 14 quotations,
+8 PIs, 2 orders, measured across all three document types with an executed falsifying
+control. So a green corpus after the change is a boundary check, not proof. The positive
+evidence is hand-built: unit fixtures for the measured case and both tie paths, a
+property test over 500 generated documents from a seeded generator, and **seed Chain E**,
+a 4-rate 12.5% document that is the only row in the corpus that could ever have carried
+a non-zero residual.
+
+**Chain E was seeded AFTER the fix, and the ordering was the risk.** Seeded before, its
+stored `cgst/sgst/igst/total` would have been written by the old engine and would
+recompute differently under the new one — the fixture built to prove the fix becoming an
+F.99 document inside our own corpus, with the parity test red for a reason unrelated to
+the allocation. It reconciles at 0.00 on both identities.
+
+### Criterion 6: the intent holds, the letter does not, and the inertness is proven
+
+Criterion 6 required `compute.test.ts` to be byte-unchanged. **It is not**: a
+`prettier --write` pass reformatted four pre-existing lines. The file was already
+non-conformant on `main` — verified in place, not on a copy — and the pre-commit hook
+would have reformatted them at commit time regardless.
+
+The intent — that no existing case changes its expected output — **holds, and was proven
+rather than asserted**: all 267 string literals identical and in order, the pre-existing
+region identical to `HEAD` once whitespace and trailing commas are normalised, and all
+54 original cases passing. The only change is a trailing comma moving from
+`toFixed(2),)` to `toBe('400.00',)`. The 133 recorded expectation lines still hash to the
+value banked before the change.
+
+That pass also surfaced **F.113**: `format:check` is defined and no workflow calls it, so
+13 tracked files fail prettier on `main` and the drift grows wherever nobody touches a
+file. It is F.107's mirror — there, a gate enforced and undocumented; here, a gate
+documented and unenforced.
+
+### Also filed rather than folded in
+
+**F.114** — `orders` carries neither `discountType` nor `discountValue` while the
+quotation and PI it descends from carry both, so an order records that a discount
+happened and its amount but not how it was expressed. Caught by typecheck, not by
+reading. It will matter for F.6's invoice, which may need to print "Discount (10%)", and
+for F.11's Tally export, where a voucher must state the form.
+
+**Impact:** a discounted document's printed line amounts now add up to its own totals,
+on every input, with no historical document re-stated.

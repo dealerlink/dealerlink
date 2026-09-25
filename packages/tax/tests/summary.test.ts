@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { computeTax } from '../src/compute';
 import { computeRateSummary, computeTaxSummary, type SummaryLineInput } from '../src/summary';
 
 /**
@@ -39,20 +40,29 @@ import { computeRateSummary, computeTaxSummary, type SummaryLineInput } from '..
  * seeds deliberately. A nullable rate was rejected because a null rate cannot
  * resolve a Tally ledger, which is what F.11 needs the table for.
  *
- * ## The discount paisa, and why one identity is asserted differently
+ * ## The discount paisa — closed by F.101, and the record of how
  *
- * `computeTax` derives `discountAmount` at DOCUMENT level but allocates and
- * rounds the discount PER LINE, so `sum(lineDiscount)` can exceed
- * `discountAmount` by a paisa and `sum(lineTaxable)` can fall short of
- * `taxableAmount` by the same paisa. Measured: a 4-rate inter-state document at
- * 12.5% gives 30046.51 against 30046.50, and 210325.49 against 210325.50.
+ * **All five identities now hold exactly, on discounted and undiscounted
+ * documents alike.** This section used to explain why one of them could not.
  *
- * **That is a pre-existing engine defect, not a grouping defect, and F.3 is not
- * allowed to fix it** (`packages/tax` behaviour is protected; day prompt D-1's
- * stop condition). It is **F.101**, sequenced before F.4. So the taxable-value
- * identities are asserted EXACTLY on undiscounted documents, and the known delta
- * is CHARACTERISED on discounted ones — pinned, so that when F.101 lands, these
- * tests fail loudly and are updated deliberately rather than drifting.
+ * Before F.101, `computeTax` derived `discountAmount` at DOCUMENT level but
+ * allocated it PER LINE by independent proportional rounding, so
+ * `sum(lineDiscount)` could exceed `discountAmount` by a paisa and
+ * `sum(lineTaxable)` fall short of `taxableAmount` by the same paisa. Measured on
+ * a 4-rate inter-state document at 12.5%: 30046.51 against 30046.50, and
+ * 210325.49 against 210325.50.
+ *
+ * That was an engine defect rather than a grouping defect, which is why F.3 was
+ * not allowed to fix it and instead CHARACTERISED it — asserting the wrong figure
+ * on purpose so the day it stopped being wrong, the test would fail loudly. It
+ * did exactly that: F.101 replaced the allocation with a largest-remainder one,
+ * and the pinned case failed on the assertion it named rather than drifting
+ * silently into irrelevance. The case is kept, inverted, as the regression test.
+ *
+ * The pre-change figures are retained in that case and here so the direction of
+ * the fix stays legible. **`discountAmount` and `taxableAmount` did not move** —
+ * F.101 adjusted only how the document figure is split across lines, which is why
+ * no historical document was re-stated.
  */
 
 const MH = 'MH';
@@ -333,10 +343,12 @@ describe('computeTaxSummary — the reconciliation invariants (spec §4)', () =>
     );
   });
 
-  // DISCOUNTED cases. The tax identities (3, 4, 5) still hold exactly, because
-  // taxes are summed per line on both sides. The TAXABLE identities (1, 2) do
-  // not, and the reason is F.101 rather than anything in this module — see the
-  // file docblock. Characterised, not skipped.
+  // DISCOUNTED cases. ALL FIVE identities now hold exactly, including the TAXABLE
+  // ones (1, 2). Before F.101 they did not: the engine allocated the document
+  // discount per line by independent proportional rounding, so the per-line
+  // taxables summed a paisa UNDER the document figure. F.101 replaced that with a
+  // largest-remainder allocation and the gap is closed at the source. The case
+  // below that used to characterise the gap now asserts its absence.
   it('DISCOUNTED — the tax identities still hold exactly', () => {
     const s = computeTaxSummary({
       tenantState: MH,
@@ -359,11 +371,20 @@ describe('computeTaxSummary — the reconciliation invariants (spec §4)', () =>
     );
   });
 
-  it('DISCOUNTED — CHARACTERISES F.101: grouped taxable is 0.01 under the document figure', () => {
-    // This test asserts a value that is WRONG BY ONE PAISA on purpose, to pin a
-    // pre-existing engine defect F.3 may not fix. When F.101 lands and the
-    // per-line allocation sums exactly, this test MUST fail — that is its job.
-    // Do not "fix" it by loosening the comparison.
+  it('DISCOUNTED — grouped taxable equals the document figure exactly (F.101 regression)', () => {
+    // THIS CASE WAS DELIBERATELY WRONG AND CAME DUE ON SCHEDULE. F.3 wrote it
+    // asserting a figure one paisa under the document total, to pin an engine
+    // defect F.3 was not allowed to fix, with the instruction: "When F.101 lands
+    // and the per-line allocation sums exactly, this test MUST fail — that is its
+    // job. Do not 'fix' it by loosening the comparison."
+    //
+    // F.101 landed and it failed, on exactly the assertion it named. The
+    // pre-change figures are kept here so a future reader can tell which
+    // direction the fix went: `byRate` and `byHsn` each summed to 210325.49
+    // against a document `taxableValue` of 210325.50, a delta of 0.01.
+    //
+    // It is KEPT rather than deleted, now as the regression test for the fix on
+    // the exact document that found the defect.
     const s = computeTaxSummary({
       tenantState: MH,
       placeOfSupply: KA,
@@ -376,18 +397,32 @@ describe('computeTaxSummary — the reconciliation invariants (spec §4)', () =>
       ],
     });
 
+    // UNCHANGED, and that is the point: the document figure is the authority and
+    // F.101 did not move it. Its survival is the proof that the fix adjusted the
+    // ALLOCATION rather than recomputing the total from the parts — which is the
+    // rejected fix that would have moved every historical discounted document.
     expect(s.totals.taxableValue.toFixed(2)).toBe('210325.50'); // document-level
-    expect(sumD(s.byRate.map((g) => g.taxableValue))).toBe('210325.49'); // per-line
-    expect(sumD(s.byHsn.map((g) => g.taxableValue))).toBe('210325.49');
+
+    // Was '210325.49' before F.101, on both partitions.
+    expect(sumD(s.byRate.map((g) => g.taxableValue))).toBe('210325.50'); // per-line
+    expect(sumD(s.byHsn.map((g) => g.taxableValue))).toBe('210325.50');
 
     const delta =
       Number(s.totals.taxableValue.toFixed(2)) - Number(sumD(s.byRate.map((g) => g.taxableValue)));
-    expect(delta.toFixed(2)).toBe('0.01');
+    expect(delta.toFixed(2)).toBe('0.00'); // was '0.01'
   });
 
-  it('CONTROL: the same document WITHOUT the discount has no delta', () => {
-    // Without this, the test above could be passing because the grouping is
-    // broken in general rather than because the discount allocation is.
+  it('CONTROL: the undiscounted document also has no delta', () => {
+    // This control USED TO DISCRIMINATE and no longer does on its own, which is
+    // worth stating rather than quietly dropping. Its job was to show the
+    // characterised delta came from the discount allocation and not from grouping
+    // being broken in general: discounted document 0.01, undiscounted 0.00. After
+    // F.101 both are 0.00, so the contrast is gone.
+    //
+    // It is KEPT because "the undiscounted path still reconciles" is a real claim
+    // that would catch a grouping regression, and D-5 says not to simply delete a
+    // control. What replaces its discriminating power is the case below, which
+    // asserts the identity that was FALSE before F.101 and is true after.
     const lines = [
       line('a', '71131900', 3, 7, 3571),
       line('b', '85414300', 5, 9, 13325),
@@ -396,6 +431,29 @@ describe('computeTaxSummary — the reconciliation invariants (spec §4)', () =>
     ];
     const s = computeTaxSummary({ tenantState: MH, placeOfSupply: KA, discount: null, lines });
     expect(sumD(s.byRate.map((g) => g.taxableValue))).toBe(s.totals.taxableValue.toFixed(2));
+  });
+
+  it('the per-line discounts sum to the document discount EXACTLY — the F.101 identity', () => {
+    // THE REPLACEMENT DISCRIMINATOR. This assertion was false before F.101 on this
+    // exact document — sum(lineDiscount) came to 30046.51 against a document
+    // discount of 30046.50 — so it fails against the old allocation and passes
+    // against the new one. The taxable identities above are downstream of it:
+    // lineTaxable is lineSubtotal minus lineDiscount, so if the discounts sum
+    // exactly, the taxables must too.
+    const out = computeTax({
+      tenantState: MH,
+      placeOfSupply: KA,
+      discount: { type: 'percent', value: 12.5 },
+      lines: [
+        { lineId: 'a', quantity: 7, unitPrice: 3571, gstRate: 3 },
+        { lineId: 'b', quantity: 9, unitPrice: 13325, gstRate: 5 },
+        { lineId: 'c', quantity: 10, unitPrice: 8300, gstRate: 12 },
+        { lineId: 'd', quantity: 3, unitPrice: 4150, gstRate: 18 },
+      ],
+    });
+    expect(sumD(out.lines.map((l) => l.lineDiscount))).toBe(out.discountAmount.toFixed(2));
+    expect(out.discountAmount.toFixed(2)).toBe('30046.50'); // unchanged by F.101
+    expect(sumD(out.lines.map((l) => l.lineTaxable))).toBe(out.taxableAmount.toFixed(2));
   });
 
   it('per-line rounding is preserved — a group total is NOT re-rounded', () => {

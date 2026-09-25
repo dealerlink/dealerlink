@@ -206,9 +206,20 @@ placement follow the audit's enumeration of the tax package.
   > showing the two agreeing where they cannot discriminate (DEV.142).
   >
   > What the rule was actually protecting against still holds and is restated
-  > above: deriving a group’s tax as rate × some re-derived taxable value. That
-  > is wrong on any discounted document, because the discount is allocated
-  > proportionally and rounded per line (`compute.ts:54-55`).
+  > above: deriving a group’s tax as rate × some re-derived taxable value. That is
+  > wrong on any discounted document, because the discount is **allocated across
+  > the lines rather than recomputed per line**, so a group's taxable value is not
+  > a clean fraction of anything.
+  >
+  > > **CORRECTED 2026-09-25 by F.101**, whose change invalidated both halves of
+  > > the previous sentence. It read "the discount is allocated proportionally and
+  > > rounded per line (`compute.ts:54-55`)". The MECHANISM changed — F.101
+  > > replaced independent per-line proportional rounding with a **largest-remainder
+  > > allocation**, so the per-line shares now sum to the document discount exactly
+  > > — and the CITATION moved with it. The conclusion is unaffected and if anything
+  > > firmer: rate × a re-derived taxable value was wrong before and is still wrong,
+  > > because the allocation gives a line the share the document assigns it, not a
+  > > share any per-line formula reproduces.
   >
   > **The consequence is bigger than this spec and is filed separately:** because
   > no per-line tax is stored, EVERY consumer recomputes, which is safe only
@@ -231,13 +242,22 @@ placement follow the audit's enumeration of the tax package.
 
 These are the acceptance criteria that matter; everything else is presentation.
 
-> **NOTE ADDED 2026-09-24 by F.4.** Invariants 1 and 2 hold on an **undiscounted**
-> document. On a **discounted** one the per-line allocation can fall a paisa short of the
-> document figure, so `sum(byRate.taxableValue)` can be 0.01 under `totals.taxableValue`.
-> That is **F.101**, not a grouping defect, and F.4 neither causes nor fixes it — F.4's
-> own measurement found every discounted seeded document has a zero residual, so no
-> reference document exhibits it. When F.101 lands, invariants 1 and 2 become satisfiable
-> on discounted documents for the first time.
+> **UPDATED 2026-09-25 — F.101 HAS LANDED AND ALL FIVE INVARIANTS NOW HOLD
+> UNCONDITIONALLY**, on discounted and undiscounted documents alike. This is the
+> first time invariants 1 and 2 are satisfiable on a discounted document.
+>
+> The note this replaces was added by F.4 on 2026-09-24 and said invariants 1 and 2
+> held only on undiscounted documents, because the per-line allocation could fall a
+> paisa short of the document figure — `sum(byRate.taxableValue)` 0.01 under
+> `totals.taxableValue`. It recorded that as F.101 rather than a grouping defect,
+> and it was right: F.101 replaced independent per-line proportional rounding with a
+> largest-remainder allocation of the document discount, so the per-line shares sum
+> to it exactly and the taxable identities follow.
+>
+> **No document was re-stated to achieve it.** `subtotal`, `discountAmount` and
+> `taxableAmount` are derived without reference to the per-line split and did not
+> move; F.101 changed only how the document figure is divided. All 14 reference
+> renders are byte-identical across the change, measured.
 
 1. `sum(byRate.taxableValue) === totals.taxableValue` exactly
 2. `sum(byHsn.taxableValue) === totals.taxableValue` exactly
