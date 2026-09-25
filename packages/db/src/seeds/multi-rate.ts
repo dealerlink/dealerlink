@@ -68,7 +68,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { computeTax, serializeOutput, type GstRate } from '@dealerlink/tax';
+import { computeTax, serializeOutput, type GstRate, type TaxDiscount } from '@dealerlink/tax';
 import { config as loadEnv } from 'dotenv';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -189,6 +189,53 @@ const NEW_PRODUCTS = [
     manufacturer: 'Havells',
     category: 'Protection',
   },
+  // ── F.101's Chain E products ────────────────────────────────────────────
+  //
+  // FIXTURE-ONLY, with their own SKUs, and deliberately NOT line-level price
+  // overrides on the products above. An override routes through F.91's
+  // re-stamp-on-draft-save path and would add a second variable to a fixture
+  // whose whole purpose is to isolate one (F.101 A.4). The prices are chosen so
+  // the four line subtotals come to 24997 / 119925 / 83000 / 12450 — the document
+  // F.101's row measured, and the only shape known to carry a non-zero
+  // discount-allocation residual under the OLD engine.
+  //
+  // APPENDED, never inserted above, for the reason the chain ordering gives.
+  {
+    sku: `${SKU_PREFIX}F101-3`,
+    name: 'F.101 fixture — 3% line',
+    hsnCode: '71131900',
+    gstRate: '3.00',
+    sellingPrice: '3571.00',
+    manufacturer: 'Dealerlink Fixtures',
+    category: 'Fixture',
+  },
+  {
+    sku: `${SKU_PREFIX}F101-5`,
+    name: 'F.101 fixture — 5% line',
+    hsnCode: '85414300',
+    gstRate: '5.00',
+    sellingPrice: '13325.00',
+    manufacturer: 'Dealerlink Fixtures',
+    category: 'Fixture',
+  },
+  {
+    sku: `${SKU_PREFIX}F101-12`,
+    name: 'F.101 fixture — 12% line',
+    hsnCode: '85044090',
+    gstRate: '12.00',
+    sellingPrice: '8300.00',
+    manufacturer: 'Dealerlink Fixtures',
+    category: 'Fixture',
+  },
+  {
+    sku: `${SKU_PREFIX}F101-18`,
+    name: 'F.101 fixture — 18% line',
+    hsnCode: '85359090',
+    gstRate: '18.00',
+    sellingPrice: '4150.00',
+    manufacturer: 'Dealerlink Fixtures',
+    category: 'Fixture',
+  },
 ] as const;
 
 interface LineSpec {
@@ -218,7 +265,12 @@ async function nextCounter(
   return Number((res as { last_value: string | number }[])[0]!.last_value);
 }
 
-function totalsFor(lines: LineSpec[], tenantState: string, placeOfSupply: string) {
+function totalsFor(
+  lines: LineSpec[],
+  tenantState: string,
+  placeOfSupply: string,
+  discount: TaxDiscount = null,
+) {
   return serializeOutput(
     computeTax({
       tenantState,
@@ -229,12 +281,17 @@ function totalsFor(lines: LineSpec[], tenantState: string, placeOfSupply: string
         unitPrice: l.unitPrice.toFixed(2),
         gstRate: l.gstRate,
       })),
-      // No document discount on either chain. A discount is the one input
-      // that makes a float seed and the Decimal engine disagree (see the
-      // header), so leaving it off here keeps this module's documents
-      // comparable with day8's should anyone diff them. F.86 removes the
-      // constraint; it is not a limitation of the engine.
-      discount: null,
+      // Chains A-D pass no document discount, and the default keeps that. The
+      // original reason was that a discount is the one input that makes a float
+      // seed and the Decimal engine disagree (see the header), so leaving it off
+      // kept this module's documents comparable with day8's. F.86 removes that
+      // constraint; it was never a limitation of the engine.
+      //
+      // F.101's Chain E passes one DELIBERATELY, and it is the only chain that
+      // does. Its whole purpose is to exercise the discount allocation, which no
+      // other seeded document in the corpus can: all 24 discounted seeded
+      // documents have a zero residual, measured across all three document types.
+      discount,
     }),
   );
 }
@@ -421,6 +478,16 @@ async function seedTenant(
     // 562.38 document-level, while an even-subtotal control (2 x 4166,
     // 4 x 3570) gives 339.18 either way — so the divergence comes from the odd
     // choice and not from coincidence. Same argument as Chain A's two 5% lines.
+    // F.101's fixture document. Prices are each product's own catalogue price —
+    // no line-level override, so the fixture isolates the discount allocation and
+    // nothing else.
+    const chainELines: LineSpec[] = [
+      spec(`${SKU_PREFIX}F101-3`, 7, 3571),
+      spec(`${SKU_PREFIX}F101-5`, 9, 13325),
+      spec(`${SKU_PREFIX}F101-12`, 10, 8300),
+      spec(`${SKU_PREFIX}F101-18`, 3, 4150),
+    ];
+
     const chainCLines: LineSpec[] = [
       spec(`${SKU_PREFIX}ASSAY-KIT`, 3, 4165),
       spec(`${SKU_PREFIX}ASSAY-KIT`, 7, 3571),
@@ -453,13 +520,19 @@ async function seedTenant(
          * be absent.
          */
         withPi?: boolean;
+        /**
+         * F.101 Chain E only. Chains A-D pass none, which is why this is
+         * optional: the corpus deliberately had no document whose discount
+         * allocation could leave a residual, and Chain E is the one that does.
+         */
+        discount?: TaxDiscount;
         /** Overrides for the F.84 rows so cleanup can find them by tag. */
         quoteTag?: string;
         piTag?: string;
       },
     ) {
       const placeOfSupply = dealer.state ?? tenantState;
-      const totals = totalsFor(lines, tenantState, placeOfSupply);
+      const totals = totalsFor(lines, tenantState, placeOfSupply, opts.discount ?? null);
 
       const quoteDate = daysAgo(opts.daysAgoIssued);
       const quoteSeq = await nextCounter(tx, tenantId, 'quotation', fy);
@@ -481,6 +554,8 @@ async function seedTenant(
           validUntil: isoDaysAgo(opts.daysAgoIssued - 30),
           currency: 'INR',
           subtotal: totals.subtotal,
+          discountType: opts.discount?.type ?? null,
+          discountValue: opts.discount ? String(opts.discount.value) : null,
           discountAmount: totals.discountAmount,
           taxableAmount: totals.taxableAmount,
           cgstAmount: totals.cgstAmount,
@@ -569,6 +644,8 @@ async function seedTenant(
           validUntil: isoDaysAgo(opts.daysAgoIssued - 33),
           currency: 'INR',
           subtotal: totals.subtotal,
+          discountType: opts.discount?.type ?? null,
+          discountValue: opts.discount ? String(opts.discount.value) : null,
           discountAmount: totals.discountAmount,
           taxableAmount: totals.taxableAmount,
           cgstAmount: totals.cgstAmount,
@@ -645,6 +722,8 @@ async function seedTenant(
           orderDate: orderDate.toISOString().slice(0, 10),
           currency: 'INR',
           subtotal: totals.subtotal,
+          // orders carry only the RESOLVED discount_amount — there is no
+          // discount_type or discount_value column on that table.
           discountAmount: totals.discountAmount,
           taxableAmount: totals.taxableAmount,
           cgstAmount: totals.cgstAmount,
@@ -748,6 +827,34 @@ async function seedTenant(
       withPi: false,
       daysAgoIssued: 22,
       quoteTag: TP_QUOTE_TAG,
+    });
+
+    // ── F.101's Chain E. APPENDED AFTER CHAIN D, and seeded AFTER the fix ────
+    //
+    // THE SEQUENCING IS THE POINT, not a detail. If this chain were seeded while
+    // the old proportional allocation was still in place, its stored headers
+    // would be written by the old engine, and the moment the allocation changed,
+    // its four movable columns — cgst_amount, sgst_amount, igst_amount,
+    // total_amount — would recompute differently from what is stored. The
+    // fixture built to prove the fix would become an F.99 historical document
+    // inside our own corpus, and the parity test would go red for a reason with
+    // nothing to do with the allocation being wrong.
+    //
+    // WHAT IT EXERCISES THAT NOTHING ELSE DOES. Every one of the 24 discounted
+    // seeded documents has a zero allocation residual — measured across
+    // quotations, PIs and orders during F.101's A.0 — so the corpus could
+    // demonstrate neither the defect nor the fix. This is the shape that can:
+    // four rates, line subtotals 24997 / 119925 / 83000 / 12450, and a 12.5%
+    // document discount. Under the OLD engine sum(lineDiscount) came to 30046.51
+    // against a document discount of 30046.50, leaving sum(lineTaxable) a paisa
+    // under taxable_amount. Under largest-remainder both reconcile exactly.
+    //
+    // It also EXERCISES THE TIE-BREAK: two of its lines finish with equal
+    // remainders, so the allocation has to fall through to D-1's second key.
+    await buildChain('Chain E (inter, 4-rate, 12.5% discount — F.101)', chainELines, interDealer, {
+      withOrder: true,
+      daysAgoIssued: 16,
+      discount: { type: 'percent', value: 12.5 },
     });
 
     void tenantSlug;
