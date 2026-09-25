@@ -139,6 +139,24 @@ Source and full argument: §0 Go-live scope; the e-way bill window is §6.
 
 None of these is a decision we can take for them.
 
+> **THE OUTSTANDING EMAIL IS OVERDUE, and it carries two lists, not one.**
+> Recorded here because the asks and the tax questions live in different files and
+> whoever sends it needs both.
+>
+> - **Four client asks** — the four numbered below. Answerable by the client.
+> - **Four tax questions** — the numbered list in `docs/GST_RATE_MODEL_AUDIT.md`:
+>   the current slab set, the transitional treatment of pre-22-Sep-2025 rates,
+>   whether GSTR-1 Table 12 needs the HSN summary per (HSN, rate) pair, and — added
+>   2026-09-25 — whether IGST Act §10(1)(b) makes place of supply the buyer's
+>   location in a bill-to/ship-to case. These need their **CA**, not the client.
+>
+> **Question 4 is the one that blocks work.** It is tracked as **F.112** (HIGH),
+> F.5a should not be built before it is answered, and the evidence is the client's
+> own shipped invoice — `docs/client-evidence/4.png` charges CGST + SGST on a
+> Goa-to-Maharashtra supply where ADR-012 would render IGST. The other three are
+> queued so the codebase stops carrying unverified statutory claims as
+> justifications; nothing is blocked on them.
+
 1. **Serials on the invoice PDF.** Serials in Tally are **not** required
    (confirmed by the client). Whether serials appear on the **invoice PDF** is
    open — `docs/client-evidence/5.png` carries 26 under one line item across 4
