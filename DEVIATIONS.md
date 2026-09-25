@@ -5931,18 +5931,26 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — eight instances of one signature: the instrument, not the reasoning
+## DEV.138 — nine instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
-**Scope:** the framing. No code change is attributed to this entry; the five
+**Scope:** the framing. No code change is attributed to this entry; the nine
 instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
-own entry, which carries two of them), in DEV.142, in DEV.143 and in DEV.144.
+own entry, which carries two of them), in DEV.142, in DEV.143, in DEV.144, and —
+for the ninth — in F.106's closeout, which produced no entry of its own for it.
+
+> **This line was stale at "five" for three instances, and that is worth one
+> sentence.** F.101's day prompt named the correction explicitly, as an authorised
+> edit under F.102's bound, and the day did not make it — the entry was written and
+> the scope line was not touched. It was found on the next edit to this entry, which
+> is the only reason it was found at all. A derived count sitting beside the table it
+> derives from is exactly the thing this entry is about.
 
 **Operator instruction, closing out F.55:** make the signature the subject, not
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The eight.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+**The nine.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
 the family caught before it shipped.
@@ -5950,6 +5958,17 @@ the family caught before it shipped.
 The seventh is a SUCCESS-SHAPED REPORT FOR A STEP THAT NEVER RAN — the narrowest
 mechanism in the table and the most reusable, because it is a property of the
 shell rather than of any judgement.
+
+**The ninth completes a trio, and the trio is what generalises.** Instances 6, 7
+and 9 are all the same error at different distances from the thing being judged:
+the wrong instrument (6), the wrong command's status (7), and the wrong LINE of
+the right command's output (9). None is a lapse of reasoning — each is a correct
+inference from a signal that did not mean what it appeared to.
+
+**The rule they share, stated so it is usable: CHECK EXIT CODES, NOT OUTPUT.** A
+command's output is written for a human reading a terminal; its exit code is the
+machine-readable claim about whether it succeeded. Grepping output for a success
+marker asks a formatting question and reads it as a correctness answer.
 
 | #     | The passing result                                                                                                                                                                                                                                                                         | What it could not have detected                                                                                                                                                                                                                                                                                                                                                               |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -5970,10 +5989,11 @@ correctness — #1 was a verification request, #2 was a probe _for_ non-vacuity,
 written because the test asserts something can never fire. Vacuity entered
 through the **instrument**, not through inattention. That is why "be careful"
 does not help and a rule is needed.
+| **9** | **A SUCCESS MARKER GREPPED OUT OF COMMAND OUTPUT.** `pnpm lint 2>&1 \| grep -E "Done$" \| tail -1` printed `packages/tax lint: Done` and was read as "lint is clean" (F.106) | That `packages/db` had FAILED further up the same output, on an `import/order` error. `pnpm -r` runs each package in turn and prints a `Done` line per success, so the LAST `Done` is whichever package happened to finish last — not a verdict on the run. The pre-commit hook caught it seconds later. **The exit code was 1 the whole time.** |
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all eight:
+it verifies confirms nothing. The general form covers all nine:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
@@ -7030,3 +7050,63 @@ test, it would be a requirement that a tenant seeded from a client's real catalo
 carry fixture products the client does not sell.
 
 **Impact:** none on behaviour. A test now asserts what it was always for.
+
+## DEV.150 — an authorised correction that was read and not carried out
+
+**Not an instrument failure. Not a judgement that turned out wrong. An instruction
+that did not get executed**, which is why it is here rather than as a tenth row in
+DEV.138's table.
+
+F.101's day prompt carried a section headed **"ONE AUTHORISED CORRECTION TO
+`DEVIATIONS.md`, ALREADY DECIDED — do not treat it as a drive-by."** It named the
+file, the line range, the exact wrong word and the exact replacement: DEV.138's scope
+line read "the five instances" while the table beneath it had grown, and the prompt
+said to correct "five" to "seven", citing F.102's bounded exception as the authority
+and asking that the edited line be named to `verifier`.
+
+The day read that section — it is quoted in the day's own working notes — wrote
+DEV.148, ran every gate, and **left the scope line alone**. Nothing failed. `verifier`
+returned PASS. CI was green. The correction simply did not happen, and nothing in the
+process was looking for it.
+
+It surfaced four days later, only because a different task edited the same entry and
+the count had to be recomputed. By then the line read "five" against **eight** table
+rows.
+
+### Why the existing safeguards could not have caught it
+
+- **`verifier` checks invariants, not intentions.** It is deliberately told nothing
+  about what a day meant to do (§10.3), so an edit that was supposed to happen and did
+  not is invisible to it. That is the correct design, not a defect in it.
+- **`check:ids` and `plan:check` check that what IS written resolves**, not that what
+  was instructed got written.
+- **F.102's bounded exception is a PERMISSION, not an obligation.** It says which lines
+  of DEV.138 _may_ be edited. Nothing converts "may" into "must", so an authorised edit
+  that is skipped leaves no trace anywhere.
+
+That is the transferable point: **bounded authorisation protects against doing too
+much. It does nothing about doing too little.** Every mechanism this project has built
+around DEVIATIONS.md — append-only, the instance-table carve-out, naming the edited
+line to `verifier` — is shaped to stop an edit going further than it should. None of
+them notices an edit that never starts.
+
+### Why it is filed separately from DEV.138
+
+DEV.138's family is about **signals that did not mean what they appeared to** — a
+clean grep, a stale exit code, the last line of a multi-package run. Every instance
+there is a correct inference from a misleading input, and the countermeasure is to
+check the instrument.
+
+This is the opposite shape. **The input was unambiguous.** A named file, a named line,
+a named word, an explicit authority, and a warning not to treat it as a drive-by. No
+instrument misled anyone; a step in a multi-step instruction was dropped, and the
+absence of a step leaves nothing behind to notice.
+
+Filing it under DEV.138 would have blurred the one useful distinction between them:
+DEV.138 says **verify the instrument**; this says **verify that each named edit
+actually landed**. A reader looking for the second should not have to find it inside a
+table about the first.
+
+**Impact:** one stale derived count, live for four days and three intervening days of
+work, in the entry whose entire subject is derived counts going stale. Corrected in the
+same commit that added DEV.138's ninth instance.
