@@ -15,6 +15,32 @@
  * it is about — rather than silently going green everywhere else.
  *
  * Runs per tenant because RLS scopes every query to `app.tenant_id`.
+ *
+ * ## THE PER-TENANT LOOP IS AN RLS MECHANIC. "EVERY TENANT" WAS NEVER THE POINT.
+ *
+ * These assertions originally ran over EVERY row in `tenants`, and that was correct
+ * only by coincidence: at the time, every tenant was one `index.ts` created and
+ * `multi-rate.ts` therefore seeded. It was a proxy for "every tenant the multi-rate
+ * seed ran for", and the two stopped being the same thing when F.106 added the
+ * client demo tenant — created AFTER `multi-rate.ts` runs, so the seed never sees
+ * it, so it has none of this corpus by construction.
+ *
+ * The scope is now DERIVED from what the seed actually wrote: a tenant is in scope
+ * if it carries products with the multi-rate seed's own SKU prefix. Not a slug
+ * list, and not an exclusion by name — either would silently drop the next tenant
+ * added for the same reason, and would need editing every time one appears.
+ *
+ * **Do not "restore" the all-tenants loop.** It would not be a stricter test; it
+ * would assert that a tenant seeded from a client's real catalogue must also carry
+ * fixture products the client does not sell, and the only way to satisfy it would
+ * be to put those products in front of the prospect. The operator's ruling on F.106
+ * was that (b) and (c) — reordering the seed, or padding the client's catalogue —
+ * both change the demo to fit the test.
+ *
+ * `BASE_TENANTS_EXPECTED` below is what stops the derivation from hiding a
+ * regression: if a BASE tenant ever drops out of the multi-rate seed, the derived
+ * scope would quietly shrink and everything here would still pass. That count is
+ * the guard, and it is asserted before anything else.
  */
 import { and, asc, eq, like, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -44,6 +70,22 @@ const GST_SUPPLY_STATUSES = ['confirmed', 'partially_dispatched', 'fully_dispatc
 let client: ReturnType<typeof postgres>;
 let db: ReturnType<typeof drizzle>;
 const tenantIds: { id: string; slug: string }[] = [];
+/**
+ * The tenants the multi-rate seed ACTUALLY RAN FOR — the scope of every assertion
+ * below. See "the per-tenant loop is an RLS mechanic" in the file docblock.
+ */
+const corpusTenants: { id: string; slug: string }[] = [];
+
+/**
+ * How many tenants must carry the corpus.
+ *
+ * `index.ts` seeds two base tenants, and `multi-rate.ts` enumerates every ACTIVE
+ * tenant at its turn, so both must appear. This is the assertion that catches a
+ * BASE tenant silently dropping out of the multi-rate seed — without it, deriving
+ * the scope would quietly shrink to one tenant and still pass. Raise it if
+ * `TENANT_SEEDS` grows.
+ */
+const BASE_TENANTS_EXPECTED = 2;
 
 beforeAll(async () => {
   client = postgres(APP_DB_URL, { max: 4, prepare: false });
@@ -51,6 +93,24 @@ beforeAll(async () => {
   const rows = await db.select({ id: tenants.id, slug: tenants.slug }).from(tenants);
   for (const r of rows) tenantIds.push(r);
   if (tenantIds.length === 0) throw new Error('no seeded tenants — run pnpm db:seed');
+
+  // DERIVED FROM WHAT THE SEED ACTUALLY WROTE, never from a slug list. A tenant
+  // is in scope if it carries products from the multi-rate seed, identified by
+  // that seed's own SKU prefix — the same marker this file already uses to pick
+  // multi-rate products out of a catalogue.
+  //
+  // A slug list, or an exclusion by name, would silently drop the NEXT tenant
+  // added for the same reason as this one, and would need editing every time.
+  for (const t of tenantIds) {
+    const hit = await asTenant(t.id, (tx) =>
+      tx
+        .select({ sku: products.sku })
+        .from(products)
+        .where(and(eq(products.tenantId, t.id), like(products.sku, 'MR-%')))
+        .limit(1),
+    );
+    if (hit.length > 0) corpusTenants.push(t);
+  }
 });
 
 afterAll(async () => {
@@ -72,8 +132,18 @@ function distinct<T extends Record<string, unknown>>(rows: T[], key: keyof T): s
 }
 
 describe('F.81 multi-rate seed corpus', () => {
+  it('NON-VACUITY: the multi-rate seed covered every base tenant', () => {
+    // Asserted FIRST, because every other assertion in this file is a `for` loop
+    // over `corpusTenants` — and a loop over an empty or short array passes
+    // silently. This is what makes the rest of the file mean something.
+    expect(
+      corpusTenants.length,
+      `tenants carrying the multi-rate corpus: ${corpusTenants.map((t) => t.slug).join(', ') || '(none)'}`,
+    ).toBeGreaterThanOrEqual(BASE_TENANTS_EXPECTED);
+  });
+
   it('gives every tenant a catalogue with at least three distinct GST rates', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const rows = await tx
           .select({ sku: products.sku, hsn: products.hsnCode, rate: products.gstRate })
@@ -97,7 +167,7 @@ describe('F.81 multi-rate seed corpus', () => {
   });
 
   it('has a quotation with two distinct rates AND two distinct HSN codes on its lines', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const quotes = await tx
           .select({ id: quotations.id, number: quotations.quoteNumber })
@@ -118,7 +188,7 @@ describe('F.81 multi-rate seed corpus', () => {
   });
 
   it('carries a THREE-rate quotation whose lines are not already ascending by rate', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const quotes = await tx
           .select({ id: quotations.id, number: quotations.quoteNumber })
@@ -145,7 +215,7 @@ describe('F.81 multi-rate seed corpus', () => {
   });
 
   it('puts TWO lines at 5% on one intra-state quotation — the rounding-sensitive case', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const quotes = await tx
           .select({
@@ -174,7 +244,7 @@ describe('F.81 multi-rate seed corpus', () => {
   });
 
   it('carries a PI with the same two rates as its quotation', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const pis = await tx
           .select({
@@ -206,7 +276,7 @@ describe('F.81 multi-rate seed corpus', () => {
   });
 
   it('has a mixed-rate order the GST summary report can see', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const rows = await tx
           .select({ id: orders.id, number: orders.orderNumber, status: orders.status })
@@ -230,7 +300,7 @@ describe('F.81 multi-rate seed corpus', () => {
   });
 
   it('has one HSN code carrying TWO different rates on a single document', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const rows = await tx
           .select({ id: orders.id, number: orders.orderNumber })
@@ -284,7 +354,7 @@ describe('F.81 multi-rate seed corpus', () => {
  */
 describe('F.84 3% fixture corpus', () => {
   it('gives every tenant a 3% product on its own HSN code', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const rows = await tx
           .select({ sku: products.sku, hsn: products.hsnCode, rate: products.gstRate })
@@ -310,7 +380,7 @@ describe('F.84 3% fixture corpus', () => {
   });
 
   it('has an INTRA-STATE quotation whose every line is 3% — criterion 5 needs both', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const quotes = await tx
           .select({
@@ -343,7 +413,7 @@ describe('F.84 3% fixture corpus', () => {
   });
 
   it('carries a PI at 3% whose rate set matches its quotation', async () => {
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const pis = await tx
           .select({
@@ -379,7 +449,7 @@ describe('F.84 3% fixture corpus', () => {
     // an already-converted quotation, which works only because
     // convert-quotation-to-pi.ts happens not to forbid a second PI — a guard
     // nobody has decided should be absent.
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const quotes = await tx
           .select({ id: quotations.id, number: quotations.quoteNumber, status: quotations.status })
@@ -417,7 +487,7 @@ describe('F.84 3% fixture corpus', () => {
     // pass unnoticed. Measured when the prices were chosen: odd subtotals give
     // CGST 562.39 per-line against 562.38 document-level, an even-subtotal control
     // gives 339.18 either way.
-    for (const t of tenantIds) {
+    for (const t of corpusTenants) {
       await asTenant(t.id, async (tx) => {
         const quotes = await tx
           .select({ id: quotations.id, number: quotations.quoteNumber })

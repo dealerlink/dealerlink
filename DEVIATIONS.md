@@ -6980,3 +6980,53 @@ for F.11's Tally export, where a voucher must state the form.
 
 **Impact:** a discounted document's printed line amounts now add up to its own totals,
 on every input, with no historical document re-stated.
+
+## DEV.149 — F.106: a corpus test asserted over every tenant, and "every tenant" was a proxy
+
+**The client demo tenant made a passing test fail, and the test was the thing that was
+wrong.** `multi-rate-corpus.test.ts` asserts that the seed corpus contains the documents
+F.3 and F.4 need — a quotation with two rates and two HSN codes, an HSN carrying two
+rates, the 3% fixtures — and it ran those assertions over **every row in `tenants`**.
+
+That was correct only by coincidence. Every tenant was one `index.ts` created and
+`multi-rate.ts` therefore seeded, so "every tenant" and "every tenant the multi-rate seed
+ran for" were the same set. F.106 added a third tenant created **after** `multi-rate.ts`
+runs, so it carries none of that corpus by construction. Eight assertions went red, **all
+naming `maharudra`, none naming `demo` or `sample`** — both of which still carried all
+four rates and nine multi-rate products.
+
+**The alternatives were worse, and they were rejected for the same reason.** Running the
+client seed before `multi-rate.ts` would have given the prospect's tenant Adani modules,
+Havells isolators and assay kits; adding 3% and 12% products to their catalogue would
+have fabricated products they do not sell. Both change the demo to fit the test, in the
+tenant the client looks at.
+
+**The scope is derived, not listed.** A tenant is in scope if it carries products with
+the multi-rate seed's own SKU prefix — the marker this file already used to pick
+multi-rate products out of a catalogue. A slug list, or an exclusion by name, would
+silently drop the next tenant added for the same reason and would need editing each time.
+
+**Deriving it opens a hole, and the hole is closed explicitly.** If a base tenant ever
+dropped out of the multi-rate seed, the derived scope would quietly shrink and every
+assertion would still pass — a narrowed test hiding the regression it exists to catch.
+`BASE_TENANTS_EXPECTED` is asserted **first**, before any loop, because every other
+assertion in the file is a `for` over that array and a loop over a short array passes
+silently.
+
+**Both controls were executed, in opposite directions.**
+
+- Flattening `demo`'s multi-rate catalogue to a single rate turned the assertions red,
+  naming `demo` — so the rescoped test still fires for tenants in scope.
+- Renaming `demo`'s multi-rate SKUs so it dropped out of scope turned the **non-vacuity**
+  assertion red: _"tenants carrying the multi-rate corpus: sample: expected 1 to be
+  greater than or equal to 2"_. That is the derivation failing loudly rather than
+  shrinking quietly.
+
+Restored by reseeding and confirmed green at 209.
+
+The file's docblock now records that the all-tenants predicate was a **proxy, not the
+purpose**, and says not to restore it — because restoring it would not be a stricter
+test, it would be a requirement that a tenant seeded from a client's real catalogue also
+carry fixture products the client does not sell.
+
+**Impact:** none on behaviour. A test now asserts what it was always for.
