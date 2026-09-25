@@ -5931,18 +5931,26 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — eight instances of one signature: the instrument, not the reasoning
+## DEV.138 — nine instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
-**Scope:** the framing. No code change is attributed to this entry; the five
+**Scope:** the framing. No code change is attributed to this entry; the nine
 instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
-own entry, which carries two of them), in DEV.142, in DEV.143 and in DEV.144.
+own entry, which carries two of them), in DEV.142, in DEV.143, in DEV.144, and —
+for the ninth — in F.106's closeout, which produced no entry of its own for it.
+
+> **This line was stale at "five" for three instances, and that is worth one
+> sentence.** F.101's day prompt named the correction explicitly, as an authorised
+> edit under F.102's bound, and the day did not make it — the entry was written and
+> the scope line was not touched. It was found on the next edit to this entry, which
+> is the only reason it was found at all. A derived count sitting beside the table it
+> derives from is exactly the thing this entry is about.
 
 **Operator instruction, closing out F.55:** make the signature the subject, not
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The eight.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+**The nine.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
 the family caught before it shipped.
@@ -5950,6 +5958,17 @@ the family caught before it shipped.
 The seventh is a SUCCESS-SHAPED REPORT FOR A STEP THAT NEVER RAN — the narrowest
 mechanism in the table and the most reusable, because it is a property of the
 shell rather than of any judgement.
+
+**The ninth completes a trio, and the trio is what generalises.** Instances 6, 7
+and 9 are all the same error at different distances from the thing being judged:
+the wrong instrument (6), the wrong command's status (7), and the wrong LINE of
+the right command's output (9). None is a lapse of reasoning — each is a correct
+inference from a signal that did not mean what it appeared to.
+
+**The rule they share, stated so it is usable: CHECK EXIT CODES, NOT OUTPUT.** A
+command's output is written for a human reading a terminal; its exit code is the
+machine-readable claim about whether it succeeded. Grepping output for a success
+marker asks a formatting question and reads it as a correctness answer.
 
 | #     | The passing result                                                                                                                                                                                                                                                                         | What it could not have detected                                                                                                                                                                                                                                                                                                                                                               |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -5970,10 +5989,11 @@ correctness — #1 was a verification request, #2 was a probe _for_ non-vacuity,
 written because the test asserts something can never fire. Vacuity entered
 through the **instrument**, not through inattention. That is why "be careful"
 does not help and a rule is needed.
+| **9** | **A SUCCESS MARKER GREPPED OUT OF COMMAND OUTPUT.** `pnpm lint 2>&1 \| grep -E "Done$" \| tail -1` printed `packages/tax lint: Done` and was read as "lint is clean" (F.106) | That `packages/db` had FAILED further up the same output, on an `import/order` error. `pnpm -r` runs each package in turn and prints a `Done` line per success, so the LAST `Done` is whichever package happened to finish last — not a verdict on the run. The pre-commit hook caught it seconds later. **The exit code was 1 the whole time.** |
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all eight:
+it verifies confirms nothing. The general form covers all nine:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
