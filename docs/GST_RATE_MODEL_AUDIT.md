@@ -18,7 +18,7 @@
 > unverified source, **not** verification, and it is recorded here only so the
 > operator knows the claim was not merely passed through unexamined.
 >
-> **Three things need professional confirmation before a spec is drawn:**
+> **Four things need professional confirmation before a spec is drawn:**
 >
 > 1. **The current slab set**, exactly — including whether 12% and 28% are
 >    abolished outright or retained for any residual category, and the precise
@@ -42,6 +42,38 @@
 >    that design or add a statutory reason for it; it cannot undermine the ledger
 >    argument. It is queued because the codebase should not carry an unverified
 >    statutory claim as a justification, not because anything is blocked on it.
+>
+> 4. **Whether IGST Act 2017 §10(1)(b) makes the place of supply the BUYER's
+>    location in a bill-to/ship-to case**, rather than the delivery address that
+>    §10(1)(a) gives. **Added 2026-09-25, from F.106.** This one is different from
+>    the three above in two ways, and both raise its priority.
+>
+>    **The evidence is the client's own shipped document, not a reading.**
+>    `docs/client-evidence/4.png` (PFI-2033) bills to Ponda, GOA, ships to
+>    Gadhinglaj, Kolhapur, MAHARASHTRA, and charges CGST + SGST — their system
+>    classifies by BILL-TO. ADR-012 makes place of supply the SHIP-TO state, so
+>    Dealerlink renders the same document as IGST. One of the two is wrong.
+>
+>    **The operator's reading, recorded as unverified exactly as the slab claim
+>    above is:** §10(1)(a) gives the location where movement terminates for
+>    delivery to the recipient, which is what ADR-012 implements; §10(1)(b) covers
+>    delivery to a third person on the buyer's direction and deems the place of
+>    supply to be the buyer's principal place of business. If that is right,
+>    **ADR-012 implements (a) only and misclassifies the three-party case** — the
+>    case that is the product's stated differentiator.
+>
+>    Two facts sharpen it, both established by reading rather than assumed.
+>    ADR-012 cites §10 generically and **never distinguishes the sub-clauses** —
+>    `git grep '10(1)' -- DECISIONS.md docs/` returns nothing — so this is a gap
+>    in the reasoning, not a rejected alternative. And ADR-012's own worked
+>    example ships "to that dealer's Karnataka site", the same dealer's other
+>    location, which sits on the (a) side; the client's document may involve a
+>    genuinely different party, which is where (b) would bite.
+>
+>    **Unlike questions 1–3, work IS blocked on this.** F.5a rewires place of
+>    supply onto `dealer_addresses` and would have to implement any change, so
+>    building it before the answer means building it twice. Tracked as **F.112**;
+>    ADR-012 stands and `packages/tax` is untouched until the CA answers.
 >
 > **§5 reframes the question** — the operator's challenge is that the defect is
 > not the list's CONTENT but the existence of a hardcoded list at all, since the
