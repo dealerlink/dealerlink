@@ -112,21 +112,29 @@ describe('Day 9 tax engine — parity with Day 8 stored quotation totals', () =>
    * exactly to the stored totals" otherwise reads as though the engine were
    * verified by it.
    *
-   * The TAXABLE identity is asserted against the sum of PER-LINE taxables, not
-   * against the stored `taxable_amount`: those two legitimately differ by a paisa
-   * on a discounted document, because the engine derives the document discount at
-   * document level and allocates it per line. That is F.101. Asserting the stored
-   * column here would fail for a reason that has nothing to do with grouping.
+   * The TAXABLE identity is asserted against the STORED `taxable_amount`, which is
+   * the stronger check: it compares the grouping against persisted data rather
+   * than against a second call to the same function.
    *
-   * **If this test ever goes red on a one-paisa taxable mismatch, check F.101
-   * before suspecting the grouping.** The measured shape, from a 4-rate
-   * inter-state document at 12.5% with line subtotals 24997 / 119925 / 83000 /
-   * 12450: `discountAmount` 30046.50 against `sum(lineDiscount)` 30046.51, and
-   * `taxableAmount` 210325.50 against `sum(lineTaxable)` 210325.49. No seeded
-   * document triggers it today — every discounted seeded document is single-rate
-   * with cleanly-dividing subtotals — so a red here means either new seed data or
-   * a real grouping defect, and the sign of the delta tells them apart: F.101
-   * always leaves the per-line sum LOWER than the document figure, never higher.
+   * **It used to be asserted against a re-computed sum of per-line taxables, and
+   * that workaround expired with F.101.** Before F.101 the engine allocated the
+   * document discount per line by independent proportional rounding, so on a
+   * discounted document `sum(lineTaxable)` could fall a paisa under the stored
+   * `taxable_amount` — measured at 210325.49 against 210325.50 on a 4-rate 12.5%
+   * document, with `sum(lineDiscount)` 30046.51 against `discountAmount` 30046.50.
+   * Asserting the stored column then would have failed for a reason that had
+   * nothing to do with grouping, so it deliberately did not.
+   *
+   * F.101 replaced that allocation with a largest-remainder one, so the per-line
+   * sum now equals the document figure exactly and the stored column is assertable.
+   * `taxable_amount` is one of the three columns F.101 could not move by
+   * construction, so this is a comparison against a number no engine change
+   * touched.
+   *
+   * The history is kept rather than deleted because a reader who finds a one-paisa
+   * taxable mismatch should know this shape existed and what closed it — but it is
+   * written as history, not as current behaviour. A comment saying "that is F.101"
+   * outliving F.101 is how a closed task keeps being cited as live.
    */
   it('groups every seeded QT- quotation to sums that reconcile exactly', async () => {
     let checked = 0;
@@ -169,21 +177,15 @@ describe('Day 9 tax engine — parity with Day 8 stored quotation totals', () =>
           const add = (xs: { toFixed: (n: number) => string }[]) =>
             xs.reduce((a, x) => a + Number(x.toFixed(2)), 0).toFixed(2);
 
-          const perLineTaxable = add(
-            computeTax({
-              tenantState: q.tenantStateAtIssue,
-              placeOfSupply: q.placeOfSupply,
-              discount,
-              lines: engineLines,
-            }).lines.map((l) => l.lineTaxable),
-          );
-
-          // 1 + 2 — both partitions cover exactly the per-line taxable total.
+          // 1 + 2 — both partitions reconcile to the STORED taxable_amount. Since
+          // F.101 this is assertable directly; see the docblock for what it
+          // replaced and why the weaker form existed.
+          const storedTaxable = Number(q.taxableAmount).toFixed(2);
           expect(add(summary.byRate.map((g) => g.taxableValue)), `${where} byRate taxable`).toBe(
-            perLineTaxable,
+            storedTaxable,
           );
           expect(add(summary.byHsn.map((g) => g.taxableValue)), `${where} byHsn taxable`).toBe(
-            perLineTaxable,
+            storedTaxable,
           );
 
           // 3 + 4 — and both reconcile to the STORED tax columns exactly. Taxes

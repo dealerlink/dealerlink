@@ -12,6 +12,13 @@ import { Decimal } from 'decimal.js';
  * value, and the document `cgstAmount`/`sgstAmount`/`igstAmount` are the
  * sums of those already-rounded line values — never a re-rounded aggregate.
  *
+ * THE DISCOUNT GOES THE OTHER WAY, and the asymmetry is deliberate. Tax is
+ * computed per line and summed upward; the discount is computed once at
+ * document level and allocated downward, by largest remainder, so the
+ * per-line shares sum to the document figure exactly (F.101). Rounding each
+ * line's share independently — the obvious alternative — does not sum, because
+ * the per-line errors do not cancel.
+ *
  * CLAUDE.md §6 says "Round-off: applied at grand total, not per line". That
  * rule concerns a *different* quantity: the optional whole-rupee "Round Off"
  * adjustment line that nudges the grand total to a round figure (±0.99

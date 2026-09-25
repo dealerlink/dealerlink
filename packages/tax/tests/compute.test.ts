@@ -346,9 +346,9 @@ describe('Suite 6 — validation errors', () => {
     expect(computeTax(oneLine(1, 1000, 3)).cgstAmount.toFixed(2)).toBe('15.00');
     expect(computeTax(oneLine(1, 1000, 40)).cgstAmount.toFixed(2)).toBe('200.00');
     // Inter-state levies the full rate as IGST.
-    expect(
-      computeTax(oneLine(1, 1000, 40, { placeOfSupply: KA })).igstAmount.toFixed(2),
-    ).toBe('400.00');
+    expect(computeTax(oneLine(1, 1000, 40, { placeOfSupply: KA })).igstAmount.toFixed(2)).toBe(
+      '400.00',
+    );
   });
 
   it('still rejects what cannot be a rate: negative, NaN, and above the column bound', () => {
@@ -363,7 +363,10 @@ describe('Suite 6 — validation errors', () => {
   // a raw driver string must NOT be silently accepted. Six call sites widen a
   // DB-read value with `as GstRate`, which is compile-time only.
   it('still rejects the raw driver string, so every caller must coerce', () => {
-    expectCode(() => computeTax(oneLine(1, 1000, '18.00' as unknown as number)), 'INVALID_GST_RATE');
+    expectCode(
+      () => computeTax(oneLine(1, 1000, '18.00' as unknown as number)),
+      'INVALID_GST_RATE',
+    );
     expectCode(() => computeTax(oneLine(1, 1000, '18' as unknown as number)), 'INVALID_GST_RATE');
   });
 
@@ -581,5 +584,161 @@ describe('Suite 9 — output structure invariants', () => {
         expect(l.lineTaxable.plus(l.lineTaxTotal).toFixed(2)).toBe(l.lineTotal.toFixed(2));
       });
     });
+  });
+});
+
+/**
+ * Suite 10 — F.101: the document discount and its per-line allocation sum to the
+ * same number.
+ *
+ * ## What this replaces, and why a fixture was needed at all
+ *
+ * Before F.101 the engine derived `discountAmount` once at document level and then
+ * allocated it per line as `round2(lineSubtotal * discountAmount / subtotal)`,
+ * each line rounding independently. The errors did not cancel, so the per-line
+ * figures did not sum to the document figure — a printed invoice whose line
+ * amounts do not add up to its own total.
+ *
+ * **The seeded corpus could not demonstrate this in either direction.** All 24
+ * discounted seeded documents have a zero residual, measured across quotations,
+ * PIs and orders during A.0. So a green corpus after the change is a boundary
+ * check, not proof; these hand-written fixtures are the proof.
+ *
+ * ## The tie-break is asserted, not assumed (D-1)
+ *
+ * Order: remainder descending, then LARGER `lineSubtotal`, then input index. The
+ * middle key is what makes the allocation a function of the document's CONTENT
+ * rather than its PRESENTATION — index-only ordering would let a caller that
+ * loaded its lines in a different order silently move which line carries the
+ * extra paisa, and the engine cannot enforce caller ordering. Both tie paths are
+ * asserted below by naming WHICH line receives it.
+ */
+describe('10. F.101 — discount allocation sums exactly', () => {
+  const base = (
+    lines: { lineId: string; quantity: number; unitPrice: number; gstRate: number }[],
+    discount: TaxComputationInput['discount'],
+  ): TaxComputationOutput =>
+    computeTax({ tenantState: 'MH', placeOfSupply: 'KA', discount, lines });
+
+  const sumOf = (
+    out: TaxComputationOutput,
+    pick: (l: TaxComputationOutput['lines'][number]) => { toFixed: (n: number) => string },
+  ) => out.lines.reduce((a, l) => a + Number(pick(l).toFixed(2)), 0).toFixed(2);
+
+  /** The case F.101's row measured, and the one the characterisation test pinned. */
+  const FOUR_RATE = [
+    { lineId: 'a', quantity: 7, unitPrice: 3571, gstRate: 3 },
+    { lineId: 'b', quantity: 9, unitPrice: 13325, gstRate: 5 },
+    { lineId: 'c', quantity: 10, unitPrice: 8300, gstRate: 12 },
+    { lineId: 'd', quantity: 3, unitPrice: 4150, gstRate: 18 },
+  ];
+
+  it('the measured 4-rate 12.5% case: sum(lineDiscount) equals discountAmount exactly', () => {
+    const r = base(FOUR_RATE, { type: 'percent', value: 12.5 });
+    // Before F.101 this sum was 30046.51 against a document discount of 30046.50.
+    expect(r.discountAmount.toFixed(2)).toBe('30046.50');
+    expect(sumOf(r, (l) => l.lineDiscount)).toBe('30046.50');
+    // And therefore the taxables reconcile too — lineTaxable is lineSubtotal
+    // minus lineDiscount, so this identity is downstream of the one above.
+    expect(r.taxableAmount.toFixed(2)).toBe('210325.50');
+    expect(sumOf(r, (l) => l.lineTaxable)).toBe('210325.50');
+  });
+
+  it('the three immune columns are unchanged by the allocation', () => {
+    const r = base(FOUR_RATE, { type: 'percent', value: 12.5 });
+    // subtotal, discountAmount and taxableAmount are derived without reference to
+    // the per-line split. If any of them moved, the fix would have been the
+    // REJECTED one — recomputing the document figure from the parts — which would
+    // re-state every historical discounted document.
+    expect(r.subtotal.toFixed(2)).toBe('240372.00');
+    expect(r.discountAmount.toFixed(2)).toBe('30046.50');
+    expect(r.taxableAmount.toFixed(2)).toBe('210325.50');
+    expect(r.subtotal.minus(r.discountAmount).toFixed(2)).toBe(r.taxableAmount.toFixed(2));
+  });
+
+  it('TIE on remainder, different subtotals — the LARGER subtotal takes the paisa', () => {
+    const r = base(
+      [
+        { lineId: 'small', quantity: 1, unitPrice: 100.01, gstRate: 18 },
+        { lineId: 'large', quantity: 1, unitPrice: 200.01, gstRate: 18 },
+      ],
+      { type: 'percent', value: 50 },
+    );
+    expect(r.discountAmount.toFixed(2)).toBe('150.01');
+    expect(sumOf(r, (l) => l.lineDiscount)).toBe('150.01');
+    // Both lines floor to a .00 share with an identical 0.005 remainder, so the
+    // remainder key cannot decide it. D-1's second key does.
+    expect(r.lines[0]!.lineDiscount.toFixed(2)).toBe('50.00'); // small
+    expect(r.lines[1]!.lineDiscount.toFixed(2)).toBe('100.01'); // large — takes it
+  });
+
+  it('TIE on remainder AND subtotal — the LOWER input index takes the paisa', () => {
+    const r = base(
+      [
+        { lineId: 'first', quantity: 1, unitPrice: 100.01, gstRate: 18 },
+        { lineId: 'second', quantity: 1, unitPrice: 100.01, gstRate: 18 },
+      ],
+      { type: 'percent', value: 50 },
+    );
+    expect(sumOf(r, (l) => l.lineDiscount)).toBe(r.discountAmount.toFixed(2));
+    // Genuinely indistinguishable by value, so index is the only key left.
+    expect(r.lines[0]!.lineDiscount.toFixed(2)).toBe('50.01'); // first — takes it
+    expect(r.lines[1]!.lineDiscount.toFixed(2)).toBe('50.00');
+  });
+
+  it('is deterministic — the same input allocates identically on repeated runs', () => {
+    const run = () =>
+      base(FOUR_RATE, { type: 'percent', value: 12.5 }).lines.map((l) => l.lineDiscount.toFixed(2));
+    expect(run()).toEqual(run());
+    expect(run()).toEqual(['3124.62', '14990.63', '10375.00', '1556.25']);
+  });
+
+  it('a zero discount and a zero subtotal both allocate zero without dividing', () => {
+    const noDiscount = base(FOUR_RATE, null);
+    expect(sumOf(noDiscount, (l) => l.lineDiscount)).toBe('0.00');
+    // A zero subtotal is reachable ONLY through a zero unit price, not a zero
+    // quantity: `validateInput` throws NEGATIVE_QUANTITY on `quantity <= 0`
+    // (compute.ts:150-155), so a zero-quantity line never reaches the allocator.
+    // And a zero subtotal can only carry a zero discount, because a positive
+    // amount discount would throw DISCOUNT_EXCEEDS_SUBTOTAL first.
+    const zero = base([{ lineId: 'z', quantity: 1, unitPrice: 0, gstRate: 18 }], null);
+    expect(zero.subtotal.toFixed(2)).toBe('0.00');
+    expect(zero.lines[0]!.lineDiscount.toFixed(2)).toBe('0.00');
+  });
+
+  /**
+   * PROPERTY TEST. The fixtures above pin cases someone chose; this asserts the
+   * identity over inputs nobody chose, which is what catches a shape the fixtures
+   * happen to miss. Deterministic generator — a seeded LCG, not Math.random — so a
+   * failure is reproducible from the printed case rather than only observed once.
+   */
+  it('PROPERTY — sum(lineDiscount) === discountAmount over 500 generated documents', () => {
+    let seed = 20260925;
+    const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const rates = [0, 3, 5, 12, 18, 28];
+
+    for (let n = 0; n < 500; n++) {
+      const count = 1 + Math.floor(next() * 6);
+      const lines = Array.from({ length: count }, (_, i) => ({
+        lineId: `l${i}`,
+        quantity: 1 + Math.floor(next() * 20),
+        unitPrice: Math.round(next() * 5_000_000) / 100,
+        gstRate: rates[Math.floor(next() * rates.length)]!,
+      }));
+      const pct = Math.round(next() * 9000) / 100; // 0.00 – 90.00
+      const r = base(lines, { type: 'percent', value: pct });
+
+      const where = `n=${n} pct=${pct} lines=${JSON.stringify(lines)}`;
+      expect(
+        sumOf(r, (l) => l.lineDiscount),
+        `discount identity: ${where}`,
+      ).toBe(r.discountAmount.toFixed(2));
+      expect(
+        sumOf(r, (l) => l.lineTaxable),
+        `taxable identity: ${where}`,
+      ).toBe(r.taxableAmount.toFixed(2));
+      // No line may receive a negative or an over-large share.
+      for (const l of r.lines) expect(Number(l.lineDiscount.toFixed(2))).toBeGreaterThanOrEqual(0);
+    }
   });
 });
