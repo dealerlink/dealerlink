@@ -52,6 +52,42 @@ export interface PdfBankDetails {
   branch: string | null;
 }
 
+/**
+ * One distinct GST rate present on a document, with the split already decided by
+ * the engine (F.4). Half-rates on an intra-state document, the full rate
+ * inter-state; the unused side is `null` rather than zero, so a template cannot
+ * print a 0% row by accident.
+ */
+export interface PdfTaxRateGroup {
+  rate: number;
+  cgstRate: number | null;
+  cgstAmount: number;
+  sgstRate: number | null;
+  sgstAmount: number;
+  igstRate: number | null;
+  igstAmount: number;
+}
+
+/**
+ * One row of the HSN/SAC summary table, keyed on the **(HSN, rate) PAIR** — not on
+ * the HSN alone (F.4, D-1). A single HSN carrying two different GST rates yields two
+ * rows, which is why `rate` is non-null and is a column of its own: on an
+ * intra-state document only the half-rate is shown elsewhere, and a reader cannot
+ * recover 18 from 9 without knowing the convention.
+ */
+export interface PdfTaxHsnGroup {
+  hsn: string;
+  rate: number;
+  taxableValue: number;
+  centralRate: number | null;
+  centralAmount: number;
+  stateRate: number | null;
+  stateAmount: number;
+  integratedRate: number | null;
+  integratedAmount: number;
+  totalTax: number;
+}
+
 export interface QuotationPdfData {
   /** Banner title in the header, e.g. "QUOTATION" or "PERFORMA INVOICE". */
   documentTitle: string;
@@ -87,8 +123,30 @@ export interface QuotationPdfData {
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
-  /** Effective GST rate for the summary label, e.g. "18". Mixed → null. */
+  /**
+   * Effective GST rate for the summary label, e.g. "18". Mixed → null.
+   *
+   * **On a mixed-rate document this is `null`, and `buildViewModel` turns `null`
+   * into the EMPTY STRING, so the totals block renders `CGST ` with a trailing
+   * space and no rate.** That is a live defect on exactly the documents F.4 exists
+   * for. `taxRateGroups` below is what replaces it; this field stays until the
+   * template stops reading it (F.4 A.2).
+   */
   gstRateLabel: string | null;
+  /**
+   * One entry per distinct GST rate actually present, ascending (F.4, D-3).
+   *
+   * Derived in the loaders by `templates/tax-groups.ts` so that production, the
+   * snapshot test and `scripts/render-typst.ts` all see it — the last of those
+   * being the byte-measurement harness, which does not use `buildViewModel`
+   * (F.108).
+   */
+  taxRateGroups: PdfTaxRateGroup[];
+  /**
+   * One entry per distinct (HSN, rate) pair, ascending by HSN then rate (F.4, D-1).
+   * Longer than the number of distinct HSN codes whenever one HSN carries two rates.
+   */
+  taxHsnGroups: PdfTaxHsnGroup[];
   totalAmount: number;
   amountInWords: string;
 

@@ -732,14 +732,24 @@ to `chrome.typ` is required.**
 
 ### 6.2 Where the row would sit, per template and per screen
 
-| Surface                                                               | Current row sequence                                                                                                                   | Insertion point                                                                                  |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `templates-typst/quotation.typ:97-110` (and the PI, which imports it) | `:100` Subtotal → `:101` Discount (conditional) → `:102` Taxable → `:103-107` IGST **or** CGST+SGST → `:109` `grand: data.totalAmount` | **between `:107` and `:108`** — after the last tax row, before the close of the `rows:` argument |
-| `templates/_components/TaxSummary.tsx` **(dead — §1.2)**              | `:40-43` Subtotal → `:44-51` Discount → `:52-55` Taxable → `:56-72` IGST or CGST+SGST → `:73-76` Grand Total                           | between `:72` and `:73`                                                                          |
-| `summary-card.tsx` (builder preview)                                  | `:68` Subtotal → `:69-75` Discount → `:76` Taxable → `:77-96` IGST or CGST+SGST → `:99-107` Total                                      | between `:96` and `:97`                                                                          |
-| `quotations/[id]/page.tsx`                                            | `:242` Subtotal → `:243-249` Discount → `:250` Taxable → `:251-258` tax rows → `:260-265` Total                                        | between `:258` and `:259`                                                                        |
-| `pi/[id]/page.tsx`                                                    | `:239` Subtotal → `:240-246` Discount → `:247` Taxable → `:248-255` tax rows → `:257-261` Total                                        | immediately before `:256`                                                                        |
-| `orders/[id]/page.tsx`                                                | `:198` Subtotal → `:199-205` Discount → `:206` Taxable → `:207-214` tax rows → `:216-221` Total                                        | between `:214` and `:215`                                                                        |
+> **CORRECTED 2026-09-24 by F.4.** The first row of this table cited
+> `quotation.typ:103-107` for the tax rows and "between `:107` and `:108`" for the
+> round-off slot. F.4 replaced that single inter/intra conditional with a
+> `..data.taxRows.map(...)` spread emitting one row per distinct rate, so both
+> numbers moved. **The row now names the anchor rather than the line numbers**, because
+> the anchor survives the next edit and the numbers did not (CLAUDE.md §11.1 ruling 6).
+> The mechanism is unchanged: append one more pair to `rows:`, last, immediately before
+> `grand:`. `_lib/chrome.typ`'s ROUND-OFF INSERTION POINT comment carries the same
+> anchor.
+
+| Surface                                                        | Current row sequence                                                                                                                          | Insertion point                                                                              |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `templates-typst/quotation.typ` (and the PI, which imports it) | Subtotal → Discount (conditional) → Taxable → **the `..data.taxRows.map(...)` spread, one row per distinct rate** → `grand: data.totalAmount` | **the last element of `rows:`** — after the spread, before the close of the `rows:` argument |
+| `templates/_components/TaxSummary.tsx` **(dead — §1.2)**       | `:40-43` Subtotal → `:44-51` Discount → `:52-55` Taxable → `:56-72` IGST or CGST+SGST → `:73-76` Grand Total                                  | between `:72` and `:73`                                                                      |
+| `summary-card.tsx` (builder preview)                           | `:68` Subtotal → `:69-75` Discount → `:76` Taxable → `:77-96` IGST or CGST+SGST → `:99-107` Total                                             | between `:96` and `:97`                                                                      |
+| `quotations/[id]/page.tsx`                                     | `:242` Subtotal → `:243-249` Discount → `:250` Taxable → `:251-258` tax rows → `:260-265` Total                                               | between `:258` and `:259`                                                                    |
+| `pi/[id]/page.tsx`                                             | `:239` Subtotal → `:240-246` Discount → `:247` Taxable → `:248-255` tax rows → `:257-261` Total                                               | immediately before `:256`                                                                    |
+| `orders/[id]/page.tsx`                                         | `:198` Subtotal → `:199-205` Discount → `:206` Taxable → `:207-214` tax rows → `:216-221` Total                                               | between `:214` and `:215`                                                                    |
 
 `dispatch-note.typ` and `payment-receipt.typ` have **no grand-total block** and
 never call `totals-block`; their only totals are a line-table footer

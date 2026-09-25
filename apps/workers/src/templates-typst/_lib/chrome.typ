@@ -344,6 +344,16 @@
 // consequences, and it is not a rendering concern. Insert it as one more pair
 // in `rows` immediately before the rule below and nothing else moves:
 //     ("Round Off", money(data.roundOff))
+//
+// THE ANCHOR IN THE CALLER IS NAMED, NOT NUMBERED, because F.4 moved it. In
+// `quotation.typ` the slot is the LAST element of the `rows:` tuple, immediately
+// after the `..data.taxRows.map(...)` spread and immediately before `grand:`.
+// Before F.4 that position was a single inter/intra conditional at lines 103-107,
+// which is why `docs/F3_F4_AUDIT.md` and F.6's task row cite ":107"/":108" —
+// those numbers are stale and the spread is now the thing to look for. The
+// sequence F.6 must produce is Subtotal, Discount, Taxable Amount, the per-rate
+// rows, Round Off, Grand Total; appending after the spread is what yields it,
+// and hoisting the tax rows out of `rows:` is what would break it.
 #let totals-block(words: "", rows: (), grand: "") = {
   grid(
     columns: (1fr, px(250)),

@@ -6759,3 +6759,111 @@ never consumed it.
 
 **Impact:** none on behaviour — the field has no consumer and never had one. The cost
 was a false premise sitting in a docstring as though it were a plan.
+
+## DEV.147 — F.4: the first day on which reference PDFs were supposed to move, and how that was told from moving by accident
+
+**The standing rule could not apply, and dropping it was not an option.** CLAUDE.md
+§11.1 rulings 1 and 4 say any movement in any of the 14 reference renders is a
+finding, never a re-baseline. F.4's whole purpose was to add an HSN/SAC table to the
+quotation and PI, which moves 8 of those 14 by construction. Re-baselining was not
+merely undesirable but **unavailable**: `docs/pdf-references/README.md` calls them a
+one-way door, and `apps/workers/scripts/` has no `capture-references.ts` — enumerated
+from a full directory listing, not a search.
+
+**What replaced it (D-5).** The 14 are partitioned: **6 tax-neutral must stay
+byte-identical**, and **8 tax-bearing may move only by one named insertion** — the
+expected segment, rebuilt from the document's own summary rather than typed in, must
+occur exactly once, and the body with that occurrence removed must equal the reference
+body exactly. `footer` and page count stay at exact equality. Every pre-F.4 guarantee
+therefore survives: every existing number, label and date.
+
+**Measured, and it is deliberately not an empty diff.** 6 unchanged, 8 moved, 0
+tax-bearing unmoved, no page count changed on any of the 14. On this day an empty diff
+across all 14 would have been a **failed measurement**, not a pass, because
+`scripts/render-typst.ts` does not use `buildViewModel` — it is a fork (F.108) and it
+is the harness the byte diff runs through. A change made only in `buildViewModel` would
+have left it writing the old `data.json` and reported no movement while production
+moved. Every field F.4 added reaches both, through one shared module rather than a
+second copy.
+
+### What shipped broken, and was the real reason to prioritise this day
+
+**A mixed-rate quotation or PI printed `CGST `, `SGST `, `IGST ` — trailing space, no
+rate, correct amounts.** `templates/quotation.tsx:234` sets `gstRateLabel` to `null`
+when rates differ, `pdf/view-model.ts:132-133` turns `null` into the empty string, and
+`templates-typst/quotation.typ:106` concatenates it. The same defect existed
+independently in the fork at `scripts/render-typst.ts:237-238`, so it was fixed in
+both. This is a stronger justification for the day than the HSN table: a customer
+reconciling a mixed-rate document could not tell what rate they were charged.
+
+### The four controls that make the assertions mean something
+
+Each was **executed and its output read**, not designed:
+
+1. **`rateLabel` broken to `toFixed(2)`** — 4 of 6 tax-row tests red on
+   `expected 'CGST 9.00%' to be 'CGST 9%'`. This is the one that protects R2's
+   partition: all 8 tax-bearing references are single-rate 18% and render `9%` today, so
+   a `9.0%` would move all 8 for a formatting reason and the added segment would no
+   longer be the HSN table alone.
+2. **`buildTaxRows` returning one bogus row** — exactly 8 files moved, the 6
+   tax-neutral untouched. This proved two things at once: the template genuinely reads
+   the new field, and R1's partition is **empirical** rather than structurally argued.
+3. **The CGST label broken _outside_ the named segment** — the intra-state snapshots
+   failed, proving the removal does not swallow changes it was never meant to cover.
+4. **The golden file corrupted twice, independently** — one paisa of text, one hex
+   digit of sha; each failed alone, so neither assertion masks the other.
+
+**Criterion 5's control proves something weaker than it appears to, and that is
+recorded rather than glossed.** Reverting `view-model.ts` to its pre-F.4 state did turn
+the multi-rate assertions red — but via a **Typst compile failure**, because the
+template dereferences `data.taxRows` unconditionally. That shows the template cannot run
+without the new data. It does **not** show the assertions catch a wrong value. That
+guarantee comes from controls 1, 3 and 4 above. Written into
+`tests/multi-rate-render.test.ts`'s own docblock so a later reader cannot cite criterion
+5 as its source.
+
+### The golden file, and what it is not
+
+No reference document exercises multi-rate at all — all 14 are single-rate 18%,
+measured, and structurally so because `multi-rate.ts` appends its chains after `day13`.
+So a green snapshot run after F.4 proves only that nothing else broke. `QT-2026-0017` is
+the positive evidence: three lines over **two** HSN codes, yielding **three** table rows
+— the case that a table keyed on HSN alone could not represent without losing a rate or
+inventing a blended one. Generated **after** the implementation was final and put
+through the same two-reseed check the references get before it counted as a baseline.
+`tests/golden/README.md` states plainly that it is a self-snapshot, not the Chromium
+cross-renderer contract.
+
+### Three corrections made to existing text, because this change invalidated it
+
+Per §11.1 ruling 6 — correct a citation during the change that breaks it, never port it:
+
+- **`_lib/chrome.typ`'s ROUND-OFF INSERTION POINT** now names the anchor (the last
+  element of `rows:`, after the `..data.taxRows.map(...)` spread) instead of line
+  numbers that moved. Comment-only, in a file all four templates import, so the 6
+  frozen references were **re-measured** after it rather than reasoned about.
+- **`docs/F3_F4_AUDIT.md` §6.2** cited `:103-107` and "between `:107` and `:108`".
+- **F.6's task row** cited lines 107, 108 **and 109**, plus "the inter/intra
+  conditional" by name — more than the day prompt had said was there, found by reading
+  the row instead of trusting the summary of it.
+
+**`docs/F3_F4_SPEC.md` §8 carried a sentence no commit could satisfy**: "A single-rate
+document must render byte-identically before and after", alongside §6's instruction to
+add the table. Both could not hold. The first sentence of that pair was kept and
+measured; the second is replaced by the partition rule, dated in place. Keeping both
+would have been the DEV.129 shape.
+
+### A prediction in another row turned out to be wrong in the direction that matters
+
+F.97 predicted a PI render would "see 38 documents that look empty while their headers
+claim money". **They do not look empty — they do not render at all.**
+`templates/performa-invoice.tsx:111` throws `has no line items` before any view model is
+built, so a third of the seeded PI corpus cannot produce a PDF by any path. Found by
+rendering `PI-2026-0011` to check whether an F.4 guard was reachable, and reading the
+error. Pre-existing, out of F.4's scope, appended to F.97 rather than filed as a second
+row — F.97 already owns it, and a duplicate would be the split-don't-fold error F.103
+was corrected away from.
+
+**Impact:** the quotation and PI PDFs state a rate on every tax row for the first time,
+and carry an HSN/SAC summary; a mixed-rate document no longer prints a label with no
+rate in it; and the reference contract survived a day that was supposed to move it.

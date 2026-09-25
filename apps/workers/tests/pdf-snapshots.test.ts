@@ -21,6 +21,29 @@
  * pinned the seed clock and Day 27 made `generatedAt` document-derived precisely
  * so these could be asserted on rather than asserted around. A test that skips
  * the fields most likely to drift is a test that passes while the product breaks.
+ *
+ * ## ONE NAMED INSERTION IS TOLERATED, AND ONLY ONE (F.4, D-5)
+ *
+ * F.4 adds an HSN/SAC summary table to the quotation and PI, so the 8 tax-bearing
+ * references can no longer match the Chromium baseline by plain equality. They are
+ * **not** re-baselined — the references are a one-way door
+ * (`docs/pdf-references/README.md`) and the capture tool no longer exists. Instead
+ * each of the 8 must satisfy a stricter statement than "close enough":
+ *
+ *   1. the expected segment, built from the document's OWN summary, occurs EXACTLY
+ *      ONCE in the rendered body;
+ *   2. the rendered body with that one occurrence removed is EXACTLY EQUAL to the
+ *      reference body;
+ *   3. `footer` and `pages` remain exact equality, unchanged.
+ *
+ * So every pre-F.4 guarantee survives: every existing number, every label, every
+ * date, the footer and the page count. A moved amount, a dropped line, a
+ * re-formatted figure or a changed label all still fail. The 6 tax-neutral cases
+ * keep plain body equality and are untouched.
+ *
+ * **If this assertion fails, the fix is never to widen the segment.** Widening it
+ * is how this degrades into re-baselining with extra steps, which is the thing the
+ * rule exists to prevent. A failure here is a finding for the operator.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -66,7 +89,9 @@ function fixtureLogo(): string | null {
   return (/'(data:image\/[^']+)'/.exec(readFileSync(BRANDED_FIXTURE, 'utf8')) ?? [])[1] ?? null;
 }
 
-async function render(c: DocumentCase): Promise<{ buffer: Buffer; filename: string }> {
+async function render(
+  c: DocumentCase,
+): Promise<{ buffer: Buffer; filename: string; vm: Record<string, unknown> }> {
   const { tenantId, documentId } = await resolveDocument(c);
   return withTenant(tenantId, async (tx) => {
     const load = loaders[c.type] as (
@@ -81,14 +106,16 @@ async function render(c: DocumentCase): Promise<{ buffer: Buffer; filename: stri
       documentId,
     );
     (data['billFrom'] as Record<string, unknown>)['logoUrl'] = c.branded ? fixtureLogo() : null;
+    const vm = buildViewModel(c.type as RenderableKind, data);
     return {
       buffer: renderTypstPdf({
         template: TEMPLATE_FOR[c.type as RenderableKind],
-        data: buildViewModel(c.type as RenderableKind, data),
+        data: vm,
         generatedAt: data['generatedAt'] as Date,
         logoSvg: logoSvgFrom(data),
       }),
       filename: filenameFor(c.type as RenderableKind, data),
+      vm,
     };
   });
 }
@@ -120,11 +147,34 @@ interface PdfDoc {
   }>;
 }
 
+/**
+ * The exact text F.4 inserts, rebuilt from the document's own summary.
+ *
+ * Squashed the same way `extract` squashes the page — all whitespace removed — so
+ * this is compared on the same footing. `caps-label` and `data-table`'s header band
+ * both upper-case their text, which is why those two parts are upper-cased here; the
+ * body and TOTAL cells are not.
+ *
+ * Returns `null` when the document has no HSN table, which is what makes the 6
+ * tax-neutral cases fall through to plain equality without a special case.
+ */
+function hsnSegment(vm: Record<string, unknown>): string | null {
+  const t = vm['hsnTable'] as { header: string[]; rows: string[][]; total: string[] } | undefined;
+  if (!t) return null;
+  const parts = [
+    'HSN / SAC Summary'.toUpperCase(),
+    ...t.header.map((h) => h.toUpperCase()),
+    ...t.rows.flat(),
+    ...t.total,
+  ];
+  return parts.join('').replace(/\s+/g, '');
+}
+
 describe('PDF snapshots — Typst against the Day 27 reference baseline', () => {
   it.each(cases.map((c) => [c.label, c] as const))(
     '%s matches the reference in text, including the footer and every date',
     async (_label, c) => {
-      const { buffer } = await render(c);
+      const { buffer, vm } = await render(c);
       const rendered = await extract(buffer);
       const reference = await extract(readFileSync(path.join(REFERENCE_DIR, `${c.label}.pdf`)));
 
@@ -144,7 +194,17 @@ describe('PDF snapshots — Typst against the Day 27 reference baseline', () => 
         expect(serials(rendered.body).sort()).toEqual(serials(reference.body).sort());
         expect(serials(rendered.body)).toHaveLength(500);
       } else {
-        expect(rendered.body).toBe(reference.body);
+        const segment = hsnSegment(vm);
+        if (segment === null) {
+          // The 6 tax-neutral cases: unchanged plain equality.
+          expect(rendered.body).toBe(reference.body);
+        } else {
+          // Exactly once — zero would mean the table never rendered, twice would
+          // mean the removal below could silently delete the wrong occurrence.
+          expect(rendered.body.split(segment)).toHaveLength(2);
+          // And everything else is byte-for-byte the Chromium reference.
+          expect(rendered.body.replace(segment, '')).toBe(reference.body);
+        }
       }
     },
   );

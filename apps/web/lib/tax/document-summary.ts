@@ -54,14 +54,25 @@ export type DocumentSummary = {
   /**
    * One entry per distinct (HSN, rate) pair, ascending by HSN then rate.
    *
-   * **This has NO consumer in F.3, deliberately.** The screens render the
-   * rate-wise block only (`docs/F3_F4_SPEC.md` §5); the HSN/SAC table is §6, and
-   * §6 is F.4. It is returned here rather than added later because F.4 is the next
-   * task and needs exactly this shape from exactly this call — stripping it now
-   * and restoring it then would churn the file across two PRs to no end.
+   * **THIS FIELD HAS NO CONSUMER AND THE REASON RECORDED FOR KEEPING IT WAS FALSE.**
+   * It said F.4 "is the next task and needs exactly this shape from exactly this
+   * call". F.4 has now shipped and did not use it, because it could not:
    *
-   * If that is the wrong call, the fix is to delete this field and the four lines
-   * that populate it; nothing reads them.
+   * - `apps/workers/package.json` declares `@dealerlink/db`, `@dealerlink/schemas`
+   *   and `@dealerlink/tax`, and has never declared a dependency on `apps/web`. A
+   *   workers module cannot import this file at all. That was true when the reason
+   *   was written, so it was not a forecast that went stale.
+   * - The amounts here are `toFixed(2)` strings — `"13671.00"`. Every money value on
+   *   a PDF goes through `formatMoney`, which emits `"13,671.00"`. The docstring
+   *   above says so itself.
+   *
+   * F.4 instead calls `computeTaxSummary` from `@dealerlink/tax` directly, in
+   * `apps/workers/src/templates/tax-groups.ts`. The full account is DEV.146.
+   *
+   * **Deleting this field and the four lines that populate it remains the right fix**
+   * — nothing reads them. It was not done inside F.4 because that was an
+   * `apps/workers` day and this is `apps/web` (D-8, CLAUDE.md §11.2); the deletion is
+   * filed as its own row.
    */
   hsnRows: {
     hsn: string;

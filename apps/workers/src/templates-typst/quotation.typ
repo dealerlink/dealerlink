@@ -100,14 +100,55 @@
       ("Subtotal", data.subtotal),
       ..(if data.discountLabel != none { (("Discount (" + data.discountLabel + ")", "− " + data.discountAmount),) } else { () }),
       ("Taxable Amount", data.taxableAmount),
-      ..(if data.isInterState {
-        (("IGST " + data.fullRateLabel, data.igstAmount),)
-      } else {
-        (("CGST " + data.halfRateLabel, data.cgstAmount), ("SGST " + data.halfRateLabel, data.sgstAmount))
-      }),
+      // F.4 — one row per distinct GST rate actually present, ascending: an IGST
+      // row per rate inter-state, a CGST/SGST pair per rate intra-state. The rows
+      // arrive pre-labelled and pre-formatted from `pdf/tax-rows.ts`, which both
+      // view builders share, because a Typst template must not do arithmetic.
+      //
+      // They stay INSIDE `rows:` deliberately. F.6's round-off is appended as one
+      // more pair immediately after them and immediately before `grand:`; hoisting
+      // the tax rows into a block of their own would put Round Off above them.
+      ..data.taxRows.map(r => (r.label, r.amount)),
     ),
     grand: data.totalAmount,
   )
+
+  // F.4 — HSN/SAC summary (`docs/F3_F4_SPEC.md` §6). One row per distinct
+  // (HSN, rate) PAIR, ascending by HSN then rate, with a TOTAL row that sums this
+  // table's own rows. `Rate` is an explicit column (D-1): the pair is the grouping
+  // key, so two rows can share an HSN and differ only by it, and on an intra-state
+  // document the only other rate shown is the HALF rate.
+  //
+  // Guarded on presence. The guard is belt-and-braces rather than a live branch:
+  // both loaders throw on a document with no line items — `performa-invoice.tsx:111`
+  // is "Performa invoice <id> has no line items" — so a zero-group document never
+  // reaches a render. (38 seeded PIs are in exactly that state, F.97, and none of
+  // them can be rendered today.) The guard stays because a header band above a TOTAL
+  // of 0.00, on a document whose header claims money, is a worse failure than a
+  // missing section, and the cost of preventing it is one line.
+  if "hsnTable" in data {
+    v(px(14))
+    caps-label("HSN / SAC Summary")
+    v(px(5))
+    data-table(
+      // Widths sum to the content box (A4 less 18mm side margins) with the HSN
+      // column taking the slack. Explicit, for the reason the line table above
+      // gives: left to `auto`, Typst starves the first column and wraps.
+      columns: if data.isInterState {
+        (1fr, px(56), px(110), px(84), px(110), px(110))
+      } else {
+        (1fr, px(48), px(96), px(62), px(88), px(62), px(88), px(92))
+      },
+      aligns: if data.isInterState {
+        (left + top, right + top, right + top, right + top, right + top, right + top)
+      } else {
+        (left + top, right + top, right + top, right + top, right + top, right + top, right + top, right + top)
+      },
+      header: data.hsnTable.header,
+      rows: data.hsnTable.rows.map(r => r.map(c => text(size: px(9), font: mono-font, c))),
+      total-cells: data.hsnTable.total.map(c => text(size: px(9), weight: 700, font: mono-font, c)),
+    )
+  }
 
   footer-block(terms: data.termsAndConditions, bank: data.bank)
 }

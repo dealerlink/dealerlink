@@ -20,6 +20,13 @@
  */
 import { formatDocDate, formatGeneratedAt, formatMoney } from '../lib/format';
 
+import {
+  buildHsnTable,
+  buildTaxRows,
+  type HsnGroupInput,
+  type TaxRateGroupInput,
+} from './tax-rows';
+
 export type RenderableKind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch';
 
 /** Values rendered as money. */
@@ -131,6 +138,27 @@ export function buildViewModel(type: RenderableKind, data: unknown): Record<stri
   const rateLabel = (data as { gstRateLabel?: string | null }).gstRateLabel ?? null;
   vm['halfRateLabel'] = rateLabel != null ? `${Number(rateLabel) / 2}%` : '';
   vm['fullRateLabel'] = rateLabel != null ? `${rateLabel}%` : '';
+
+  // F.4 — the rate-wise rows the totals block will render (A.2 consumes them).
+  // Derived in BOTH view builders from ONE shared function: this file and
+  // `scripts/render-typst.ts` are forks (F.108), and a derivation added to only
+  // one would leave the byte-measurement harness reporting the old output while
+  // production moved.
+  const taxGroups = (data as { taxRateGroups?: TaxRateGroupInput[] }).taxRateGroups;
+  if (taxGroups) {
+    vm['taxRows'] = buildTaxRows(
+      taxGroups,
+      Boolean((data as { isInterState?: boolean }).isInterState),
+    );
+  }
+
+  const hsnGroups = (data as { taxHsnGroups?: HsnGroupInput[] }).taxHsnGroups;
+  if (hsnGroups && hsnGroups.length) {
+    vm['hsnTable'] = buildHsnTable(
+      hsnGroups,
+      Boolean((data as { isInterState?: boolean }).isInterState),
+    );
+  }
 
   return vm;
 }
