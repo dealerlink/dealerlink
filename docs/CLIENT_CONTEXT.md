@@ -144,18 +144,20 @@ None of these is a decision we can take for them.
 > whoever sends it needs both.
 >
 > - **Four client asks** — the four numbered below. Answerable by the client.
-> - **Four tax questions** — the numbered list in `docs/GST_RATE_MODEL_AUDIT.md`:
->   the current slab set, the transitional treatment of pre-22-Sep-2025 rates,
->   whether GSTR-1 Table 12 needs the HSN summary per (HSN, rate) pair, and — added
->   2026-09-25 — whether IGST Act §10(1)(b) makes place of supply the buyer's
->   location in a bill-to/ship-to case. These need their **CA**, not the client.
+> - **Three tax questions** — the numbered list in `docs/GST_RATE_MODEL_AUDIT.md`:
+>   the current slab set, the transitional treatment of pre-22-Sep-2025 rates, and
+>   whether GSTR-1 Table 12 needs the HSN summary per (HSN, rate) pair. These need
+>   their **CA**, not the client.
 >
-> **Question 4 is the one that blocks work.** It is tracked as **F.112** (HIGH),
-> F.5a should not be built before it is answered, and the evidence is the client's
-> own shipped invoice — `docs/client-evidence/4.png` charges CGST + SGST on a
-> Goa-to-Maharashtra supply where ADR-012 would render IGST. The other three are
-> queued so the codebase stops carrying unverified statutory claims as
-> justifications; nothing is blocked on them.
+> **Nothing is blocked on any of them.** They are queued so the codebase stops
+> carrying unverified statutory claims as justifications.
+>
+> A fourth was added on 2026-09-25 and removed on 2026-09-26 — the §10(1)(b)
+> bill-to/ship-to question. **F.5a now implements both arrangements** rather than
+> asking which applies, because any dealer network does both and the distinction is
+> per-document. What survives is **F.112**, an observation for onboarding: on
+> migration Dealerlink may compute IGST where their current system computed
+> CGST + SGST, and they will report it as a bug on day one.
 
 1. **Serials on the invoice PDF.** Serials in Tally are **not** required
    (confirmed by the client). Whether serials appear on the **invoice PDF** is
