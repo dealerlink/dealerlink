@@ -143,7 +143,9 @@ None of these is a decision we can take for them.
 > Recorded here because the asks and the tax questions live in different files and
 > whoever sends it needs both.
 >
-> - **Four client asks** — the four numbered below. Answerable by the client.
+> - **The client asks** — the numbered list below. Answerable by the client.
+>   Enumerated rather than counted on purpose: a count goes stale silently when an
+>   ask is added, and one was added on 2026-09-26 (ask 5, invoice volume).
 > - **Three tax questions** — the numbered list in `docs/GST_RATE_MODEL_AUDIT.md`:
 >   the current slab set, the transitional treatment of pre-22-Sep-2025 rates, and
 >   whether GSTR-1 Table 12 needs the HSN summary per (HSN, rate) pair. These need
@@ -173,6 +175,20 @@ None of these is a decision we can take for them.
 4. **Scanner suffix must send CR/Enter.** Usually the default; some scanners
    need a configuration barcode. A **setup instruction, not code** — it has to
    reach whoever configures their hardware.
+5. **What is your monthly invoice volume?** Added 2026-09-26. This is not a
+   sizing question, it is the question that prices the Phase 1 proposal. The
+   parallel-run posture in `docs/DEMO_SCRIPT.md` has Dealerlink hold the sale up
+   to the order while **Swipe keeps issuing the invoices of record**, so every
+   confirmed order is keyed into Swipe a second time to raise the invoice. That
+   double entry is **per invoice**, so the cost of Phase 1 to them is a straight
+   multiple of this number and we currently do not know it. At 40 invoices a
+   month the parallel run is an irritation; at 400 it is a reason to refuse, and
+   the honest response would be to move F.6 (tax invoice) ahead of the
+   stock-and-serials pitch rather than sell a phase that adds work. It also
+   bounds two other things: whether they are near the **e-invoicing AATO
+   threshold** (§2), and how much the Tally ledger problem is actually costing
+   them per month — the ₹557.02 split on `MA/26-27/1079` is one voucher, and
+   nobody has multiplied it. **Ask before quoting Phase 1, not after.**
 
 **Scanner integration needs no code.** USB and Bluetooth scanners run in **HID
 keyboard mode**: they type the decoded string and send Enter. No driver, no SDK,
