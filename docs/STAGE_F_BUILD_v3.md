@@ -185,7 +185,9 @@ See §4 for the rationale. GSTIN requirements:
 - Block dispatch when required and missing, naming the dealer and address. Do
   not defer the failure to e-way bill generation.
 - **Do not** let the GSTIN override place-of-supply derivation. Place of supply
-  stays derived from the Ship-To _address_ state per ADR-012.
+  stays derived from the state of whichever party the document’s delivery
+  arrangement selects, per ADR-016 — the Ship-To under §10(1)(a), the Bill-To
+  under §10(1)(b). A GSTIN is evidence about a party, never the selection.
 
 ### F.11 — Tally mapping configuration
 
@@ -435,7 +437,13 @@ backlog more than any technical finding.
 - `packages/tax` and its fixtures, RLS policies, `adminDb`, audit triggers and
   `critical-path.spec.ts` are protected. No refactor without an explicit
   instruction.
-- Place of supply is Ship-To for goods, IGST Act §10, ADR-012.
+- Place of supply for goods follows the DELIVERY ARRANGEMENT, IGST Act §10,
+  **ADR-016**: the Ship-To state under §10(1)(a) (goods delivered to the
+  recipient — the default, and what every pre-F.5a document carries), the
+  Bill-To state under §10(1)(b) (delivered to a third party on the recipient’s
+  direction). ADR-012 is superseded and remains correct about the (a) case it
+  reasoned about. The selection lives in `resolvePlaceOfSupply`
+  (`packages/tax/src/place-of-supply.ts`); never restate it in a caller.
 - `gstRate` returns as a **string**. Any comparison, keying or grouping by rate
   must normalise to numeric first. **The reason is not the one this line used to
   give.** `'18'` and `'18.00'` cannot become separate groups — the four rate

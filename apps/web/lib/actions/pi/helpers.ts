@@ -41,8 +41,11 @@ export interface ComputedTotals {
 
 /**
  * Authoritative server-side totals for a PI/Order. Delegates to the canonical
- * `@dealerlink/tax` engine. `placeOfSupply` is the SHIP-TO state (ADR-012),
- * so a Ship-To in a different state from the tenant flips IGST↔CGST/SGST.
+ * `@dealerlink/tax` engine. `placeOfSupply` is passed IN, already derived by
+ * the caller through `resolvePlaceOfSupply` (ADR-016) — the Ship-To state under
+ * IGST Act §10(1)(a), the Bill-To state under §10(1)(b) — so a place of supply
+ * in a different state from the tenant flips IGST↔CGST/SGST. This function does
+ * not derive it and must not: the selection has one home.
  */
 export function computeDocumentTotals(
   lines: ReadonlyArray<{ quantity: number; unitPrice: number; gstRate: number }>,
@@ -283,6 +286,7 @@ export async function loadPiForGuard(tx: DrizzleTx, id: string) {
       shipToDealerId: performaInvoices.shipToDealerId,
       tenantStateAtIssue: performaInvoices.tenantStateAtIssue,
       placeOfSupply: performaInvoices.placeOfSupply,
+      deliveryArrangement: performaInvoices.deliveryArrangement,
       validUntil: performaInvoices.validUntil,
       discountType: performaInvoices.discountType,
       discountValue: performaInvoices.discountValue,

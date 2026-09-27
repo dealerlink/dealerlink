@@ -68,9 +68,24 @@ export const performaInvoices = pgTable(
       .references(() => dealers.id, { onDelete: 'restrict' }),
 
     // Tax-engine inputs captured at issuance — never recomputed from masters.
-    // placeOfSupply is the SHIP-TO dealer's state (IGST Act §10 — ADR-012).
+    // placeOfSupply derives from the party the deliveryArrangement selects, per
+    // ADR-016: the SHIP-TO dealer's state under IGST Act §10(1)(a), the BILL-TO
+    // dealer's state under §10(1)(b). ADR-012 is superseded, not deleted — it
+    // reasoned only about the (a) case and is correct about it.
     tenantStateAtIssue: text().notNull(),
     placeOfSupply: text().notNull(),
+
+    // WHICH §10 sub-clause applies, recorded per document because it is a fact
+    // about the transaction and not a tenant preference (ADR-012 rejected the
+    // tenant-setting option at DECISIONS.md:591; that rejection stands).
+    //
+    // NULLABLE, AND NULL CARRIES MEANING: the parties are the same, so the
+    // question could not arise and was never asked. A NOT NULL default would
+    // assert arrangement (a) on every single-party document in the corpus, which
+    // is a claim nobody made. Resolution treats NULL as (a) — see
+    // `resolvePlaceOfSupply` — so behaviour is identical either way; what differs
+    // is whether the row claims a determination was made.
+    deliveryArrangement: text(),
 
     preparedBy: uuid()
       .notNull()
@@ -133,6 +148,13 @@ export const performaInvoices = pgTable(
     check('performa_invoices_subtotal_chk', sql`${t.subtotal} >= 0`),
     check('performa_invoices_total_chk', sql`${t.totalAmount} >= 0`),
     check('performa_invoices_validity_chk', sql`${t.validUntil} >= ${t.piDate}`),
+    // text + CHECK rather than a pgEnum, following the dispatches_status_chk
+    // precedent (dispatch.ts:97). NULL passes an IN check, which is what makes
+    // the nullable column above expressible without a third "unknown" member.
+    check(
+      'performa_invoices_delivery_arrangement_chk',
+      sql`${t.deliveryArrangement} IN ('s10_1_a', 's10_1_b')`,
+    ),
   ],
 );
 

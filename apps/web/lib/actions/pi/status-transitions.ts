@@ -151,6 +151,14 @@ export const confirmPi = tenantAction(
         shipToDealerId: pi.shipToDealerId,
         tenantStateAtIssue: pi.tenantStateAtIssue,
         placeOfSupply: pi.placeOfSupply,
+        // COPIED, NEVER RE-DERIVED — like the two state columns above it. An
+        // order that carried a place of supply without the arrangement that
+        // selected it would print a tax type whose justification it does not
+        // hold, which is the F.114 shape: a descendant document knowing less
+        // than its parent. Re-deriving here would be worse still, because the
+        // dealers' states can have changed since the PI was issued and these
+        // are at-issue snapshots (ADR-016).
+        deliveryArrangement: pi.deliveryArrangement,
         orderDate: now.toISOString().slice(0, 10),
         currency: pi.currency,
         subtotal: pi.subtotal,
