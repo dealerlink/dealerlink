@@ -29,7 +29,7 @@ import {
   users,
 } from '../schema';
 
-import { daysAgo, isoDaysAgo, seedNow } from './clock';
+import { daysAgo, daysAhead, isoDaysAgo, seedNow } from './clock';
 
 const here =
   typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
@@ -567,6 +567,46 @@ async function seedTenant(
         reason: 'revised_to_rev_2',
       });
 
+      /**
+       * A REVISION ISSUED TODAY CANNOT INHERIT A VALIDITY THAT ALREADY LAPSED.
+       *
+       * F.134(b). The revisions below are dated `isoDaysAgo(0)` — the seed epoch —
+       * while copying `parent.validUntil` verbatim. That is legal only while the
+       * parent's validity still runs at the epoch, and `quotations_validity_chk`
+       * enforces `valid_until >= quote_date`, so for a parent whose window had
+       * already closed the INSERT failed and took the whole seed with it:
+       *
+       *   new row for relation "quotations" violates check constraint
+       *   "quotations_validity_chk"   (quote_date 2026-09-11, valid_until 2026-09-06)
+       *
+       * WHY IT WAS INTERMITTENT RATHER THAN ALWAYS BROKEN: the parent is chosen by
+       * the unordered `.limit(1)` select above, so which of the three `accepted`
+       * quotations it lands on is decided by physical row order. Enumerating the
+       * plans, two are safe as parents (`validUntil` at epoch +5d and +0d) and one
+       * is not (−5d) — a one-in-three draw, taken once per tenant, re-rolled on
+       * every reseed. That is F.134's hazard producing a hard failure rather than a
+       * byte difference, and it is why the seed ran for months and then stopped.
+       *
+       * THE FIX IS `max`, DELIBERATELY, NOT A REPLACEMENT. Where the inherited date
+       * is already legal it is kept EXACTLY, so every document that seeded correctly
+       * before still seeds identically and no reference PDF can move for this
+       * reason. Only the illegal case changes, and it changes to the minimum that
+       * makes it legal plus the standard revision window.
+       *
+       * The row-order lottery itself is NOT fixed here — that is F.134(a), deferred,
+       * because choosing a canonical order is a bigger question than it looks: part
+       * of the 14-reference contract may have been captured under a different one.
+       * After this fix every ordering is safe, so the seed runs regardless of what
+       * (a) later decides.
+       */
+      const REVISION_VALIDITY_DAYS = 15;
+      const revisionQuoteDate = isoDaysAgo(0);
+      const inheritedValidUntil = parent.validUntil;
+      const revisionValidUntil =
+        inheritedValidUntil >= revisionQuoteDate
+          ? inheritedValidUntil
+          : daysAhead(REVISION_VALIDITY_DAYS).toISOString().slice(0, 10);
+
       // Create Rev 2 (sent) and Rev 3 (draft) sharing the same quote_number.
       for (const rev of [2, 3]) {
         const status = rev === 2 ? 'superseded' : 'draft';
@@ -582,8 +622,8 @@ async function seedTenant(
             preparedBy: actorId,
             tenantStateAtIssue: parent.tenantStateAtIssue,
             placeOfSupply: parent.placeOfSupply,
-            quoteDate: isoDaysAgo(0),
-            validUntil: parent.validUntil,
+            quoteDate: revisionQuoteDate,
+            validUntil: revisionValidUntil,
             currency: parent.currency,
             discountType: parent.discountType,
             discountValue: parent.discountValue,
