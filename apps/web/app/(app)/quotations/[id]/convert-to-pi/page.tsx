@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getAuthContext } from '@/lib/auth/session';
 import { listDealers } from '@/lib/queries/dealers';
 import { getQuotationById } from '@/lib/queries/quotations';
+import { buildPlaceOfSupplyPreviews } from '@/lib/tax/place-of-supply-preview';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
 import { ConvertToPiForm } from './convert-form';
@@ -54,6 +55,25 @@ export default async function ConvertToPiPage({ params }: PageProps) {
     state: (d.state ?? '').toUpperCase(),
   }));
 
+  const billTo = {
+    id: q.dealer.id,
+    name: q.dealer.name,
+    state: (q.dealer.state ?? '').toUpperCase(),
+  };
+  // The Bill-To dealer must be among the candidates, or the form's 'none' lookup
+  // for it would miss. `listDealers` filters to ACTIVE, and a quotation's dealer
+  // can have been deactivated since it was raised — a real state, not a defensive
+  // branch — so it is prepended rather than assumed present.
+  const candidates = dealers.some((d) => d.id === billTo.id) ? dealers : [billTo, ...dealers];
+
+  // Every (Ship-To, arrangement) classification, derived here rather than in the
+  // form (D-8). The form is a lookup with no tax rule inside it.
+  const previews = buildPlaceOfSupplyPreviews({
+    tenantState: q.tenantStateAtIssue,
+    billTo: { id: billTo.id, state: billTo.state },
+    candidates,
+  });
+
   return (
     <div className="mx-auto max-w-[760px] px-8 py-10">
       <Link
@@ -76,16 +96,12 @@ export default async function ConvertToPiPage({ params }: PageProps) {
       <ConvertToPiForm
         quotationId={q.id}
         quoteNumber={q.quoteNumber}
-        billTo={{
-          id: q.dealer.id,
-          name: q.dealer.name,
-          state: (q.dealer.state ?? '').toUpperCase(),
-        }}
-        tenantState={q.tenantStateAtIssue}
+        billTo={billTo}
         quotationPlaceOfSupply={q.placeOfSupply}
         defaultValidUntil={addDays(15)}
         defaultTerms={q.termsAndConditions ?? ''}
-        dealers={dealers}
+        dealers={candidates}
+        previews={previews}
       />
     </div>
   );

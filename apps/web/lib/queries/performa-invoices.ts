@@ -149,6 +149,13 @@ export interface PiDetail {
   preparedByName: string;
   tenantStateAtIssue: string;
   placeOfSupply: string;
+  /**
+   * The recorded §10 delivery arrangement, or null when the parties match and the
+   * question could not arise (ADR-016). Surfaced so the edit form can seed its
+   * control from what the document already says, rather than resetting it to the
+   * default on every edit.
+   */
+  deliveryArrangement: 's10_1_a' | 's10_1_b' | null;
   isInterState: boolean;
   piDate: string;
   validUntil: string;
@@ -281,6 +288,10 @@ export async function getPerformaInvoiceById(
       preparedByName: base.preparedByName ?? '—',
       tenantStateAtIssue: pi.tenantStateAtIssue,
       placeOfSupply: pi.placeOfSupply,
+      // Read as stored. The CHECK constraint restricts the column to the two
+      // clause values, so the cast is narrowing a DB guarantee rather than
+      // asserting one the application has not established.
+      deliveryArrangement: (pi.deliveryArrangement ?? null) as 's10_1_a' | 's10_1_b' | null,
       isInterState: pi.tenantStateAtIssue.trim() !== pi.placeOfSupply.trim(),
       piDate: pi.piDate,
       validUntil: pi.validUntil,
