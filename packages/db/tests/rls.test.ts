@@ -85,20 +85,79 @@ describe('RLS isolation — metadata', () => {
     expect((row as { relrowsecurity: boolean }).relrowsecurity).toBe(false);
   });
 
-  it.each([
-    'users',
-    'tenant_settings',
-    'document_counters',
-    'audit_log',
-    'auth_events',
-    'access_log',
-  ])('%s has RLS enabled AND forced', async (table) => {
-    const [row] = await db.execute(
-      sql`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = ${table}`,
-    );
-    const r = row as { relrowsecurity: boolean; relforcerowsecurity: boolean };
-    expect(r.relrowsecurity).toBe(true);
-    expect(r.relforcerowsecurity).toBe(true);
+  /**
+   * EVERY TENANT-SCOPED TABLE, DERIVED FROM THE DATABASE — NOT A HARDCODED LIST.
+   *
+   * This replaced an `it.each` over six literal table names (F.5a). The hole that
+   * list left was not theoretical: `migrate.ts:49` iterates `rls/*.sql`, so a new
+   * table's GRANTS are automatic (`rls/00-app-role.sql` re-grants on ALL TABLES),
+   * but its POLICY is a file somebody has to remember to write and its audit
+   * trigger is a third, separate stanza. **A table absent from the literal was a
+   * table nobody checked**, so it would ship readable across every tenant with the
+   * whole suite green.
+   *
+   * The rule is now derived: every table in `public` carrying a `tenant_id` column
+   * must have `relrowsecurity`, `relforcerowsecurity`, and a `tenant_isolation`
+   * policy. A new table is covered the moment it exists, with no list to update —
+   * which is the only version of this check that survives the next person who
+   * forgets.
+   *
+   * CLAUDE.md §4 is the rule being enforced: "Every table has `tenant_id` + RLS
+   * policy. Non-negotiable. **This applies to log tables too.**"
+   */
+  it('every table with a tenant_id column has RLS enabled, forced, and a tenant_isolation policy', async () => {
+    const rows = (await db.execute(sql`
+      SELECT c.relname AS table_name,
+             c.relrowsecurity AS enabled,
+             c.relforcerowsecurity AS forced,
+             EXISTS (
+               SELECT 1 FROM pg_policies p
+               WHERE p.tablename = c.relname AND p.policyname = 'tenant_isolation'
+             ) AS has_policy
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND a.attnum > 0
+        AND NOT a.attisdropped
+      WHERE n.nspname = 'public' AND c.relkind = 'r'
+      ORDER BY c.relname
+    `)) as unknown as {
+      table_name: string;
+      enabled: boolean;
+      forced: boolean;
+      has_policy: boolean;
+    }[];
+
+    /**
+     * Tables that carry a `tenant_id` and legitimately sit outside the rule, each
+     * with its reason stated HERE rather than omitted silently. An exclusion that
+     * says why is a different object from a list that quietly drops a table.
+     *
+     * Empty today, and that is the honest state: every tenant-scoped table in the
+     * schema is expected to be isolated, including all six log tables. If a future
+     * table needs to be here, the reason goes beside it or it does not go in.
+     */
+    const JUSTIFIED_EXCLUSIONS: Record<string, string> = {};
+
+    // Guards the vacuous pass: if the query broke or the schema were empty, an
+    // all-green loop over zero rows would prove nothing. The floor is deliberately
+    // low rather than an exact count, so seed and schema growth cannot make this
+    // fail for the wrong reason (R-5's lesson about carrying corpus numbers).
+    expect(
+      rows.length,
+      'no tenant_id tables found — the enumeration query is broken',
+    ).toBeGreaterThan(10);
+
+    const offenders = rows
+      .filter((r) => !(r.table_name in JUSTIFIED_EXCLUSIONS))
+      .filter((r) => !r.enabled || !r.forced || !r.has_policy)
+      .map(
+        (r) =>
+          `${r.table_name}: enabled=${r.enabled} forced=${r.forced} tenant_isolation=${r.has_policy}`,
+      );
+
+    // NAMED, not counted — a failure must say which table and which of the three
+    // properties is missing, because the three have three different fixes.
+    expect(offenders, `${rows.length} tenant-scoped tables checked`).toEqual([]);
   });
 });
 

@@ -15,6 +15,7 @@ export * from './email-delivery-log';
 export * from './webhook-events';
 export * from './inbound-token-history';
 export * from './dealer';
+export * from './dealer-address';
 export * from './product';
 export * from './inventory';
 export * from './deal';

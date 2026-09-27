@@ -190,6 +190,17 @@ CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON products
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
 
+-- F.5a: dealer delivery addresses are auditable, beside the dealer master they
+-- belong to. An address change moves where goods physically go, so it needs the
+-- same trail as the dealer record itself. NOT automatic — migrate.ts applies this
+-- file, but nothing generates the stanza, and no pre-existing test enumerates
+-- tables to demand one (P-8). dealer-addresses.test.ts asserts the audit row
+-- directly, and failed before this stanza existed.
+DROP TRIGGER IF EXISTS audit_trg ON dealer_addresses;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON dealer_addresses
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
 DROP TRIGGER IF EXISTS audit_trg ON inventory_items;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON inventory_items
