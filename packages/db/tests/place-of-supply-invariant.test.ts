@@ -197,27 +197,36 @@ describe('F.5a — place_of_supply agrees with the arrangement that selected it'
     });
   }
 
-  it('the corpus is uniformly arrangement (a), as A.0 measured it', async () => {
-    // A.0's party census found all eight differing-party documents carrying
-    // place_of_supply = the ship-to state, i.e. arrangement (a). This is the
-    // sentence ADR-016 cites for "nothing existing reclassifies", so it is
-    // asserted rather than left in a deviation entry where it cannot fail.
+  it('exactly the named documents record a §10(1)(b) arrangement — nothing else', async () => {
+    // A NAMED SET, NOT A LOOSENED PREDICATE. This assertion used to read "every
+    // arrangement in the corpus is NULL", which was true before the §10(1)(b) chain
+    // existed. The obvious update — allow NULL *or* 's10_1_b' — would have been
+    // wrong in a way that is easy to miss: a predicate accepts an UNEXPECTED (b)
+    // document silently, and an unexpected (b) document is a stored tax
+    // classification nobody chose. A named set fails when one appears.
     //
-    // It is NOT a claim that (b) never occurs — it is a claim about the SEEDED
-    // corpus. When a (b) chain is seeded, this expectation changes with it, and
-    // that is the point: the day that introduces a (b) document should have to
-    // come here and say so.
-    const arrangements = new Set<string>();
+    // So the day that seeds another (b) chain has to come here and add it
+    // deliberately. That is the point, not an inconvenience: this is the only place
+    // in the suite where "which documents are classified by the buyer's state rather
+    // than the delivery address" is written down.
+    const EXPECTED: Record<string, string> = {
+      // F.5a D-11's chain. Tenant MH, Bill-To MH, Ship-To KA — so (b) makes it
+      // intra-state where (a) would have made it inter-state.
+      'thirdparty/PI-2026-0001': 's10_1_b',
+      'thirdparty/ORD-2026-0001': 's10_1_b',
+    };
+
+    const found: Record<string, string> = {};
     for (const t of tenantIds) {
       for (const which of ['pi', 'order'] as const) {
         for (const r of await load(t.id, which)) {
-          // Same seeded-only scope as above, and for the same reason: a fixture
-          // fabricated by another test in this suite says nothing about the seed.
           if (!SEEDED_NUMBER.test(r.docNumber)) continue;
-          arrangements.add(r.arrangement ?? 'NULL');
+          if (r.arrangement != null) found[`${t.slug}/${r.docNumber}`] = r.arrangement;
         }
       }
     }
-    expect([...arrangements].sort()).toEqual(['NULL']);
+    // Compared as whole objects so an extra key, a missing key AND a changed value
+    // each fail, and the diff names the document.
+    expect(found).toEqual(EXPECTED);
   });
 });
