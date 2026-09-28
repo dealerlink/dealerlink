@@ -200,7 +200,23 @@ async function seedTenant(
       })
       .from(quotations)
       .where(sql`tenant_id = ${tenantId} AND status <> 'superseded'`)
-      .orderBy(sql`created_at ASC`);
+      /**
+       * F.134(a) — `created_at` ALONE IS NOT AN ORDERING HERE. `now()` in Postgres
+       * is the TRANSACTION timestamp, so every quotation inserted in one transaction
+       * shares a `created_at`: 22 quotations per tenant carry only 18 distinct
+       * values, measured. The remainder of the sort fell back to physical row order,
+       * so which quotation each PI descended from changed between reseeds — and
+       * PI-2026-0001 and PI-2026-0002 swapped their place of supply.
+       *
+       * THIS SITE HAD AN `ORDER BY` AND WAS STILL ORDER-DEPENDENT, which is why
+       * F.134's rule is ORDER BY SOMETHING UNIQUE rather than "add an ordering": an
+       * audit for missing clauses would have declared this line safe.
+       *
+       * `quote_number` is unique per tenant, so the pair is total. `created_at`
+       * stays first to preserve the intended chronological grouping wherever it does
+       * discriminate; `quote_number` only breaks ties.
+       */
+      .orderBy(sql`created_at ASC, quote_number ASC`);
 
     if (dealerRows.length === 0 || quoteRows.length === 0) {
       console.log('  · (no dealers/quotations — skipping)');
@@ -240,8 +256,48 @@ async function seedTenant(
       console.log('  · (no quotations with lines — skipping)');
       return;
     }
-    // Confirmed plans want a linked deal so the deal advances — float those first.
-    sources.sort((a, b) => (a.dealId ? 0 : 1) - (b.dealId ? 0 : 1));
+    /**
+     * F.134(a) — EACH PI PLAN NAMES ITS SOURCE QUOTATION.
+     *
+     * This replaced `sources.sort((a, b) => (a.dealId ? 0 : 1) - (b.dealId ? 0 : 1))`
+     * followed by `sources[i % sources.length]`. That sort was PARTIAL: it compared
+     * only "has a dealId", so every deal-bearing quotation compared EQUAL to every
+     * other and the order within each group was whatever the query happened to
+     * deliver. Two plans carry `linkDeal`, so which of them became PI-2026-0001 was
+     * decided by row order — and PI-2026-0001 and PI-2026-0002 swapped between
+     * reseeds, each rendering the other's dealer, state and tax type.
+     *
+     * A boolean comparator is not an ordering. Same finding as `created_at ASC` on a
+     * column that ties: the clause exists and does not discriminate.
+     *
+     * WHY THESE QUOTATIONS, AND WHY THAT IS NOT IN TENSION WITH THE DOCUMENTED
+     * WORKFLOW. The first two entries are read out of the reference PDFs:
+     * PI-2026-0001 carries Verma Sun with two lines and a 10% discount, which is
+     * QT-2026-0010; PI-2026-0002 carries Pillai Renewables with one line, which is
+     * QT-2026-0005. CLAUDE.md's "PIs always come from accepted quotations" is a claim
+     * about the PRODUCT and does not constrain which accepted quotation a FIXTURE
+     * picks. QT-2026-0010 is accepted, so the references pin one valid choice among
+     * several — which is what a fixture does. Ordering these by acceptance instead
+     * would be a DIFFERENT fixture, not a more correct one. Do not re-open this.
+     *
+     * The remaining eight are not pinned by any reference; they are named anyway, so
+     * that adding a quotation to day8 cannot reshuffle which quotation any PI
+     * descends from. Deal-bearers first (preserving the original intent that a linked
+     * deal advances), then ascending.
+     */
+    const PLAN_SOURCE_QUOTES = [
+      'QT-2026-0010',
+      'QT-2026-0005',
+      'QT-2026-0001',
+      'QT-2026-0002',
+      'QT-2026-0003',
+      'QT-2026-0004',
+      'QT-2026-0006',
+      'QT-2026-0007',
+      'QT-2026-0008',
+      'QT-2026-0009',
+    ] as const;
+    const sourceByQuote = new Map(sources.map((x) => [x.quoteNumber, x]));
 
     // in_stock inventory pool per product, for confirmed-order reservations.
     const invRows = await tx
@@ -261,7 +317,23 @@ async function seedTenant(
 
     for (let i = 0; i < PLANS.length; i++) {
       const plan = PLANS[i]!;
-      const src = sources[i % sources.length]!;
+      // Named, not indexed. Throws on absence: an index silently returns the wrong
+      // quotation, and a PI built on the wrong quotation is a document whose dealer,
+      // state and tax type are all wrong while looking entirely plausible.
+      const wantQuote = PLAN_SOURCE_QUOTES[i];
+      if (!wantQuote) {
+        throw new Error(
+          `day11: PI plan ${i} has no source quotation named — PLAN_SOURCE_QUOTES covers ` +
+            `0..${PLAN_SOURCE_QUOTES.length - 1}. Name the quotation rather than widening the index.`,
+        );
+      }
+      const src = sourceByQuote.get(wantQuote);
+      if (!src) {
+        throw new Error(
+          `day11: ${wantQuote} has no lines in this tenant, so it cannot source a PI. ` +
+            `The reference PDFs were captured against it; a missing source is a corpus defect.`,
+        );
+      }
 
       const billTo = dealerRows.find((d) => d.id === src.dealerId) ?? dealerRows[0]!;
       let shipTo = billTo;
