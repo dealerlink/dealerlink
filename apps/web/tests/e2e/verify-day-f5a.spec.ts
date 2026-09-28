@@ -65,12 +65,14 @@ async function skipIfPasswordRotation(page: Page): Promise<void> {
  */
 async function findConvertibleQuotation(): Promise<{
   quotationId: string;
+  billToDealerId: string;
   billToState: string;
   otherDealerId: string;
   otherState: string;
 } | null> {
   const rows = (await adminDb.execute(sql`
     SELECT q.id::text AS quotation_id,
+           bd.id::text     AS bill_to_dealer_id,
            upper(bd.state) AS bill_to_state,
            od.id::text     AS other_dealer_id,
            upper(od.state)  AS other_state
@@ -89,6 +91,7 @@ async function findConvertibleQuotation(): Promise<{
     LIMIT 1
   `)) as unknown as {
     quotation_id: string;
+    bill_to_dealer_id: string;
     bill_to_state: string;
     other_dealer_id: string;
     other_state: string;
@@ -97,6 +100,7 @@ async function findConvertibleQuotation(): Promise<{
   return r
     ? {
         quotationId: r.quotation_id,
+        billToDealerId: r.bill_to_dealer_id,
         billToState: r.bill_to_state,
         otherDealerId: r.other_dealer_id,
         otherState: r.other_state,
@@ -140,14 +144,25 @@ test.describe('F.5a — the delivery arrangement is asked only when it can arise
 
     // ── And it goes away again. Without this, "appears when they differ" is
     //    consistent with "appears once and never leaves".
-    await shipToSelect.selectOption({ index: 0 });
-    const firstIsBillTo = await shipToSelect.inputValue();
-    if (firstIsBillTo !== f.otherDealerId) {
-      await expect(
-        control,
-        'the control must disappear when Ship-To returns to the Bill-To dealer',
-      ).toHaveCount(0);
-    }
+    //
+    // SELECTS THE BILL-TO DEALER BY ID, AND THE ASSERTION IS UNCONDITIONAL. Both
+    // halves of that are a correction. The first version did
+    // `selectOption({ index: 0 })` and guarded the assertion with
+    // `if (firstIsBillTo !== f.otherDealerId)` — but option 0 is merely the first
+    // dealer in the list, which need not be the Bill-To dealer, and the guard only
+    // checked it was not the OTHER dealer. So when option 0 was a third dealer the
+    // parties still differed, the control correctly stayed, and the assertion
+    // failed on CI while passing locally.
+    //
+    // The guard was the worse half. **A conditional assertion can pass without
+    // running**, so the test reported success under exactly the orderings its
+    // author had not anticipated. Asserting on an explicit id removes the reason
+    // the guard existed.
+    await shipToSelect.selectOption(f.billToDealerId);
+    await expect(
+      control,
+      'the control must disappear when Ship-To returns to the Bill-To dealer',
+    ).toHaveCount(0);
   });
 
   test('switching the arrangement moves the place of supply, server-derived', async ({ page }) => {

@@ -7111,11 +7111,13 @@ table about the first.
 work, in the entry whose entire subject is derived counts going stale. Corrected in the
 same commit that added DEV.138's ninth instance.
 
-## DEV.151 — F.5a: three new DEV.138 shapes, and the second day running where a test is the safety net because the tooling is not
+## DEV.151 — F.5a: four new DEV.138 shapes, and the second day running where a test is the safety net because the tooling is not
 
-**F.5a shipped in five commits.** The build itself went as D-1 to D-12 specified. What
-this entry is for is the four things that did not: three new failure shapes in DEV.138's
-family, and a framing the operator asked to be carried forward.
+**F.5a shipped in seven commits.** The build itself went as D-1 to D-12 specified. What
+this entry is for is the five things that did not: FOUR new failure shapes in DEV.138's
+family, and a framing the operator asked to be carried forward. Shape 13 was found by CI
+after the PR opened, which is why the count here is four rather than the three the
+closeout commit first recorded.
 
 ### The corpus, measured, with the state it was measured in
 
@@ -7220,6 +7222,48 @@ What the corrected instrument then showed is bigger than the correction: **a res
 change which documents EXIST.** `QT-2026-0012`'s revisions 2 and 3 cease to exist and
 `QT-2026-0010`'s come into being. That is recorded on F.134 as the strongest argument
 for (a).
+
+### Shape 13 — a conditional assertion, which can pass without running
+
+Found by CI on the F.5a PR, in the same spec as shape 11. The "and it goes away
+again" check read:
+
+```ts
+await shipToSelect.selectOption({ index: 0 });
+const firstIsBillTo = await shipToSelect.inputValue();
+if (firstIsBillTo !== f.otherDealerId) {
+  await expect(control, '…must disappear…').toHaveCount(0);
+}
+```
+
+Option 0 is merely the first dealer in the list, which need not be the Bill-To
+dealer, and the guard only checked it was not the OTHER dealer. On CI option 0 was
+a third dealer, so the parties still differed, the control **correctly** stayed,
+and the assertion failed:
+
+```
+Error: the control must disappear when Ship-To returns to the Bill-To dealer
+Expected: 0   Received: 1
+19 × locator resolved to 1 element
+```
+
+**The guard is the defect, not the selector.** A conditional assertion **can pass
+without running**, so under every ordering where option 0 happened to be the
+Bill-To dealer — which is what held locally — the test reported success while
+asserting nothing. The operator's framing: a test that skips itself when setup
+does not cooperate can pass without running, and that is **this project's
+most-filed failure shape**.
+
+Fixed by selecting the Bill-To dealer **by id** and deleting the guard, so the
+assertion is unconditional. Re-proven capable of failing afterwards: rendering the
+control unconditionally still fails it.
+
+**SECOND VACUITY IN ONE FILE**, with shape 11, and both were found by EXECUTION
+rather than by review — 11 by its author noticing that a two-letter code appears
+unconditionally on the page, 13 by CI drawing an ordering the author had not
+considered. A spec can be read carefully twice and still assert nothing, because
+what makes an assertion vacuous is usually a fact about the DATA rather than about
+the code.
 
 ### The framing to carry forward — two days running
 
