@@ -798,6 +798,177 @@ Tradeoffs:
 - DEV.66 (resolved): Cold-start timeout adjustment (60s → 120s)
 - DEV.67 (resolved): Idle-recycle widened to 45m; worker sizing flagged for Stage D
 
+## ADR-016 — Place of supply follows the delivery arrangement: §10(1)(a) ship-to, §10(1)(b) bill-to
+
+**Date:** 2026-09-27
+**Status:** Accepted
+**Supersedes:** ADR-012 (which remains, and is still the correct record of the case
+it reasoned about)
+**Implements:** F.5a
+**Related:** F.112 (the onboarding observation that surfaced the distinction), F.132
+(`placeOfSupplyOverride`), F.134 (seed reproducibility)
+
+### Context
+
+ADR-012 established that place of supply for goods is the **ship-to** location and
+not the payer's address, correcting a Bill-To-only simplification that had been
+harmless while a quotation carried exactly one dealer. That decision was right, and
+it is not being reversed.
+
+What ADR-012 did not distinguish is **which** §10 sub-clause it was applying. Read
+in full, it cites "the IGST Act 2017 **§10**" generically, and its worked example
+is "a Maharashtra distributor billing a Maharashtra dealer but shipping to **that
+dealer's** Karnataka site". That is one dealer with two sites — the §10(1)(a) case,
+where goods are delivered to the recipient and the place of supply is where delivery
+ends. ADR-012 is correct about it.
+
+§10(1)(b) is a different arrangement with a different answer. Where goods are
+delivered to someone **on the direction of a third person**, the place of supply is
+that third person's principal place of business — so it derives from the **bill-to**
+party, not the ship-to one. Both arrangements occur in any real dealer network, and
+which one applies is a fact about the individual transaction. A distributor shipping
+to a dealer's own warehouse and a distributor shipping to a dealer's customer on that
+dealer's instruction are doing different things, and the statute taxes them
+differently.
+
+So the gap ADR-012 left is not an error in its reasoning; it is a case it never
+reached. "ADR-012 was wrong" is the wrong summary and would mislead the next reader.
+
+### Decision
+
+**Place of supply derives from the party that the document's recorded delivery
+arrangement selects.**
+
+- **§10(1)(a)** — goods delivered to the recipient → the **ship-to** state.
+- **§10(1)(b)** — goods delivered to a third party on the recipient's direction →
+  the **bill-to** state.
+
+The selecting condition is the arrangement, recorded **per document** in
+`performa_invoices.delivery_arrangement` and `orders.delivery_arrangement`. The rule
+itself is one pure function, `resolvePlaceOfSupply` in `packages/tax`, beside
+`isInterState` and for the same reason: it is a statutory classification rather than
+a caller's convenience, and CLAUDE.md §5 says tax rules are never inlined in routes.
+
+**It is not a tenant setting.** ADR-012 rejected that option on the ground that §10
+is statute and not tenant policy, and that rejection stands unchanged — with more
+force now, not less, because the arrangement varies between two documents issued by
+the same tenant on the same day.
+
+**Quotations are unaffected.** A quotation has one dealer, so the parties cannot
+differ, the question cannot arise, and place of supply remains `dealer.state`. The
+column exists only on the two tables where a distinct ship-to and a stored place of
+supply both exist.
+
+**Orders copy the arrangement forward from the PI; they never re-derive it.** Like
+`tenant_state_at_issue` and `place_of_supply` beside it, this is an at-issue
+snapshot. Re-deriving on confirmation would read dealer states that may have moved
+since the PI was issued, and an order that stored a place of supply without the
+arrangement that selected it would print a tax type whose justification it does not
+carry.
+
+#### (a) is the default, and that is load-bearing rather than convenient
+
+`NULL`, absent, and any unrecognised value all resolve to (a). `NULL` specifically
+means _the parties were the same, so the question could not arise and was never
+asked_ — which is why the column is nullable rather than `NOT NULL DEFAULT 's10_1_a'`.
+A default would assert on the record that somebody determined the arrangement for
+every single-party document in the corpus, which nobody did.
+
+This is what makes "no existing document reclassifies" a measured fact rather than an
+intention. F.5a's baseline census, taken on a clean reseed before any change:
+**all eight** differing-party documents in the seeded corpus — 6 of 68 PIs and 2 of
+48 orders — carry `place_of_supply` equal to the **ship-to** state. The corpus is
+uniformly arrangement (a). Defaulting to (a) therefore reproduces every stored
+classification exactly, and the migration writes to no existing column at all. The
+post-change census confirmed it: **0 of 162 rows moved.**
+
+#### Where an override is present, the override wins
+
+> "Where placeOfSupplyOverride is set, it wins. The override names a place of supply
+> directly; the arrangement only selects which party's state to derive one from. A
+> derivation cannot overrule a value that was stated. Any document where both are
+> present must be treated as a data-quality finding, not a precedence question — no
+> UI sets the override, so its presence alongside an arrangement means something
+> wrote it that should not have."
+
+That precedence is applied by the **callers**, not inside `resolvePlaceOfSupply`,
+because the callers are the only place that sees both. Putting it in the resolver
+would mean a pure function silently ignoring one of its own arguments. `F.132` is
+filed to revisit the override itself, which is now formally authoritative while being
+settable by no user interface.
+
+#### The stored values name the statute, not the party
+
+The two values are **`'s10_1_a'` and `'s10_1_b'`**, not `'ship_to'` and `'bill_to'`.
+
+The alternative will look more readable to the next reader, and it was not taken.
+A value named for its **effect** restates the derivation inside the data, so
+correcting the derivation later would silently turn every stored row into a false
+record of what was determined — the rows would claim a party was chosen when what
+was actually recorded was a transaction type. A **clause reference cannot drift from
+the statute it cites**: if the mapping from clause to party ever changes, the stored
+rows stay true and only the function changes.
+
+This is the same principle as `tenant_state_at_issue` snapshotting the tax engine's
+**input** rather than its conclusion, and it is the same reason F.99 exists: a
+document that stores a conclusion without the input that produced it cannot be
+audited, and cannot be corrected without guessing what it meant.
+
+### Alternatives considered
+
+- **Leave ADR-012's single rule in place and treat §10(1)(b) as out of scope.**
+  Rejected: the arrangement is not exotic. Any dealer network does both, and the
+  cost of getting it wrong is a misstated tax on an issued invoice.
+- **Ask the client which arrangement they use and implement only that one.** This was
+  the original plan and was abandoned deliberately: the distinction is
+  **per-document**, not per-tenant, so there is no single answer to ask for. What
+  survives of the question is F.112, an onboarding observation.
+- **Make the arrangement a tenant setting.** Rejected for ADR-012's own reason.
+- **Backfill an explicit arrangement onto existing rows.** Rejected, and this is the
+  most important rejection in this ADR. Every read path derives the tax type from the
+  stored `place_of_supply`, so rewriting that column changes the tax type printed on
+  documents that have **already been issued** — the F.99 failure mode with statutory
+  consequences attached. The migration adds two nullable columns and two CHECK
+  constraints and writes to nothing.
+- **A `pgEnum` instead of `text` + CHECK.** Both need a migration to change, the
+  codebase already mixes the two, and the `dispatches_status_chk` precedent is the
+  closer one. `NULL` also passes an `IN` check, which is what lets the nullable
+  column above be expressed without inventing a third "unknown" member.
+
+### What is still unverified, stated plainly
+
+**The statutory reading in this ADR is the operator's and the model's. It has not
+been reviewed by a chartered accountant.** That is the same caveat
+`docs/GST_RATE_MODEL_AUDIT.md` carries, and it is repeated here rather than assumed
+because an ADR is exactly the document a later reader will treat as settled.
+
+Specifically unverified: that §10(1)(b) is the correct clause for the
+bill-to/ship-to arrangement as this product models it; and that a Goa-billed,
+Maharashtra-shipped supply classifies the way F.112 describes. F.112 remains open as
+an onboarding observation — on migration, Dealerlink may compute IGST where a
+client's current system computed CGST + SGST, and they will report it as a bug on
+day one. Nothing in this ADR resolves that; it makes the two readings expressible,
+which is what was missing.
+
+### Consequences
+
+- A PI or order can classify differently from the quotation it descends from, for
+  two reasons now rather than one: a ship-to in another state, **or** a §10(1)(b)
+  arrangement. The convert and edit forms surface the classification from the server.
+- `place_of_supply` is re-derived when ship-to changes **or** when the arrangement
+  changes. Both are draft-only edits.
+- The arrangement is asked **only** when ship-to and bill-to differ. When they match
+  it is stored as `NULL`, because there is nothing to decide.
+- `packages/tax` gained one file and one export and nothing else. `computeTax` still
+  receives an opaque state string, exactly as ADR-012 described.
+- The invariant that `place_of_supply` equals the state its own arrangement selects
+  is now asserted for every seeded PI and order — the first test of it on this
+  project (`packages/db/tests/place-of-supply-invariant.test.ts`). F.105's audit had
+  recorded that nothing asserted it.
+- **Not yet proven:** that the tax-type LABEL is correct on a rendered page under
+  (b). The classification is proven; the rendering of it is F.131. A gap stated is a
+  different object from a gap omitted.
+
 ---
 
 _This log is append-only. Locked decisions are not edited; if a decision changes, write a new ADR that supersedes the old one._

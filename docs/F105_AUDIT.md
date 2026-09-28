@@ -2,6 +2,28 @@
 
 **Audit only. Nothing was fixed.** Completed 2026-09-23 on `main` at `43c06db`.
 
+> **POINTER ADDED 2026-09-27 — THE RULE THIS AUDIT MEASURED HAS BEEN SUPERSEDED, AND
+> THIS FILE IS DELIBERATELY NOT REWRITTEN.**
+>
+> Everything below describes a world with ONE place-of-supply rule: place of supply is
+> the ship-to state. **F.5a replaced that with two rules selected per document** —
+> ship-to under IGST Act §10(1)(a), bill-to under §10(1)(b) — recorded in
+> `performa_invoices.delivery_arrangement` / `orders.delivery_arrangement` and resolved
+> by `resolvePlaceOfSupply` in `packages/tax`. **ADR-016** is the current rule and
+> supersedes ADR-012.
+>
+> The write sites, the derivations and the site→derivation mapping below are still
+> ACCURATE AS OF 2026-09-23 and were re-confirmed at the start of F.5a; the two
+> production derivations F.5a changed are the D2 pair, and they now call the resolver
+> instead of reading `shipTo.state` directly.
+>
+> **Why this is a pointer and not an edit:** this file is EVIDENCE of what was measured
+> on a particular day, not a statement of the live rule. Rewriting it to agree with a
+> later decision would destroy the only thing it is good for — and the one correction
+> it already carries (its "34 of 68" denominator, corrected in place and dated) is
+> exactly the kind of fact that a rewrite would have quietly absorbed. Read it as a
+> dated measurement. For the current rule, read ADR-016.
+
 **Verdict: NO.** `orders.place_of_supply` is written in exactly one production place,
 and it copies the PI's value, which is itself derived from the **ship-to dealer's**
 state per ADR-012. No production write site on any of the three document types reads

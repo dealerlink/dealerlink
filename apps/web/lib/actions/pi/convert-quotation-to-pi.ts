@@ -2,6 +2,7 @@
 
 import { performaInvoiceLines, performaInvoices, quotations } from '@dealerlink/db';
 import { convertQuotationToPiSchema } from '@dealerlink/schemas';
+import { resolvePlaceOfSupply } from '@dealerlink/tax';
 import { eq } from 'drizzle-orm';
 
 import { tenantAction } from '@/lib/actions/wrap';
@@ -23,9 +24,14 @@ import {
  * Convert an accepted quotation into a draft Performa Invoice.
  *
  * Bill-To is the quotation's dealer. Ship-To defaults to the same dealer but
- * can be redirected; when the Ship-To dealer sits in a different state the
- * tax is recomputed — place of supply follows Ship-To per ADR-012 (IGST
- * Act §10), which may flip the document between IGST and CGST/SGST.
+ * can be redirected; when the Ship-To dealer sits in a different state the tax
+ * is recomputed, which may flip the document between IGST and CGST/SGST.
+ *
+ * Place of supply follows the DELIVERY ARRANGEMENT per ADR-016 (IGST Act §10):
+ * the Ship-To state under §10(1)(a) — goods delivered to the recipient, the
+ * default — and the Bill-To state under §10(1)(b), where goods go to a third
+ * party on the recipient's direction. ADR-012 is superseded, not deleted: it
+ * reasoned only about the (a) case and is correct about it.
  */
 export const convertQuotationToPi = tenantAction(
   ['admin', 'sales'],
@@ -67,8 +73,25 @@ export const convertQuotationToPi = tenantAction(
       shipToId === billToId ? billTo : await loadDealerForDocument(tx, shipToId, 'Ship-To');
 
     const tenantCtx = await loadTenantPiContext(tx, tenantId);
-    // ADR-012: place of supply is the SHIP-TO state.
-    const placeOfSupply = (input.placeOfSupplyOverride ?? shipTo.state).toUpperCase();
+    // ADR-016: the place of supply derives from the party the delivery
+    // arrangement selects — Ship-To under IGST Act §10(1)(a), Bill-To under
+    // §10(1)(b). An absent arrangement resolves to (a), which is what this line
+    // did unconditionally before, so nothing existing reclassifies.
+    //
+    // The OVERRIDE STILL WINS, and the precedence is applied here rather than
+    // inside `resolvePlaceOfSupply` because this is the only place that sees
+    // both: the override names a place of supply directly, while the arrangement
+    // only selects which party's state to derive one from, and a derivation
+    // cannot overrule a value that was stated. See ADR-016 and F.132.
+    const arrangement = shipToId === billToId ? null : (input.deliveryArrangement ?? null);
+    const placeOfSupply = (
+      input.placeOfSupplyOverride ??
+      resolvePlaceOfSupply({
+        arrangement,
+        shipToState: shipTo.state,
+        billToState: billTo.state,
+      })
+    ).toUpperCase();
 
     const lines = await loadQuotationLines(tx, q.id);
     if (lines.length === 0) {
@@ -106,6 +129,9 @@ export const convertQuotationToPi = tenantAction(
         shipToDealerId: shipToId,
         tenantStateAtIssue: tenantCtx.tenantState,
         placeOfSupply,
+        // Stored alongside the state it selected, so the document carries the
+        // justification for its own tax type rather than only the conclusion.
+        deliveryArrangement: arrangement,
         preparedBy: auth.user.id,
         piDate: input.piDate ?? now.toISOString().slice(0, 10),
         validUntil: input.validUntil,

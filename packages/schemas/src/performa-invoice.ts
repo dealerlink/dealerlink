@@ -21,10 +21,25 @@ export type PiLineInput = z.infer<typeof piLineInputSchema>;
  * supply — ADR-012). `placeOfSupplyOverride` is an escape hatch for a
  * ship-to address whose state is not the dealer's registered state.
  */
+/**
+ * Which IGST Act §10 sub-clause applies when Ship-To and Bill-To differ
+ * (ADR-016). Declared once and reused by both schemas below, so the two cannot
+ * drift — the same argument that gave the rate rule one `gstRateSchema`.
+ *
+ * The values name the STATUTE SUB-CLAUSE and not the party they select, so that
+ * correcting the derivation later cannot turn stored rows into a false record of
+ * what was determined. ADR-016 carries the full reasoning.
+ *
+ * Optional, and absence is meaningful: the parties are the same, so the question
+ * could not arise. It resolves to §10(1)(a) — today's behaviour.
+ */
+export const deliveryArrangementSchema = z.enum(['s10_1_a', 's10_1_b']);
+
 export const convertQuotationToPiSchema = z.object({
   quotationId: z.string().uuid(),
   shipToDealerId: z.string().uuid().optional(),
   placeOfSupplyOverride: stateCodeSchema.optional(),
+  deliveryArrangement: deliveryArrangementSchema.optional(),
   piDate: z.string().date().optional(),
   validUntil: z.string().date(),
   discount: quotationDiscountSchema.optional(),
@@ -39,6 +54,7 @@ export const updatePiSchema = z
     id: z.string().uuid(),
     shipToDealerId: z.string().uuid().optional(),
     placeOfSupplyOverride: stateCodeSchema.optional(),
+    deliveryArrangement: deliveryArrangementSchema.optional(),
     validUntil: z.string().date().optional(),
     discount: quotationDiscountSchema.optional(),
     termsAndConditions: trimmed.max(8000).nullable().optional(),
