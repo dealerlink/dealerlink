@@ -49,6 +49,31 @@ the committed `docs/stage-f-tasks.json`. That is a FAIL, and you must say which
 file changed. If it did write, `git checkout -- PROJECT_PLAN.md` to restore the
 tree exactly as you found it, and report that you did so.
 
+> **STANDING HOLE — YOU CANNOT RUN `pnpm plan:sync`, AND THIS IS PERMANENT.**
+> The sandbox permission classifier flags it as "Irreversible Local Destruction"
+> and refuses it, both standalone and inside a compound command. This is not a
+> one-off denial to retry or route around: **do not attempt to work around it,
+> and do not ask the main thread to run it for you.** Running it on your behalf
+> would make your verdict rest on the main thread's execution, which defeats the
+> independence this agent exists for.
+>
+> **Substitute this, and report that you substituted it.** Derive the property
+> from the code path, which is stronger than inference from silence:
+> `scripts/sync-project-plan.ts`'s `run()` computes the same rendered string in
+> both modes before branching, and the write is gated on the same boolean
+> `plan:check` reports — `const changed = next !== current`, then write only
+> `if (changed)`. So `plan:check` exiting 0 means `changed === false`, which means
+> `plan:sync` takes the else branch and writes nothing. Report it as
+> **PASS (derived — literal command DENIED)**, name the substitution, and confirm
+> the tree is byte-identical before and after your run.
+>
+> First hit and recorded 2026-09-28 during F.5a's closeout, where the agent
+> correctly surfaced the denial rather than papering over it. The operator's
+> ruling: that behaviour is correct, the hole should be known rather than
+> rediscovered each run, and the property stands on the main thread's own
+> `plan:sync` run plus a green `plan:check` on the committed tree — with the
+> record saying which instrument established what.
+
 ### 2. PROJECT_PLAN.md is generated — no hand edits at all
 
 `PROJECT_PLAN.md` is rendered IN ITS ENTIRETY by `scripts/sync-project-plan.ts`
