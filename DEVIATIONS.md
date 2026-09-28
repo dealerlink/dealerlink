@@ -5931,13 +5931,14 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — nine instances of one signature: the instrument, not the reasoning
+## DEV.138 — thirteen instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
-**Scope:** the framing. No code change is attributed to this entry; the nine
+**Scope:** the framing. No code change is attributed to this entry; the thirteen
 instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
-own entry, which carries two of them), in DEV.142, in DEV.143, in DEV.144, and —
-for the ninth — in F.106's closeout, which produced no entry of its own for it.
+own entry, which carries two of them), in DEV.142, in DEV.143, in DEV.144, in
+F.106's closeout — which produced no entry of its own for the ninth — and, for
+the tenth through the thirteenth, in DEV.151.
 
 > **This line was stale at "five" for three instances, and that is worth one
 > sentence.** F.101's day prompt named the correction explicitly, as an authorised
@@ -5950,7 +5951,7 @@ for the ninth — in F.106's closeout, which produced no entry of its own for it
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The nine.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+**The thirteen.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
 the family caught before it shipped.
@@ -5990,10 +5991,14 @@ written because the test asserts something can never fire. Vacuity entered
 through the **instrument**, not through inattention. That is why "be careful"
 does not help and a rule is needed.
 | **9** | **A SUCCESS MARKER GREPPED OUT OF COMMAND OUTPUT.** `pnpm lint 2>&1 \| grep -E "Done$" \| tail -1` printed `packages/tax lint: Done` and was read as "lint is clean" (F.106) | That `packages/db` had FAILED further up the same output, on an `import/order` error. `pnpm -r` runs each package in turn and prints a `Done` line per success, so the LAST `Done` is whichever package happened to finish last — not a verdict on the run. The pre-commit hook caught it seconds later. **The exit code was 1 the whole time.** |
+| **10** | **A CONTROL WHOSE RED RUN PROVED THE ASSERTION WAS BROKEN, not the thing under test absent.** An audit-trigger assertion went red twice — querying `table_name`/`record_id` on a table whose columns are `entity_type`/`entity_id`, then asserting `'INSERT'` against a writer storing `lower(TG_OP)` (F.5a, DEV.151) | That after the stanza landed the record held a green test, a red history, and **no correct assertion had ever run without the trigger**. A red run FEELS like evidence even when it failed for the wrong reason. Closed by dropping the trigger and re-running the corrected assertion: `expected [] to include 'insert'`. **A control counts only when the red run failed for the reason under test.** |
+| **11** | **AN ASSERTION THAT COULD NOT FAIL.** `expect(page.locator('body')).toContainText(billToState)` in a new e2e spec, on a two-letter state code (F.5a, DEV.151) | That the Bill-To dealer's state is rendered unconditionally in the Parties block, so it passed whatever the arrangement was. A whole-page `toContainText` on a short token is almost always vacuous. Same shape as the `product.test.ts` fixture that never reached the rate — and like that one, **found by its author before shipping, because no gate can see it.** |
+| **12** | **A COMPARISON WHOSE KEY WAS NOT UNIQUE.** A census diff keyed `table\|tenant\|docnum\|tsi\|pos\|class`, compared as Sets (F.5a, DEV.151) | That quotations share `quote_number` across revisions, so rows collapsed to one key and the diff could not see them. It reported **4 rows changed where the truth was 16 affected**, across three kinds of change. Caught ONLY because two of its own outputs disagreed — "0 changed" beside per-class counts moving 14/33 to 12/35. Nothing external would have caught it, and its answer was the reassuring one. **A comparison must assert the uniqueness of its own key, or it cannot detect its own degeneracy.** |
+| **13** | **A CONDITIONAL ASSERTION, WHICH CAN PASS WITHOUT RUNNING.** `selectOption({ index: 0 })` then `if (firstIsBillTo !== f.otherDealerId) { await expect(control).toHaveCount(0) }` in the same e2e spec as row 11 (F.5a, DEV.151) | That option 0 is merely the FIRST dealer in the list and need not be the Bill-To dealer, while the guard only checked it was not the OTHER dealer. Under every ordering where option 0 happened to be Bill-To — which held locally — the test reported success while asserting nothing; CI drew a third dealer and it failed. **The guard was the defect, not the selector.** Second vacuity in one file, and the operator's framing: a test that skips itself when setup does not cooperate is this project's most-filed failure shape. |
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all nine:
+it verifies confirms nothing. The general form covers all thirteen:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
