@@ -352,6 +352,53 @@ async function seedTenant(
       return;
     }
 
+    /**
+     * F.134(a) — PLAN LINES NAME THEIR PRODUCT BY SKU.
+     *
+     * `plan.lineIdx` used to index into `usableProducts`, which made every seeded
+     * document depend on BOTH the set's membership AND each product's position in an
+     * unordered query result. Two consequences, and the second is the worse one:
+     *
+     *   1. Which product landed on a line changed between reseeds, because the
+     *      products select has no ordering and physical row order decides. That is
+     *      what made `pdf-snapshots.test.ts` intermittently red on `main`.
+     *   2. ADDING ONE PRODUCT TO THE CATALOGUE SILENTLY RESHUFFLED EVERY SEEDED
+     *      DOCUMENT. An ordering would have fixed (1) and left (2) untouched.
+     *
+     * THE GAIN IS THE THROW, NOT THE DETERMINISM. An index silently returns the wrong
+     * product — any integer is a valid index into a non-empty array, so there is no
+     * failure to observe. A named lookup fails loudly the moment the SKU it wants is
+     * not there. Determinism follows from naming; it is not the reason for it.
+     *
+     * THESE THREE SKUs ARE NOT A CHOICE. They are what the 14 Chromium references in
+     * `docs/pdf-references/` were captured with, read out of the PDFs themselves:
+     * QT-2026-0001 (lineIdx [0]) carries PRE-450-BI, QT-2026-0006 ([0,1,2]) carries
+     * PRE-450-BI/PRE-540-BI/PRE-600-BI, and QT-2026-0010 ([0,2]) carries
+     * PRE-450-BI/PRE-600-BI. The three constraints agree, and every plan in this file
+     * uses only lineIdx 0, 1 and 2, so the mapping is total. The PI references need no
+     * separate derivation because PIs copy their lines from quotations.
+     */
+    const PLAN_LINE_SKUS = ['PRE-450-BI', 'PRE-540-BI', 'PRE-600-BI'] as const;
+    const bySku = new Map(usableProducts.map((x) => [x.sku, x]));
+    const productForLine = (lineIdx: number): ProductRow => {
+      const sku = PLAN_LINE_SKUS[lineIdx];
+      if (!sku) {
+        throw new Error(
+          `day8: plan lineIdx ${lineIdx} has no SKU mapping — PLAN_LINE_SKUS covers ` +
+            `0..${PLAN_LINE_SKUS.length - 1}. Add the SKU rather than widening the index.`,
+        );
+      }
+      const row = bySku.get(sku);
+      if (!row) {
+        throw new Error(
+          `day8: SKU ${sku} is absent from this tenant's sellable catalogue. The 14 ` +
+            `reference PDFs were captured with it, so a missing SKU is a corpus defect, ` +
+            `not something to fall back from.`,
+        );
+      }
+      return row;
+    };
+
     let createdCount = 0;
     const createdIdsInOrder: string[] = [];
 
@@ -361,7 +408,7 @@ async function seedTenant(
       const dealer = pick(dealerRows, seed * 11);
 
       const lines = plan.lineIdx.map((lineIdx, j) => {
-        const p = usableProducts[lineIdx % usableProducts.length]!;
+        const p = productForLine(lineIdx);
         const unitPrice = round2(Number(p.defaultSellingPrice) + (plan.unitPriceDelta[j] ?? 0));
         return {
           product: p,
@@ -549,6 +596,25 @@ async function seedTenant(
       // dealer + parent references. (Cited as DEV.38 historically; that entry
       // does not exist — see the note on the dealer query above.)
       .where(sql`status = 'accepted' AND tenant_id = ${tenantId}`)
+      /**
+       * F.134(a) — ORDERED BY SOMETHING UNIQUE. `quote_number` is unique per tenant
+       * (`quotations_tenant_number_uq`), so this fully determines the draw.
+       *
+       * WHY THIS ORDER AND NOT ANOTHER: it selects the LOWEST accepted quote number,
+       * which is the draw the 14 Chromium references were captured under — the draw
+       * in which QT-2026-0010 is the revision parent and therefore renders its
+       * revision date rather than revision 1's. That was established by measurement
+       * (14/14 byte-identical to F.5a's A.0 baseline), not chosen. It also happens to
+       * pick a parent whose validity has not lapsed, though F.134(b) means that no
+       * longer matters for correctness.
+       *
+       * WITHOUT AN ORDERING this took whichever row Postgres returned first, so which
+       * quotation carried revisions 2 and 3 changed between reseeds — and with it
+       * whether QT-2026-0010 existed as a revision chain at all. A reseed could
+       * change WHICH DOCUMENTS EXIST, which is what made `pdf-snapshots.test.ts`
+       * intermittently red on `main`.
+       */
+      .orderBy(sql`quote_number ASC`)
       .limit(1);
 
     if (acceptedRows[0]) {
