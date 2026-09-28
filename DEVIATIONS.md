@@ -7110,3 +7110,140 @@ table about the first.
 **Impact:** one stale derived count, live for four days and three intervening days of
 work, in the entry whose entire subject is derived counts going stale. Corrected in the
 same commit that added DEV.138's ninth instance.
+
+## DEV.151 — F.5a: three new DEV.138 shapes, and the second day running where a test is the safety net because the tooling is not
+
+**F.5a shipped in five commits.** The build itself went as D-1 to D-12 specified. What
+this entry is for is the four things that did not: three new failure shapes in DEV.138's
+family, and a framing the operator asked to be carried forward.
+
+### The corpus, measured, with the state it was measured in
+
+**N = 165 = 162 pre-existing documents + 3 from the §10(1)(b) chain.** Stated by
+composition rather than as a single number, because criterion 6's entire value is that
+nothing pre-existing moved and a bare 165 loses that.
+
+Measured immediately after `pnpm db:seed`, before any suite ran (R-5). The A.0 baseline
+was 46 quotations / 68 PIs / 48 orders. **Do not carry 116 or 161**, the two figures in
+circulation when the day began; and note that F.105's 53 quotations came from a database
+holding db-test fixture rows (DEV.91), which is why a clean seed gives fewer.
+
+Criterion 6, answered in its specified form under a pinned draw — `main` against F.5a on
+the same seed order: **0 CHANGED, 0 REMOVED, 3 ADDED, by the query in
+`census2.mjs`.** The pin was a temporary `ORDER BY created_at ASC, quote_number ASC` on
+`day11.ts:203`, applied on both branches, then **removed and removal proven** (`grep -c`
+→ 0, `git diff --quiet` clean), with the final census taken on the restored tree.
+
+The **differential** result is retained as the stronger evidence: the same reseed, with
+and without F.5a, affects the same rows and no others. It controls for the row-order
+lottery rather than assuming it holds still, and it is the only one of the two that can
+answer whether the pin itself changed behaviour.
+
+### Two premises the day prompt got wrong, corrected by measurement
+
+**P-1 — the arrangement can live on TWO tables, not three.** `place_of_supply` is on
+`quotations`, `performa_invoices` and `orders`; `ship_to_dealer_id` is on
+`performa_invoices`, `orders` and `dispatches`. The sets are not the same set. A
+quotation has one dealer so the parties cannot differ, and `dispatches` carries both
+parties but stores no place of supply and is tax-neutral. So the column went on two
+tables.
+
+**P-3 — `packages/tax` did not need to change, and the brief that commissioned the
+prompt was wrong to say the day "touches" it.** The engine takes an opaque
+`placeOfSupply` string; ADR-012 says so itself. What the day touched is the _callers_.
+A new file was added inside the package by D-1's choice, not by necessity — and that
+choice then hit a bound nobody had anticipated: **the authorisation permitted a new file
+but not the one-line export that makes it reachable.** `packages/tax/package.json`
+exports only `"."`, so the file was inert. That was a STOP, and the operator amended
+criterion 12 rather than letting it be inferred.
+
+### The executed controls — four, none designed and left unrun
+
+- **(b) fixtures against the pre-change rule:** 5 failed, 10 passed.
+  `expected 'AS' to be 'MH'`; `(b) is intra-state: expected 'inter' to be 'intra'`;
+  `expected [] to deeply equal [ 's10_1_b' ]`.
+- **RLS against the bare migration**, with the table confirmed at
+  `rls_enabled=false rls_forced=false policies=0`: 5 failed, including
+  `sample must not see demo rows: expected [ Array(1) ] to deeply equal []` and
+  `a tenant cannot INSERT into another tenant: promise resolved "[]" instead of rejecting`.
+  Sample could both read and write demo's rows.
+- **The invariant test on a broken row:** named it —
+  `demo/PI-2026-0003: stored MH, arrangement NULL(=a) selects AS`.
+- **The e2e negative case against an unconditionally rendered control:** failed at the
+  `must NOT appear while the parties match` assertion.
+
+### Shape 10 — a control whose red run proved the ASSERTION was broken
+
+Not a vacuous pass, and not a false stop. **A red run that failed for the wrong reason,
+leaving evidence that looked complete.**
+
+The audit-trigger assertion went red twice for the author's own errors: it queried
+`table_name`/`record_id` on a table whose columns are `entity_type`/`entity_id`, then
+asserted `'INSERT'` against a writer storing `lower(TG_OP)`. After the trigger stanza
+landed the test was green. So the record held a green test, a red history, and **no
+correct assertion had ever run without the trigger.**
+
+**The tell: a red run FEELS like evidence even when it failed for the wrong reason.**
+**The rule: a control counts only when the red run failed for the reason under test.**
+Closed by dropping the trigger and re-running the corrected assertion —
+`expected [] to include 'insert'` — then restoring via `db:migrate`.
+
+### Shape 11 — an assertion that could not fail, caught by its author
+
+The first version of `verify-day-f5a.spec.ts` asserted
+`expect(page.locator('body')).toContainText(billToState)`. The Bill-To dealer's state is
+rendered unconditionally in the Parties block, so **that passed whatever the arrangement
+was**. A whole-page `toContainText` on a two-letter code is almost always vacuous.
+
+Same shape as the `product.test.ts` fixture that never reached the rate it was asserting
+about — and, like that one, **found by its author before shipping rather than by a gate
+afterwards**, because no gate can see it. It now targets a `data-testid` with
+`toHaveText`, plus a there-and-back switch so it cannot pass by the element merely
+changing once to something that matches.
+
+### Shape 12 — a comparison whose key was not unique
+
+The census key was `table|tenant|docnum|tsi|pos|class`. **Quotations share `quote_number`
+across revisions**, so several rows collapse to one key, and a Set-based diff over a
+non-unique key cannot see them. It reported **4 rows changed** where the true figure is
+**16 affected across three kinds** — 8 changed, 4 removed, 4 added.
+
+**It was caught only because two of its own outputs disagreed:** "0 changed" printed
+alongside per-class counts that had moved from 14/33 to 12/35. Nothing external would
+have caught it — CI does not run this instrument, `verifier` does not know it exists, and
+its answer was the _reassuring_ one.
+
+**The rule: a comparison must assert the uniqueness of its own key, or it cannot detect
+its own degeneracy.** `census2.mjs` now throws when key count ≠ row count.
+
+What the corrected instrument then showed is bigger than the correction: **a reseed can
+change which documents EXIST.** `QT-2026-0012`'s revisions 2 and 3 cease to exist and
+`QT-2026-0010`'s come into being. That is recorded on F.134 as the strongest argument
+for (a).
+
+### The framing to carry forward — two days running
+
+**This is the second task in a row where a TEST is the safety net because the TOOLING is
+not.** F.5a already carried the `rls.test.ts` enumeration fix for that reason, and
+`dealer_addresses` then became the table that proved why: `migrate.ts` applies `rls/*.sql`
+and `triggers/*.sql` automatically and `00-app-role.sql` re-grants on ALL TABLES, so
+grants are free — but **the policy is a file somebody must remember and the audit trigger
+is a third separate stanza, and nothing generated or checked either.** The existing RLS
+assertions were hand-written `it.each` lists of six and four table names, so a new table
+was simply not in them.
+
+`rls.test.ts` now derives from the database: **33 tenant-scoped tables against a
+hardcoded 6.** Its control was executed — a table created with a `tenant_id` and no
+policy made it fail and name the offender,
+`f5a_control_unprotected: enabled=false forced=false tenant_isolation=false`.
+
+### Filed, not folded in
+
+F.135 (11 hardcoded `placeOfSupply: 'MH'` literals in `packages/db/tests` — F.103's
+defect where F.103 never reached), F.136 (a `rate-limit.test.ts` flake, classified and
+NOT REPRODUCED), and F.134's re-framing. F.100's population grew by three miscites and
+F.116's by none — both reported, neither fixed.
+
+**Impact:** none on shipped behaviour. Every measurement in this entry names the command
+or the query that produced it, because three of the four things worth recording here were
+instruments that lied.
