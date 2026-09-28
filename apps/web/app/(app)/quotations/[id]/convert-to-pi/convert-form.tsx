@@ -172,7 +172,10 @@ export function ConvertToPiForm({
             (b) the place of supply is the Bill-To state, and this would have
             displayed the wrong one beside a correctly computed total.
           */}
-          Place of supply: <span className="mono text-ink">{newPlaceOfSupply || '—'}</span>
+          Place of supply:{' '}
+          <span className="mono text-ink" data-testid="place-of-supply">
+            {newPlaceOfSupply || '—'}
+          </span>
         </div>
       </section>
 

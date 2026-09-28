@@ -63,7 +63,7 @@ export function DeliveryArrangementField({
   ];
 
   return (
-    <fieldset className="mt-4" disabled={disabled}>
+    <fieldset className="mt-4" disabled={disabled} data-testid="delivery-arrangement">
       <legend className="text-ink mb-1 block text-[12px] font-medium">
         Who is receiving these goods?{' '}
         <span className="text-mute font-normal">— this decides the place of supply</span>
