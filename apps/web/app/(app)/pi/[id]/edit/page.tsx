@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { getAuthContext } from '@/lib/auth/session';
 import { listDealers } from '@/lib/queries/dealers';
+import { buildPlaceOfSupplyPreviews } from '@/lib/tax/place-of-supply-preview';
 import { getPerformaInvoiceById } from '@/lib/queries/performa-invoices';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
@@ -47,6 +48,22 @@ export default async function PiEditPage({ params }: PageProps) {
     state: (d.state ?? '').toUpperCase(),
   }));
 
+  // The Bill-To dealer must be a candidate, or the 'none' lookup for it misses.
+  // Bill-To is immutable on a PI, but it can have been deactivated since the PI was
+  // raised and `listDealers` filters to active — a real state, not a defensive
+  // branch.
+  const billToOption = { id: pi.billTo.id, state: (pi.billTo.state ?? '').toUpperCase() };
+  const candidates = dealers.some((d) => d.id === billToOption.id)
+    ? dealers
+    : [{ ...billToOption, name: pi.billTo.name }, ...dealers];
+
+  // Derived here, not in the form (D-8).
+  const previews = buildPlaceOfSupplyPreviews({
+    tenantState: pi.tenantStateAtIssue,
+    billTo: billToOption,
+    candidates,
+  });
+
   return (
     <div className="mx-auto max-w-[760px] px-8 py-10">
       <Link
@@ -68,13 +85,14 @@ export default async function PiEditPage({ params }: PageProps) {
 
       <PiEditForm
         id={pi.id}
-        tenantState={pi.tenantStateAtIssue}
         billToId={pi.billTo.id}
         shipToId={pi.shipTo.id}
         validUntil={pi.validUntil}
         terms={pi.termsAndConditions ?? ''}
         notes={pi.notes ?? ''}
-        dealers={dealers}
+        dealers={candidates}
+        deliveryArrangement={pi.deliveryArrangement ?? null}
+        previews={previews}
         lines={pi.lines.map((l) => ({
           productId: l.productId,
           productSku: l.productSku,

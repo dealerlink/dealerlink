@@ -72,9 +72,19 @@ export const orders = pgTable(
       .notNull()
       .references(() => dealers.id, { onDelete: 'restrict' }),
 
-    // placeOfSupply is the SHIP-TO dealer's state (IGST Act §10 — ADR-012).
+    // placeOfSupply derives from the party the deliveryArrangement selects, per
+    // ADR-016: the SHIP-TO dealer's state under IGST Act §10(1)(a), the BILL-TO
+    // dealer's state under §10(1)(b). ADR-012 is superseded, not deleted.
     tenantStateAtIssue: text().notNull(),
     placeOfSupply: text().notNull(),
+
+    // COPIED FORWARD FROM THE PI, not re-derived — like the two party ids and
+    // the two state columns above, and for the same reason: an order must carry
+    // the justification for the tax type it prints. An order that stored a
+    // place of supply without the arrangement that selected it would know less
+    // than the document it descends from, which is the F.114 shape exactly.
+    // Nullable for the same reason as on the PI: NULL means the parties matched.
+    deliveryArrangement: text(),
 
     // Commercial
     orderDate: date().notNull().defaultNow(),
@@ -126,6 +136,13 @@ export const orders = pgTable(
     ),
     check('orders_subtotal_chk', sql`${t.subtotal} >= 0`),
     check('orders_total_chk', sql`${t.totalAmount} >= 0`),
+    // text + CHECK, matching the PI's constraint exactly. The two must agree:
+    // status-transitions.ts copies the value across, so a value legal on one and
+    // illegal on the other would fail at confirmation rather than at entry.
+    check(
+      'orders_delivery_arrangement_chk',
+      sql`${t.deliveryArrangement} IN ('s10_1_a', 's10_1_b')`,
+    ),
   ],
 );
 

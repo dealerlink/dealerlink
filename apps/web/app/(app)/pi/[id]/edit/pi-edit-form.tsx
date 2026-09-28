@@ -3,8 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
+import {
+  DeliveryArrangementField,
+  type ArrangementValue,
+} from '@/components/tax/delivery-arrangement-field';
 import { Button } from '@/components/ui/button';
 import { updatePi } from '@/lib/actions/pi/update-pi';
+import { previewKey, type PlaceOfSupplyPreviewMap } from '@/lib/tax/place-of-supply-preview';
 
 interface DealerOption {
   id: string;
@@ -25,7 +30,6 @@ interface LineSnapshot {
 
 interface Props {
   id: string;
-  tenantState: string;
   billToId: string;
   shipToId: string;
   validUntil: string;
@@ -33,11 +37,14 @@ interface Props {
   notes: string;
   dealers: DealerOption[];
   lines: LineSnapshot[];
+  /** The stored arrangement, or null when the parties match. */
+  deliveryArrangement: ArrangementValue | null;
+  /** Every (Ship-To, arrangement) classification, derived on the server (D-8). */
+  previews: PlaceOfSupplyPreviewMap;
 }
 
 export function PiEditForm({
   id,
-  tenantState,
   billToId,
   shipToId: initialShipTo,
   validUntil: initialValidUntil,
@@ -45,9 +52,14 @@ export function PiEditForm({
   notes: initialNotes,
   dealers,
   lines,
+  deliveryArrangement: initialArrangement,
+  previews,
 }: Props) {
   const router = useRouter();
   const [shipToId, setShipToId] = useState(initialShipTo);
+  // Seeded from what the document already recorded, so re-saving an untouched PI
+  // preserves its arrangement rather than silently resetting it to (a).
+  const [arrangement, setArrangement] = useState<ArrangementValue>(initialArrangement ?? 's10_1_a');
   const [validUntil, setValidUntil] = useState(initialValidUntil);
   const [terms, setTerms] = useState(initialTerms);
   const [notes, setNotes] = useState(initialNotes);
@@ -55,7 +67,17 @@ export function PiEditForm({
   const [error, setError] = useState<string | null>(null);
 
   const shipTo = useMemo(() => dealers.find((d) => d.id === shipToId), [dealers, shipToId]);
-  const interState = shipTo ? tenantState.trim() !== shipTo.state.trim() : false;
+  const shipToDiffers = shipToId !== billToId;
+
+  // From the server-built table (D-8). This replaced
+  // `tenantState.trim() !== shipTo.state.trim()` — a client-side copy of
+  // CLAUDE.md §5's rule, which under §10(1)(b) would have shown the wrong tax type
+  // to the person choosing the arrangement.
+  const preview = previews[previewKey(shipToId, shipToDiffers ? arrangement : 'none')];
+  const interState = preview?.isInterState ?? false;
+  // No fallback to the ship-to state — see convert-form.tsx for why a plausible
+  // wrong value is worse here than a visible blank.
+  const placeOfSupply = preview?.placeOfSupply ?? '';
 
   async function submit() {
     setPending(true);
@@ -63,6 +85,8 @@ export function PiEditForm({
     const r = await updatePi({
       id,
       shipToDealerId: shipToId,
+      // Only when the parties differ — the server clears it otherwise.
+      deliveryArrangement: shipToDiffers ? arrangement : undefined,
       validUntil,
       termsAndConditions: terms.trim() || null,
       notes: notes.trim() || null,
@@ -101,8 +125,16 @@ export function PiEditForm({
             </option>
           ))}
         </select>
+        {shipToDiffers && (
+          <DeliveryArrangementField
+            value={arrangement}
+            onChange={setArrangement}
+            billToName={dealers.find((d) => d.id === billToId)?.name ?? 'the buyer'}
+            shipToName={shipTo?.name ?? 'the consignee'}
+          />
+        )}
         <p className="text-mute mt-2 text-[12px]">
-          Place of supply <span className="mono text-ink">{shipTo?.state || '—'}</span> ·{' '}
+          Place of supply <span className="mono text-ink">{placeOfSupply || '—'}</span> ·{' '}
           {interState ? 'Inter-state — IGST' : 'Intra-state — CGST + SGST'}. Totals recompute on
           save.
         </p>

@@ -34,3 +34,11 @@ export {
 export { toDecimal, sumDecimals, Decimal } from './decimal';
 export { round2 } from './round';
 export { isInterState } from './state';
+
+export {
+  resolvePlaceOfSupply,
+  isDeliveryArrangement,
+  DELIVERY_ARRANGEMENTS,
+  type DeliveryArrangement,
+  type PlaceOfSupplyInput,
+} from './place-of-supply';
