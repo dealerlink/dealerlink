@@ -38,6 +38,7 @@ import {
   formatBlock,
   insideMarkers,
   outsideMarkers,
+  assertBlockedByResolves,
   parseTasks,
   renderBlock,
   renderPlan,
@@ -130,6 +131,84 @@ describe('task source of truth', () => {
   it('rejects a duplicate id', () => {
     const bad = JSON.stringify({ tasks: [sample, sample] });
     expect(() => parseTasks(bad)).toThrow(/duplicate task id/);
+  });
+
+  // blockedBy. Each of these was executed against the real plan file before
+  // being written here, and each failed for the reason it names — the field
+  // exists to make a wrong dependency id catchable, so a validation that could
+  // not fail would be the whole point missed.
+  describe('blockedBy', () => {
+    it('rejects an id that names no task — the check the field exists for', () => {
+      const bad = JSON.stringify({ tasks: [{ ...sample, blockedBy: ['F.999'] }] });
+      expect(() => parseTasks(bad)).toThrow(/name a task that does not exist/);
+    });
+
+    it('resolves a FORWARD reference, because dependencies point both ways in the array', () => {
+      // The reason integrity is a second pass and not inline: validating during
+      // the single map pass would reject this, which is legitimate.
+      const raw = JSON.stringify({
+        tasks: [
+          { ...sample, id: 'F.900', blockedBy: ['F.901'] },
+          { ...sample, id: 'F.901' },
+        ],
+      });
+      expect(() => parseTasks(raw)).not.toThrow();
+    });
+
+    it('rejects a self-reference', () => {
+      const bad = JSON.stringify({ tasks: [{ ...sample, blockedBy: [sample.id] }] });
+      expect(() => parseTasks(bad)).toThrow(/lists itself/);
+    });
+
+    it('rejects a duplicate entry', () => {
+      const raw = JSON.stringify({
+        tasks: [
+          { ...sample, id: 'F.900', blockedBy: ['F.901', 'F.901'] },
+          { ...sample, id: 'F.901' },
+        ],
+      });
+      expect(() => parseTasks(raw)).toThrow(/duplicate id in "blockedBy"/);
+    });
+
+    it('rejects a non-array and a non-string entry', () => {
+      expect(() =>
+        parseTasks(JSON.stringify({ tasks: [{ ...sample, blockedBy: 'F.901' }] })),
+      ).toThrow(/non-array "blockedBy"/);
+      expect(() => parseTasks(JSON.stringify({ tasks: [{ ...sample, blockedBy: [7] }] }))).toThrow(
+        /non-string entry in "blockedBy"/,
+      );
+    });
+
+    it('treats an absent field as absent rather than empty', () => {
+      const [t] = parseTasks(JSON.stringify({ tasks: [sample] }));
+      expect(t.blockedBy).toBeUndefined();
+    });
+
+    it('renders both directions, and marks a completed blocker', () => {
+      const rendered = renderPlan('# H', [
+        { ...sample, id: 'F.900', status: 'pending', blockedBy: ['F.901'] },
+        { ...sample, id: 'F.901', status: 'complete' },
+      ]);
+      expect(rendered).toContain('## What blocks what');
+      // blocked -> blocker
+      expect(rendered).toMatch(/\| F\.900 +\| F\.901 ✓/);
+      // blocker -> released, the inverse index
+      expect(rendered).toMatch(/\| F\.901 ✓ +\| F\.900/);
+    });
+
+    it('says so in words when nothing records a dependency, rather than rendering an empty table', () => {
+      const rendered = renderPlan('# H', [{ ...sample, blockedBy: undefined }]);
+      expect(rendered).toContain('No task records a `blockedBy`');
+      expect(rendered).not.toContain('### Blocked tasks');
+    });
+
+    it('the committed plan has no dangling dependency', () => {
+      // Belt to the parseTasks brace: this asserts on the REAL file, so a wrong
+      // id committed to it fails here as well as in plan:check.
+      expect(() => assertBlockedByResolves(tasks)).not.toThrow();
+      const ids = new Set(tasks.map((t) => t.id));
+      for (const t of tasks) for (const d of t.blockedBy ?? []) expect(ids.has(d)).toBe(true);
+    });
   });
 });
 

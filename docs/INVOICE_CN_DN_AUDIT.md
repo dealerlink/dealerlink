@@ -27,16 +27,31 @@ here and left untouched there.
 
 **This file is exempt from `prettier` in `.prettierignore`, and that exemption is
 the one repository-config change this audit required.** The pre-commit hook runs
-`prettier --write` on every `.md` file, and on this one it does not merely
-reformat. It pairs the underscores in a bare path with a nearby emphasis run and
-rewrites `TAX_INVOICE_AUDIT.md:96` as `TAX*INVOICE_AUDIT.md:96` — a corrupted
-file reference inside a document whose entire value is being exact. Measured by
-diffing the two files' whitespace-split token streams, which is also how the
-claim that nothing else changed was checked; the only other differences were
-emphasis delimiters and table padding. An unformatted verbatim record is the
-point of a verbatim record, while a formatted one with a mangled path in it is a
-worse document that looks tidier. The identical asterisk/underscore pairing
-hazard is already on record for the plan renderer at `DEVIATIONS.md:5290`.
+`prettier --write` on every `.md` file, and on this one **prettier is not
+idempotent**: pass 1 converts `*proposal*` to `_proposal_` and leaves the bare
+path `TAX_INVOICE_AUDIT.md:96` intact, and **pass 2** then pairs that new
+underscore with the one inside the path and emits `TAX*INVOICE_AUDIT.md:96`. Pass
+3 is a fixed point, still corrupted. So the hook would not damage this file on the
+commit that adds it — it would damage it on the second commit that touches it.
+
+**A single-pass control therefore CLEARS prettier**, which is why this paragraph
+says pass 2 rather than saying "prettier corrupts it". An earlier version of this
+header described the one-pass behaviour as the mechanism; the evidence behind it
+came from a file that had been formatted twice, and anyone re-testing the obvious
+way would have found no corruption and removed the exemption. Measured with
+prettier 3.8.3 from the repository root, exit code checked per pass, and
+corroborated by diffing whitespace-split token streams — the only other
+differences are emphasis delimiters and table padding.
+
+**And the corruption is invisible to `check:paths` rather than loud.** Against the
+shipped patterns, `docs/TAX_INVOICE_AUDIT.md:96` extracts as a citation while
+`docs/TAX*INVOICE_AUDIT.md:96` extracts as **nothing at all** — `*` is absent from
+the pattern's character class, so the match dies at `docs/TAX` with no extension
+and no pattern fires. It is not even skipped as a glob. A corrupted path stops
+being checked instead of going red. The occurrence in this file is bare, with no
+`docs/` prefix, so it was never a citation and nothing was lost here; the hazard
+is general. `DEVIATIONS.md:5290` records the identical pairing defect in the plan
+renderer. DEV.153 carries the full measurement.
 
 ## Two caveats that bound what this report can be used for
 
