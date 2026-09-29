@@ -7558,3 +7558,12 @@ notes instead of dropped.
 **Not fixed, filed:** the sub-phase headings now render out of chronological
 order, and `F.5b`'s notes contradict its `days` field (pre-existing on `main`,
 widened by this branch's +8 shift).
+
+**One specific fact worth more than the pattern, because the next person will hit
+it:** `pnpm lint` is `pnpm -r lint` and does **not** typecheck — the real entry
+point is `pnpm typecheck`, which is `pnpm -r typecheck && pnpm typecheck:scripts`,
+and the second half compiles `scripts/` through `tsconfig.scripts.json`. There is
+no root `tsconfig.json`, so `npx tsc --noEmit -p tsconfig.json` answers “The
+specified path does not exist”, which is easy to read as a non-answer rather than
+as a check that never ran. A `noUncheckedIndexedAccess` error in a new test in
+this branch reached CI for exactly that reason.
