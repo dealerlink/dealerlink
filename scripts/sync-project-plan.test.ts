@@ -180,8 +180,12 @@ describe('task source of truth', () => {
     });
 
     it('treats an absent field as absent rather than empty', () => {
-      const [t] = parseTasks(JSON.stringify({ tasks: [sample] }));
-      expect(t.blockedBy).toBeUndefined();
+      const parsed = parseTasks(JSON.stringify({ tasks: [sample] }));
+      // Indexed access, not destructuring: noUncheckedIndexedAccess types `[t]` as
+      // `T | undefined`, and asserting the length first is what makes the access safe
+      // AND checks the thing the test is actually about.
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0]?.blockedBy).toBeUndefined();
     });
 
     it('renders both directions, and marks a completed blocker', () => {
