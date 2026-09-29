@@ -5931,14 +5931,14 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — thirteen instances of one signature: the instrument, not the reasoning
+## DEV.138 — fourteen instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
-**Scope:** the framing. No code change is attributed to this entry; the thirteen
+**Scope:** the framing. No code change is attributed to this entry; the fourteen
 instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
 own entry, which carries two of them), in DEV.142, in DEV.143, in DEV.144, in
-F.106's closeout — which produced no entry of its own for the ninth — and, for
-the tenth through the thirteenth, in DEV.151.
+F.106's closeout — which produced no entry of its own for the ninth — for
+the tenth through the thirteenth, in DEV.151, and for the fourteenth in DEV.152.
 
 > **This line was stale at "five" for three instances, and that is worth one
 > sentence.** F.101's day prompt named the correction explicitly, as an authorised
@@ -5951,7 +5951,7 @@ the tenth through the thirteenth, in DEV.151.
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The thirteen.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+**The fourteen.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
 the family caught before it shipped.
@@ -5995,10 +5995,11 @@ does not help and a rule is needed.
 | **11** | **AN ASSERTION THAT COULD NOT FAIL.** `expect(page.locator('body')).toContainText(billToState)` in a new e2e spec, on a two-letter state code (F.5a, DEV.151) | That the Bill-To dealer's state is rendered unconditionally in the Parties block, so it passed whatever the arrangement was. A whole-page `toContainText` on a short token is almost always vacuous. Same shape as the `product.test.ts` fixture that never reached the rate — and like that one, **found by its author before shipping, because no gate can see it.** |
 | **12** | **A COMPARISON WHOSE KEY WAS NOT UNIQUE.** A census diff keyed `table\|tenant\|docnum\|tsi\|pos\|class`, compared as Sets (F.5a, DEV.151) | That quotations share `quote_number` across revisions, so rows collapsed to one key and the diff could not see them. It reported **4 rows changed where the truth was 16 affected**, across three kinds of change. Caught ONLY because two of its own outputs disagreed — "0 changed" beside per-class counts moving 14/33 to 12/35. Nothing external would have caught it, and its answer was the reassuring one. **A comparison must assert the uniqueness of its own key, or it cannot detect its own degeneracy.** |
 | **13** | **A CONDITIONAL ASSERTION, WHICH CAN PASS WITHOUT RUNNING.** `selectOption({ index: 0 })` then `if (firstIsBillTo !== f.otherDealerId) { await expect(control).toHaveCount(0) }` in the same e2e spec as row 11 (F.5a, DEV.151) | That option 0 is merely the FIRST dealer in the list and need not be the Bill-To dealer, while the guard only checked it was not the OTHER dealer. Under every ordering where option 0 happened to be Bill-To — which held locally — the test reported success while asserting nothing; CI drew a third dealer and it failed. **The guard was the defect, not the selector.** Second vacuity in one file, and the operator's framing: a test that skips itself when setup does not cooperate is this project's most-filed failure shape. |
+| **14** | **A GATE THAT COULD NOT SEE AN UNTRACKED CITED FILE.** `pnpm check:paths` green locally over 78 paths while `docs/PLAN_REVISION_PARITY_LIST.md`, cited from 14 sites, was `??` in `git status` (PR #81, DEV.152) | That `scripts/check-path-references.mjs:157` resolves existence with `existsSync`, DELIBERATELY — its comment argues "Existence is a FILESYSTEM question, not a git-index one", correctly, for an unstaged MOVE. For a new UNTRACKED file the same predicate points the wrong way: disk says yes, the index says no, and CI clones only the index. **Both controls executed:** untracked-but-present → EXIT=0 "every cited docs/ path resolves"; same index, removed from disk → EXIT=1 with CI's exact message. CI was running the second control. Row 2 is C6c with the SCANNER untracked; this is the same blindness with the **cited target** untracked, and the only member of that family a green local gate concealed. |
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all thirteen:
+it verifies confirms nothing. The general form covers all fourteen:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
@@ -7296,3 +7297,129 @@ F.116's by none — both reported, neither fixed.
 **Impact:** none on shipped behaviour. Every measurement in this entry names the command
 or the query that produced it, because three of the four things worth recording here were
 instruments that lied.
+
+---
+
+## DEV.152 — a dangling citation whose target was untracked, and the local gate that could not see it
+
+**Date:** 2026-09-29 · **Task:** PR #81 (the parity revision) · **Impact:** none
+on shipped behaviour; one red CI run, two red checks, one root cause.
+
+PR #81 is docs-only and went red on two of the three required checks. Both are
+one defect:
+
+- **`checks`** failed at `check:paths`: `DANGLING: 1 cited docs/ path(s) do not
+exist` — `docs/PLAN_REVISION_PARITY_LIST.md`, cited from **14 sites**
+  (`PROJECT_PLAN.md:126, :192-197` and `docs/stage-f-tasks.json:245, :1307,
+:1316, :1325, :1334, :1343, :1352`).
+- **`test`** failed 2 of 6 in `scripts/check-path-references.test.ts` — `expected
+'DANGLING: 1 cited docs/ path(s) do no…' to be ''` and `expected '' to contain
+'PLANNED DELIVERABLES'`. The second is a **consequence, not a second finding**:
+  the test shells out to the same checker (`:76-85`), so the DANGLING text lands
+  in `stderr` and `stdout` is empty. One defect, surfaced twice because `test`
+  covers the checker itself.
+
+**The cause.** `docs/PLAN_REVISION_PARITY_LIST.md` had **never been committed on
+any branch**. It existed only in the working tree — `git status --short` read
+`?? docs/PLAN_REVISION_PARITY_LIST.md` — while F.144–F.150 and the F.11
+amendment cited it fourteen times as their source.
+
+### The fifth member of the C6c family, and a shape the other four did not have
+
+The four before it were **cross-branch**: ADR-016 cited from #71, F.135, F.134,
+and DEV.151 cited from #77. Each would have resolved on merge, and each was
+fixed by describing the source instead of citing it. This one would **never**
+have resolved, which is why the fix here was the opposite — commit the file.
+
+**The new shape: the untracked artifact was the CITED TARGET, not the scanner.**
+C6c and DEV.138's row 2 are about a _scanner_ validated from a tree in which the
+scanner itself was untracked, so it could not reach its own files. Here the
+scanner was fine and fully able to reach the citing files; what was invisible was
+the thing being cited.
+
+It read perfectly locally, and that is the whole difficulty: **the file being
+read was the file CI cannot see.** Nothing in a local read signals that a
+document is invisible to everyone else. A missing file announces itself; an
+untracked one does not.
+
+**The rule that generalises, and it is one command:**
+
+> **Before citing a path from a working tree, confirm it is tracked.**
+> `git ls-files --error-unmatch <path>` exits non-zero if it is not.
+
+### The part that is not a habit failure — and it is worse
+
+Running `pnpm check:paths` locally before pushing would **not** have caught this.
+`scripts/check-path-references.mjs:157` resolves existence on the filesystem:
+
+```js
+const exists = (p) => existsSync(p);
+```
+
+and its own comment at `:148-156` argues that deliberately — "Existence is a
+FILESYSTEM question, not a git-index one" — because a first version,
+`tracked.has(p) || existsSync(p)`, was vacuous when a cited file was **moved
+without staging the move**: `git ls-files` still reported the old path, so the
+check stayed green while every citation of it was already broken. **That argument
+is correct for an unstaged move.** It is wrong for the mirror case. A new
+untracked file exists on disk and not in the index, and CI clones the index and
+nothing else.
+
+**Both controls executed**, on this working tree, with the file cited from 14
+sites:
+
+| Tree state                           | `check:paths`                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| untracked (`??`) but present on disk | **EXIT=0** — `OK: every cited docs/ path resolves (78 distinct paths cited)` |
+| same index, file removed from disk   | **EXIT=1** — CI's exact DANGLING message                                     |
+
+So **CI is not running a different check: CI is running the second row.** The
+local run is structurally unable to detect a citation of an untracked file, and
+would have returned a confident green. That is DEV.138's shape exactly — a real
+command, real output, and no demonstration that the negative case could be
+reached — and it is the only one of these five occurrences that a green local
+gate actively concealed.
+
+**Filed as F.151, not fixed here** (§11.2). It is a change to a scanner,
+discovered on a docs-only branch, and the fix needs three executed controls
+including a regression test for the unstaged-move case the current design exists
+to catch — a fix that loses that case is worse than the defect. The habit rule
+above is what applies in the meantime, because it is the half that works today.
+
+### What landed instead
+
+`docs/PLAN_REVISION_PARITY_LIST.md` committed, with the operator's two dictated
+corrections applied first so the committed version is the one the rows cite:
+
+- **The Tally masters export is not coming from the client.** §7 had it as the
+  longest client-side lead time and §5's sequence row said F.11 "needs their
+  Tally masters export — request it now". Both corrected: the export is a step in
+  **their onboarding**, not an input to F.11's design, so it leaves the critical
+  path entirely.
+- **The two-entity question moves to the onboarding template** (§6 item 6, §7).
+  Which legal entity to provision is a question every tenant answers at
+  onboarding; asked bespokely it yields one answer and no mechanism.
+
+**And F.11's own citation of that document was corrected in the same commit**,
+per §11.1 ruling 6. Its notes read "§5 and §7 both **treat** it as the longest
+client-side lead time" — true of the document as filed, false of the document
+being committed. Left alone it would have been a citation pointing at text that
+no longer says what it is cited as saying, which is the ported-stale-citation
+defect that ruling exists for.
+
+**Verified before pushing, by exit code and not by output:** `pnpm plan:sync` then
+`pnpm plan:check` both 0; `pnpm check:paths` 0 with 78 distinct paths and the one
+expected planned deliverable, F.30's roadmap document, not yet written; `pnpm
+check:ids` 0 over 167 distinct ids; and `scripts/check-path-references.test.ts` **6 of 6**,
+including the two assertions that failed in CI.
+
+**And the first run of those gates after this entry was written went red on this
+entry** — `check:paths` EXIT=1, `DANGLING: 1 cited docs/ path(s) do not exist`,
+because the sentence above originally spelled out F.30's not-yet-written roadmap
+path while reporting that `check:paths` was clean. The planned-deliverable
+allowance covers citations from the plan, not from here. **Fixed by not writing
+the path** — DEV.128, and `DEVIATIONS.md:5296` already carries the identical
+fix for the identical mistake: "spelling the full path here would itself be a
+dangling citation, and the fix for that is to not write it, not to grow the
+allowlist." An entry about dangling citations produced one in its own verification
+paragraph, which is the least surprising thing in this file.
