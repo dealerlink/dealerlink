@@ -8,3 +8,10 @@ pnpm-lock.yaml
 .pnpm-store/
 test-results/
 playwright-report/
+
+# A verbatim transcript of a subagent audit. Prettier mangles bare paths in it
+# (TAX_INVOICE_AUDIT.md:96 -> TAX*INVOICE_AUDIT.md:96, by pairing the underscores
+# with a nearby *emphasis* run), which would make the file untrue rather than
+# merely unformatted — prettier is NOT idempotent here: pass 1 is clean and pass 2
+# corrupts, so a single-pass control CLEARS it. DEV.153 records the measurement.
+docs/INVOICE_CN_DN_AUDIT.md

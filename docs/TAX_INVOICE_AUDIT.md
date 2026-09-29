@@ -1,5 +1,54 @@
 # Tax Invoice + Ship-To GSTIN Audit — Stage F Day 19
 
+> **POINTER ADDED 2026-09-29 — THE VERDICT STILL HOLDS; NINE OF THE MECHANICS
+> BELOW ARE NOW WRONG. THIS FILE IS DELIBERATELY NOT REWRITTEN.**
+>
+> A second audit, commissioned 2026-09-29 as input to a combined tax-invoice /
+> credit-note / debit-note spec, **independently re-derived Part A's
+> `DOES NOT EXIST` verdict before reading this file** and confirms it. That is the
+> third confirmation of it (Day 19 here, a Day 24 re-derivation recorded in F.6's
+> notes, and this one). **The verdict is not in doubt. The mechanics are.**
+>
+> **Read the new audit — `docs/INVOICE_CN_DN_AUDIT.md` — for anything you intend
+> to act on:** it enumerates the
+> current state layer by layer and is the input the F.6 spec is written from.
+> This file remains the record of what was measured on 2026-09-06.
+>
+> **The nine, as the new audit lists them** (its own prose says "eight" and then
+> enumerates nine; the enumeration is the evidence):
+>
+> 1. **§A.4's hard block is LIFTED.** "Prerequisite: F.3 + F.4 must land first" —
+>    both are complete, and the multi-rate summary and HSN/SAC table are live.
+> 2. **§A.1 row 4 / §A.3 / §A.4 item 7 name the wrong renderer.** They target a
+>    React `tax-invoice.tsx` reusing Header / PartyBlock / Footer / TaxSummary.
+>    Since ADR-015 the live renderer is **Typst**; those six React components
+>    still exist and are **dead code**. The real target is a Typst entry point
+>    plus the shared chrome library.
+> 3. **§A.1 row 8 cites the React `Footer.tsx`** for bank details. The live one is
+>    `footer-block` in the Typst chrome library.
+> 4. **§A.5's CHECK-constraint column is false.** It says `gstRate IN
+(0,5,12,18,28)`. All four `*_gst_rate_chk` constraints are now
+>    `gst_rate >= 0` — F.55 / migration `0018_smiling_bill_hollister`.
+> 5. **§A.5's 3% warning is obsolete** — same cause, closed by F.55.
+> 6. **§A.5's reason for normalising `gstRate` is the wrong mechanism.** It says
+>    `'18'` and `'18.00'` "become two buckets". On a `decimal(5,2)` column that
+>    cannot happen — CLAUDE.md §5, DEV.135, F.82. Right conclusion, wrong reason,
+>    and the correct premise is what a live `Set`-of-rates derivation depends on.
+> 7. **§A.5's line citations are stale** (e.g. the `hsnCode` line number).
+> 8. **§B.1 is now flatly false.** "There is **no separate shipping-address
+>    entity.** Ship-To is a dealer row, full stop." F.5a landed the opposite:
+>    a `dealer_addresses` table exists, with RLS, an audit trigger and tests.
+>    Relatedly, §A.3 and §B.5 cite **ADR-012**, now **superseded by ADR-016**.
+> 9. **Counts and line numbers:** "22 schema files" is now 23, and the
+>    `render-pdf.ts` citations have moved.
+>
+> **Why a pointer and not an edit:** this file is EVIDENCE of what was measured on
+> 2026-09-06, and rewriting evidence to match a later tree destroys the record of
+> what was true when a decision was taken — the same reason `docs/F105_AUDIT.md`
+> carries a pointer instead of a rewrite. Nine corrections applied in place would
+> also make this file look re-verified as a whole, which it has not been: the new
+> audit checked these nine mechanics, not every claim here.
+
 > **Date:** 2026-09-06
 > **Task:** F.2 (tax invoice existence audit) + F.5 scoping (Ship-To GSTIN)
 > **Method:** read-only static audit of the monorepo at `main`. No application

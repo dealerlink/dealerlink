@@ -7423,3 +7423,147 @@ fix for the identical mistake: "spelling the full path here would itself be a
 dangling citation, and the fix for that is to not write it, not to grow the
 allowlist." An entry about dangling citations produced one in its own verification
 paragraph, which is the least surprising thing in this file.
+
+---
+
+## DEV.153 — a formatting check that certifies the file it corrupts, and two vacuous instruments used while auditing a vacuity claim
+
+**Date:** 2026-09-29 · **Task:** PR #82 (the invoice/CN/DN audit transcription) ·
+**Impact:** none on shipped behaviour. One `verifier` FAIL, one config exemption,
+and three wrong claims by the author of this entry.
+
+`docs/INVOICE_CN_DN_AUDIT.md` is a verbatim transcript of a subagent audit, so
+its value is being byte-exact. The repository's pre-commit hook runs
+`prettier --write` on every staged `.md` file. The question was whether that is
+safe for this file. It is not, but **not for the reason first reported**, and the
+way the wrong reason survived is the part worth keeping.
+
+### The real mechanism: prettier is NOT idempotent here, and pass 1 is clean
+
+Measured with `prettier` 3.8.3, `--config /workspace/.prettierrc`,
+`--ignore-path /dev/null`, run from the repository root, exit code checked on
+every pass:
+
+| pass | exit | changed vs previous  | `docs/…AUDIT.md:96` intact | corrupted |
+| ---- | ---- | -------------------- | -------------------------- | --------- |
+| 1    | 0    | yes                  | 2                          | 1         |
+| 2    | 0    | yes                  | **1**                      | **2**     |
+| 3    | 0    | **no** (fixed point) | 1                          | 2         |
+
+(The standing `corrupted=1` is this file's own header quoting the corrupt form as
+an example; the moving figure is the one that matters.)
+
+**Pass 1 converts `*proposal*` to `_proposal_` and leaves the bare path alone.
+Pass 2 then pairs that NEW underscore with the underscore inside
+`TAX_INVOICE_AUDIT.md:96` and emits `TAX*INVOICE_AUDIT.md:96`.** Pass 3 is a
+fixed point, still corrupted. So the hook does not damage the file on the commit
+that adds it — it damages it on **the second commit that touches it**, which is
+the commit nobody is watching.
+
+### Why this is worse than an ordinary formatting nuisance
+
+**A single-pass control clears prettier.** Anyone re-testing the exemption the
+obvious way — format once, diff, see only emphasis delimiters and table
+padding — concludes the exemption was unjustified and removes it. The check
+certifies the thing it is checking. That is the DEV.138 signature with the
+polarity of a **false all-clear** rather than a false pass, and it is the reason
+this file is exempt in `.prettierignore` instead of merely being noted.
+
+### And the corruption is INVISIBLE to `check:paths`, not loud
+
+Measured against the shipped patterns, pulled out of
+`scripts/check-path-references.mjs` rather than retyped:
+
+| line                                                   | extracted                               |
+| ------------------------------------------------------ | --------------------------------------- |
+| `see docs/TAX_INVOICE_AUDIT.md:96 for the _proposal_`  | `docs/TAX_INVOICE_AUDIT.md` — **CITED** |
+| `see docs/TAX*INVOICE_AUDIT.md:96 for the \_proposal_` | **nothing extracted at all**            |
+
+Not even skipped as a glob. `*` is absent from the second pattern's character
+class `[A-Za-z0-9._/-]`, so the match terminates at `docs/TAX`, which has no
+extension, so no pattern fires. **Corruption deletes a path from the checker's
+view rather than making it dangle** — the citation stops being checked, silently,
+and `check:paths` goes on reporting OK. A dangling path is a red gate; a
+vanished path is nothing at all.
+
+The one occurrence in this file is bare (`TAX_INVOICE_AUDIT.md:96`, no `docs/`
+prefix) and was therefore never a citation, so nothing was lost here. The hazard
+is general: the same corruption on any `docs/`-prefixed path removes it from the
+gate.
+
+### The author's three wrong claims, in the order they were made
+
+**1 — The mechanism, reported as a one-pass property when it is a two-pass one.**
+The original evidence came from a file that had been through `prettier --write`
+**twice** — once in a dry run, once when settling the formatting — and a two-pass
+result was described as what formatting does. The entry that would have been
+written on that basis would have sent the next reader to a control that clears.
+
+**2 — An invalid instrument, reaching the wrong answer.** The idempotence test
+was first run from the scratchpad. `prettier-plugin-tailwindcss` cannot resolve
+outside the repository, so `prettier` exited **1** and wrote nothing; the loop
+discarded the exit code with `>/dev/null 2>&1`, so all four "passes" were
+identical copies of the input. That was read as **"idempotent, no corruption"**
+and was about to be reported as contradicting the `verifier`. This is DEV.138
+instance 6's exact mechanism — DEV.142's `.prettierrc`-outside-the-repo
+failure — reproduced by someone who had that entry in view.
+
+**3 — A discarded exit code, again.** Instance 9's rule is four words: **check
+exit codes, not output.** The loop above printed a tidy per-pass table derived
+entirely from a command that never ran. Caught only by asking the one question
+that always catches it — _did the input change at all?_ — `cmp -s p0 p1` said the
+file was untouched.
+
+**Both were committed while auditing someone else's vacuity claim.** The
+`verifier` had reported the two-pass mechanism correctly; the attempt to verify
+it produced no evidence and nearly overturned a correct finding with a void one.
+§11.1 ruling 2 forbids overruling the `verifier` except on **demonstrated**
+unsatisfiability, and "demonstrated" is doing the whole job in that sentence: the
+demonstration here was a command that failed silently.
+
+### The `verifier` FAIL this closes
+
+`.prettierignore:15` read `DEV.152 records the measurement.` It did not — DEV.152
+is the untracked-cited-target entry and contains nothing about prettier. The
+`verifier` established that affirmatively, by reading DEV.152 end to end and
+noting that the last `prettier`/`INVOICE_CN_DN` hit in this file sits some three
+hundred lines **above** DEV.152's heading. `pnpm check:ids` is structurally blind
+to it because the id resolves; only the target is wrong. That is §11.1 ruling 6
+and DEV.128 — "a wrong id is not self-correcting, because every downstream
+citation looks exactly as authoritative as a right one" — committed by the author
+of the commit that also corrected a citation for that reason. Line 15 now names
+this entry.
+
+**Why an entry rather than repointing line 15 at the audit file's own header,**
+which also records the mechanism and would have closed the FAIL more cheaply:
+the operator's ruling was that the single-pass all-clear "is worth more than the
+commit it costs", and a hazard living only inside the document it protects is
+invisible to the next `.md` that hits it. Filed separately as a plan row, with
+the `DEVIATIONS.md:5290` precedent: that entry records the identical
+asterisk/underscore pairing defect in the plan renderer, ruled non-blocking, and
+it reached `main`-bound output within a day of the ruling. **Second instrument,
+second surface, and until now neither had a row.**
+
+### Also corrected in the same commit
+
+Two counts inside F.23/F.24/F.25's shared notes, replaced by enumerations rather
+than by better counts. "Three older ones" was **four** outside the 42–51 body
+(days 19, 25, 35, 36) or exactly **one** within 36–127. And the first attempt at
+that enumeration **missed day 35 entirely**, because `F.5a`'s `days` field is
+`30–35` with an **en-dash** and the parser accepted only hyphens — a silently
+skipped row producing a confidently wrong list, which is the same shape as
+everything else in this entry. The unparsed `days` fields are now named in the
+notes instead of dropped.
+
+**Not fixed, filed:** the sub-phase headings now render out of chronological
+order, and `F.5b`'s notes contradict its `days` field (pre-existing on `main`,
+widened by this branch's +8 shift).
+
+**One specific fact worth more than the pattern, because the next person will hit
+it:** `pnpm lint` is `pnpm -r lint` and does **not** typecheck — the real entry
+point is `pnpm typecheck`, which is `pnpm -r typecheck && pnpm typecheck:scripts`,
+and the second half compiles `scripts/` through `tsconfig.scripts.json`. There is
+no root `tsconfig.json`, so `npx tsc --noEmit -p tsconfig.json` answers “The
+specified path does not exist”, which is easy to read as a non-answer rather than
+as a check that never ran. A `noUncheckedIndexedAccess` error in a new test in
+this branch reached CI for exactly that reason.

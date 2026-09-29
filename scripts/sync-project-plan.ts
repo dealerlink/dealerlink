@@ -87,6 +87,19 @@ export interface StageFTask {
   status: string;
   completedDate: string | null;
   notes: string | null;
+  /**
+   * Ids of tasks that must be resolved before this one can start.
+   *
+   * Optional, and absent is NOT the same as empty: absent means nobody has
+   * recorded a dependency for this row, empty means someone looked and found
+   * none. Both render the same, so the distinction only matters to whoever is
+   * populating it.
+   *
+   * Every id must resolve to a real task — see the referential-integrity pass
+   * in parseTasks(). A blockedBy pointing at an id that does not exist is the
+   * DEV.128 defect in a machine-readable field, where it is cheap to catch.
+   */
+  blockedBy?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +122,7 @@ export function parseTasks(raw: string): StageFTask[] {
   }
 
   const seen = new Set<string>();
-  return tasks.map((t, i) => {
+  const out: StageFTask[] = tasks.map((t, i) => {
     if (t == null || typeof t !== 'object' || Array.isArray(t)) {
       throw new Error(`stage-f-tasks.json: task[${i}] is not an object`);
     }
@@ -134,6 +147,31 @@ export function parseTasks(raw: string): StageFTask[] {
     }
     const status = task.status as string;
     const id = task.id as string;
+    // blockedBy: shape only here. Referential integrity needs the full id set,
+    // so it runs as a second pass below — a dependency can point forward.
+    const blockedBy = (task as { blockedBy?: unknown }).blockedBy;
+    if (blockedBy !== undefined) {
+      if (!Array.isArray(blockedBy)) {
+        throw new Error(
+          `stage-f-tasks.json: task ${id} has a non-array "blockedBy" — expected an ` +
+            `array of task ids or the field omitted, got ${typeof blockedBy}`,
+        );
+      }
+      for (const dep of blockedBy) {
+        if (typeof dep !== 'string' || dep === '') {
+          throw new Error(
+            `stage-f-tasks.json: task ${id} has a non-string entry in "blockedBy" — ` +
+              `every entry must be a task id`,
+          );
+        }
+      }
+      if (new Set(blockedBy as string[]).size !== blockedBy.length) {
+        throw new Error(`stage-f-tasks.json: task ${id} lists a duplicate id in "blockedBy"`);
+      }
+      if ((blockedBy as string[]).includes(id)) {
+        throw new Error(`stage-f-tasks.json: task ${id} lists itself in "blockedBy"`);
+      }
+    }
     // Object.hasOwn, NOT `in`: `in` walks the prototype chain, so a status of
     // "toString", "constructor", "__proto__" or "valueOf" passed validation and
     // rendered a native function into the Status cell — while being counted in
@@ -156,8 +194,39 @@ export function parseTasks(raw: string): StageFTask[] {
       status,
       completedDate: task.completedDate ?? null,
       notes: task.notes ?? null,
+      ...(blockedBy === undefined ? {} : { blockedBy: blockedBy as string[] }),
     };
   });
+  assertBlockedByResolves(out);
+  return out;
+}
+
+/**
+ * Every `blockedBy` id must name a task that exists.
+ *
+ * A SECOND PASS, because a dependency may point forward in the array and the
+ * single-pass `seen` set only knows about rows already visited — validating
+ * inline would reject a legitimate forward reference and accept nothing extra.
+ *
+ * This is the one check the field exists to make possible. `pnpm check:ids`
+ * scans PROSE for `F.n` citations and cannot tell a dependency from a mention,
+ * so before this field a wrong dependency id was invisible to every gate.
+ */
+export function assertBlockedByResolves(tasks: StageFTask[]): void {
+  const ids = new Set(tasks.map((t) => t.id));
+  const dangling: string[] = [];
+  for (const t of tasks) {
+    for (const dep of t.blockedBy ?? []) {
+      if (!ids.has(dep)) dangling.push(`${t.id} → ${dep}`);
+    }
+  }
+  if (dangling.length > 0) {
+    throw new Error(
+      `stage-f-tasks.json: ${dangling.length} "blockedBy" reference(s) name a task that ` +
+        `does not exist: ${dangling.join(', ')}. Fix the id; do not add a placeholder task ` +
+        `to satisfy it.`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +489,82 @@ function renderSummary(tasks: StageFTask[]): string {
 }
 
 /**
+ * What blocks what, generated from `blockedBy` rather than written as prose.
+ *
+ * WHY THIS IS A SECTION AND NOT A SENTENCE IN SOMEBODY'S NOTES. Before the
+ * field existed, every dependency in this plan lived in a notes field, which
+ * means: it was invisible unless you read that row, it went stale silently when
+ * a row moved, and no gate could see it. PR #82 is the worked example — F.25
+ * was to be moved ahead of F.23, the provider abstraction it needs, and nothing
+ * in the data said so because all three rows had `notes: null`. The inversion
+ * was caught by a human reading what the rows were FOR.
+ *
+ * BOTH DIRECTIONS ARE RENDERED. "F.6 is blocked by F.152" and "F.152 blocks
+ * F.6" are the same fact, but they are not the same question: the first is
+ * asked by whoever is about to start F.6, the second by whoever is about to
+ * close F.152 and wants to know what it releases. A one-directional view makes
+ * the second question require reading the whole table.
+ *
+ * A blocker that is already `complete` is marked, because a satisfied
+ * dependency is the common case in a plan this old and reads as noise
+ * otherwise — F.84's blocker F.55 has been closed for days.
+ */
+function renderDependencies(tasks: StageFTask[]): string {
+  const status = new Map(tasks.map((t) => [t.id, t.status]));
+  const blocked = tasks.filter((t) => (t.blockedBy ?? []).length > 0);
+
+  if (blocked.length === 0) {
+    // Not an empty table: an empty table looks like a rendering failure, and a
+    // plan with no recorded dependencies is a real and reportable state.
+    return [
+      '## What blocks what',
+      '',
+      'No task records a `blockedBy`. That means none is RECORDED, not that none',
+      'exists — dependencies stated only in a notes field are invisible here.',
+    ].join('\n');
+  }
+
+  const mark = (id: string) => (status.get(id) === 'complete' ? `${id} ✓` : id);
+
+  const blockedRows = blocked.map(
+    (t) =>
+      `| ${t.id} | ${(t.blockedBy ?? []).map(mark).join(', ')} | ${STATUS_SYMBOLS[t.status]} |`,
+  );
+
+  // The inverse index, built rather than hand-maintained.
+  const blocks = new Map<string, string[]>();
+  for (const t of blocked) {
+    for (const dep of t.blockedBy ?? []) {
+      if (!blocks.has(dep)) blocks.set(dep, []);
+      blocks.get(dep)!.push(t.id);
+    }
+  }
+  const blockerRows = [...blocks.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], 'en', { numeric: true }))
+    .map(([dep, ids]) => `| ${mark(dep)} | ${ids.join(', ')} |`);
+
+  return [
+    '## What blocks what',
+    '',
+    `Generated from the \`blockedBy\` field on ${blocked.length} task(s). A ✓ marks a`,
+    'blocker that is already complete. **A dependency stated only in prose does not',
+    'appear here** — if it matters, put it in the field.',
+    '',
+    '### Blocked tasks',
+    '',
+    '| Task | Blocked by | Status |',
+    '| --- | --- | --- |',
+    ...blockedRows,
+    '',
+    '### What each blocker releases',
+    '',
+    '| Blocker | Releases |',
+    '| --- | --- |',
+    ...blockerRows,
+  ].join('\n');
+}
+
+/**
  * How the banned section can be spelled. "Change Log" and "Change-Log" are the
  * same section under DEV.110's ban, and an HTML heading is a heading.
  */
@@ -582,6 +727,10 @@ export function renderPlan(header: string, tasks: StageFTask[]): string {
     MARKER_START,
     renderBlock(tasks),
     MARKER_END,
+    '',
+    '---',
+    '',
+    renderDependencies(tasks),
     '',
     '---',
     '',
