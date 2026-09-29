@@ -122,7 +122,7 @@
       "id": "F.5b",
       "task": "Ship-To GSTIN validation (checksum + state cross-check + required-when-different)",
       "subPhase": "SP1",
-      "days": "99",
+      "days": "107",
       "status": "pending",
       "completedDate": null,
       "notes": "v3 §4 / §6 (~1.5 d). Mostly promotion: a correct GSTN mod-36 checksum already exists in `lib/format/index.ts`, tested, wired only to the tenant's own GSTIN. Add the embedded-state cross-check (a top IRP rejection cause), required-when Bill-To ≠ Ship-To, and a dispatch block naming the dealer + address. GSTIN must NOT override place-of-supply derivation (ADR-012). D-3: GSTN Advisory 661, effective 1 Aug 2026. DAY RANGE CORRECTED 2026-09-26, F.5a day-prompt directive D-12: 33–34 → 36. THE DEFECT: F.5b was scheduled 33–34, INSIDE F.5a’s 30–35, while depending on it — Ship-To GSTIN validation needs the Ship-To address entity that F.5a creates, so the two could not run concurrently and the overlap asserted that they could. Moved to 36, the first day after F.5a ends and before F.6 begins at 37, so nothing downstream shifts. OBSERVATION, NOT FIXED HERE (§11.2): day 36 was F.4’s nominal slot and 35 was F.3’s, and both are COMPLETE — they shipped out of sequence, ahead of F.5a. So for completed rows the `days` field now records where work was PLANNED, not when it happened, while for pending rows it still reads as a schedule. That ambiguity is pre-existing and wider than this correction; it is left alone deliberately rather than silently reinterpreted. UPDATED 2026-09-28 (F.5a complete): THIS ROW’S TRIGGER CONDITION IS NOW COMPUTED BY SHIPPED CODE. “Required when Bill-To ≠ Ship-To” is exactly the condition F.5a uses to decide whether to ask for a delivery arrangement, and it is evaluated in two places already: `convert-form.tsx` and `pi-edit-form.tsx` render the control on `shipToId !== billTo.id`, and both server actions clear `deliveryArrangement` to NULL on the same condition. So F.5b does not need to invent the predicate — it needs to reuse it, and if it writes a third copy that is the defect F.5a spent A.3 removing. ALSO RELEVANT: `dealer_addresses` now exists with a NOT NULL 2-letter state, so the Ship-To state cross-check F.5b owns has a real address entity to check against rather than only a dealer’s registered state."
@@ -203,7 +203,7 @@
       "id": "F.7",
       "task": "Serials rendered on invoice lines",
       "subPhase": "SP1",
-      "days": "100",
+      "days": "108",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -221,7 +221,7 @@
       "id": "F.9",
       "task": "GST report: rate-wise + HSN-wise grouping",
       "subPhase": "SP1",
-      "days": "101",
+      "days": "109",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -230,7 +230,7 @@
       "id": "F.10",
       "task": "GSTR-1 export (B2B, B2CL, CDNR, HSN)",
       "subPhase": "SP1",
-      "days": "102-103",
+      "days": "110-111",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -266,7 +266,7 @@
       "id": "F.14",
       "task": "Vendor bill export",
       "subPhase": "SP1",
-      "days": "104",
+      "days": "112",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -275,7 +275,7 @@
       "id": "F.15",
       "task": "Data migration importers",
       "subPhase": "SP1",
-      "days": "105-106",
+      "days": "113-114",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -284,7 +284,7 @@
       "id": "F.16",
       "task": "Opening balance import",
       "subPhase": "SP1",
-      "days": "107",
+      "days": "115",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -293,7 +293,7 @@
       "id": "F.17",
       "task": "ADR: serial capture (swap-on-scan)",
       "subPhase": "SP2",
-      "days": "108",
+      "days": "116",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -302,7 +302,7 @@
       "id": "F.18",
       "task": "Serial bulk import at procurement",
       "subPhase": "SP2",
-      "days": "109-110",
+      "days": "117-118",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -311,7 +311,7 @@
       "id": "F.19",
       "task": "`swapReservedSerial` + scan-to-assign",
       "subPhase": "SP2",
-      "days": "111-113",
+      "days": "119-121",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -320,7 +320,7 @@
       "id": "F.20",
       "task": "Serial format validation per product/tenant",
       "subPhase": "SP2",
-      "days": "114",
+      "days": "122",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -329,7 +329,7 @@
       "id": "F.21",
       "task": "Mobile-responsive / PWA",
       "subPhase": "SP2",
-      "days": "85-98",
+      "days": "93-106",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -338,7 +338,7 @@
       "id": "F.22",
       "task": "Dealer price lists",
       "subPhase": "SP2",
-      "days": "115-116",
+      "days": "123-124",
       "status": "pending",
       "completedDate": null,
       "notes": null
@@ -347,28 +347,28 @@
       "id": "F.23",
       "task": "GSP provider abstraction + credential vault",
       "subPhase": "SP3",
-      "days": "117",
+      "days": "76",
       "status": "pending",
       "completedDate": null,
-      "notes": null
+      "notes": "THIS IS THE SHARED PLUMBING THE OTHER TWO DEPEND ON, which is why it leads the block: the provider abstraction and the credential vault serve both F.24 (IRN) and F.25 (e-way bill). It is one day, and putting it anywhere other than immediately ahead of them is what created the inversion described below. BLOCKED ON GSP — and MOVED with F.23/F.24/F.25 as one block to days 76–83 on 2026-09-29 by operator ruling.  WHY THE THREE MOVE TOGETHER, IN THE OPERATOR'S REASONING: e-invoicing and the e-way bill share ONE provider abstraction, ONE credential vault and ONE GSP contract. Separating them by forty days means building the integration, setting it down, and picking it up again — so the block moves as a block or not at all.  HOW THE MOVE AROSE, because the record is more useful than the outcome. The instruction was to move F.25 (e-way bill) alone to immediately after the Tally block. Applied literally that would have put the e-way bill at day 76 with F.23 — the GSP provider abstraction and credential vault it depends on — still at day 117, roughly forty days LATER: a dependency inversion. Nothing in the plan stated the dependency (all three rows had `notes: null`), so it was visible only by reading what the rows are for. Raised before applying rather than after, per CLAUDE.md §10.1 — \"any decision the day prompt did not anticipate\" — and the operator's own verdict on it: \"My instruction inverted a dependency and you were right not to apply it.\"  WHY DAY 76 IS SAFE: F.154 sets the GSP contract's START at 2026-09-30 with 2–4 weeks of third-party paperwork, so the contract is long settled by day 76. That row carries a start date rather than a queue position precisely so that this kind of scheduling question has a date to check against.  WHAT MOVED, EXACTLY: F.23 117 → 76; F.24 118–121 → 77–80; F.25 122–124 → 81–83. Everything that occupied days 76–116 shifted +8 (F.147 76–84 → 84–92 through F.22 115–116 → 123–124). F.26 (125) and F.27 (126–127) are unchanged and the plan still ends at day 127. Verified computationally, not by eye: no day is claimed twice except the pre-existing deliberate overlaps (F.6/F.8/F.144 as one body at 42–51, and three older ones), and days 36–127 contain no gap."
     },
     {
       "id": "F.24",
       "task": "E-invoice / IRN",
       "subPhase": "SP3",
-      "days": "118-121",
+      "days": "77-80",
       "status": "pending",
       "completedDate": null,
-      "notes": null
+      "notes": "NOT ON PHASE 1'S CRITICAL PATH, and that is measured rather than assumed: the client issues 6–7 invoices per working day (53 in 8 days, from `INV-40` dated 17 Sep to `INV-93` dated 25 Sep), so manual IRN generation is about ten minutes a day. Phase 1 invoicing with manual IRNs is viable, so F.6 does not wait for this row. Recorded at length on F.11. BLOCKED ON GSP — and MOVED with F.23/F.24/F.25 as one block to days 76–83 on 2026-09-29 by operator ruling.  WHY THE THREE MOVE TOGETHER, IN THE OPERATOR'S REASONING: e-invoicing and the e-way bill share ONE provider abstraction, ONE credential vault and ONE GSP contract. Separating them by forty days means building the integration, setting it down, and picking it up again — so the block moves as a block or not at all.  HOW THE MOVE AROSE, because the record is more useful than the outcome. The instruction was to move F.25 (e-way bill) alone to immediately after the Tally block. Applied literally that would have put the e-way bill at day 76 with F.23 — the GSP provider abstraction and credential vault it depends on — still at day 117, roughly forty days LATER: a dependency inversion. Nothing in the plan stated the dependency (all three rows had `notes: null`), so it was visible only by reading what the rows are for. Raised before applying rather than after, per CLAUDE.md §10.1 — \"any decision the day prompt did not anticipate\" — and the operator's own verdict on it: \"My instruction inverted a dependency and you were right not to apply it.\"  WHY DAY 76 IS SAFE: F.154 sets the GSP contract's START at 2026-09-30 with 2–4 weeks of third-party paperwork, so the contract is long settled by day 76. That row carries a start date rather than a queue position precisely so that this kind of scheduling question has a date to check against.  WHAT MOVED, EXACTLY: F.23 117 → 76; F.24 118–121 → 77–80; F.25 122–124 → 81–83. Everything that occupied days 76–116 shifted +8 (F.147 76–84 → 84–92 through F.22 115–116 → 123–124). F.26 (125) and F.27 (126–127) are unchanged and the plan still ends at day 127. Verified computationally, not by eye: no day is claimed twice except the pre-existing deliberate overlaps (F.6/F.8/F.144 as one body at 42–51, and three older ones), and days 36–127 contain no gap."
     },
     {
       "id": "F.25",
       "task": "E-way bill",
       "subPhase": "SP3",
-      "days": "122-124",
+      "days": "81-83",
       "status": "pending",
       "completedDate": null,
-      "notes": null
+      "notes": "THE ROW THE MOVE WAS ASKED FOR. The e-way bill is the adoption-relevant half of the block — goods do not move without one — which is why it was to be pulled forward from day 122 to immediately after the Tally block. It arrives at 81–83 rather than 76–78 because F.23 and F.24 come with it. BLOCKED ON GSP — and MOVED with F.23/F.24/F.25 as one block to days 76–83 on 2026-09-29 by operator ruling.  WHY THE THREE MOVE TOGETHER, IN THE OPERATOR'S REASONING: e-invoicing and the e-way bill share ONE provider abstraction, ONE credential vault and ONE GSP contract. Separating them by forty days means building the integration, setting it down, and picking it up again — so the block moves as a block or not at all.  HOW THE MOVE AROSE, because the record is more useful than the outcome. The instruction was to move F.25 (e-way bill) alone to immediately after the Tally block. Applied literally that would have put the e-way bill at day 76 with F.23 — the GSP provider abstraction and credential vault it depends on — still at day 117, roughly forty days LATER: a dependency inversion. Nothing in the plan stated the dependency (all three rows had `notes: null`), so it was visible only by reading what the rows are for. Raised before applying rather than after, per CLAUDE.md §10.1 — \"any decision the day prompt did not anticipate\" — and the operator's own verdict on it: \"My instruction inverted a dependency and you were right not to apply it.\"  WHY DAY 76 IS SAFE: F.154 sets the GSP contract's START at 2026-09-30 with 2–4 weeks of third-party paperwork, so the contract is long settled by day 76. That row carries a start date rather than a queue position precisely so that this kind of scheduling question has a date to check against.  WHAT MOVED, EXACTLY: F.23 117 → 76; F.24 118–121 → 77–80; F.25 122–124 → 81–83. Everything that occupied days 76–116 shifted +8 (F.147 76–84 → 84–92 through F.22 115–116 → 123–124). F.26 (125) and F.27 (126–127) are unchanged and the plan still ends at day 127. Verified computationally, not by eye: no day is claimed twice except the pre-existing deliberate overlaps (F.6/F.8/F.144 as one body at 42–51, and three older ones), and days 36–127 contain no gap."
     },
     {
       "id": "F.42",
@@ -1326,7 +1326,7 @@
     },
     {
       "subPhase": "SP1",
-      "days": "76-84",
+      "days": "84-92",
       "status": "pending",
       "completedDate": null,
       "id": "F.147",
@@ -1367,6 +1367,30 @@
       "days": "—",
       "status": "pending",
       "notes": "FILED 2026-09-29 by the main thread under CLAUDE.md §11.2 — discovered while running the control for DEV.152 and NOT folded into PR #81, which is the branch it was found on.  THE DEFECT, and it is a design decision that is right for one case and wrong for its mirror. `scripts/check-path-references.mjs:157` reads `const exists = (p) => existsSync(p);` and its own comment (`:148-156`) argues the point deliberately: \"Existence is a FILESYSTEM question, not a git-index one\", because a first version `tracked.has(p) || existsSync(p)` was vacuous when a cited file was MOVED without staging the move — `git ls-files` still reported the old path, so the check stayed green while every citation was already broken. That argument is CORRECT for an unstaged move.  IT IS WRONG FOR THE MIRROR CASE: a NEW, UNTRACKED cited file. There the filesystem says the path exists and the index says it does not, and CI — which clones the index and nothing else — can only ever see the index. So a citation of an untracked file passes locally and fails in CI, and the local pass is STRUCTURALLY unable to detect it. The two cases point opposite ways and the current resolver answers only one of them.  MEASURED, both controls executed 2026-09-29 on this working tree with `docs/PLAN_REVISION_PARITY_LIST.md` cited from 14 sites: (1) untracked but present on disk → EXIT=0, \"OK: every cited docs/ path resolves (78 distinct paths cited)\"; (2) same index, file removed from disk → EXIT=1 with CI's exact message. CI is not running a different check — it is running control (2).  WHAT TO BUILD: resolve a cited path as existing only when it is BOTH on disk AND tracked-or-staged, so the unstaged-move case and the untracked-new-file case both fail. The tracked set is already computed one function away (`trackedFiles()`, `:63`), and staged-but-uncommitted must count as tracked or the check would reject every legitimate new document in the commit that adds it. THE CONTROL IS NOT OPTIONAL and both halves must be executed, because the comment at `:148` records that the FIRST attempt at this predicate was vacuous and was caught only by moving `docs/TESTING.md` and watching the check stay green: (a) cite a file, stage it, expect PASS; (b) cite a file, leave it `??`, expect FAIL; (c) cite a tracked file, move it without staging, expect FAIL — (c) is the regression test for the case the current design exists to catch, and a fix that loses it is worse than the defect.  ALSO EXTEND `scripts/check-path-references.test.ts`, which today has 6 tests and asserts only that the checker passes against the committed tree — it cannot see this class either. The same question applies to `scripts/check-id-references.mjs`: whether an id cited from an untracked file, or citing an entry only in an untracked file, has the same blind spot. NOT CHECKED — stated as an open question, not a finding.  WHY IT IS WORTH A ROW RATHER THAN THE HABIT ALONE. DEV.152's rule (`git ls-files --error-unmatch` before citing a path from a working tree) is a habit, and habits are what this family keeps failing: five occurrences of a dangling cross-tree citation reaching CI in ten days. This is the only one of the five that a GREEN LOCAL GATE actively concealed, and it is the only one a tool change can prevent."
+    },
+    {
+      "id": "F.152",
+      "task": "HIGH — SETTLE BEFORE F.6, NOT DURING: the PDF loader RECOMPUTES every total from stored lines while view-model.ts asserts money is read and never recomputed. Round-off is the field that breaks the agreement",
+      "subPhase": "SP1",
+      "days": "—",
+      "status": "pending",
+      "notes": "FILED 2026-09-29. Found by the code-auditor enumeration for the combined invoice / credit-note / debit-note spec; the full evidence is docs/INVOICE_CN_DN_AUDIT.md Q2 §3, which calls it \"the sharpest single constraint I found for the spec\".  MUST BE SETTLED BEFORE F.6 BEGINS, NOT INSIDE IT. That is the point of filing it separately. F.6 has to choose whether an invoice's PDF prints its STORED totals or RECOMPUTED ones, and the answer determines whether a `round_off` column is visible on the document at all. A spec written without deciding it will decide it implicitly, in whichever loader gets written first.  THE CONTRADICTION, BOTH SIDES NAMED. `apps/workers/src/pdf/view-model.ts:14-16` asserts that it makes \"numbers are read, never computed\" STRUCTURAL, citing CLAUDE.md: money is read from stored columns and never recomputed. `apps/workers/src/templates/performa-invoice.tsx:116-139` — one directory over — calls `computeTax` over the stored LINES and returns `subtotal: Number(tax.subtotal)` … `totalAmount: Number(tax.totalAmount)` at `:231-241`. So the header totals on a rendered PI are recomputed, not read.  IT IS LATENT, NOT A LIVE DEFECT — and the reason it is latent is the reason it will stop being latent. The two agree numerically today because the stored columns were themselves written by `computeTax` over the same lines. **Round-off is the first field where they would disagree:** a document-level adjustment stored on the header has no representation in the lines, so a loader that recomputes from lines cannot see it and would silently print a total that differs from the stored one — on a GST document, after issue.  WHY THE LOADER RECOMPUTES, so the fix is not mistaken for laziness: F.99 (`docs/stage-f-tasks.json`) records that no per-line tax is stored at any grain, so every consumer recomputes. Confirmed by the audit: `performa_invoice_lines` stores `lineTotal` only — no `taxableValue`, no `gstAmount`, no `lineDiscount`. Recomputing is currently the ONLY way to get a per-line tax figure for the line table. So \"just read the stored columns\" is not a one-line change: the line table needs its per-line figures from somewhere.  THE THREE OPTIONS, stated so the decision is a choice and not a discovery. (a) Loader reads the stored HEADER totals and recomputes only the per-line figures it has no column for — smallest change, and it makes the header authoritative, which is what `view-model.ts` claims. (b) Store per-line tax (F.99's subject) and read everything — largest change, touches money columns, needs a §10.1 stop-and-ask. (c) Keep recomputing and model round-off as a line — rejected on its face by the audit's Q2 §1, which names the measured defect that per-line independent rounding caused (30046.50 vs 30046.51, `compute.ts:66-71`) and warns that repeating the pattern for round-off reintroduces it.  AND THE SECOND INVARIANT IT TOUCHES: `packages/tax/src/summary.ts` holds `sum(byRate) === sum(byHsn) === grandTotal` because `totalsFrom` takes the engine's own figures and never re-sums the groups. A round-off added to `grandTotal` BREAKS that identity unless it is modelled as a document-level term outside the groups. `summary.ts:106` already says so: \"No round-off — that is F.6.\"  NOT A DECISION THIS ROW MAKES. Money columns and `packages/tax` are protected surfaces (CLAUDE.md §10.1), and option (b) in particular requires a stop-and-ask. This row's deliverable is the DECISION plus whatever test makes it structural — the audit's own framing is that `view-model.ts` claims a property the repo does not have, so a claim in a comment is what failed here."
+    },
+    {
+      "id": "F.153",
+      "task": "RenderableDocumentType has five arms including invoice; RenderableKind has four and omits it — F.6 cannot land without resolving the divergence",
+      "subPhase": "SP1",
+      "days": "—",
+      "status": "pending",
+      "notes": "FILED 2026-09-29 from the code-auditor enumeration; evidence in docs/INVOICE_CN_DN_AUDIT.md Q1 (\"A significant divergence the Day 19 audit could not have seen\") and Q4's queue/render row.  THE FACTS. `RenderableDocumentType` at `apps/workers/src/jobs/render-pdf.ts:36-41` has FIVE arms and includes `'invoice'`. `RenderableKind` at `apps/workers/src/pdf/view-model.ts:30` has FOUR and omits it. They are now two different unions over what is nominally the same concept, and the three config objects that actually drive rendering — `TEMPLATE_FOR` (`view-model.ts:72`), `FOOTER_LABEL` (`:64`) and the `filenameFor` switch (`:180`) — are all keyed on the FOUR-arm one.  WHY IT MATTERS FOR F.6 RATHER THAN BEING TIDY-UP: the five-arm union is what made `'invoice'` look like a placeholder that was already wired. It is not. `render-pdf.ts:65-76` is a negative allow-list of four types, so `'invoice'` throws `render-pdf: documentType \"invoice\" is not implemented yet` BY OMISSION rather than through an explicit case. F.6 must add an arm to `RenderableKind` AND entries to three config objects AND a `filenameFor` case AND remove the exclusion — five places, none of which the Day 19 audit could name because the divergence did not exist yet.  AND IT COMPOUNDS FOR THE TWO NOTES. `'invoice'` is at least present in `generated_document_type` (`packages/db/src/schema/generated-document.ts:17`), in `RenderableDocumentType` and in the Zod arm (`packages/schemas/src/email.ts:57`). `credit_note` and `debit_note` are in NONE of them, so those two additionally need a pgEnum value migration that the invoice does not — the audit calls this \"the single clearest asymmetry in the whole comparison\".  RESOLVE IT, do not just widen both. Two unions over one concept that must be kept in step by hand is the defect; adding a fifth arm to the second one reproduces it with a bigger blast radius. The question F.6's spec has to answer is whether these should be ONE type — and if they must stay two (the payload type may legitimately accept a type the renderer has not implemented), then what makes the relationship checked rather than remembered. A type-level exhaustiveness check over the config objects is the obvious candidate and is cheap; naming it here so the decision is deliberate."
+    },
+    {
+      "id": "F.154",
+      "task": "GSP contract for e-invoicing and e-way bill — paperwork, 2–4 weeks, START 2026-09-30 and not a queue position",
+      "subPhase": "SP1",
+      "days": "—",
+      "status": "pending",
+      "notes": "FILED 2026-09-29 by operator instruction, WITH A START DATE RATHER THAN A QUEUE POSITION, and the distinction is the whole reason the row exists separately.  START: 2026-09-30. Expected elapsed: 2–4 weeks of third-party paperwork. Engineering effort during that time: approximately none.  WHY A START DATE AND NOT A QUEUE POSITION. Every other row in this plan is work somebody does, so ordering it against other work is meaningful. This one is a counterparty's clock. Given a queue position it would sit behind whatever is in front of it and contribute nothing to the wait, which is the only quantity that matters; given a start date it runs in parallel with everything and its elapsed time is spent whether or not anyone is looking at it. `docs/PLAN_REVISION_PARITY_LIST.md` §5 already puts it outside the numbered sequence for this reason — \"Runs in parallel from now. Gates e-way bill and e-invoicing; 2–4 weeks of paperwork, not started\".  WHAT IT GATES, and the gating is hard rather than nice-to-have: F.23–F.24 (e-invoicing / IRN) and F.25 (e-way bill). No GSP credentials, no API, no substitute — there is no route to a compliant IRN or e-way bill that does not go through a GST Suvidha Provider or the portal by hand.  IT IS NOT ON THE CRITICAL PATH FOR PHASE 1 INVOICING, and that is a measurement rather than an assumption. The client's own invoices give 53 invoices in 8 days (`INV-40` dated 17 Sep, `INV-93` dated 25 Sep) — 6–7 per working day, so manual IRN generation is about ten minutes a day. Phase 1 invoicing with manual IRNs is VIABLE, which is why F.6 does not wait for this row. Recorded at greater length on F.11.  FIRST CONCRETE STEP, so the start date means something on 30 Sep: choose a GSP and begin their onboarding paperwork. Not started, no GSP chosen, no quotes obtained — stated as the current state rather than implied by the status field."
     }
   ]
 }
