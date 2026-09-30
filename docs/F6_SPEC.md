@@ -71,12 +71,27 @@ automated, and the only thing that makes a move intended is that it was
 Both need the scratch rasteriser install (`docs/RUNBOOKS.md` R25) and **neither
 runs in CI**.
 
-**THE PREDICTED MOVE-SET IS EMPTY. Write that down in the branch before step 2.**
+**THE PREDICTED MOVE-SET IS EMPTY, AND THAT PREDICTION IS CONDITIONAL — write
+both down in the branch before step 2.**
 F.152 measured 0 of 31 PIs and 0 of 48 quotations differing between stored and
 recomputed; every reference case has lines, because they render today; and
 `round_off` is on the **invoice** table only, so no quotation or PI totals block
 gains a row. **So any non-empty diff is a finding**, and the criterion is not
 "expect a move" but "predict the move-set, and justify every element of it".
+
+**THE CONDITION: `round_off` lands on the INVOICE TABLE ONLY this day.** If it
+were also added to `performa_invoices`, the PI totals block would gain a Round
+Off row and **three PI reference cases would move for real** — the empty
+prediction would be false, and the day would need a justified per-figure move
+manifest instead. Settled 2026-09-30: **invoice only, and the PI is FILED as
+EXPECTED WORK rather than as a maybe** (F.165). The client's PFI-2033 totals
+₹5,76,955.00, a whole rupee, so the PI probably does need it; the deferral is
+because adding it here moves three reference cases, and that deserves its own day
+with its own pre-change capture rather than being folded into a day that already
+changes the loader.
+
+So if this day's scope grows to include the PI column, **the empty prediction is
+void** and §1's procedure must be re-run with a non-empty expected set.
 
 `typst-determinism` cannot move either: `determinism-check.ts` pins a single
 dispatch case, which no quotation or PI loader change can reach.
@@ -131,6 +146,19 @@ Two consequences that are part of this decision, not details of it:
   13,744.00 gives **−0.40**. A non-negative constraint would reject half of all
   real cases. A magnitude bound is defensible; a sign bound is not.
 
+**ROUND-OFF IS ALWAYS APPLIED — settled 2026-09-30, and stated as a DECISION
+rather than left as an omission.** Nothing in `tenant_settings` expresses a
+rounding preference, and none is added. Every invoice rounds to the whole rupee
+and carries the `round_off` term, for a tenant that wants it and a tenant that
+does not.
+
+The precedent is CLAUDE.md §8's locked decisions: the fiscal year is hardcoded to
+April–March and the currency and locale to INR/en-IN for Phase 1, each with a
+`tenant_settings` column already present but read as a constant. The same shape
+applies here — if per-tenant rounding is ever wanted it is a column and a config
+flip, not a migration. What matters is that this is **recorded as chosen**, so
+nobody later reads the absence of a flag as an oversight and adds one in passing.
+
 **AND THE IDENTITY CANNOT DETECT A WRONG `taxable_amount`**, which must be stated
 so nobody reads it as covering more than it does. `storedTaxable` appears on both
 sides of `roundOff = storedTotal − (storedTaxable + Σ grouped tax)` and
@@ -164,12 +192,33 @@ including `'invoice'`; `RenderableKind` has four and omits it, and
 `TEMPLATE_FOR`, `FOOTER_LABEL` and `filenameFor` are all keyed on the four-arm
 union (F.153).
 
-**Settled 2026-09-30: ONE union.** Two unions kept in step by hand is what
-produced the divergence, so a type-level exhaustiveness check across two of them
-would be guarding a structure that should not exist. Collapse them. If the queue
-payload genuinely needs to accept a document type the renderer has not
-implemented, that is expressed by the renderer's own guard — the exclusion list
-in `render-pdf.ts`, which already exists — and not by a second type.
+**Settled 2026-09-30: TWO unions, plus a type-level exhaustiveness check that
+makes the relationship between them CHECKED rather than remembered.**
+
+> **This REVERSES a ruling made earlier the same day, and the reasoning matters
+> more than the outcome.** The first ruling was "ONE union — two kept in step by
+> hand is what produced the divergence". That mistook the symptom for the cause.
+> **The queue payload and the renderer's capability are genuinely different
+> sets**: the payload boundary describes what a job may legitimately ASK FOR,
+> and `RenderableKind` describes what the renderer can actually PRODUCE. A
+> document type can correctly exist in the first while absent from the second —
+> that is what `render-pdf.ts`'s exclusion list expresses today for
+> `'invoice'`. Collapsing them would assert an identity that is **not true**,
+> and would force every future not-yet-implemented type to be either absent from
+> the payload schema (so the job cannot be enqueued at all) or present in the
+> renderer's config objects (so it claims a template it does not have).
+>
+> **The defect was that the relationship was UNCHECKED, not that there were two
+> types.** The fix is therefore a check, not a merge: an exhaustiveness
+> constraint asserting that every `RenderableKind` has an entry in
+> `TEMPLATE_FOR`, `FOOTER_LABEL` and `filenameFor`, and that every
+> `RenderableDocumentType` is either a `RenderableKind` or explicitly listed
+> in the exclusion set. Then adding an arm to either union without completing the
+> other side fails `typecheck` instead of drifting.
+>
+> Recorded as a reversal rather than an edit because the first ruling dismissed
+> this argument without engaging it, and the record of a decision is worth less
+> if it hides the version that was wrong.
 
 **Build:**
 
@@ -235,6 +284,44 @@ the alternative will be attempted and will throw under a misleading name
 
 ---
 
+## 4a. Settled 2026-09-30 — prefixes, roles, and the settlement comments
+
+**Document prefixes: use the FALLBACK, do not extend the admin surface.** Allocate
+`credit_note` and `debit_note` numbers through the `prefixes['x'] ?? 'CN'` pattern
+`allocatePaymentNumber` already uses (`apps/web/lib/actions/payments/helpers.ts:37`).
+Zero admin-surface change and no JSONB default change this day.
+Operator-configurable prefixes for the two notes are **filed** (F.164).
+
+The reason to keep them apart is a live data-loss path, filed separately as
+**F.163**: `updateTenantDocPrefixes` replaces the **whole** `doc_prefixes` JSONB and
+`docPrefixesSchema` is a closed `z.object`, so **a key present in the database
+default but absent from the schema is DELETED on the first operator save** —
+silently, with no error, and no test covers it. The three lists
+(`docPrefixesSchema`, the JSONB default, the admin `keys` array) must only ever
+change together, and this day changes none of them.
+
+**Role gating: Accounts issues invoices; ADMIN issues credit and debit notes.** Not
+the same authority — raising a receivable and reducing one are different acts, and
+the second writes off money the tenant is owed. CLAUDE.md §6 gives Accounts
+"generate invoices" explicitly, so the invoice half is the rule already written;
+the notes go to Admin because §6 grants Admin everything within the tenant and §9
+forbids inventing a role permission that is not specified. `TAX_INVOICE_AUDIT.md:96`
+proposed exactly this split and it was never implemented — it is now a decision
+rather than a proposal.
+
+**The settlement read-path comments are AUTHORISED for this day** — five one-line
+comments, one at each site named in F.161
+(`packages/db/src/payments/recompute.ts:57-60`,
+`apps/web/lib/reports/outstanding.ts:102`, `apps/web/lib/queries/payments.ts:381`
+and `:433`, `apps/web/app/(app)/dashboard/page.tsx:94`), each naming F.161 and
+saying the figure is incomplete once a reducing document exists. This is an
+explicit authorisation of a scope extension beyond the three tasks (§11.2), granted
+because a filed row nobody reading `outstanding.ts:102` will ever find is how the
+gap becomes a support ticket. **Comments only — no behaviour change at any of the
+five sites.**
+
+---
+
 ## 5. Out of scope
 
 - **E-invoice and e-way bill** — F.23/F.24/F.25, GSP-gated, days 76–83
@@ -252,11 +339,25 @@ the alternative will be attempted and will throw under a misleading name
 
 ## 6. Acceptance
 
-1. The loader reads stored totals; the reconciliation assertion exists and has
-   been shown to fail when the two disagree
+1. The loader reads stored totals, and the reconciliation assertion **has been
+   shown to fail** by a MUTATE-AND-ROLLBACK FIXTURE: a test that alters one stored
+   money column inside a transaction, asserts the loader raises its named error
+   identifying the document, and rolls back. _(Amended 2026-09-30 — "has been
+   shown to fail" named no mechanism, and a criterion whose satisfaction cannot be
+   demonstrated is how DEV.129 happened. The fixture is the mechanism, and it must
+   also go RED if the assertion is deleted, or it is testing the database rather
+   than the assertion.)_
 2. An invoice issues from a confirmed order, renders, and carries its serials
-3. Round-off is stored, rendered, and reconciles `stored total − (taxable +
-tax)` exactly
+3. Round-off is stored, rendered, and reconciles
+   `stored total − (stored taxable + Σ GROUPED tax)` exactly — **the GROUPED tax,
+   derived from the lines, not the stored tax columns.** That is the side that can
+   catch a grouping error; stored-against-stored compares two numbers written by
+   the same call and cannot. **Plus a SECOND assertion,
+   `Σ(line taxable) === stored taxable_amount`** — because the first identity
+   **cannot detect a wrong `taxable_amount`: `stored taxable` appears on both
+   sides and cancels.** _(Amended 2026-09-30. As written this was ambiguous between
+   stored and grouped tax, and the two differ in exactly what the assertion is
+   capable of catching.)_
 4. A credit note and a debit note issue against an invoice, each carrying the
    originating invoice number as a snapshot
 5. `packages/tax` is unchanged — no file modified, no fixture moved
@@ -271,8 +372,19 @@ tax)` exactly
    the test is re-run". "All three measures" was undefined anywhere in this
    document; it is now named.)_
 7. The type divergence is resolved, not widened
-8. Every new table is caught by `rls.test.ts`'s enumeration, with its policy and
-   audit trigger present
+8. Every new table is caught by `rls.test.ts`'s enumeration, with its
+   `tenant_isolation` policy present. This half is **automatic** — the test
+   derives its population from `pg_class`, so a new tenant-scoped table is
+   checked without anyone adding it to a list.
+9. Every new table has its `audit_trg` stanza in `triggers/audit-log.sql` **and a
+   per-table test asserting the audit row**. This half is **NOT automatic and
+   nothing enumerates it**: `rls.test.ts` checks `relrowsecurity`,
+   `relforcerowsecurity` and the policy only, and no test anywhere enumerates the
+   25 hand-written trigger stanzas — so a table whose stanza was forgotten looks
+   identical to one that has it. _(Split from a single criterion on 2026-09-30.
+   The two halves have different deciders, and conflating them let the manual half
+   inherit the automatic half's assurance. `dealer-address.ts:63-65` records F.5a
+   hitting exactly this.)_
 
 ---
 
