@@ -479,12 +479,50 @@ wrong decision. Recorded here rather than corrected in the comment, because the
 comment is not wrong — the two documents simply number their own decisions
 independently, and this section is what the citation was pointing at.
 
-F.5a's D-5 had already taken the FK-only route for the PI and deliberately left
-the general case open: "it must be settled **uniformly** in
-`docs/STAGE_F_BUILD_v3.md`, where four future documents face the same question.
-Deciding it for one document in one day is how four documents end up with three
-conventions." D-7 is that uniform settlement, and it generalises what F.5a
-already did rather than reversing it.
+F.5a's D-5 decided the PRINCIPLE — "snapshot the STATE; FK only for the address
+text" — and deliberately left the general case open: "it must be settled
+**uniformly** in `docs/STAGE_F_BUILD_v3.md`, where four future documents face the
+same question. Deciding it for one document in one day is how four documents end
+up with three conventions." D-7 is that uniform settlement.
+
+> **CORRECTION, 2026-09-30. This passage previously read "F.5a's D-5 had already
+> taken the FK-only route for the PI … D-7 generalises what F.5a already did".
+> That was FALSE, and the error was the author's of this section, not F.5a's.**
+> D-5 decided a principle; **it was never implemented.** `ship_to_address_id` /
+> `shipToAddressId` occurs in **no `.ts`, `.tsx`, `.sql` or `.typ` file in the
+> repository** — the only occurrences are in this document, `docs/F6_SPEC.md`,
+> `docs/TAX_INVOICE_AUDIT.md`, `docs/stage-f-tasks.json` and the generated
+> `PROJECT_PLAN.md` — and **no table takes an FK to `dealer_addresses`**. F.5a
+> shipped the master table, its RLS policy, its audit-trigger stanza and its
+> tests, and wired **no document** to it. So D-7 is not generalising an existing
+> implementation; it is settling a convention that nothing yet follows. Reported
+> by `prompt-drafter` and then re-derived independently (`git grep -n` over
+> `*.ts`/`*.tsx`/`*.sql`/`*.typ`, exit 1; plus the complete `performa_invoices`
+> column list read in full). Corrected here rather than left, per CLAUDE.md
+> §11.1 ruling 6 — a wrong claim in a decision document reads exactly as
+> authoritative as a right one.
+
+### The FK is DEFERRED, and that follows from D-7's own reasoning
+
+**Settled 2026-09-30: D-7 fixes the CONVENTION — FK, never a snapshot — and the
+wiring is deferred to one follow-up that adds `ship_to_address_id` to the
+performa invoice, the order, the dispatch note and the invoice TOGETHER
+(F.160).** F.6 does not add it to the invoice alone.
+
+The argument is D-7's own sentence, turned on the immediate work: an invoice
+descends from a **confirmed order**, and the order carries no address FK. So
+there is nothing to copy forward, and wiring the invoice alone would require a
+Ship-To **address picker at issuance** that no other document has — which is
+precisely the "four documents end up with three conventions" outcome D-7 exists
+to prevent. Adding a nullable column populated by nothing would be worse: a
+schema change that asserts a convention while demonstrating none.
+
+**D-7 names four documents and the DEBIT NOTE IS NOT AMONG THEM** — the four are
+"tax invoice, credit note, e-invoice and e-way bill", inherited from
+`dealer-address.ts:38-44`, which was written before F.144 existed. **So D-7 is
+silent on F.144's debit note.** It is not excluded on any reasoning; it simply
+was not in view. The convention plainly ought to apply to it, and F.160 covers
+it, but that is an extension of D-7 rather than a reading of it.
 
 ### The reasoning
 
