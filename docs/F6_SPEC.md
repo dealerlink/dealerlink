@@ -44,6 +44,43 @@ themselves written by `computeTax`.
 Apply it to the PI loader as part of this work. The quotation loader too, if
 the audit's enumeration shows it shares the mechanism.
 
+**HOW AN INTENDED MOVE IS DISTINGUISHED FROM AN UNINTENDED ONE — settled
+2026-09-30. Take a PRE-CHANGE CAPTURE, and write the predicted move-set down
+before re-running the test.**
+
+There is no expected-diff manifest and no per-case classification: the 14 objects
+in `apps/workers/scripts/typst-matrix.json` carry only `label`, `type`,
+`tenantSlug`, `documentNumber` and `branded`, and `pdf-snapshots.test.ts`
+tolerates exactly two named deviations. There is also **no way to re-baseline** —
+the capture tool named in `docs/pdf-references/README.md` is absent from
+`apps/workers/scripts/` (F.83's one-way door). So the discrimination cannot be
+automated, and the only thing that makes a move intended is that it was
+**predicted in writing, per figure, before the test was re-run**.
+
+1. On `main`, before any change:
+   `cd apps/workers && pnpm exec tsx scripts/render-typst.ts --manifest scripts/typst-matrix.json --out /tmp/pre-f6`
+2. After the loader change, the same command to `/tmp/post-f6`.
+3. `REFS_DIR=/tmp/pre-f6 node apps/workers/scripts/compare-figures.mjs /tmp/post-f6`.
+   That script reads `REFS_DIR` and defaults to `docs/pdf-references`, so the
+   pre-change set becomes the reference; it prints the set difference in **both**
+   directions per document and exits non-zero on any difference. **That output IS
+   the move manifest.**
+4. `compare-typst.mjs --refs /tmp/pre-f6 --renders /tmp/post-f6` for the
+   side-by-side and the full extracted text of each pair.
+
+Both need the scratch rasteriser install (`docs/RUNBOOKS.md` R25) and **neither
+runs in CI**.
+
+**THE PREDICTED MOVE-SET IS EMPTY. Write that down in the branch before step 2.**
+F.152 measured 0 of 31 PIs and 0 of 48 quotations differing between stored and
+recomputed; every reference case has lines, because they render today; and
+`round_off` is on the **invoice** table only, so no quotation or PI totals block
+gains a row. **So any non-empty diff is a finding**, and the criterion is not
+"expect a move" but "predict the move-set, and justify every element of it".
+
+`typst-determinism` cannot move either: `determinism-check.ts` pins a single
+dispatch case, which no quotation or PI loader change can reach.
+
 **Why this cannot wait:** an invoice descends from an order, and `orders` has
 `discount_amount` but no `discount_type` or `discount_value` (F.114). A
 recomputing loader therefore cannot reproduce its parent's own discount — it
@@ -66,6 +103,41 @@ roundOff = storedTotal − (storedTaxable + sum of grouped tax)
 time is a recomputation by another name. Add `round_off` to the invoice table,
 written at issuance by the same path that writes the other totals, and have the
 loader read it and assert the identity above.
+
+**WHAT `total_amount` STORES — settled 2026-09-30: the WHOLE-RUPEE total, not the
+engine total.**
+
+This is forced, not preferred. `packages/tax/src/compute.ts:132` is:
+
+```ts
+totalAmount: taxableAmount.plus(cgstAmount).plus(sgstAmount).plus(igstAmount),
+```
+
+so **if the invoice stored `computeTax`'s `totalAmount`, the identity above would
+evaluate to 0.00 for every document that has ever existed and no Round Off row
+could ever appear.** Shipping the column under that write path would be shipping
+a column that is always zero. The client's `ROUND OFFS 0.46` closing 13,743.54
+against a stated 13,744.00 establishes the requirement, so the stored total must
+be the whole-rupee figure — a number **no pure function of the lines
+reproduces**, which is precisely why §1 is a precondition rather than a tidy-up.
+
+Two consequences that are part of this decision, not details of it:
+
+- **`amountInWords` and `grand:` follow the STORED total.** Today
+  `amountInWords(tax.totalAmount)` and `grand:` take the engine's figure; under
+  this ruling both read the stored one, or the document says one number in
+  figures and a different one in words.
+- **`round_off` is SIGNED. No `>= 0` CHECK.** Rounding 13,744.40 down to
+  13,744.00 gives **−0.40**. A non-negative constraint would reject half of all
+  real cases. A magnitude bound is defensible; a sign bound is not.
+
+**AND THE IDENTITY CANNOT DETECT A WRONG `taxable_amount`**, which must be stated
+so nobody reads it as covering more than it does. `storedTaxable` appears on both
+sides of `roundOff = storedTotal − (storedTaxable + Σ grouped tax)` and
+**cancels**. The assertion catches tax drift and nothing else. Covering the
+taxable half needs a SECOND assertion — `Σ(line taxable) === stored
+taxable_amount` — which is computable, because the loader already holds the
+per-line taxable figure.
 
 The client's evidence is the requirement: their documents round to whole rupees
 and their Tally voucher `MA/26-27/1079` carries `ROUND OFFS 0.46`, which closes
@@ -90,8 +162,14 @@ exists.** Five declaration-only placeholders do.
 **Resolve the type divergence first.** `RenderableDocumentType` has five arms
 including `'invoice'`; `RenderableKind` has four and omits it, and
 `TEMPLATE_FOR`, `FOOTER_LABEL` and `filenameFor` are all keyed on the four-arm
-union (F.153). Resolve it — do not widen both and leave two unions that must be
-kept in step by hand.
+union (F.153).
+
+**Settled 2026-09-30: ONE union.** Two unions kept in step by hand is what
+produced the divergence, so a type-level exhaustiveness check across two of them
+would be guarding a structure that should not exist. Collapse them. If the queue
+payload genuinely needs to accept a document type the renderer has not
+implemented, that is expressed by the renderer's own guard — the exclusion list
+in `render-pdf.ts`, which already exists — and not by a second type.
 
 **Build:**
 
@@ -182,10 +260,16 @@ tax)` exactly
 4. A credit note and a debit note issue against an invoice, each carrying the
    originating invoice number as a snapshot
 5. `packages/tax` is unchanged — no file modified, no fixture moved
-6. All 14 reference cases hold on all three measures. **Expect the PI reference
-   renders to move** if §1 changes what the PI loader prints — that is the
-   feature, not a finding, and the day must distinguish an intended move from
-   an unintended one before it starts
+6. All 14 reference cases hold on page count, footer text and body text — the
+   three things `pdf-snapshots.test.ts` asserts. **The predicted move-set is
+   EMPTY and was written down in the branch BEFORE the test was re-run**; any
+   non-empty diff is a finding requiring justification per figure. _(Amended
+   2026-09-30. This read "Expect the PI reference renders to move … the day must
+   distinguish an intended move from an unintended one before it starts". Both
+   halves were wrong: F.152's own measurement predicts no move, and no mechanism
+   can classify a move before the move exists — the satisfiable form is "before
+   the test is re-run". "All three measures" was undefined anywhere in this
+   document; it is now named.)_
 7. The type divergence is resolved, not widened
 8. Every new table is caught by `rls.test.ts`'s enumeration, with its policy and
    audit trigger present
