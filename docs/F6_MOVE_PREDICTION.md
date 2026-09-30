@@ -71,6 +71,44 @@ of them runs in CI.
 
 ## RESULT
 
-_To be filled in after step 3, with the verbatim output. Left empty on purpose:
-this file is committed before the change so that the prediction is on the record
-independently of the outcome._
+**THE PREDICTION HELD. The move-set is empty.**
+
+`compare-figures.mjs`, pre against post, verbatim tail:
+
+```
+same BRANDED__dispatch__DSP-2026-0005.pdf                   0 figures
+same BRANDED__payment_receipt__PAY-2026-0007.pdf            4 figures
+same BRANDED__performa_invoice__PI-2026-0001.pdf           27 figures
+same BRANDED__quotation__QT-2026-0001.pdf                  21 figures
+same dispatch__DSP-2026-0005__in_transit__8line.pdf         0 figures
+same dispatch__DSP-REF-0026__26serials.pdf                  0 figures
+same dispatch__DSP-REF-0500__500serials.pdf                 0 figures
+same payment_receipt__PAY-2026-0007__verified.pdf           4 figures
+same performa_invoice__PI-2026-0001__intra__2line.pdf      27 figures
+same performa_invoice__PI-2026-0002__inter__1line.pdf      18 figures
+same quotation__QT-2026-0001__inter-sample-tenant__1line.pdf  18 figures
+same quotation__QT-2026-0001__intra__1line.pdf             21 figures
+same quotation__QT-2026-0006__inter__3line.pdf             29 figures
+same quotation__QT-2026-0010__intra__2line.pdf             27 figures
+
+ALL 196 FIGURES IDENTICAL across 14 documents
+```
+
+**Exit code 0.** Both captures rendered 14/14. And
+`pdf-snapshots.test.ts` is **17/17** with the whole workers suite at **74/74**,
+before and after.
+
+### What this result does and does not establish
+
+It establishes that the loader change is **invisible on the current corpus**,
+which is what reasons 1–3 predicted. It does **not** establish that stored and
+recomputed agree in general — that is F.152's limit 3, and it is worth repeating
+here because a green figure comparison is exactly the kind of result that gets
+over-read: **if every row in the dev corpus was written by the current engine,
+agreement is guaranteed by construction, and neither this comparison nor
+`pdf-snapshots.test.ts` can distinguish "no drift" from "no old data".**
+
+That is precisely why A.1.5's mutate-and-rollback fixture is not optional. An
+empty diff here means the change is safe to land; it says nothing about whether
+the loader is now reading the column, because reading and recomputing produce the
+same bytes on this data. Only a test that makes them disagree can tell.

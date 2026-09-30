@@ -24,6 +24,7 @@ import { amountInWords } from '../lib/amount-in-words';
 import { formatGeneratedAt } from '../lib/format';
 
 import { renderQuotationHtml } from './quotation';
+import { readStoredTotals } from './stored-totals';
 import { buildTaxGroups } from './tax-groups';
 import type { PdfBankDetails, PdfParty, QuotationPdfData } from './types';
 
@@ -177,6 +178,17 @@ export async function loadPerformaInvoicePdfData(
     })),
   });
 
+  // F.152 / F6 D-1 — the header totals come from the STORED columns, and this call
+  // asserts they reconcile with what the lines group to BEFORE anything renders.
+  // Two assertions, because the single `total − (taxable + tax)` identity cannot
+  // detect a wrong `taxable_amount`: it cancels on both sides.
+  const storedTotals = readStoredTotals({
+    documentNumber: pi.piNumber,
+    stored: pi,
+    lines,
+    rateGroups: taxRateGroups,
+  });
+
   const discountLabel =
     pi.discountType === 'percent' && pi.discountValue
       ? `${Number(pi.discountValue)}%`
@@ -228,18 +240,22 @@ export async function loadPerformaInvoicePdfData(
     billTo: dealerToParty(billToDealer),
     shipTo: shipToParty,
     lines,
-    subtotal: Number(tax.subtotal),
+    // F.152 / F6 D-1: the header totals are READ from the stored columns and the
+    // grouping is DERIVED from the lines, and `readStoredTotals` asserts the two
+    // reconcile before either reaches the page. `amountInWords` takes the STORED
+    // total, or the document states one number in figures and another in words.
+    subtotal: storedTotals.subtotal,
     discountLabel,
-    discountAmount: Number(tax.discountAmount),
-    taxableAmount: Number(tax.taxableAmount),
-    cgstAmount: Number(tax.cgstAmount),
-    sgstAmount: Number(tax.sgstAmount),
-    igstAmount: Number(tax.igstAmount),
+    discountAmount: storedTotals.discountAmount,
+    taxableAmount: storedTotals.taxableAmount,
+    cgstAmount: storedTotals.cgstAmount,
+    sgstAmount: storedTotals.sgstAmount,
+    igstAmount: storedTotals.igstAmount,
     gstRateLabel,
     taxRateGroups,
     taxHsnGroups,
-    totalAmount: Number(tax.totalAmount),
-    amountInWords: amountInWords(tax.totalAmount),
+    totalAmount: storedTotals.totalAmount,
+    amountInWords: amountInWords(storedTotals.totalAmountDecimal.toFixed(2)),
     termsAndConditions: pi.termsAndConditions ?? settings?.defaultTerms ?? null,
     bank,
     generatedAt: new Date(),

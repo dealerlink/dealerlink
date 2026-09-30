@@ -70,7 +70,10 @@ export const quotations = pgTable(
     discountType: quotationDiscountType(),
     discountValue: decimal({ precision: 12, scale: 2 }),
 
-    // Denormalized totals — recomputed authoritatively on every server write.
+    // Totals written authoritatively on every server WRITE, and read thereafter —
+    // the PDF loader reads these columns rather than recomputing them (F.152 /
+    // F6 D-1). "On every server write" was always the accurate half; the loader
+    // treated it as permission to recompute on every READ as well.
     subtotal: decimal({ precision: 14, scale: 2 }).notNull(),
     discountAmount: decimal({ precision: 12, scale: 2 }).notNull().default('0'),
     taxableAmount: decimal({ precision: 14, scale: 2 }).notNull(),

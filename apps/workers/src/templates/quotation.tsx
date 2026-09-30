@@ -33,6 +33,7 @@ import { Header } from './_components/Header';
 import { LineItemsTable } from './_components/LineItemsTable';
 import { PartyBlock } from './_components/PartyBlock';
 import { TaxSummary } from './_components/TaxSummary';
+import { readStoredTotals } from './stored-totals';
 import { QUOTATION_CSS } from './styles';
 import { buildTaxGroups } from './tax-groups';
 import type { PdfBankDetails, QuotationPdfData } from './types';
@@ -249,6 +250,17 @@ export async function loadQuotationPdfData(
     })),
   });
 
+  // F.152 / F6 D-1 — the header totals come from the STORED columns, and this call
+  // asserts they reconcile with what the lines group to BEFORE anything renders.
+  // Two assertions, because the single `total − (taxable + tax)` identity cannot
+  // detect a wrong `taxable_amount`: it cancels on both sides.
+  const storedTotals = readStoredTotals({
+    documentNumber: quote.quoteNumber,
+    stored: quote,
+    lines,
+    rateGroups: taxRateGroups,
+  });
+
   const discountLabel =
     quote.discountType === 'percent' && quote.discountValue
       ? `${Number(quote.discountValue)}%`
@@ -311,18 +323,22 @@ export async function loadQuotationPdfData(
     // a distinct party here (CLAUDE.md §6).
     shipTo: null,
     lines,
-    subtotal: Number(tax.subtotal),
+    // F.152 / F6 D-1: the header totals are READ from the stored columns and the
+    // grouping is DERIVED from the lines, and `readStoredTotals` asserts the two
+    // reconcile before either reaches the page. `amountInWords` takes the STORED
+    // total, or the document states one number in figures and another in words.
+    subtotal: storedTotals.subtotal,
     discountLabel,
-    discountAmount: Number(tax.discountAmount),
-    taxableAmount: Number(tax.taxableAmount),
-    cgstAmount: Number(tax.cgstAmount),
-    sgstAmount: Number(tax.sgstAmount),
-    igstAmount: Number(tax.igstAmount),
+    discountAmount: storedTotals.discountAmount,
+    taxableAmount: storedTotals.taxableAmount,
+    cgstAmount: storedTotals.cgstAmount,
+    sgstAmount: storedTotals.sgstAmount,
+    igstAmount: storedTotals.igstAmount,
     gstRateLabel,
     taxRateGroups,
     taxHsnGroups,
-    totalAmount: Number(tax.totalAmount),
-    amountInWords: amountInWords(tax.totalAmount),
+    totalAmount: storedTotals.totalAmount,
+    amountInWords: amountInWords(storedTotals.totalAmountDecimal.toFixed(2)),
     termsAndConditions: quote.termsAndConditions ?? settings?.defaultTerms ?? null,
     bank,
     generatedAt: new Date(),
