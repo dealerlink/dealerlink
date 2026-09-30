@@ -58,14 +58,16 @@ To change the plan: edit the JSON, run `pnpm plan:sync`, commit both.
 
 ## 2. Decisions log
 
-| #   | Decision                                                                    | Consequence                                                                |
-| --- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| D-1 | **Third-party GSP** for e-invoice and e-way bill (ClearTax / Masters India) | Built behind a provider interface so the ERP-intermediary route stays open |
-| D-2 | **Tally mapping is tenant-configurable**, not a fixed standard              | Module F.11                                                                |
-| D-3 | **Ship-To GSTIN in SP1**                                                    | GSTN Advisory 661, effective 1 Aug 2026                                    |
-| D-4 | **`dealer_addresses` over keeping Ship-To as a dealer**                     | ~5 d vs 2.7 d. Rationale in §4                                             |
-| D-5 | **CI before schema work**                                                   | Day 22. Rationale in §3                                                    |
-| D-6 | **Typst before the document work, not after**                               | Rationale in §5                                                            |
+| #   | Decision                                                                                  | Consequence                                                                |
+| --- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| D-1 | **Third-party GSP** for e-invoice and e-way bill (ClearTax / Masters India)               | Built behind a provider interface so the ERP-intermediary route stays open |
+| D-2 | **Tally mapping is tenant-configurable**, not a fixed standard                            | Module F.11                                                                |
+| D-3 | **Ship-To GSTIN in SP1**                                                                  | GSTN Advisory 661, effective 1 Aug 2026                                    |
+| D-4 | **`dealer_addresses` over keeping Ship-To as a dealer**                                   | ~5 d vs 2.7 d. Rationale in §4                                             |
+| D-5 | **CI before schema work**                                                                 | Day 22. Rationale in §3                                                    |
+| D-6 | **Typst before the document work, not after**                                             | Rationale in §5                                                            |
+| D-7 | **FK only for a document's Ship-To address — no snapshotted address text**                | All four documents. Rationale in §10                                       |
+| D-8 | **Credit and debit notes carry POSITIVE lines; the document type supplies the direction** | `packages/tax` untouched. Rationale in §11                                 |
 
 ### D-1 — questions for the GSP shortlist, before signing
 
@@ -456,3 +458,122 @@ backlog more than any technical finding.
 - From Day 23, days land via branch and PR with green CI. No direct pushes to
   `main`.
 - Never hand-edit the `PROJECT_PLAN.md` task table.
+
+---
+
+## 10. D-7 — the Ship-To address reference on documents
+
+**Settled 2026-09-30. FK only — `ship_to_address_id` — on all four documents.
+No snapshotted address text.** The four are the **tax invoice, credit note,
+e-invoice and e-way bill**, and this is settled here, once, for all four, rather
+than inside F.6's spec.
+
+### Which "D-5" sent this here, because the label collides
+
+`packages/db/src/schema/dealer-address.ts:38-44` says the question must be
+settled here and cites **D-5**. That is **F.5a's day-prompt D-5**
+(`docs/F5A_DAY_PROMPT.md:723`, "snapshot the STATE; FK only for the address
+text"), **not this document's D-5**, which is "CI before schema work" (§2, §3).
+A reader following the bare citation into the decisions log above lands on the
+wrong decision. Recorded here rather than corrected in the comment, because the
+comment is not wrong — the two documents simply number their own decisions
+independently, and this section is what the citation was pointing at.
+
+F.5a's D-5 had already taken the FK-only route for the PI and deliberately left
+the general case open: "it must be settled **uniformly** in
+`docs/STAGE_F_BUILD_v3.md`, where four future documents face the same question.
+Deciding it for one document in one day is how four documents end up with three
+conventions." D-7 is that uniform settlement, and it generalises what F.5a
+already did rather than reversing it.
+
+### The reasoning
+
+**The question is already narrower than it looks, and `dealer-address.ts` is what
+narrows it.** Its own words, `:31-37`:
+
+> A document does NOT read its place of supply from here at render time. The
+> state is captured on the document at issuance, beside `tenant_state_at_issue`,
+> for the reason `performa-invoice.ts` already states: "Tax-engine inputs
+> captured at issuance — never recomputed from masters". An address whose state
+> is later corrected must not retroactively change the tax classification of an
+> invoice that has already been issued.
+
+So **the tax-relevant part of an address is already pinned** and D-7 governs only
+the **presentational address text**. That distinction does the whole work:
+
+- **Address text SHOULD show corrected on a re-render.** A dealer that fixes a
+  misspelt street or a wrong PIN wants the corrected text on the next copy of
+  the document, not the typo preserved as though it were a legal fact. A
+  snapshot would freeze the error and call it fidelity.
+- **What must never move is the tax classification** — and that is pinned
+  independently, at issuance, in `tenant_state_at_issue` and `place_of_supply`.
+  The thing a snapshot would protect is the thing that is already protected.
+
+**It is F.152's principle one layer down: inputs captured, presentation
+referenced.** F.152 settled that a document's money comes from its stored
+columns and is never recomputed, while the _grouping_ is derived at render time.
+D-7 is the same split applied to the Ship-To party — the state is the captured
+input, the address text is the derived presentation.
+
+### The consequence that must not be lost — soft delete
+
+An FK-only reference means a **deleted address would break a document's render**.
+Today it cannot happen, because the FK is `restrict` (D-2, `dealer-address.ts:47-52`)
+and a delete of a referenced address fails loudly. **But that is an accident of
+the constraint rather than a designed guarantee**, and `dealer_addresses` already
+carries a `deletedAt` column that **nothing writes**. CLAUDE.md §4's soft-delete
+rule is half implemented across the codebase — `deleted_at` on `dealers` and
+`products` is filtered in six read paths and written by nothing (**F.127**).
+
+**So F.127's work must not make addresses deletable without addressing this.**
+The moment something writes `deleted_at`, a soft-deleted address stops being
+caught by the `restrict` FK — the row still exists, so the constraint is
+satisfied — and a document referencing it either renders a deleted address or
+fails, depending on whether the loader filters. Recorded on F.127 as well as
+here, because whoever picks up F.127 will be reading that row and not this
+section.
+
+---
+
+## 11. D-8 — the sign of a credit or debit note
+
+**Settled 2026-09-30. Credit and debit notes carry POSITIVE lines; the DOCUMENT
+TYPE supplies the direction. `packages/tax` is NOT touched**, so this is not a
+protected-surface change and needs no §10.1 stop-and-ask.
+
+### What was measured, by executing rather than reading
+
+`docs/INVOICE_CN_DN_AUDIT.md` established that `computeTax` rejects negative
+lines, and flagged that it had verified this **by reading `compute.ts:151-163`,
+not by running it**. Executed 2026-09-30 with the loader's own call shape:
+
+| input                                             | result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| baseline (`quantity: "2"`, `unitPrice: "100.00"`) | RETURNED — total `236.00`                              |
+| `quantity: "-2"` and `quantity: -2`               | THREW `TaxComputationError` code `NEGATIVE_QUANTITY`   |
+| `quantity: "0"`                                   | THREW `TaxComputationError` code `NEGATIVE_QUANTITY`   |
+| `unitPrice: "-100.00"` and `unitPrice: -100`      | THREW `TaxComputationError` code `NEGATIVE_UNIT_PRICE` |
+| `unitPrice: "0.00"`                               | **RETURNED** — total `0.00`                            |
+| both negative                                     | THREW `NEGATIVE_QUANTITY` — quantity is checked first  |
+
+### Why those three facts settle it
+
+1. **The two bounds are DIFFERENT: `unitPrice >= 0` while `quantity > 0`.** A
+   zero-priced line is accepted and produces a valid zero-tax document. So the
+   engine **already accepts the shape a reduction needs** — positive quantities,
+   any non-negative price — and nothing has to change for a credit note to pass
+   through it.
+2. **Both throws are `TaxComputationError` with a `code`, not a bare `Error`**, so
+   a caller can branch on them at the boundary. Rejecting a negative line where
+   it is entered is a normal validation path, not an exception leaking out of the
+   engine.
+3. **The engine keeps ONE invariant: money math operates on positive quantities,
+   and the document states its direction.** A signed engine would mean every
+   consumer of every total has to know which way the document points. An
+   unsigned engine plus a typed document means exactly one place knows.
+
+### What this does not decide
+
+How the direction is _represented_ — a `document_type` discriminator, a sign
+applied at presentation, or a separate table per document — is F.6's to specify.
+D-8 fixes only that the **lines are positive and the engine is untouched**.
