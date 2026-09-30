@@ -27,7 +27,42 @@ import {
   type TaxRateGroupInput,
 } from './tax-rows';
 
-export type RenderableKind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch';
+/**
+ * What the renderer can actually PRODUCE.
+ *
+ * ## THIS IS DELIBERATELY NOT THE SAME TYPE AS `RenderableDocumentType` (F.153, F6 D-6)
+ *
+ * `RenderableDocumentType` in `jobs/render-pdf.ts` is the QUEUE PAYLOAD boundary:
+ * what a job may legitimately ask for. This union is the renderer's CAPABILITY:
+ * what it has a template, a footer label and a filename rule for. **They are
+ * genuinely different sets**, and a document type can correctly exist in the first
+ * while absent from the second — that is the state `'invoice'` is in today.
+ *
+ * Collapsing them into one type was considered and rejected, because it would
+ * assert an identity that is not true: every future not-yet-implemented type would
+ * then have to be either absent from the payload schema, so the job cannot be
+ * enqueued at all, or present in the renderer's config objects, so it claims a
+ * template it does not have.
+ *
+ * **The defect F.153 recorded was that the RELATIONSHIP was unchecked, not that
+ * there were two types.** So the fix is a check, not a merge — see
+ * `assertRenderableKindsAreDocumentTypes` below and the derived guard in
+ * `render-pdf.ts`. Adding an arm to either union without completing the other side
+ * now fails `typecheck` instead of drifting.
+ */
+export const RENDERABLE_KINDS = [
+  'quotation',
+  'performa_invoice',
+  'payment_receipt',
+  'dispatch',
+] as const;
+
+export type RenderableKind = (typeof RENDERABLE_KINDS)[number];
+
+/** Runtime membership, derived from the one list rather than restated. */
+export function isRenderableKind(value: string): value is RenderableKind {
+  return (RENDERABLE_KINDS as readonly string[]).includes(value);
+}
 
 /** Values rendered as money. */
 const MONEY_KEYS = new Set([
@@ -195,5 +230,13 @@ export function filenameFor(type: RenderableKind, data: unknown): string {
       return `${d.receiptNumber}.pdf`;
     case 'dispatch':
       return `${d.dispatchNumber}.pdf`;
+    default: {
+      // Exhaustiveness: a new RenderableKind without a case here is a COMPILE
+      // error on this line, not a document that silently downloads as
+      // "undefined.pdf". `never` is doing the work — if `type` can still be
+      // something, it will not assign.
+      const unhandled: never = type;
+      throw new Error(`filenameFor: no filename rule for "${String(unhandled)}"`);
+    }
   }
 }
