@@ -17,6 +17,10 @@ export const generatedDocumentType = pgEnum('generated_document_type', [
   'invoice',
   'dispatch',
   'payment_receipt',
+  // F.8 / F.144. Added in their own migration, BEFORE the tables that use them:
+  // Postgres cannot use a new enum value in the same transaction that adds it.
+  'credit_note',
+  'debit_note',
 ]);
 
 /**

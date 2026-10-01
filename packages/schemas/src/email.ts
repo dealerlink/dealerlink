@@ -63,6 +63,24 @@ export const renderPdfJobPayloadSchema = z.object({
 export type RenderPdfJobPayload = z.infer<typeof renderPdfJobPayloadSchema>;
 
 /**
+ * What a render job may ASK FOR, named at its single source so callers narrow to it
+ * rather than to the wider database enum.
+ *
+ * **There are THREE sets here, not two, and two of them being accidentally equal
+ * hid the third until F.6 widened the enum** (F.153, F6 D-6):
+ *
+ *  1. `generatedDocumentType` — what may be STORED as a generated document. Seven
+ *     values once `credit_note` and `debit_note` exist.
+ *  2. **This type** — what a render job may be enqueued for. Five.
+ *  3. `RenderableKind` in `apps/workers/src/pdf/view-model.ts` — what the renderer
+ *     can actually PRODUCE. Four.
+ *
+ * Each is legitimately narrower than the one above it. A document type can be
+ * storable before it is requestable, and requestable before it is renderable.
+ */
+export type RenderPdfDocumentType = RenderPdfJobPayload['documentType'];
+
+/**
  * Shape of `email_delivery_log.meta` for a queued outbound email. `queueEmail`
  * writes this; the worker reads it to build the Resend request.
  */

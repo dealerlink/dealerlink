@@ -304,3 +304,46 @@ DROP TRIGGER IF EXISTS audit_trg ON dispatch_serials;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON dispatch_serials
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- F.6 / F.8 / F.144 — the tax invoice, credit note and debit note, and their line
+-- tables. An issued tax document is a legal record: who changed it, when, and from
+-- what, is not optional. Cancellation in particular records a reason and an actor
+-- in its own columns, and this trail is what makes those columns verifiable rather
+-- than self-reported.
+--
+-- SIX STANZAS, HAND-WRITTEN, AND NOTHING ENUMERATES THEM. migrate.ts applies this
+-- file, but no test derives the population of tables that OUGHT to have a stanza —
+-- unlike rls.test.ts, which derives from pg_class. So a table whose stanza was
+-- forgotten looks exactly like one that has it. That is why F.6's acceptance
+-- criteria were split into 8 (RLS, automatic) and 9 (audit, not automatic), and why
+-- packages/db/tests/invoice-documents.test.ts asserts an audit row for each of the
+-- six directly rather than trusting this file to be complete.
+DROP TRIGGER IF EXISTS audit_trg ON invoices;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON invoices
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON invoice_lines;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON invoice_lines
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON credit_notes;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON credit_notes
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON credit_note_lines;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON credit_note_lines
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON debit_notes;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON debit_notes
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+DROP TRIGGER IF EXISTS audit_trg ON debit_note_lines;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON debit_note_lines
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
