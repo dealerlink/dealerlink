@@ -7569,3 +7569,100 @@ no root `tsconfig.json`, so `npx tsc --noEmit -p tsconfig.json` answers “The
 specified path does not exist”, which is easy to read as a non-answer rather than
 as a check that never ran. A `noUncheckedIndexedAccess` error in a new test in
 this branch reached CI for exactly that reason.
+
+---
+
+## DEV.154 — F.6/F.8/F.144: the loader contract landed, and six assertions caught six things
+
+**Date:** 2026-09-30 → 2026-10-02 · **Tasks:** F.6, F.8, F.144, closing F.152 and
+F.153 · **Impact:** the tax invoice, credit note and debit note exist. Six new
+tables, two enum values, one new money column, and the PDF loaders no longer
+recompute what they print.
+
+The build is in the commits. This entry records what the day found, because almost
+all of it was found by something written earlier the same day rather than by
+reading.
+
+### The movement prediction held, and it was written down first
+
+`docs/F6_MOVE_PREDICTION.md` was committed on `main` at `9537024` **before any
+file in the branch changed**, predicting an EMPTY move-set on three grounds:
+F.152's measurement (0 of 48 quotations, 0 of 31 PIs differing between stored and
+recomputed), every reference case having lines, and `round_off` landing on the
+invoice table only.
+
+Measured, twice — after A.1 and again after A.7 changed more:
+
+```
+ALL 196 FIGURES IDENTICAL across 14 documents
+```
+
+**Criterion 6's expected move did not occur, and was never going to.** The
+criterion originally read "Expect the PI reference renders to move"; that was
+amended before the day started, because F.152's own measurement predicted the
+opposite. The prediction remains CONDITIONAL on F.165's deferral: `round_off` on
+`performa_invoices` would add a totals row and move three PI cases for real.
+
+### The reconciliation assertion earned itself immediately
+
+It fired twice on real data during A.7 and refused to render a wrong document
+both times:
+
+1. **The seed** copied `discount_amount` but not the discount type and value, so
+   the grouping ran with no discount — stored tax 7,113.60 against lines grouping
+   to 8,013.60, a gap of exactly the IGST on the 5,000 discount.
+2. **The loader** used `line_total` as the per-line taxable value, which is the
+   PRE-discount figure copied from the order, so the lines summed to the subtotal
+   — 44,520.00 against a stored 39,520.00.
+
+Both would have produced a tax invoice stating figures its own lines did not
+support. Neither was found by reading.
+
+### A test value chosen where right and wrong agree is not a test
+
+My render assertion expected `207,813.00`. `Intl.NumberFormat('en-IN')` renders
+that as **`2,07,813.00`** — lakh grouping. The expectation was wrong, not the
+render.
+
+**The mechanism is the part worth keeping.** The positive case asserted
+`46,634.00`, which passed — and **could not have failed**, because under a lakh
+en-IN grouping and plain thousands grouping produce the same string. So the test
+that ran first was structurally incapable of catching the error, and only the
+negative case, whose value crosses a lakh, could.
+
+> **A test value chosen where the right and wrong implementations agree is not a
+> test. It reports the same result either way.**
+
+That is a sibling of DEV.138's family rather than a member: nothing about the
+instrument was broken. The VALUE was uninformative, which is a property of the
+fixture, not of the command. It generalises past number formatting — a date inside
+a month where two formats coincide, a state code that is the same in both
+conventions, a quantity of 1 where `n` and `n-1` agree.
+
+### Filed, not fixed
+
+- **F.161** (HIGH) — settlement is order-anchored, so a credit note is invisible
+  to it: a fully-credited order can never reach `paid` and four read paths
+  overstate the receivable. **Five one-line comments were AUTHORISED** (F6 D-10)
+  and added at the exact sites; no behaviour changed.
+- **F.167** — five hand-maintained maps keyed on a type that is not the type they
+  must stay in step with. Four are now compiler-checked; `resolve-document.ts` is
+  not, and it is the one that produced broken SQL at runtime.
+- **F.168** — no enumeration over audit triggers. F.6 added six more per-table
+  assertions, so the pattern has now been repeated twice rather than fixed.
+- **F.165** — `round_off` on `performa_invoices`, expected work, deferred because
+  it moves three reference cases and deserves its own capture day.
+- **F.159** (the `NEGATIVE_QUANTITY` misnomer), **F.163** (the JSONB key-loss
+  path), **F.164** (configurable note prefixes), **F.166** (`pnpm --filter`
+  exiting 0 on no match), **F.160** (`ship_to_address_id` on all four documents).
+- **Not filed, reported:** `addressLines` exists in three identical copies
+  (`quotation.tsx:49`, `dispatch-note.tsx:44`, `performa-invoice.tsx`). The
+  invoice imports one rather than adding a fourth.
+
+### What this day did NOT do
+
+No e-invoice, no IRN, no e-way bill. No settlement. **No behavioural change to
+`packages/tax` of any kind** — `git diff --stat main -- packages/tax` prints
+nothing, which is what D-8 was settled for. No new case in
+`typst-matrix.json`, no touching `docs/pdf-references/`. **No serials on invoice
+lines** — that is F.7, it has its own row, and it is not done.

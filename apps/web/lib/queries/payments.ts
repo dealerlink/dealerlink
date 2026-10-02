@@ -378,6 +378,7 @@ export async function getOverdueOrders(tenantId: string): Promise<OverdueOrderRo
         creditPeriodDays: creditPeriod,
         dueDate: due.toISOString().slice(0, 10),
         daysOverdue,
+        // F.161 — same formula, same gap: a credit note does not reduce this.
         outstanding: Math.max(0, Number(r.totalAmount) - (allocated.get(r.id) ?? 0)),
       });
     }
@@ -430,6 +431,7 @@ export async function getPaymentDashboard(tenantId: string): Promise<PaymentDash
 
     return {
       overdueCount: overdue.length,
+      // F.161 — the roll-up inherits the gap above; the dashboard renders this.
       overdueOutstanding: overdue.reduce((s, o) => s + o.outstanding, 0),
       recentPayments: recent.map((r) => ({
         id: r.id,
