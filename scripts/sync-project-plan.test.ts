@@ -40,6 +40,7 @@ import {
   outsideMarkers,
   assertBlockedByResolves,
   parseTasks,
+  SUMMARY_MAX,
   renderBlock,
   renderPlan,
   type StageFTask,
@@ -205,8 +206,140 @@ describe('task source of truth', () => {
       expect(rendered).toContain('No task records a `blockedBy`');
       expect(rendered).not.toContain('### Blocked tasks');
     });
+  });
 
-    it('the committed plan has no dangling dependency', () => {
+  // kind / severity / summary (F.172). Each of these was executed against the real
+  // plan file before being written here.
+  /**
+   * Isolate the ## Open defects section.
+   *
+   * WITHOUT THIS THE ASSERTIONS BELOW ARE VACUOUS, and that was observed rather
+   * than feared: a control that dropped the summary-to-task fallback left all 100
+   * tests passing, because `expect(rendered).toContain(task)` finds the task text
+   * in the MAIN TASK TABLE whether or not the defect view rendered anything. Same
+   * shape as DEV.138 row 11 — a whole-document `toContain` on a short string.
+   */
+  function defectSection(rendered: string): string {
+    const start = rendered.indexOf('## Open defects');
+    if (start < 0) return '';
+    const after = rendered.slice(start + 1);
+    const end = after.indexOf('\n## ');
+    return end < 0 ? after : after.slice(0, end);
+  }
+
+  describe('kind, severity and summary', () => {
+    it('rejects an unknown kind and an unknown severity', () => {
+      expect(() => parseTasks(JSON.stringify({ tasks: [{ ...sample, kind: 'chore' }] }))).toThrow(
+        /invalid "kind"/,
+      );
+      expect(() =>
+        parseTasks(JSON.stringify({ tasks: [{ ...sample, severity: 'medium' }] })),
+      ).toThrow(/invalid "severity"/);
+    });
+
+    it('rejects a MULTI-LINE summary — it renders in a table cell', () => {
+      expect(() =>
+        parseTasks(JSON.stringify({ tasks: [{ ...sample, summary: 'one\ntwo' }] })),
+      ).toThrow(/multi-line "summary"/);
+    });
+
+    it('rejects a summary longer than the bound — past that it is prose', () => {
+      const long = 'x'.repeat(SUMMARY_MAX + 1);
+      expect(() => parseTasks(JSON.stringify({ tasks: [{ ...sample, summary: long }] }))).toThrow(
+        /the limit is/,
+      );
+      // And the boundary is asserted rather than assumed: exactly at the limit passes.
+      const atLimit = 'x'.repeat(SUMMARY_MAX);
+      expect(() =>
+        parseTasks(JSON.stringify({ tasks: [{ ...sample, summary: atLimit }] })),
+      ).not.toThrow();
+    });
+
+    it('treats all three as absent when omitted, rather than defaulting them', () => {
+      const [t] = parseTasks(JSON.stringify({ tasks: [sample] }));
+      expect(t!.kind).toBeUndefined();
+      expect(t!.severity).toBeUndefined();
+      expect(t!.summary).toBeUndefined();
+    });
+
+    it('renders summary in the defect view, and falls back to task without one', () => {
+      const rendered = renderPlan('# H', [
+        {
+          ...sample,
+          id: 'F.900',
+          status: 'pending',
+          kind: 'defect',
+          severity: 'high',
+          summary: 'A one-line summary',
+        },
+        {
+          ...sample,
+          id: 'F.901',
+          status: 'pending',
+          task: 'A row with no summary at all',
+          kind: 'defect',
+          severity: 'normal',
+        },
+      ]);
+      const view = defectSection(rendered);
+      expect(view).not.toBe('');
+      expect(view).toContain('A one-line summary');
+      // THE FALLBACK, asserted INSIDE the view. Without the scoping this passed even
+      // with the fallback removed, because the task text is also in the main table.
+      expect(view).toContain('A row with no summary at all');
+    });
+
+    it('a high-severity FEATURE appears, and not among the defects', () => {
+      const rendered = renderPlan('# H', [
+        {
+          ...sample,
+          id: 'F.900',
+          status: 'pending',
+          kind: 'feature',
+          severity: 'high',
+          summary: 'Build the thing',
+        },
+      ]);
+      const view = defectSection(rendered);
+      expect(view).toContain('High severity, but NOT defects');
+      expect(view).toContain('Build the thing');
+    });
+
+    it('REPORTS the unclassified count rather than treating those rows as features', () => {
+      const rendered = renderPlan('# H', [
+        {
+          ...sample,
+          id: 'F.900',
+          status: 'pending',
+          kind: 'defect',
+          severity: 'high',
+          summary: 'Known',
+        },
+        { ...sample, id: 'F.901', status: 'pending' },
+        { ...sample, id: 'F.902', status: 'pending' },
+      ]);
+      expect(defectSection(rendered)).toMatch(/2 carry no .?kind.? yet/);
+    });
+
+    it('no committed task title still carries the prose HIGH prefix', () => {
+      // §11.1 ruling 6: the prose signal was stripped in the same change that
+      // replaced it. Two sources for the same fact means the unchecked one wins,
+      // because it is the one in the title.
+      const stillPrefixed = tasks.filter((t) => /^HIGH\s*[—-]/.test(t.task)).map((t) => t.id);
+      expect(stillPrefixed).toEqual([]);
+    });
+
+    it('every committed summary is one line and within the bound', () => {
+      for (const t of tasks) {
+        if (t.summary === undefined) continue;
+        expect(t.summary, `${t.id} summary is multi-line`).not.toMatch(/[\r\n]/);
+        expect(t.summary.length, `${t.id} summary is too long`).toBeLessThanOrEqual(SUMMARY_MAX);
+      }
+    });
+  });
+
+  describe('the committed plan itself', () => {
+    it('has no dangling dependency', () => {
       // Belt to the parseTasks brace: this asserts on the REAL file, so a wrong
       // id committed to it fails here as well as in plan:check.
       expect(() => assertBlockedByResolves(tasks)).not.toThrow();

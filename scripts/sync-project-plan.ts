@@ -61,6 +61,9 @@ const HEADER_PATH =
  * is an error. The legend table in the rendered document is generated from
  * this map, so a new status cannot appear in the plan without a meaning.
  */
+/** A summary longer than this is prose; `notes` is where prose belongs. */
+export const SUMMARY_MAX = 110;
+
 const STATUS_SYMBOLS: Record<string, string> = {
   complete: '✅',
   in_progress: '🔄',
@@ -100,6 +103,50 @@ export interface StageFTask {
    * DEV.128 defect in a machine-readable field, where it is cheap to catch.
    */
   blockedBy?: string[];
+  /**
+   * Whether this row fixes something broken or builds something new.
+   *
+   * OPTIONAL, AND ABSENT IS REPORTED RATHER THAN DEFAULTED. 176 rows predate this
+   * field and classifying them all in one sitting would be a judgement call on
+   * decisions the classifier did not make — the same objection as machine
+   * summarising, with a human doing it (F.172). So the defect view counts the
+   * unclassified rather than silently treating them as features.
+   *
+   * `kind` and `severity` are ORTHOGONAL. F.124 (no Settings module) and F.147
+   * (confirm against incoming stock) are both `high` and both `feature`.
+   */
+  kind?: 'defect' | 'feature';
+  /**
+   * TWO levels, deliberately.
+   *
+   * Three invites a `medium` that means "I did not decide", and on 129 pending rows
+   * most would land there. `high` means it is worth displacing other work;
+   * everything else is `normal`.
+   *
+   * Seeded from the SEVEN rows that already self-declared `HIGH` in their task
+   * title — a convention that emerged by hand, in prose, with nothing able to check
+   * it. Assigning severities independently would have produced two notions of HIGH,
+   * and the prose one would have won because it is in the title.
+   */
+  severity?: 'high' | 'normal';
+  /**
+   * One authored line for the view. NOT derived from `notes`.
+   *
+   * ## WHY THIS IS AUTHORED AND WHY THAT MATTERS
+   *
+   * The median row carries a 2,258-character note and the longest is 25,487. That
+   * is what makes a 176-row plan unscannable, and severity does not touch it. But a
+   * generated view cannot produce a one-line summary from a long note without
+   * SUMMARISING, and a machine summary of prose is precisely what this project keeps
+   * filing against — DEV.93's whole value is that a builder wrote down what was
+   * ruled out, which a summariser discards.
+   *
+   * So the view renders `summary` when a row has one and falls back to `task`
+   * otherwise. The notes stay untouched as the archive.
+   *
+   * NOT BACKFILLED. Seeded for the seven `high` rows and written from here on.
+   */
+  summary?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +219,46 @@ export function parseTasks(raw: string): StageFTask[] {
         throw new Error(`stage-f-tasks.json: task ${id} lists itself in "blockedBy"`);
       }
     }
+
+    // kind / severity: membership, so a typo is a hard failure rather than a row
+    // that silently drops out of the view.
+    const rowKind = (task as { kind?: unknown }).kind;
+    if (rowKind !== undefined && rowKind !== 'defect' && rowKind !== 'feature') {
+      throw new Error(
+        `stage-f-tasks.json: task ${id} has invalid "kind" ${JSON.stringify(rowKind)} — ` +
+          `expected "defect", "feature", or the field omitted`,
+      );
+    }
+    const rowSeverity = (task as { severity?: unknown }).severity;
+    if (rowSeverity !== undefined && rowSeverity !== 'high' && rowSeverity !== 'normal') {
+      throw new Error(
+        `stage-f-tasks.json: task ${id} has invalid "severity" ${JSON.stringify(rowSeverity)} — ` +
+          `expected "high", "normal", or the field omitted. There are TWO levels on purpose.`,
+      );
+    }
+
+    // summary: ONE LINE, and short enough to be a summary rather than a second
+    // notes field. Without the length bound the field would drift into prose and
+    // the view would stop being scannable, which is the only thing it is for.
+    const rowSummary = (task as { summary?: unknown }).summary;
+    if (rowSummary !== undefined) {
+      if (typeof rowSummary !== 'string' || rowSummary.trim() === '') {
+        throw new Error(`stage-f-tasks.json: task ${id} has an empty or non-string "summary"`);
+      }
+      if (/[\r\n]/.test(rowSummary)) {
+        throw new Error(
+          `stage-f-tasks.json: task ${id} has a multi-line "summary" — it renders in a ` +
+            `table cell and must be one line`,
+        );
+      }
+      if (rowSummary.length > SUMMARY_MAX) {
+        throw new Error(
+          `stage-f-tasks.json: task ${id} has a ${rowSummary.length}-character "summary"; ` +
+            `the limit is ${SUMMARY_MAX}. A summary longer than that is prose, and the ` +
+            `notes field is where prose belongs.`,
+        );
+      }
+    }
     // Object.hasOwn, NOT `in`: `in` walks the prototype chain, so a status of
     // "toString", "constructor", "__proto__" or "valueOf" passed validation and
     // rendered a native function into the Status cell — while being counted in
@@ -195,6 +282,9 @@ export function parseTasks(raw: string): StageFTask[] {
       completedDate: task.completedDate ?? null,
       notes: task.notes ?? null,
       ...(blockedBy === undefined ? {} : { blockedBy: blockedBy as string[] }),
+      ...(rowKind === undefined ? {} : { kind: rowKind }),
+      ...(rowSeverity === undefined ? {} : { severity: rowSeverity }),
+      ...(rowSummary === undefined ? {} : { summary: rowSummary as string }),
     };
   });
   assertBlockedByResolves(out);
@@ -509,6 +599,93 @@ function renderSummary(tasks: StageFTask[]): string {
  * dependency is the common case in a plan this old and reads as noise
  * otherwise — F.84's blocker F.55 has been closed for days.
  */
+/**
+ * Open defects, by severity. Generated (F.172).
+ *
+ * ## WHAT THIS SOLVES, AND WHAT IT DELIBERATELY DOES NOT
+ *
+ * The plan reached 176 rows with no severity, no triage state, and a median note
+ * of 2,258 characters, so it could not be scanned — only read end to end, which
+ * nobody does. This renders the subset that matters most, in one line each.
+ *
+ * It renders `summary` when a row has one and falls back to `task` otherwise. It does
+ * NOT summarise `notes`. A generated one-liner from a 2,000-character note would be a
+ * machine summary of prose, which is exactly what this project keeps filing
+ * against: DEV.93's value is that a builder recorded what was RULED OUT, and a
+ * summariser discards precisely that.
+ *
+ * ## THE UNCLASSIFIED COUNT IS REPORTED, NOT HIDDEN
+ *
+ * `kind` was not backfilled across 176 rows, because classifying decisions one did
+ * not make is the same objection as machine summarising with a human doing it. So
+ * the footer states how many pending rows carry no `kind`. An absent
+ * classification is a fact about the plan, and a view that silently treated those
+ * rows as features would be asserting something nobody checked.
+ */
+function renderDefects(tasks: StageFTask[]): string {
+  const OPEN = new Set(['pending', 'in_progress']);
+  const open = tasks.filter((t) => OPEN.has(t.status));
+  const defects = open.filter((t) => t.kind === 'defect');
+  const line = (t: StageFTask) => t.summary ?? t.task;
+
+  const high = defects.filter((t) => t.severity === 'high');
+  const rest = defects.filter((t) => t.severity !== 'high');
+  // A high-severity FEATURE is not a contradiction and must not be lost: F.124
+  // (no Settings module) and F.147 (confirm against incoming stock) are both.
+  const highFeatures = open.filter((t) => t.kind === 'feature' && t.severity === 'high');
+  const unclassified = open.filter((t) => t.kind === undefined).length;
+
+  const rows = (list: StageFTask[]) =>
+    list.map((t) => `| ${t.id} | ${STATUS_SYMBOLS[t.status]} | ${cell(line(t))} |`);
+
+  const out = ['## Open defects', ''];
+  if (defects.length === 0 && highFeatures.length === 0) {
+    out.push(
+      'No open row carries `kind: "defect"`. That means none is CLASSIFIED, not that',
+      'none exists — see the unclassified count below.',
+    );
+  } else {
+    if (high.length > 0) {
+      out.push(
+        '### High severity',
+        '',
+        '| Task | Status | Summary |',
+        '| --- | --- | --- |',
+        ...rows(high),
+        '',
+      );
+    }
+    if (rest.length > 0) {
+      out.push(
+        '### Normal severity',
+        '',
+        '| Task | Status | Summary |',
+        '| --- | --- | --- |',
+        ...rows(rest),
+        '',
+      );
+    }
+    if (highFeatures.length > 0) {
+      out.push(
+        '### High severity, but NOT defects',
+        '',
+        'Work that is worth displacing other work and is not a fix. `kind` and',
+        '`severity` are orthogonal.',
+        '',
+        '| Task | Status | Summary |',
+        '| --- | --- | --- |',
+        ...rows(highFeatures),
+        '',
+      );
+    }
+  }
+  out.push(
+    `**${open.length} open rows. ${defects.length} classified as defects, ` +
+      `${high.length} of them high. ${unclassified} carry no \`kind\` yet** — not ` +
+      'backfilled on purpose (F.172), so they are counted rather than assumed.',
+  );
+  return out.join('\n');
+}
 function renderDependencies(tasks: StageFTask[]): string {
   const status = new Map(tasks.map((t) => [t.id, t.status]));
   const blocked = tasks.filter((t) => (t.blockedBy ?? []).length > 0);
@@ -727,6 +904,10 @@ export function renderPlan(header: string, tasks: StageFTask[]): string {
     MARKER_START,
     renderBlock(tasks),
     MARKER_END,
+    '',
+    '---',
+    '',
+    renderDefects(tasks),
     '',
     '---',
     '',
