@@ -7678,4 +7678,37 @@ No e-invoice, no IRN, no e-way bill. No settlement. **No behavioural change to
 `packages/tax` of any kind** — `git diff --stat main -- packages/tax` prints
 nothing, which is what D-8 was settled for. No new case in
 `typst-matrix.json`, no touching `docs/pdf-references/`. **No serials on invoice
-lines** — that is F.7, it has its own row, and it is not done.
+lines** — that is F.7, it has its own row, and it is not done. **And no e2e drives
+the three write paths** — filed as **F.169** and sequenced immediately after this
+merge, not into the backlog, because every previous day has had a `verify-day-*`
+spec driving its feature end to end and this is the largest change yet without
+one.
+
+### The `verifier` corrected the MAIN THREAD's brief, not the code — twice
+
+This is worth recording in its own right, because it is the direction that is easy
+to forget when writing an agent's remit.
+
+The brief I gave `verifier` stated two things about this branch's contents, and
+**both were wrong**:
+
+- I said `docs/stage-f-tasks.json` "gained F.159 through F.168". It gained
+  **F.166, F.167 and F.168**; F.159–F.165 were already on `main` from the merged
+  `9ecec39`.
+- I said `DEVIATIONS.md` "gained DEV.153 and DEV.154". It gained **DEV.154 only**;
+  DEV.153 was already merged.
+
+It checked both rather than accepting them, diffed the task arrays structurally,
+and reported the corrections. **Had it taken the scope notes as given it would have
+reported against a false premise** — a clean verdict about a branch that did not
+exist. It also found the false provenance claim in this very entry, which was
+likewise a main-thread error rather than a code defect.
+
+**That is the second time its independence has paid against the BRIEF rather than
+against the WORK.** The first was DEV.129, where the criterion written to enforce
+this discipline was itself unsatisfiable and had been "checked for intent and not
+executed". The remit says the verifier "is told nothing about what the day intended
+and must not be", and the reason that phrasing matters is visible here: an agent
+that trusts the framing it is handed can only check what the framing admits. Its
+value is not merely that it re-runs commands the main thread also ran — it is that
+it does not inherit the main thread's beliefs about what it did.
