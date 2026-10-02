@@ -105,6 +105,14 @@ const TENANT_ROUTES = [
   '/pi',
   `/pi/${NO_SUCH_ID}`,
   '/orders',
+  // F.6 / F.169. The dynamic detail route matters more than the list: it is where
+  // `createInvoiceFromOrder` navigates on success, and compiling it cold inside a
+  // 30s assertion is what made verify-day-f6 time out AFTER the invoice had already
+  // been written. The fix is to warm the route, not to raise the timeout
+  // (§11.1 ruling 1) — the action was never slow; the first compile of a route this
+  // list did not know about was.
+  '/invoices',
+  `/invoices/${NO_SUCH_ID}`,
   `/orders/${NO_SUCH_ID}`,
   '/payments',
   '/payments/new',

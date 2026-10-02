@@ -147,3 +147,25 @@ export async function getInvoiceDetail(tenantId: string, invoiceId: string) {
     };
   });
 }
+
+/**
+ * The invoice issued against an order, if any.
+ *
+ * One invoice per order in Phase 1, so this returns at most one row. The ORDER
+ * page uses it to hide the issue control and show the number instead; the write
+ * path enforces the rule independently, because a hidden button is not a
+ * constraint (CLAUDE.md §6: hiding a button is not security).
+ */
+export async function getInvoiceForOrder(
+  tenantId: string,
+  orderId: string,
+): Promise<{ id: string; invoiceNumber: string } | null> {
+  return withTenant(tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber })
+      .from(invoices)
+      .where(and(eq(invoices.tenantId, tenantId), eq(invoices.orderId, orderId)))
+      .limit(1);
+    return row ?? null;
+  });
+}

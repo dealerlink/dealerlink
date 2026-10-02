@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cancelOrder, updateOrderExpectedDispatch } from '@/lib/actions/orders';
 import { confirmOrder } from '@/lib/actions/orders/confirm-order';
+import { createInvoiceFromOrder } from '@/lib/actions/invoices/create-invoice';
 
 interface PreviewLine {
   productId: string;
@@ -21,6 +22,14 @@ interface Props {
   orderNumber: string;
   status: string;
   isAdmin: boolean;
+  /**
+   * F6 D-8: ACCOUNTS and ADMIN may issue a tax invoice. Deliberately a separate
+   * prop from `isAdmin` — the two notes are admin-only, so collapsing them into one
+   * flag would make the distinction unexpressible in the UI and untestable.
+   */
+  canIssueInvoice: boolean;
+  /** Set once an invoice exists: one invoice per order, so the control goes away. */
+  invoiceNumber: string | null;
   canConfirm: boolean;
   canEditDispatch: boolean;
   expectedDispatchDate: string | null;
@@ -28,13 +37,15 @@ interface Props {
   preview: PreviewLine[] | null;
 }
 
-type Pending = null | 'confirm' | 'cancel' | 'dispatch';
+type Pending = null | 'confirm' | 'cancel' | 'dispatch' | 'invoice';
 
 export function OrderActions({
   id,
   orderNumber,
   status,
   isAdmin,
+  canIssueInvoice,
+  invoiceNumber,
   canConfirm,
   canEditDispatch,
   expectedDispatchDate,
@@ -111,6 +122,50 @@ export function OrderActions({
           <Button variant="primary" onClick={() => setConfirmOpen((o) => !o)} disabled={!!pending}>
             Confirm order
           </Button>
+        )}
+        {/*
+          ISSUE TAX INVOICE — on the ORDER, not on the invoice list. An invoice is
+          issued FROM a confirmed order, so this is where the action belongs; a
+          "new invoice" button on the list would invite an invoice with no order
+          behind it, which Phase 1 does not allow and GST would not support.
+
+          Three conditions, each load-bearing: the order must be past `pending`
+          (you cannot invoice an unconfirmed order), the role must permit it
+          (F6 D-8 — accounts OR admin), and no invoice may exist yet (one per
+          order; a second would double-count the supply).
+        */}
+        {canIssueInvoice && !invoiceNumber && status !== 'pending' && status !== 'cancelled' && (
+          <Button
+            variant="primary"
+            data-testid="issue-invoice"
+            onClick={async () => {
+              setPending('invoice');
+              setError(null);
+              const r = await createInvoiceFromOrder({ orderId: id });
+              setPending(null);
+              if (r.ok) {
+                router.push(`/invoices/${r.data.id}`);
+              } else {
+                // The write path's own message, not a generic one. On a
+                // reconciliation failure this is `assertOrderReconciles`'s text,
+                // which names the order, the column and both figures — the spec
+                // asserts on it rather than on a 500.
+                setError(r.error.message);
+              }
+            }}
+            disabled={!!pending}
+          >
+            {pending === 'invoice' ? 'Issuing…' : 'Issue tax invoice'}
+          </Button>
+        )}
+        {invoiceNumber && (
+          <a
+            href={`/invoices?q=${encodeURIComponent(invoiceNumber)}`}
+            className="text-accent mono text-[12.5px] hover:underline"
+            data-testid="order-invoice-link"
+          >
+            {invoiceNumber}
+          </a>
         )}
         {canEditDispatch && status !== 'cancelled' && status !== 'closed' && (
           <Button variant="default" onClick={() => setDispatchOpen((o) => !o)} disabled={!!pending}>
@@ -228,7 +283,14 @@ export function OrderActions({
         </div>
       )}
       {error && (
-        <div className="rounded-[6px] border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700">
+        // data-testid so a spec can assert on the NAMED error rather than timing
+        // out opaquely. The write path's refusals are diagnoses — e.g.
+        // `assertOrderReconciles` names the order, the column and both figures —
+        // and a test that cannot read them reports "timeout" for every cause.
+        <div
+          data-testid="order-action-error"
+          className="rounded-[6px] border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700"
+        >
           {error}
         </div>
       )}
