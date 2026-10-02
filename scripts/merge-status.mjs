@@ -101,10 +101,7 @@ function deployment(appId) {
   // `services[0].source_commit_hash` is the real SHA. The `cause` string also
   // carries a short one, but parsing prose when a field exists is how a summary
   // starts reporting something subtly different from what it claims.
-  const sha =
-    d.services?.[0]?.source_commit_hash ??
-    d.workers?.[0]?.source_commit_hash ??
-    null;
+  const sha = d.services?.[0]?.source_commit_hash ?? d.workers?.[0]?.source_commit_hash ?? null;
   return { phase: d.phase, sha, createdAt: d.created_at, cause: d.cause };
 }
 
@@ -186,11 +183,26 @@ function ciChecks(mergeSha) {
 }
 
 const ok = (b) => (b ? '✓' : '✗');
+/**
+ * IN FLIGHT IS NOT THE SAME AS WRONG, and conflating them is the exact confusion
+ * this script exists to remove.
+ *
+ * The first version printed '✗' for an `in_progress` check and counted a BUILDING
+ * deploy as a "problem" — so running it straight after a merge always reported
+ * failures that were simply not finished yet. A reader would learn to discount the
+ * output, which is how a summary stops being read.
+ */
+const PENDING = '…';
+const mark = (state) => (state === true ? '✓' : state === false ? '✗' : PENDING);
+
+/** DO deploy phases that mean "not finished yet" rather than "wrong". */
+const IN_FLIGHT = new Set(['BUILDING', 'DEPLOYING', 'PENDING_BUILD', 'PENDING_DEPLOY']);
 
 async function main() {
   const merge = latestMergeOnMain();
   const journal = journalLength();
   let problems = 0;
+  let inflight = 0;
 
   console.log('');
   if (!merge) {
@@ -218,11 +230,14 @@ async function main() {
       continue;
     }
     const carries = d.sha === merge.sha;
-    const settled = d.phase === 'ACTIVE';
+    const inFlight = IN_FLIGHT.has(String(d.phase));
+    // `null` means "not yet determined" and renders as '…', not as a failure.
+    const settled = inFlight ? null : d.phase === 'ACTIVE';
     console.log(
       `  ${name.padEnd(11)} ${String(d.phase).padEnd(10)} ${String(d.sha ?? '?').slice(0, 7)}  ` +
-        `${ok(settled)} settled  ${ok(carries)} carries the merge`,
+        `${mark(settled)} settled  ${mark(carries)} carries the merge`,
     );
+    if (inFlight) inflight++;
     if (!carries) {
       // THE LINE THIS SCRIPT EXISTS FOR.
       console.log(
@@ -232,7 +247,7 @@ async function main() {
       );
       problems++;
     }
-    if (!settled) problems++;
+    if (settled === false) problems++;
   }
   console.log('');
 
@@ -284,9 +299,13 @@ async function main() {
     console.log('  no runs for this commit');
   } else {
     for (const r of ci) {
+      const done = r.status === 'completed';
       const good = r.conclusion === 'success' || r.conclusion === 'skipped';
-      console.log(`  ${ok(good)} ${String(r.name).padEnd(20)} ${r.conclusion ?? r.status}`);
-      if (!good && r.status === 'completed') problems++;
+      console.log(
+        `  ${mark(done ? good : null)} ${String(r.name).padEnd(20)} ${r.conclusion ?? r.status}`,
+      );
+      if (done && !good) problems++;
+      if (!done) inflight++;
     }
   }
   console.log('');
@@ -302,7 +321,15 @@ async function main() {
   }
   console.log('');
 
-  console.log(problems === 0 ? 'No correspondence problems found.' : `${problems} problem(s) above.`);
+  if (problems > 0) {
+    console.log(`${problems} problem(s) above.`);
+  } else if (inflight > 0) {
+    console.log(`No problems. ${inflight} thing(s) still in flight — re-run when they settle.`);
+  } else {
+    console.log('No correspondence problems found.');
+  }
+  // Exit 0 while things are merely unfinished: a non-zero exit for "not yet" would
+  // make the script useless in the minutes after a merge, which is when it is run.
   process.exit(problems === 0 ? 0 : 1);
 }
 
