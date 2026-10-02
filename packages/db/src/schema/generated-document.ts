@@ -17,11 +17,40 @@ export const generatedDocumentType = pgEnum('generated_document_type', [
   'invoice',
   'dispatch',
   'payment_receipt',
-  // F.8 / F.144. Added in their own migration, BEFORE the tables that use them:
-  // Postgres cannot use a new enum value in the same transaction that adds it.
+  // F.8 / F.144.
   'credit_note',
   'debit_note',
 ]);
+
+/**
+ * ⚠️ ADDING A VALUE HERE — READ THIS FIRST. It is a two-case rule and the easy
+ * case is the one that happened, which is why the hard case needs writing down.
+ *
+ * `ALTER TYPE … ADD VALUE` may run inside a transaction on Postgres 12+, but the
+ * NEW VALUE CANNOT BE USED in that same transaction. Drizzle generates the
+ * `ADD VALUE` statements and the `CREATE TABLE`s into ONE migration file, and
+ * `migrate.ts` applies each file as a unit.
+ *
+ * **So:**
+ *
+ *  - If nothing in the migration USES the new value — no column typed with this
+ *    enum, no `DEFAULT 'credit_note'`, no CHECK or seed referencing it — one
+ *    migration is fine. That was the case for F.6: `credit_note` and
+ *    `debit_note` were added while the six new tables used `invoice_status` and
+ *    `invoice_discount_type` instead, so no statement touched the new values.
+ *    **Verified at the time, not assumed.**
+ *  - **The next table that actually references `generated_document_type` with a
+ *    new value will FAIL AT APPLY TIME**, with
+ *    `unsafe use of new value "…" of enum type`. It needs the `ADD VALUE` split
+ *    into its own earlier migration, which means hand-splitting what
+ *    `drizzle-kit generate` produced — the generator will not do it for you and
+ *    will not warn.
+ *
+ * An earlier version of F.6's own DDL review asserted the split was required
+ * outright. That was wrong in the direction that costs nothing, and the
+ * conditional is the part worth keeping: the rule is not "always split", it is
+ * "split whenever the same migration uses the value".
+ */
 
 /**
  * Where the rendered PDF bytes live.

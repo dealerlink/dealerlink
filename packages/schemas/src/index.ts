@@ -10,3 +10,4 @@ export * from './order';
 export * from './payment';
 export * from './dispatch';
 export * from './email';
+export * from './invoice';
