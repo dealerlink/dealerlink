@@ -8,6 +8,7 @@ import { formatDate, formatINRExact, formatTaxAmount } from '@/lib/format';
 import { summariseDocument } from '@/lib/tax/document-summary';
 import { TaxSummaryBlock } from '@/components/tax/tax-summary-block';
 import { getDispatchesForOrder } from '@/lib/queries/dispatch';
+import { getInvoiceForOrder } from '@/lib/queries/invoices';
 import { getOrderById, getReservationPreview } from '@/lib/queries/orders';
 import { getOrderPayments } from '@/lib/queries/payments';
 import { impersonationTenantId } from '@/lib/tenant/context';
@@ -96,6 +97,12 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
     order.status === 'pending' ? (await getReservationPreview(tenantId, order.id)).lines : null;
 
   const canRecordPayment = role === 'admin' || role === 'accounts';
+  // F6 D-8. The SAME pair as canRecordPayment by coincidence, not by sharing: a
+  // tax invoice is Accounts' to raise, and the credit/debit notes that REDUCE a
+  // receivable are Admin's alone. Reusing canRecordPayment would couple two rules
+  // that happen to agree today.
+  const canIssueInvoice = role === 'admin' || role === 'accounts';
+  const existingInvoice = await getInvoiceForOrder(tenantId, order.id);
   const orderPayments = tab === 'payments' ? await getOrderPayments(tenantId, order.id) : null;
 
   const canDispatch = role === 'admin' || role === 'dispatch';
@@ -145,6 +152,8 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
           orderNumber={order.orderNumber}
           status={order.status}
           isAdmin={isAdmin}
+          canIssueInvoice={canIssueInvoice}
+          invoiceNumber={existingInvoice?.invoiceNumber ?? null}
           canConfirm={canConfirm}
           canEditDispatch={canEditDispatch}
           expectedDispatchDate={order.expectedDispatchDate}

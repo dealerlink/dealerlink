@@ -34,7 +34,7 @@
 import path from 'node:path';
 
 import { config as loadEnv } from 'dotenv';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 // Seeds are run directly with tsx, so they load the env themselves — the same two
 // lines every other seed in this directory carries.
@@ -162,6 +162,73 @@ export async function seedInvoices(): Promise<void> {
         })),
       );
       console.log(`  · ${slug}/${plan.invoiceNumber} round_off ${plan.roundOff}`);
+    }
+
+    // ── ADVANCE THE DOCUMENT COUNTER TO MATCH THE NUMBERS JUST PINNED.
+    //
+    // THIS IS NOT HOUSEKEEPING. Without it the seed and the write path disagree:
+    // the seed inserts INV-2026-0001/0002/0022 directly, `document_counters` has no
+    // `invoice` row at all, and so the FIRST invoice issued through the UI allocates
+    // INV-2026-0001 and collides with the seeded row on
+    // `invoices_tenant_number_uq`. The user sees "Something went wrong. Please try
+    // again." and nothing anywhere names the cause.
+    //
+    // Found by F.169's end-to-end spec and by nothing else: typecheck, lint, 85
+    // worker tests, 224 db tests and 224 web tests all passed with this defect
+    // present, because every one of them either inserted rows directly or called
+    // the allocator in a transaction that rolled back. **A seed that writes
+    // documents must advance the counter those documents came from**, or it has
+    // produced a corpus the application cannot extend.
+    //
+    // Per §11.1 ruling 4 the seed is fixed rather than the test taught to avoid it.
+    const fy = Number(PLAN[0].invoiceNumber.split('-')[1]);
+    const highest = Math.max(...PLAN.map((p) => Number(p.invoiceNumber.split('-')[2])));
+    await adminDb.execute(sql`
+      INSERT INTO document_counters (tenant_id, doc_type, fiscal_year, last_value)
+      VALUES (${tenant.id}::uuid, 'invoice', ${fy}, ${highest})
+      ON CONFLICT (tenant_id, doc_type, fiscal_year)
+      DO UPDATE SET last_value = GREATEST(document_counters.last_value, ${highest}),
+                    updated_at = now()`);
+    console.log(`  · ${slug}: invoice counter at ${highest} (next is ${highest + 1})`);
+
+    // ── THE RESERVED FIXTURE FOR F.169's END-TO-END SPEC.
+    //
+    // `ORD-2026-0023` is left UN-INVOICED on purpose and is the order that spec
+    // issues from. Any invoice against it — and any note against that invoice — is
+    // removed here, so `pnpm db:seed:invoices` genuinely RESTORES the fixture.
+    //
+    // WHY THIS IS NEEDED RATHER THAN TIDY. The spec's first run issues an invoice
+    // and thereby consumes its own fixture, and only FOUR orders in the demo corpus
+    // are invoiceable at all — the other ~43 store zero tax while the engine
+    // computes real tax, so `assertOrderReconciles` correctly refuses them. Three
+    // of the four are taken by the pinned invoices above. So without this reset the
+    // spec passes once on a fresh database and then fails forever with a message
+    // telling the reader to reseed, which would not have helped. CI reseeds every
+    // run and would never have shown it.
+    //
+    // Deleting a seeded test invoice is the seed's business: it owns these rows. It
+    // is NOT a licence to delete a real one — an issued tax invoice is immutable and
+    // is corrected by a credit note.
+    const reserved = await adminDb
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.tenantId, tenant.id), eq(orders.orderNumber, 'ORD-2026-0023')))
+      .limit(1);
+    if (reserved[0]) {
+      const stale = await adminDb
+        .select({ id: invoices.id })
+        .from(invoices)
+        .where(and(eq(invoices.tenantId, tenant.id), eq(invoices.orderId, reserved[0].id)));
+      for (const inv of stale) {
+        // Notes hold a `restrict` FK to the invoice, so they go first.
+        await adminDb.execute(sql`DELETE FROM credit_notes WHERE invoice_id = ${inv.id}::uuid`);
+        await adminDb.execute(sql`DELETE FROM debit_notes  WHERE invoice_id = ${inv.id}::uuid`);
+        await adminDb.execute(sql`DELETE FROM invoices      WHERE id = ${inv.id}::uuid`);
+      }
+      console.log(
+        `  · ${slug}: ORD-2026-0023 reserved un-invoiced for F.169` +
+          (stale.length ? ` (removed ${stale.length} stale invoice)` : ''),
+      );
     }
   }
 }
