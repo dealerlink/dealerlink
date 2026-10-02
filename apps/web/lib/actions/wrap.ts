@@ -5,6 +5,10 @@ import { z } from 'zod';
 import { requireRole, type AuthContext } from '@/lib/auth/require-role';
 import { AppError, isAppError, type AppErrorCode } from '@/lib/errors';
 import { runWithLogContext } from '@/lib/observability/als';
+// NOT the DOM global of the same name: a missing import here resolved silently to
+// `window.reportError`, which takes one argument, and typecheck reported only
+// "Expected 1 arguments, but got 2".
+import { reportError } from '@/lib/observability/log';
 import { setSentryTenant } from '@/lib/observability/context';
 import { impersonationTenantId } from '@/lib/tenant/context';
 
@@ -36,13 +40,66 @@ function clientMeta() {
   return { ip, userAgent, requestId };
 }
 
-function toActionError(err: unknown): { code: AppErrorCode; message: string } {
+/** Short, greppable handle shown to the user and logged beside the real error. */
+function refFrom(requestId: string | null): string | null {
+  return requestId ? requestId.replace(/-/g, '').slice(0, 8) : null;
+}
+
+/**
+ * Normalise a thrown error into the client payload, and REPORT the real one.
+ *
+ * ## THE CLIENT MESSAGE STAYS GENERIC. THAT IS NOT THE DEFECT. (F.170)
+ *
+ * The original comment here — "Don't leak internal messages to clients" — is
+ * right and is unchanged in effect: a Postgres error carries table and column
+ * names, and this is a multi-tenant product. **What was wrong is that the real
+ * error went NOWHERE.** Both catch sites discarded it, so an unexpected throw in
+ * any tenant write path produced a generic sentence for the user, nothing in the
+ * server output, and nothing in Sentry — because the action CATCHES the error and
+ * returns a value, so the Next.js/Sentry instrumentation never sees a throw either.
+ *
+ * Measured cost of that: F.169's seed/counter collision took roughly an hour to
+ * diagnose by reproducing the action's body statement by statement, for a defect a
+ * single log line would have named instantly. Before the e2e surfaced the message
+ * text, every cause — a reconciliation failure, a unique violation, a status
+ * refusal — was the identical `Timeout 30000ms exceeded`.
+ *
+ * ## ONLY NON-AppError THROWS ARE REPORTED, AND THAT IS DELIBERATE
+ *
+ * An `AppError` is a DESIGNED refusal whose message the user already sees and can
+ * act on — `CONFLICT` from `assertOrderReconciles`, `VALIDATION` from a Zod
+ * failure, `READ_ONLY` from an impersonating operator. Reporting those would bury
+ * the genuine `INTERNAL` throws in expected noise, which is the failure mode that
+ * makes an alerting channel worthless. "Log everything" is the easy wrong answer.
+ *
+ * ## THE REF IS IN THE MESSAGE, AND IT LEAKS NOTHING
+ *
+ * The user sees `Something went wrong (ref: a1b2c3d4). Please try again.` It is the
+ * first eight hex characters of the request id, which is either the inbound
+ * `x-request-id` or a UUID generated for this call — **it encodes nothing about the
+ * tenant, the data or the error.** It turns a support conversation from "something
+ * went wrong" into a log lookup. The FULL request id is logged, and an eight-char
+ * prefix greps against it.
+ *
+ * It is attached only to `INTERNAL`, never to a designed refusal: a `CONFLICT`
+ * message is already actionable and a reference number on it is noise.
+ */
+function toActionError(
+  err: unknown,
+  context: Record<string, unknown> & { requestId: string | null },
+): { code: AppErrorCode; message: string } {
   if (isAppError(err)) return { code: err.code, message: err.message };
-  // Don't leak internal messages to clients
-  const message =
-    err instanceof Error && err.message.startsWith('[lucia]')
-      ? 'Internal authentication error'
-      : 'Something went wrong. Please try again.';
+
+  // The real error, server-side only. `reportError` routes to Sentry AND keeps a
+  // structured console line, so this is visible in DO Logs and in the dev terminal.
+  // The ALS log context does NOT reach here — `runWithLogContext` wraps only the
+  // action body — so every field is passed explicitly.
+  reportError(err, context);
+
+  const ref = refFrom(context.requestId);
+  const isLucia = err instanceof Error && err.message.startsWith('[lucia]');
+  const base = isLucia ? 'Internal authentication error' : 'Something went wrong';
+  const message = ref ? `${base} (ref: ${ref}). Please try again.` : `${base}. Please try again.`;
   return { code: 'INTERNAL', message };
 }
 
@@ -75,6 +132,12 @@ export function tenantAction<I, O>(
   fn: (ctx: TenantActionCtx<I>) => Promise<O>,
 ): (raw: unknown) => Promise<ActionResult<O>> {
   return async (raw) => {
+    // HOISTED ABOVE THE try ON PURPOSE. `requestId` was declared inside it, so it
+    // was not in scope in the catch — the ref could not be shown and the log could
+    // not be correlated. Reading the headers cannot throw.
+    const { ip, userAgent, requestId } = clientMeta();
+    let tenantIdForLog: string | null = null;
+    let userIdForLog: string | null = null;
     try {
       const parsed = inputSchema.safeParse(raw);
       if (!parsed.success) {
@@ -113,7 +176,8 @@ export function tenantAction<I, O>(
       // to a tenant.
       setSentryTenant({ tenantId });
 
-      const { ip, userAgent, requestId } = clientMeta();
+      tenantIdForLog = tenantId;
+      userIdForLog = auth.user.id;
 
       // Seed the ALS log context so every log line inside the action carries
       // tenant / user / request id without threading them through.
@@ -142,7 +206,15 @@ export function tenantAction<I, O>(
 
       return { ok: true, data };
     } catch (err) {
-      return { ok: false, error: toActionError(err) };
+      return {
+        ok: false,
+        error: toActionError(err, {
+          action: 'tenantAction',
+          requestId,
+          tenantId: tenantIdForLog,
+          userId: userIdForLog,
+        }),
+      };
     }
   };
 }
@@ -156,6 +228,9 @@ export function operatorAction<I, O>(
   fn: (ctx: OperatorActionCtx<I>) => Promise<O>,
 ): (raw: unknown) => Promise<ActionResult<O>> {
   return async (raw) => {
+    // Same hoist as tenantAction, for the same reason: the catch needs requestId.
+    const { ip, userAgent, requestId } = clientMeta();
+    let userIdForLog: string | null = null;
     try {
       const parsed = inputSchema.safeParse(raw);
       if (!parsed.success) {
@@ -164,7 +239,7 @@ export function operatorAction<I, O>(
         });
       }
       const auth = await requireRole(['operator']);
-      const { ip, userAgent, requestId } = clientMeta();
+      userIdForLog = auth.user.id;
       const data = await runWithLogContext(
         { requestId, userId: auth.user.id, role: auth.user.role },
         () =>
@@ -175,7 +250,14 @@ export function operatorAction<I, O>(
       );
       return { ok: true, data };
     } catch (err) {
-      return { ok: false, error: toActionError(err) };
+      return {
+        ok: false,
+        error: toActionError(err, {
+          action: 'operatorAction',
+          requestId,
+          userId: userIdForLog,
+        }),
+      };
     }
   };
 }
