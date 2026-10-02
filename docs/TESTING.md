@@ -12,3 +12,54 @@
 **Coverage targets:** 90%+ on `packages/tax/`, 70%+ on Server Actions, smoke E2E for each role's primary workflow.
 
 **RLS test pattern** is mandatory: for every table, write a test that asserts a query as Tenant A cannot see Tenant B's data. This catches the entire class of multi-tenant data leak bugs.
+
+---
+
+## Two rules about the VALUE a test asserts on
+
+Both of these are about fixtures rather than code, both were learned by shipping a
+test that reported a pass it had not earned, and neither is caught by any gate.
+
+### 1. Never assert an ABSOLUTE value of shared mutable state
+
+**An assertion on an absolute value of shared state is an assertion about test
+ORDER and corpus HISTORY, not about the code under test.** It reports a pass on a
+virgin database and a failure afterwards, and neither result is about the behaviour
+it was written to check.
+
+Worked example (F.175): two numbering tests asserted
+`document_counters.last_value === 1` for a new document series, and that the
+counter row did not exist after a rolled-back transaction. Both were true when
+written. Both broke the moment an end-to-end spec allocated real numbers through
+the same allocator — `expected 5 to be 1`. The counter is shared, mutable, global
+state.
+
+**Assert the DELTA, or the invariant.** Read a baseline first, then assert that one
+allocation advances the counter by exactly one, and that a rolled-back transaction
+leaves it unchanged. Those were the properties the tests actually meant.
+
+At risk: anything asserting a row COUNT, a `max(id)`, a sequence value, or the
+ABSENCE of a row another test may create. Some absolutes are legitimate —
+`rls.test.ts`'s derived population is a fact about the schema, not about history —
+so the question is whether the value is a property of the code or of everything
+that has run before.
+
+### 2. Never choose a test value where the right and wrong implementations agree
+
+**A test value chosen where the right and wrong implementations agree is not a
+test. It reports the same result either way.**
+
+Worked example (DEV.154): a render assertion expected `207,813.00` where
+`Intl.NumberFormat('en-IN')` produces **`2,07,813.00`** — lakh grouping. The
+expectation was wrong, not the render. The sibling assertion, on `46,634.00`,
+passed — and **could not have failed**, because under a lakh en-IN grouping and
+plain thousands grouping produce the same string. The test that ran first was
+structurally incapable of catching the error.
+
+This generalises past number formatting: a date inside a month where two formats
+coincide, a state code identical in both conventions, a quantity of `1` where `n`
+and `n - 1` agree, a single-line document where a per-line and a document-level
+calculation give the same total.
+
+**Before trusting a green assertion, ask what value the WRONG implementation would
+produce — and if it is the same value, the fixture is the thing to change.**
