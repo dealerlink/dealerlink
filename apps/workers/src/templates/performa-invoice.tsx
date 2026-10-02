@@ -34,7 +34,15 @@ export interface BuiltPerformaInvoiceHtml {
   footerTemplate: string;
 }
 
-function addressLines(parts: Array<string | null | undefined>): string[] {
+/**
+ * Exported for the invoice loader (F.6).
+ *
+ * NOTE: this helper is already duplicated in `quotation.tsx:49` and
+ * `dispatch-note.tsx:44` — three identical copies before F.6. The invoice imports
+ * this one rather than adding a fourth; consolidating the existing three is not
+ * this day's scope (§11.2) and is reported rather than folded in.
+ */
+export function addressLines(parts: Array<string | null | undefined>): string[] {
   return parts.map((p) => (p ?? '').trim()).filter((p) => p.length > 0);
 }
 

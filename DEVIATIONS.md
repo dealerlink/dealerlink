@@ -5931,14 +5931,14 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — fifteen instances of one signature: the instrument, not the reasoning
+## DEV.138 — sixteen instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
-**Scope:** the framing. No code change is attributed to this entry; the fifteen
+**Scope:** the framing. No code change is attributed to this entry; the sixteen
 instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
 own entry, which carries two of them), in DEV.142, in DEV.143, in DEV.144, in
 F.106's closeout — which produced no entry of its own for the ninth — for
-the tenth through the thirteenth, in DEV.151, for the fourteenth in DEV.152, and for the fifteenth in F.6’s A.6 closeout.
+the tenth through the thirteenth, in DEV.151, for the fourteenth in DEV.152, for the fifteenth in F.6’s A.6 closeout, and for the sixteenth — a PAIR, recorded as one row — in F.6’s A.2/A.7.
 
 > **This line was stale at "five" for three instances, and that is worth one
 > sentence.** F.101's day prompt named the correction explicitly, as an authorised
@@ -5951,7 +5951,7 @@ the tenth through the thirteenth, in DEV.151, for the fourteenth in DEV.152, and
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The fifteen.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+**The sixteen.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
 the family caught before it shipped.
@@ -5997,10 +5997,11 @@ does not help and a rule is needed.
 | **13** | **A CONDITIONAL ASSERTION, WHICH CAN PASS WITHOUT RUNNING.** `selectOption({ index: 0 })` then `if (firstIsBillTo !== f.otherDealerId) { await expect(control).toHaveCount(0) }` in the same e2e spec as row 11 (F.5a, DEV.151) | That option 0 is merely the FIRST dealer in the list and need not be the Bill-To dealer, while the guard only checked it was not the OTHER dealer. Under every ordering where option 0 happened to be Bill-To — which held locally — the test reported success while asserting nothing; CI drew a third dealer and it failed. **The guard was the defect, not the selector.** Second vacuity in one file, and the operator's framing: a test that skips itself when setup does not cooperate is this project's most-filed failure shape. |
 | **14** | **A GATE THAT COULD NOT SEE AN UNTRACKED CITED FILE.** `pnpm check:paths` green locally over 78 paths while `docs/PLAN_REVISION_PARITY_LIST.md`, cited from 14 sites, was `??` in `git status` (PR #81, DEV.152) | That `scripts/check-path-references.mjs:157` resolves existence with `existsSync`, DELIBERATELY — its comment argues "Existence is a FILESYSTEM question, not a git-index one", correctly, for an unstaged MOVE. For a new UNTRACKED file the same predicate points the wrong way: disk says yes, the index says no, and CI clones only the index. **Both controls executed:** untracked-but-present → EXIT=0 "every cited docs/ path resolves"; same index, removed from disk → EXIT=1 with CI's exact message. CI was running the second control. Row 2 is C6c with the SCANNER untracked; this is the same blindness with the **cited target** untracked, and the only member of that family a green local gate concealed. |
 | **15** | **A PROBE WHOSE SENTINEL WAS ECHOED BACK AT IT — and the first member where a WRONG FIX was reachable.** A CHECK-constraint test wrapped its INSERT in `DO $$ … RAISE EXCEPTION '__probe_rollback__' … $$` and classified the outcome by `message.includes('__probe_rollback__')` (F.6 A.6) | That **drizzle echoes the QUERY TEXT into `error.message`** (`Failed query: <sql>`), and the query text contains the sentinel — so **every rejection matched and was classified as an acceptance**. `0.99` passed for the wrong reason while `1.00` silently inverted. The real Postgres error is in `error.cause.message`, which the probe never read. **What makes this one different from 1–14: the failing assertion was `expected true to be false`, which is EXACTLY what a genuinely missing CHECK produces** — so the message could not distinguish a broken instrument from a broken constraint, and the available wrong fix was to "correct" a constraint that was already right. Only the drop-the-CHECK control told them apart: dropping it went red, restoring it went green, and a bare INSERT of `1.00` was rejected with `invoices_round_off_chk`. **The rule: a probe that classifies by searching an error string must not use a sentinel that can appear in the error's own echo of the input.** |
+| **16** | **TWO CHECKS SATISFIED THE WRONG WAY, in one day, and this is the family's sharpest statement yet.** (a) The render job's loader dispatch was a ternary chain ending in a bare `else`; (b) `Exclude<RenderableDocumentType, RenderableKind \| NotImplementedDocumentType>` asserted every payload type was accounted for (F.6 A.2/A.7) | (a) That a TRAILING ELSE IS INDISTINGUISHABLE FROM A MISSING CASE to the compiler. Adding `'invoice'` to `RENDERABLE_KINDS` would have loaded an invoice with the **payment-receipt loader** — no error, a PDF with the wrong fields. The A.2 exhaustiveness work did not see it because there was no missing case to see. (b) That MEMBERSHIP IN EITHER LIST SATISFIES `Exclude`, so `'invoice'` sat in **both** `RENDERABLE_KINDS` and `NOT_IMPLEMENTED_DOCUMENT_TYPES` — a self-contradictory declaration — and typecheck stayed green. **THE SHARPER STATEMENT: these are not checks that COULD NOT fail. Both could fail, and did, for other things. They passed while describing something FALSE, because each was satisfiable by a route other than the one it was written to verify.** "A passing negative result is not evidence until something demonstrates it could have failed" is necessary and NOT sufficient: the demonstration must fail for the REASON the check exists. Fixed by `Record<RenderableKind, PdfLoader>` (exhaustive by construction) and a disjointness assertion; both controlled. |
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all fifteen:
+it verifies confirms nothing. The general form covers all sixteen:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**

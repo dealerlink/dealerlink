@@ -15,7 +15,7 @@
 import { adminDb } from '@dealerlink/db';
 import { sql } from 'drizzle-orm';
 
-export type Kind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch';
+export type Kind = 'quotation' | 'performa_invoice' | 'payment_receipt' | 'dispatch' | 'invoice';
 
 export interface DocumentCase {
   label: string;
@@ -27,12 +27,27 @@ export interface DocumentCase {
   covers?: string[];
 }
 
-/** Table each document type lives in. */
+/**
+ * Table each document type lives in.
+ *
+ * ## A MISSING ENTRY HERE PRODUCES BROKEN SQL, NOT A TYPE ERROR
+ *
+ * `Kind` is this script's own union and is NOT `RenderableKind`, so adding a
+ * document type to the renderer does not make these two maps fail to compile. F.6
+ * found that the hard way: `invoice` was absent, `SOURCE_TABLE[c.type]` and
+ * `NUMBER_COLUMN[c.type]` returned `undefined`, and the interpolated query became
+ * `from  d … where d. = $2` — a Postgres syntax error at runtime, in a test, rather
+ * than a compile error at the keyboard.
+ *
+ * Keeping `Kind` separate is deliberate (this is harness addressing, not renderer
+ * capability), so the guard is the runtime assertion in `resolveDocument` below.
+ */
 export const SOURCE_TABLE: Record<Kind, string> = {
   quotation: 'quotations',
   performa_invoice: 'performa_invoices',
   payment_receipt: 'payments',
   dispatch: 'dispatches',
+  invoice: 'invoices',
 };
 
 /** Column holding the human document number, per type. */
@@ -41,6 +56,7 @@ const NUMBER_COLUMN: Record<Kind, string> = {
   performa_invoice: 'pi_number',
   payment_receipt: 'payment_number',
   dispatch: 'dispatch_number',
+  invoice: 'invoice_number',
 };
 
 /**
@@ -55,7 +71,16 @@ export async function resolveDocument(
   c: Pick<DocumentCase, 'type' | 'tenantSlug' | 'documentNumber'>,
 ): Promise<{ tenantId: string; documentId: string }> {
   const table = SOURCE_TABLE[c.type];
-  const col = NUMBER_COLUMN[c.type];
+  const numberColumn = NUMBER_COLUMN[c.type];
+  if (!table || !numberColumn) {
+    // Fail with the cause rather than with a syntax error 40 lines later.
+    throw new Error(
+      `resolveDocument: no table/number-column mapping for type "${c.type}". ` +
+        `Add it to SOURCE_TABLE and NUMBER_COLUMN in scripts/resolve-document.ts. ` +
+        `Known: ${Object.keys(SOURCE_TABLE).join(', ')}.`,
+    );
+  }
+  const col = numberColumn;
   const order = c.type === 'quotation' ? sql.raw('order by d.revision desc') : sql.raw('');
   const rows = (await adminDb.execute(sql`
     select d.id::text as document_id, d.tenant_id::text as tenant_id
