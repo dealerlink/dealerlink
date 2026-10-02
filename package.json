@@ -36,7 +36,8 @@
     "typst:install": "node scripts/install-typst.mjs",
     "typst:check": "node scripts/install-typst.mjs --check",
     "check:ids": "node scripts/check-id-references.mjs",
-    "check:paths": "node scripts/check-path-references.mjs"
+    "check:paths": "node scripts/check-path-references.mjs",
+    "merge-status": "node scripts/merge-status.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
