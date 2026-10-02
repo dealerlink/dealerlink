@@ -7712,3 +7712,79 @@ and must not be", and the reason that phrasing matters is visible here: an agent
 that trusts the framing it is handed can only check what the framing admits. Its
 value is not merely that it re-runs commands the main thread also ran — it is that
 it does not inherit the main thread's beliefs about what it did.
+
+---
+
+## DEV.155 — knowing a pattern does not prevent it; running the control does
+
+**Date:** 2026-10-02 · **Task:** F.172 (the defect view) · **Impact:** none on
+shipped behaviour. One vacuous assertion, caught before it merged, by the thing
+that catches them.
+
+F.172 added `kind`, `severity` and an authored `summary` to the plan JSON and a
+generated **Open defects** view. That work is in the commit. **This entry is about
+one of its tests**, because the test is the more useful finding.
+
+### What happened
+
+The view renders `summary` when a row has one and falls back to `task` otherwise.
+A test asserted the fallback:
+
+```ts
+expect(rendered).toContain('A row with no summary at all');
+```
+
+Then the control: remove the fallback — `t.summary ?? ''` instead of
+`t.summary ?? t.task` — and re-run.
+
+**All 100 tests passed.**
+
+`toContain` searches the whole rendered document, and the row's `task` text also
+appears in the main Stage F task table. So the assertion was satisfied by a
+different table entirely, and **would have passed with the defect view deleted
+outright.**
+
+Fixed with a `defectSection()` helper that slices the `## Open defects` region, after
+which the control fails as it should.
+
+### Why this is the headline and not a footnote
+
+**This is DEV.138 row 11's exact shape** — a whole-document `toContainText` on a
+short string, recorded during F.5a. It is also the shape of row 16, where two
+checks passed while describing something false.
+
+And it was written **in the same session that recorded both of those, by the same
+author, after that author had added the rule to `docs/TESTING.md`.** The sequence,
+in order, within one working period:
+
+1. Row 11 filed: a whole-page `toContainText` is almost always vacuous.
+2. Row 16 filed: a check can pass while describing something false.
+3. `docs/TESTING.md` amended with two rules about the value a test asserts on.
+4. **`expect(rendered).toContain(task)` written against a whole document.**
+
+So the lesson is not "remember the rule". The author remembered it well enough to
+document it twice and then reproduced it anyway, forty minutes later, while
+actively thinking about test quality. **A rule that depends on recall has now
+failed its own author three times.**
+
+> **The instruction is therefore mechanical, not attentive: isolate the section
+> under test, and prove the assertion fails when the thing it checks is removed.**
+
+`docs/TESTING.md` now leads with that rather than with "avoid whole-document
+assertions", because avoidance is a recall instruction and the control is not. The
+three-failure sequence is written into that file too, so the next reader sees the
+evidence for why the rule is shaped that way rather than just the rule.
+
+### What this says about the other controls in this session
+
+It is worth being precise about the scoreboard, because the honest reading is
+mixed rather than flattering. Controls run in this session caught: a loader that
+ignored its own new code path (F.152), two render unions satisfiable the wrong way
+(F.153), a seed that never advanced a counter (F.169), a probe whose sentinel was
+echoed back at it (DEV.153), and this. **Every one of those was found by deleting
+the behaviour and watching, and none by reading carefully.**
+
+Against that, the same session produced four scripts that reported an outcome they
+had not checked, a `pnpm --filter` that exited 0 having run nothing, and this
+assertion. The ratio is the argument: the controls are not a safety net on top of
+careful work — on this evidence they are doing most of the actual detection.
