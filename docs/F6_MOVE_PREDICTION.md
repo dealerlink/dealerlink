@@ -112,3 +112,20 @@ That is precisely why A.1.5's mutate-and-rollback fixture is not optional. An
 empty diff here means the change is safe to land; it says nothing about whether
 the loader is now reading the column, because reading and recomputing produce the
 same bytes on this data. Only a test that makes them disagree can tell.
+
+## RE-VERIFIED AFTER A.7, because A.7 changed more than A.1 did
+
+A.7 rewrote the render job's loader dispatch from a ternary chain to a
+`Record<RenderableKind, PdfLoader>`, added an optional `round-off:` parameter to the
+shared `quotation-body`, and added `roundOff` to both forked `MONEY_KEYS` copies.
+Any of those could have moved an existing document, so the comparison was run
+again rather than assumed to still hold:
+
+```
+ALL 196 FIGURES IDENTICAL across 14 documents
+```
+
+Exit 0, 14/14 rendered, `pdf-snapshots.test.ts` 17/17. **Still empty.** The
+`round-off:` parameter defaults to `none` and neither existing entry point passes
+it, so the quotation and PI totals blocks are unchanged — which is why it was added
+as a parameter rather than as a read of `data.roundOff`.

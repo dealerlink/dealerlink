@@ -37,6 +37,7 @@ import {
   type RenderableKind,
 } from '../pdf/view-model';
 import { loadDispatchNotePdfData } from '../templates/dispatch-note';
+import { loadInvoicePdfData } from '../templates/invoice';
 import { loadPaymentReceiptPdfData } from '../templates/payment-receipt';
 import { loadPerformaInvoicePdfData } from '../templates/performa-invoice';
 import { loadQuotationPdfData } from '../templates/quotation';
@@ -64,7 +65,7 @@ export type RenderableDocumentType =
  * When a type is implemented it moves from here into `RENDERABLE_KINDS`, and the
  * two assertions below will not compile until both sides agree.
  */
-export const NOT_IMPLEMENTED_DOCUMENT_TYPES = ['invoice'] as const;
+export const NOT_IMPLEMENTED_DOCUMENT_TYPES = [] as const;
 export type NotImplementedDocumentType = (typeof NOT_IMPLEMENTED_DOCUMENT_TYPES)[number];
 
 /**
@@ -84,6 +85,19 @@ export type _RenderableKindsAreDocumentTypes = Assert<
 >;
 export type _EveryDocumentTypeIsAccountedFor = Assert<
   Equals<Exclude<RenderableDocumentType, RenderableKind | NotImplementedDocumentType>, never>
+>;
+/**
+ * AND THE TWO LISTS MUST BE DISJOINT — a type cannot be both renderable and
+ * declared not-implemented.
+ *
+ * This assertion was MISSING and was found by F.6's A.7: moving `'invoice'` into
+ * `RENDERABLE_KINDS` left it in `NOT_IMPLEMENTED_DOCUMENT_TYPES` as well, and
+ * everything still compiled — the `Exclude` above is satisfied by membership in
+ * EITHER list, so a type in both is invisible to it. A contradictory declaration
+ * that type-checks is exactly the state F.153 was filed about.
+ */
+export type _ListsAreDisjoint = Assert<
+  Equals<Extract<RenderableKind, NotImplementedDocumentType>, never>
 >;
 
 export interface RenderPdfPayload {
@@ -124,14 +138,39 @@ export async function runRenderPdf(payload: RenderPdfPayload): Promise<RenderPdf
   return withTenant(
     payload.tenantId,
     async (tx) => {
-      const data =
-        documentType === 'quotation'
-          ? await loadQuotationPdfData(tx, payload.tenantId, payload.documentId)
-          : documentType === 'performa_invoice'
-            ? await loadPerformaInvoicePdfData(tx, payload.tenantId, payload.documentId)
-            : documentType === 'dispatch'
-              ? await loadDispatchNotePdfData(tx, payload.tenantId, payload.documentId)
-              : await loadPaymentReceiptPdfData(tx, payload.tenantId, payload.documentId);
+      // A RECORD, NOT A TERNARY CHAIN, and that is a correction with teeth.
+      //
+      // This was `type === 'quotation' ? … : type === 'performa_invoice' ? … :
+      // type === 'dispatch' ? … : loadPaymentReceiptPdfData(…)` — a chain whose
+      // final ELSE silently absorbed every type it did not name. Adding 'invoice'
+      // to RENDERABLE_KINDS would therefore have loaded an INVOICE WITH THE PAYMENT
+      // RECEIPT LOADER: no error, no warning, a rendered PDF with the wrong fields.
+      //
+      // The compile-time exhaustiveness added for the two render unions did NOT
+      // catch it, because a trailing else is not a missing case. `Record<
+      // RenderableKind, …>` is, so a new kind without a loader is now a compile
+      // error here — the same mechanism that already protects TEMPLATE_FOR.
+      // The four existing loaders return four DIFFERENT data shapes, so the record
+      // is typed on the call signature rather than on one loader's type.
+      type PdfData =
+        | Awaited<ReturnType<typeof loadQuotationPdfData>>
+        | Awaited<ReturnType<typeof loadPerformaInvoicePdfData>>
+        | Awaited<ReturnType<typeof loadDispatchNotePdfData>>
+        | Awaited<ReturnType<typeof loadPaymentReceiptPdfData>>
+        | Awaited<ReturnType<typeof loadInvoicePdfData>>;
+      type PdfLoader = (
+        tx: Parameters<typeof loadQuotationPdfData>[0],
+        tenantId: string,
+        documentId: string,
+      ) => Promise<PdfData>;
+      const LOADERS: Record<RenderableKind, PdfLoader> = {
+        quotation: loadQuotationPdfData,
+        performa_invoice: loadPerformaInvoicePdfData,
+        dispatch: loadDispatchNotePdfData,
+        payment_receipt: loadPaymentReceiptPdfData,
+        invoice: loadInvoicePdfData,
+      };
+      const data = await LOADERS[documentType](tx, payload.tenantId, payload.documentId);
 
       // The loaders still set `generatedAt: new Date()`. Overridden with the
       // document-keyed value so the footer does not claim a PDF was generated

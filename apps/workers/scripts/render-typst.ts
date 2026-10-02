@@ -80,6 +80,13 @@ const MONEY_KEYS = new Set([
   'taxableValue',
   'gstAmount',
   'lineTotal',
+  // F.6 / F6 D-3. ADDED TO BOTH FORKS DELIBERATELY AND FIRST, not discovered from
+  // a blank row: a key absent from this set is NOT an error. `convert` falls
+  // through to `return value`, so the number arrives at the template unformatted
+  // AND gains no `…Raw` companion — the invoice would simply print without its
+  // round-off row and reconcile against nothing. Nothing throws, nothing warns.
+  // `roundOff` is SIGNED, so `formatMoney` must handle a negative.
+  'roundOff',
 ]);
 const DATE_KEYS = new Set([
   'quoteDate',

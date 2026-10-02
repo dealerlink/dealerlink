@@ -55,6 +55,7 @@ export const RENDERABLE_KINDS = [
   'performa_invoice',
   'payment_receipt',
   'dispatch',
+  'invoice',
 ] as const;
 
 export type RenderableKind = (typeof RENDERABLE_KINDS)[number];
@@ -80,6 +81,13 @@ const MONEY_KEYS = new Set([
   'taxableValue',
   'gstAmount',
   'lineTotal',
+  // F.6 / F6 D-3. ADDED TO BOTH FORKS DELIBERATELY AND FIRST, not discovered from
+  // a blank row: a key absent from this set is NOT an error. `convert` falls
+  // through to `return value`, so the number arrives at the template unformatted
+  // AND gains no `…Raw` companion — the invoice would simply print without its
+  // round-off row and reconcile against nothing. Nothing throws, nothing warns.
+  // `roundOff` is SIGNED, so `formatMoney` must handle a negative.
+  'roundOff',
 ]);
 
 /** Values rendered as a document date. */
@@ -101,6 +109,9 @@ const FOOTER_LABEL: Record<RenderableKind, string> = {
   performa_invoice: 'Performa Invoice',
   payment_receipt: 'Receipt',
   dispatch: 'Dispatch',
+  // "Tax Invoice" in full: on a GST document the word "Invoice" alone is
+  // ambiguous with the performa invoice, which is not a tax document.
+  invoice: 'Tax Invoice',
 };
 
 /** Entry template per document type. */
@@ -112,6 +123,8 @@ export const TEMPLATE_FOR: Record<RenderableKind, string> = {
   performa_invoice: 'performa-invoice.typ',
   payment_receipt: 'payment-receipt.typ',
   dispatch: 'dispatch-note.typ',
+  // Imports the quotation BODY like the PI does, plus one row: the round-off.
+  invoice: 'tax-invoice.typ',
 };
 
 function convert(value: unknown, key?: string): unknown {
@@ -230,6 +243,11 @@ export function filenameFor(type: RenderableKind, data: unknown): string {
       return `${d.receiptNumber}.pdf`;
     case 'dispatch':
       return `${d.dispatchNumber}.pdf`;
+    case 'invoice':
+      // The invoice number travels in `quoteNumber`, as the PI's does — the view
+      // model's field is named for the quotation it was first built for, and
+      // renaming it would touch all four templates for no gain.
+      return `${d.quoteNumber}.pdf`;
     default: {
       // Exhaustiveness: a new RenderableKind without a case here is a COMPILE
       // error on this line, not a document that silently downloads as

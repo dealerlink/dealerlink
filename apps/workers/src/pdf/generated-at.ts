@@ -43,6 +43,7 @@ const SOURCE_TABLE: Record<RenderableKind, string> = {
   performa_invoice: 'performa_invoices',
   payment_receipt: 'payments',
   dispatch: 'dispatches',
+  invoice: 'invoices',
 };
 
 export async function resolveGeneratedAt(

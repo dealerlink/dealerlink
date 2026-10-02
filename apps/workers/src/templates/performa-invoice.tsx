@@ -38,7 +38,9 @@ function addressLines(parts: Array<string | null | undefined>): string[] {
   return parts.map((p) => (p ?? '').trim()).filter((p) => p.length > 0);
 }
 
-function dealerToParty(d: typeof dealers.$inferSelect): PdfParty {
+/** Exported for the invoice loader (F.6) — a second copy is how the four HTML
+ * templates drifted apart. */
+export function dealerToParty(d: typeof dealers.$inferSelect): PdfParty {
   return {
     name: d.displayName,
     legalName: d.legalName,
