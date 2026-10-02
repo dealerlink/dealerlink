@@ -7585,11 +7585,24 @@ reading.
 
 ### The movement prediction held, and it was written down first
 
-`docs/F6_MOVE_PREDICTION.md` was committed on `main` at `9537024` **before any
-file in the branch changed**, predicting an EMPTY move-set on three grounds:
-F.152's measurement (0 of 48 quotations, 0 of 31 PIs differing between stored and
-recomputed), every reference case having lines, and `round_off` landing on the
-invoice table only.
+`docs/F6_MOVE_PREDICTION.md` was committed in **`e2b443d`, this branch's FIRST
+commit, whose parent is `9537024`** — before any file in the branch changed. It
+predicted an EMPTY move-set on three grounds: F.152's measurement (0 of 48
+quotations, 0 of 31 PIs differing between stored and recomputed), every reference
+case having lines, and `round_off` landing on the invoice table only.
+
+> **Corrected before the PR opened.** This paragraph first read "committed on
+> `main` at `9537024`", which is **false**: the file is not on `main` at all, and
+> `git show main:docs/F6_MOVE_PREDICTION.md` answers "exists on disk, but not in
+> 'main'". A reader following it literally gets an error and could reasonably
+> conclude the prediction was never recorded — which would discard the one property
+> the document exists to have. `9537024` is the PARENT of the commit that added it,
+> not a commit containing it. The substantive claim survives and was independently
+> confirmed: `e2b443d` touches two documentation files and no code, and the first
+> code change is the next commit. Reported by `verifier`, re-derived with
+> `git log --diff-filter=A` and `git rev-parse e2b443d^`. §11.1 ruling 6: a wrong
+> reference is not self-correcting, because every downstream citation looks exactly
+> as authoritative as a right one.
 
 Measured, twice — after A.1 and again after A.7 changed more:
 
