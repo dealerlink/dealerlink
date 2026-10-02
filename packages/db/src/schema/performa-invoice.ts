@@ -99,7 +99,12 @@ export const performaInvoices = pgTable(
     discountType: performaInvoiceDiscountType(),
     discountValue: decimal({ precision: 12, scale: 2 }),
 
-    // Denormalized totals — recomputed authoritatively via @dealerlink/tax.
+    // Totals written by @dealerlink/tax at issuance and READ THEREAFTER — never
+    // recomputed at render time (F.152 / F6 D-1). This line previously read
+    // "Denormalized totals — recomputed authoritatively via @dealerlink/tax", which
+    // the PDF loader took as licence to recompute every one of them from the stored
+    // lines. It now reads them, and asserts they reconcile with what the lines
+    // group to. Corrected in the same commit as the loader (§11.1 ruling 6).
     subtotal: decimal({ precision: 14, scale: 2 }).notNull(),
     discountAmount: decimal({ precision: 12, scale: 2 }).notNull().default('0'),
     taxableAmount: decimal({ precision: 14, scale: 2 }).notNull(),

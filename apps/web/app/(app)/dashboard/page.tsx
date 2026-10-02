@@ -91,6 +91,7 @@ export default async function DashboardPage() {
               {paymentDash.overdueCount.toLocaleString('en-IN')}
             </div>
             <div className="text-mute mt-1 text-[12.5px]">
+              {/* F.161 — overstates the receivable once a credit note exists. */}
               {formatINRExact(paymentDash.overdueOutstanding)} outstanding past credit period
             </div>
           </section>

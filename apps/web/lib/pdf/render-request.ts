@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DrizzleTx, GeneratedDocumentType } from '@dealerlink/db';
+import type { RenderPdfDocumentType } from '@dealerlink/schemas';
 
 import { getLatestGeneratedDocument } from '@/lib/queries/generated-documents';
 import { enqueueRenderPdfJob } from '@/lib/queue/client';
@@ -25,8 +26,24 @@ import { enqueueRenderPdfJob } from '@/lib/queue/client';
  * tight managed-DB connection budget (DEV.61/62).
  */
 
+/**
+ * A render REQUEST can only name a type a render job may be enqueued for, which is
+ * narrower than what the database can store.
+ *
+ * This was `GeneratedDocumentType` and compiled only because the two sets happened
+ * to be identical. F.6 added `credit_note` and `debit_note` to the DB enum and the
+ * compiler caught it immediately — the assertion below keeps the relationship
+ * checked rather than coincidental (F.153, F6 D-6).
+ */
+type _RequestableIsStorable = [RenderPdfDocumentType] extends [GeneratedDocumentType]
+  ? true
+  : never;
+/** Fails to compile if a requestable type is not storable. */
+const _assertRequestableIsStorable: _RequestableIsStorable = true;
+void _assertRequestableIsStorable;
+
 export interface RenderPdfRequestInput {
-  documentType: GeneratedDocumentType;
+  documentType: RenderPdfDocumentType;
   documentId: string;
   tenantId: string;
   userId: string | null;

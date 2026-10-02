@@ -15,7 +15,15 @@
 
 #import "_lib/chrome.typ": *
 
-#let quotation-body(data, logo: none) = {
+// `round-off:` is F.6's. It is a PARAMETER rather than a read of `data.roundOff`
+// so that the quotation and the performa invoice, whose data has no such field,
+// are unaffected — Typst errors on a missing field, and a default of `none` means
+// the two existing entry points need no change at all.
+//
+// It arrives PRE-FORMATTED and already signed, like every other money value, or as
+// `none` when there is nothing to show. The template does no arithmetic and makes
+// no decision about whether the figure is worth printing.
+#let quotation-body(data, logo: none, round-off: none) = {
   doc-header(
     bill-from: data.billFrom,
     title: data.documentTitle,
@@ -109,6 +117,16 @@
       // more pair immediately after them and immediately before `grand:`; hoisting
       // the tax rows into a block of their own would put Round Off above them.
       ..data.taxRows.map(r => (r.label, r.amount)),
+      // F.6 — ROUND OFF, appended as the LAST pair: after the tax-rate rows and
+      // immediately before `grand:`, which is the sequence `chrome.typ`'s insertion
+      // note specifies (Subtotal, Discount, Taxable Amount, per-rate rows, Round
+      // Off, Grand Total).
+      //
+      // BARE, NOT `money(...)`. Every sibling row above passes a pre-formatted
+      // string and `totals-block` applies the mono wrapper itself, so the sample in
+      // `chrome.typ`'s own comment — `("Round Off", money(data.roundOff))` — would
+      // double-wrap it.
+      ..(if round-off != none { (("Round Off", round-off),) } else { () }),
     ),
     grand: data.totalAmount,
   )

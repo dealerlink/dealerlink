@@ -54,6 +54,10 @@ export async function recomputeOrderPaymentStatus(
   `);
   const allocatedRaw = (sumRows as unknown as { allocated: string | null }[])[0]?.allocated ?? '0';
   const allocated = new Decimal(allocatedRaw);
+  // F.161 — INCOMPLETE ONCE A CREDIT NOTE EXISTS. This derives paymentStatus from
+  // orders.total_amount against allocations only, so a fully-credited order can
+  // never reach 'paid'. Settlement is order-anchored and a credit note is invisible
+  // to it. Filed HIGH; not fixed here (F6 D-10 authorises this comment only).
   const total = new Decimal(order.total_amount);
 
   const fromStatus = order.payment_status;

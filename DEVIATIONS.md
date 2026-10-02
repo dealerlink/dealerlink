@@ -5931,14 +5931,14 @@ thing as hardening theirs.
 
 ---
 
-## DEV.138 — fourteen instances of one signature: the instrument, not the reasoning
+## DEV.138 — sixteen instances of one signature: the instrument, not the reasoning
 
 **Date:** 2026-09-18
-**Scope:** the framing. No code change is attributed to this entry; the fourteen
+**Scope:** the framing. No code change is attributed to this entry; the sixteen
 instances it names are recorded in DEV.124, C6c, DEV.136, in DEV.139 (F.55's
 own entry, which carries two of them), in DEV.142, in DEV.143, in DEV.144, in
 F.106's closeout — which produced no entry of its own for the ninth — for
-the tenth through the thirteenth, in DEV.151, and for the fourteenth in DEV.152.
+the tenth through the thirteenth, in DEV.151, for the fourteenth in DEV.152, for the fifteenth in F.6’s A.6 closeout, and for the sixteenth — a PAIR, recorded as one row — in F.6’s A.2/A.7.
 
 > **This line was stale at "five" for three instances, and that is worth one
 > sentence.** F.101's day prompt named the correction explicitly, as an authorised
@@ -5951,7 +5951,7 @@ the tenth through the thirteenth, in DEV.151, and for the fourteenth in DEV.152.
 the mechanism of any single instance. The mechanisms differ every time and are
 the least transferable part.
 
-**The fourteen.** Four are vacuous PASSES. The fifth is a false STOP, in the table
+**The sixteen.** Four are vacuous PASSES. The fifth is a false STOP, in the table
 because it has the same cause and the opposite polarity. The sixth is an invalid
 instrument that nonetheless reached the RIGHT conclusion, and it is the first of
 the family caught before it shipped.
@@ -5996,10 +5996,12 @@ does not help and a rule is needed.
 | **12** | **A COMPARISON WHOSE KEY WAS NOT UNIQUE.** A census diff keyed `table\|tenant\|docnum\|tsi\|pos\|class`, compared as Sets (F.5a, DEV.151) | That quotations share `quote_number` across revisions, so rows collapsed to one key and the diff could not see them. It reported **4 rows changed where the truth was 16 affected**, across three kinds of change. Caught ONLY because two of its own outputs disagreed — "0 changed" beside per-class counts moving 14/33 to 12/35. Nothing external would have caught it, and its answer was the reassuring one. **A comparison must assert the uniqueness of its own key, or it cannot detect its own degeneracy.** |
 | **13** | **A CONDITIONAL ASSERTION, WHICH CAN PASS WITHOUT RUNNING.** `selectOption({ index: 0 })` then `if (firstIsBillTo !== f.otherDealerId) { await expect(control).toHaveCount(0) }` in the same e2e spec as row 11 (F.5a, DEV.151) | That option 0 is merely the FIRST dealer in the list and need not be the Bill-To dealer, while the guard only checked it was not the OTHER dealer. Under every ordering where option 0 happened to be Bill-To — which held locally — the test reported success while asserting nothing; CI drew a third dealer and it failed. **The guard was the defect, not the selector.** Second vacuity in one file, and the operator's framing: a test that skips itself when setup does not cooperate is this project's most-filed failure shape. |
 | **14** | **A GATE THAT COULD NOT SEE AN UNTRACKED CITED FILE.** `pnpm check:paths` green locally over 78 paths while `docs/PLAN_REVISION_PARITY_LIST.md`, cited from 14 sites, was `??` in `git status` (PR #81, DEV.152) | That `scripts/check-path-references.mjs:157` resolves existence with `existsSync`, DELIBERATELY — its comment argues "Existence is a FILESYSTEM question, not a git-index one", correctly, for an unstaged MOVE. For a new UNTRACKED file the same predicate points the wrong way: disk says yes, the index says no, and CI clones only the index. **Both controls executed:** untracked-but-present → EXIT=0 "every cited docs/ path resolves"; same index, removed from disk → EXIT=1 with CI's exact message. CI was running the second control. Row 2 is C6c with the SCANNER untracked; this is the same blindness with the **cited target** untracked, and the only member of that family a green local gate concealed. |
+| **15** | **A PROBE WHOSE SENTINEL WAS ECHOED BACK AT IT — and the first member where a WRONG FIX was reachable.** A CHECK-constraint test wrapped its INSERT in `DO $$ … RAISE EXCEPTION '__probe_rollback__' … $$` and classified the outcome by `message.includes('__probe_rollback__')` (F.6 A.6) | That **drizzle echoes the QUERY TEXT into `error.message`** (`Failed query: <sql>`), and the query text contains the sentinel — so **every rejection matched and was classified as an acceptance**. `0.99` passed for the wrong reason while `1.00` silently inverted. The real Postgres error is in `error.cause.message`, which the probe never read. **What makes this one different from 1–14: the failing assertion was `expected true to be false`, which is EXACTLY what a genuinely missing CHECK produces** — so the message could not distinguish a broken instrument from a broken constraint, and the available wrong fix was to "correct" a constraint that was already right. Only the drop-the-CHECK control told them apart: dropping it went red, restoring it went green, and a bare INSERT of `1.00` was rejected with `invoices_round_off_chk`. **The rule: a probe that classifies by searching an error string must not use a sentinel that can appear in the error's own echo of the input.** |
+| **16** | **TWO CHECKS SATISFIED THE WRONG WAY, in one day, and this is the family's sharpest statement yet.** (a) The render job's loader dispatch was a ternary chain ending in a bare `else`; (b) `Exclude<RenderableDocumentType, RenderableKind \| NotImplementedDocumentType>` asserted every payload type was accounted for (F.6 A.2/A.7) | (a) That a TRAILING ELSE IS INDISTINGUISHABLE FROM A MISSING CASE to the compiler. Adding `'invoice'` to `RENDERABLE_KINDS` would have loaded an invoice with the **payment-receipt loader** — no error, a PDF with the wrong fields. The A.2 exhaustiveness work did not see it because there was no missing case to see. (b) That MEMBERSHIP IN EITHER LIST SATISFIES `Exclude`, so `'invoice'` sat in **both** `RENDERABLE_KINDS` and `NOT_IMPLEMENTED_DOCUMENT_TYPES` — a self-contradictory declaration — and typecheck stayed green. **THE SHARPER STATEMENT: these are not checks that COULD NOT fail. Both could fail, and did, for other things. They passed while describing something FALSE, because each was satisfiable by a route other than the one it was written to verify.** "A passing negative result is not evidence until something demonstrates it could have failed" is necessary and NOT sufficient: the demonstration must fail for the REASON the check exists. Fixed by `Record<RenderableKind, PdfLoader>` (exhaustive by construction) and a disjointness assertion; both controlled. |
 
 **The rule.** C6c states it for scanners: stage the tool before validating it.
 DEV.134 states it for measurements: a count that cannot move across the change
-it verifies confirms nothing. The general form covers all fourteen:
+it verifies confirms nothing. The general form covers all sixteen:
 
 > **A passing negative result is not evidence until something demonstrates it
 > could have failed.**
@@ -7567,3 +7569,146 @@ no root `tsconfig.json`, so `npx tsc --noEmit -p tsconfig.json` answers “The
 specified path does not exist”, which is easy to read as a non-answer rather than
 as a check that never ran. A `noUncheckedIndexedAccess` error in a new test in
 this branch reached CI for exactly that reason.
+
+---
+
+## DEV.154 — F.6/F.8/F.144: the loader contract landed, and six assertions caught six things
+
+**Date:** 2026-09-30 → 2026-10-02 · **Tasks:** F.6, F.8, F.144, closing F.152 and
+F.153 · **Impact:** the tax invoice, credit note and debit note exist. Six new
+tables, two enum values, one new money column, and the PDF loaders no longer
+recompute what they print.
+
+The build is in the commits. This entry records what the day found, because almost
+all of it was found by something written earlier the same day rather than by
+reading.
+
+### The movement prediction held, and it was written down first
+
+`docs/F6_MOVE_PREDICTION.md` was committed in **`e2b443d`, this branch's FIRST
+commit, whose parent is `9537024`** — before any file in the branch changed. It
+predicted an EMPTY move-set on three grounds: F.152's measurement (0 of 48
+quotations, 0 of 31 PIs differing between stored and recomputed), every reference
+case having lines, and `round_off` landing on the invoice table only.
+
+> **Corrected before the PR opened.** This paragraph first read "committed on
+> `main` at `9537024`", which is **false**: the file is not on `main` at all, and
+> `git show main:docs/F6_MOVE_PREDICTION.md` answers "exists on disk, but not in
+> 'main'". A reader following it literally gets an error and could reasonably
+> conclude the prediction was never recorded — which would discard the one property
+> the document exists to have. `9537024` is the PARENT of the commit that added it,
+> not a commit containing it. The substantive claim survives and was independently
+> confirmed: `e2b443d` touches two documentation files and no code, and the first
+> code change is the next commit. Reported by `verifier`, re-derived with
+> `git log --diff-filter=A` and `git rev-parse e2b443d^`. §11.1 ruling 6: a wrong
+> reference is not self-correcting, because every downstream citation looks exactly
+> as authoritative as a right one.
+
+Measured, twice — after A.1 and again after A.7 changed more:
+
+```
+ALL 196 FIGURES IDENTICAL across 14 documents
+```
+
+**Criterion 6's expected move did not occur, and was never going to.** The
+criterion originally read "Expect the PI reference renders to move"; that was
+amended before the day started, because F.152's own measurement predicted the
+opposite. The prediction remains CONDITIONAL on F.165's deferral: `round_off` on
+`performa_invoices` would add a totals row and move three PI cases for real.
+
+### The reconciliation assertion earned itself immediately
+
+It fired twice on real data during A.7 and refused to render a wrong document
+both times:
+
+1. **The seed** copied `discount_amount` but not the discount type and value, so
+   the grouping ran with no discount — stored tax 7,113.60 against lines grouping
+   to 8,013.60, a gap of exactly the IGST on the 5,000 discount.
+2. **The loader** used `line_total` as the per-line taxable value, which is the
+   PRE-discount figure copied from the order, so the lines summed to the subtotal
+   — 44,520.00 against a stored 39,520.00.
+
+Both would have produced a tax invoice stating figures its own lines did not
+support. Neither was found by reading.
+
+### A test value chosen where right and wrong agree is not a test
+
+My render assertion expected `207,813.00`. `Intl.NumberFormat('en-IN')` renders
+that as **`2,07,813.00`** — lakh grouping. The expectation was wrong, not the
+render.
+
+**The mechanism is the part worth keeping.** The positive case asserted
+`46,634.00`, which passed — and **could not have failed**, because under a lakh
+en-IN grouping and plain thousands grouping produce the same string. So the test
+that ran first was structurally incapable of catching the error, and only the
+negative case, whose value crosses a lakh, could.
+
+> **A test value chosen where the right and wrong implementations agree is not a
+> test. It reports the same result either way.**
+
+That is a sibling of DEV.138's family rather than a member: nothing about the
+instrument was broken. The VALUE was uninformative, which is a property of the
+fixture, not of the command. It generalises past number formatting — a date inside
+a month where two formats coincide, a state code that is the same in both
+conventions, a quantity of 1 where `n` and `n-1` agree.
+
+### Filed, not fixed
+
+- **F.161** (HIGH) — settlement is order-anchored, so a credit note is invisible
+  to it: a fully-credited order can never reach `paid` and four read paths
+  overstate the receivable. **Five one-line comments were AUTHORISED** (F6 D-10)
+  and added at the exact sites; no behaviour changed.
+- **F.167** — five hand-maintained maps keyed on a type that is not the type they
+  must stay in step with. Four are now compiler-checked; `resolve-document.ts` is
+  not, and it is the one that produced broken SQL at runtime.
+- **F.168** — no enumeration over audit triggers. F.6 added six more per-table
+  assertions, so the pattern has now been repeated twice rather than fixed.
+- **F.165** — `round_off` on `performa_invoices`, expected work, deferred because
+  it moves three reference cases and deserves its own capture day.
+- **F.159** (the `NEGATIVE_QUANTITY` misnomer), **F.163** (the JSONB key-loss
+  path), **F.164** (configurable note prefixes), **F.166** (`pnpm --filter`
+  exiting 0 on no match), **F.160** (`ship_to_address_id` on all four documents).
+- **Not filed, reported:** `addressLines` exists in three identical copies
+  (`quotation.tsx:49`, `dispatch-note.tsx:44`, `performa-invoice.tsx`). The
+  invoice imports one rather than adding a fourth.
+
+### What this day did NOT do
+
+No e-invoice, no IRN, no e-way bill. No settlement. **No behavioural change to
+`packages/tax` of any kind** — `git diff --stat main -- packages/tax` prints
+nothing, which is what D-8 was settled for. No new case in
+`typst-matrix.json`, no touching `docs/pdf-references/`. **No serials on invoice
+lines** — that is F.7, it has its own row, and it is not done. **And no e2e drives
+the three write paths** — filed as **F.169** and sequenced immediately after this
+merge, not into the backlog, because every previous day has had a `verify-day-*`
+spec driving its feature end to end and this is the largest change yet without
+one.
+
+### The `verifier` corrected the MAIN THREAD's brief, not the code — twice
+
+This is worth recording in its own right, because it is the direction that is easy
+to forget when writing an agent's remit.
+
+The brief I gave `verifier` stated two things about this branch's contents, and
+**both were wrong**:
+
+- I said `docs/stage-f-tasks.json` "gained F.159 through F.168". It gained
+  **F.166, F.167 and F.168**; F.159–F.165 were already on `main` from the merged
+  `9ecec39`.
+- I said `DEVIATIONS.md` "gained DEV.153 and DEV.154". It gained **DEV.154 only**;
+  DEV.153 was already merged.
+
+It checked both rather than accepting them, diffed the task arrays structurally,
+and reported the corrections. **Had it taken the scope notes as given it would have
+reported against a false premise** — a clean verdict about a branch that did not
+exist. It also found the false provenance claim in this very entry, which was
+likewise a main-thread error rather than a code defect.
+
+**That is the second time its independence has paid against the BRIEF rather than
+against the WORK.** The first was DEV.129, where the criterion written to enforce
+this discipline was itself unsatisfiable and had been "checked for intent and not
+executed". The remit says the verifier "is told nothing about what the day intended
+and must not be", and the reason that phrasing matters is visible here: an agent
+that trusts the framing it is handed can only check what the framing admits. Its
+value is not merely that it re-runs commands the main thread also ran — it is that
+it does not inherit the main thread's beliefs about what it did.

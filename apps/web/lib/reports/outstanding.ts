@@ -99,6 +99,8 @@ async function loadAging(tenantId: string): Promise<OrderAging[]> {
     const now = Date.now();
     const aging: OrderAging[] = [];
     for (const r of rows) {
+      // F.161 — OVERSTATES the receivable once a credit note exists: this subtracts
+      // allocations but nothing reduces the figure by a credit note's value.
       const outstanding = Math.max(0, Number(r.totalAmount) - (allocMap.get(r.id) ?? 0));
       if (outstanding <= 0) continue;
       const creditPeriod = r.creditPeriodDays ?? tenantDefault;

@@ -173,6 +173,29 @@ and their Tally voucher `MA/26-27/1079` carries `ROUND OFFS 0.46`, which closes
 round-off reconciles a whole-rupee document total against line-level tax
 arithmetic. It is a correctness requirement, not a display convention.
 
+**A ZERO ROUND-OFF IS NOT PRINTED — settled 2026-10-02, and recorded as a
+DECISION so it does not read as a bug later.**
+
+The row appears only when the stored term is non-zero. Two reasons, and neither is
+an oversight:
+
+- **The client's own voucher shows the line only when it carries a figure.** Their
+  Tally output is the reference for what this document looks like, and it does not
+  carry a `ROUND OFFS 0.00` line on documents that happen to come out exact.
+- **"Round Off ₹0.00" on every exact document is noise**, on the one block of a tax
+  invoice a reader actually checks.
+
+This does **not** weaken F6 D-4. Round-off is still always APPLIED — every invoice
+computes the term and stores it, including as `0.00`. What is conditional is
+whether a zero is _rendered_, which is a presentation question and a different one.
+The stored column is unconditional, so the reconciliation assertion and any report
+over `round_off` see every document.
+
+Implementation: the loader passes `null` rather than `'0.00'`, so the template tests
+`!= none` — the same shape `discountLabel` already uses — rather than comparing a
+formatted string. **Both branches must be tested**, because a conditional row is
+exactly the kind of thing that passes without running.
+
 **The insertion point is already specified in live code.** `chrome.typ:337-356`
 carries an explicit ROUND-OFF INSERTION POINT, and `totals-block(words:, rows:,
 grand:)` is caller-driven — so **no edit to `chrome.typ` is required**. The row
