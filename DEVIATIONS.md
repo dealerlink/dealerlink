@@ -8078,3 +8078,96 @@ fails silently on a NUL byte (DEV.117/118), a `pnpm --filter` that exits 0 havin
 run nothing (F.166), and an edit that does not apply. **Every one of them turns a
 negative result into a false positive, and every one of them is invisible in the
 output a human actually reads.** The list belongs in one place, which is here.
+
+---
+
+## DEV.158 — a gate set that looked complete and omitted the only one that mattered
+
+**Date:** 2026-10-03 · **Task:** F.148 (the `agent_tokens` DDL) · **Impact:** one
+red CI run, caught by CI. Nothing shipped.
+
+### What happened
+
+The DDL commit was reported as verified against this list, which is the list I
+actually ran:
+
+> `pnpm test` six suites green and all floors met · typecheck 0 · lint 0 ·
+> plan:check, check:ids, check:paths clean.
+
+**`pnpm build` is not in it.** CI's `checks` job failed at `build`:
+
+```
+Failed to compile.
+node:crypto
+Module build failed: UnhandledSchemeError: Reading from "node:crypto"
+is not handled by plugins (Unhandled scheme).
+
+Import trace for requested module:
+node:crypto
+../../packages/db/src/agent-token.ts
+../../packages/db/src/index.ts
+./lib/tenant/resolve.ts
+```
+
+`packages/db/src/agent-token.ts` imports `node:crypto` for `hashAgentToken`. One
+line added it to the package barrel; `apps/web/lib/tenant/resolve.ts` imports
+that barrel; and **that file is inlined into the Next.js Edge middleware
+bundle**, where webpack cannot resolve a `node:` scheme.
+
+### Why every gate I ran was green, and that is the point
+
+- `pnpm typecheck` — `node:crypto` is a perfectly good import to TypeScript.
+- `pnpm lint` — no rule forbids it.
+- `pnpm test` — vitest runs under Node, where `node:crypto` resolves.
+- `plan:check`, `check:ids`, `check:paths`, `check:floors` — unrelated.
+
+**`pnpm build` is the only gate in this repository that exercises webpack's Edge
+bundling.** Nothing else compiles for a runtime where Node built-ins are absent.
+So the one gate omitted was the only one capable of seeing the change.
+
+### The family, and it now has three members
+
+This is the same shape as two already recorded:
+
+|             | the gate                     | what it looked like | what it was                                                    |
+| ----------- | ---------------------------- | ------------------- | -------------------------------------------------------------- |
+| F.166       | `pnpm --filter <name> <cmd>` | a suite passing     | **exit 0 having run nothing**                                  |
+| DEV.153     | `pnpm lint`                  | a typecheck         | **lint is not typecheck**; the entry point is `pnpm typecheck` |
+| **DEV.158** | six green gates              | complete coverage   | **the one gate for the runtime the change reached was absent** |
+
+**The common property: the gate set is assembled from habit, and habit is
+assembled from the last change, not this one.** Every member reports success
+truthfully about something other than what was asked.
+
+### The rule, and it is about selection rather than diligence
+
+> **Run `pnpm build` before claiming green on anything that touches a shared
+> package.**
+
+Not "run everything" — that is advice nobody follows on a doc-only change. The
+trigger is specific and checkable: **a change inside `packages/*` can reach a
+runtime the change's own author never compiled for.** `packages/db`'s barrel is
+imported by an Edge-bundled file (F.190, F.191), so a one-line edit there is a
+change to the Edge bundle whether or not it looks like one.
+
+The narrower, more honest form of the lesson: **when listing what was verified,
+ask what runtime the change reaches, and whether any gate on the list compiles
+for it.** Six green checks are not coverage; they are six specific claims, and
+the question is whether any of them is about the thing that changed.
+
+### The fix, and the control
+
+Narrow, per operator ruling: `./agent-token` is no longer exported from the
+barrel, with the reason written at the barrel. Imported by path instead.
+
+**Measured both directions.** Removing the export: `pnpm build` exits 0 and the
+Edge bundle builds (`ƒ Middleware 151 kB`). Re-adding **a single symbol** —
+`export { hashAgentToken } from './agent-token'` — reproduces the identical
+failure with the same import trace. So the hazard is the module being
+**reachable at all**, not which symbol is named, and "remove only
+`hashAgentToken`" would not have been a fix. The edit was grepped for and
+confirmed present before each build, per DEV.157's follow-on.
+
+Filed, not fixed: F.190 (`resolve.ts` importing the barrel is the real coupling)
+and F.191 (nothing declares the barrel Edge-bundled, and only `next build`
+catches a violation — with three candidate detectors priced and none built).
