@@ -99,3 +99,4 @@ export {
   type MarkDeliveredDbResult,
   type ReturnDispatchDbResult,
 } from './dispatch/lifecycle';
+export { hashAgentToken, resolveAgentToken, touchAgentToken } from './agent-token';

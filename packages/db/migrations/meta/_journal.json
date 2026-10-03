@@ -155,6 +155,13 @@
       "when": 1790825180919,
       "tag": "0021_dark_whizzer",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791017439527,
+      "tag": "0022_eminent_legion",
+      "breakpoints": true
     }
   ]
 }

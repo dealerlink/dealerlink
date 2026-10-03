@@ -347,3 +347,17 @@ DROP TRIGGER IF EXISTS audit_trg ON debit_note_lines;
 CREATE TRIGGER audit_trg
   AFTER INSERT OR UPDATE OR DELETE ON debit_note_lines
   FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
+
+-- F.148: agent_tokens. EXPLICIT, because `tests/rls.test.ts` derives its
+-- population from `pg_class` and picks up a new tenant_id table automatically
+-- while NOTHING enumerates audit triggers (F.168) — a forgotten stanza here
+-- looks identical to a present one.
+--
+-- The `secret_token` column is caught by audit_redact()'s `%_token` pattern
+-- above, which is the only reason it is not named `agent_token_hash`. See the
+-- comment on that column in src/schema/agent-token.ts before extending this
+-- function.
+DROP TRIGGER IF EXISTS audit_trg ON agent_tokens;
+CREATE TRIGGER audit_trg
+  AFTER INSERT OR UPDATE OR DELETE ON agent_tokens
+  FOR EACH ROW EXECUTE FUNCTION audit_log_writer();
