@@ -101,8 +101,20 @@ export function middleware(req: NextRequest) {
 }
 
 // Bypass static assets, /_next, favicon, and public API routes
-// (/api/health, /api/webhooks/* — the latter is signature-verified, not
-// session-gated, so tenant-scope middleware must not touch it).
+// (/api/health, /api/webhooks/*, /api/agent/* — none is session-gated, so
+// tenant-scope middleware must not touch them).
+//
+// `api/agent` added by F.148 A.1, following the webhook’s stated reasoning
+// exactly. The agent authenticates with a BEARER TOKEN that names its tenant,
+// and `lib/tenant/resolve.ts` would otherwise derive a scope from the HOST:
+// `<slug>.dealerlink.in` resolves to `{ kind: 'tenant', slug }` (resolve.ts:74-78).
+// **A host-derived tenant signal competing with the token is the ambiguity the
+// token exists to remove**, so the agent calls the non-tenant app host and this
+// matcher does not look at the request at all. (`app` is in RESERVED_SUBDOMAINS,
+// resolve.ts:20, so even that host resolves to `operator` rather than to a
+// tenant — belt and braces, deliberately.)
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|api/health|api/webhooks|.*\\..*).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon\\.ico|api/health|api/webhooks|api/agent|.*\\..*).*)',
+  ],
 };

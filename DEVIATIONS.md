@@ -8171,3 +8171,140 @@ confirmed present before each build, per DEV.157's follow-on.
 Filed, not fixed: F.190 (`resolve.ts` importing the barrel is the real coupling)
 and F.191 (nothing declares the barrel Edge-bundled, and only `next build`
 catches a violation — with three candidate detectors priced and none built).
+
+---
+
+## DEV.159 — six controls on one route, and five of them found a defect in the test rather than the code
+
+**Date:** 2026-10-03 · **Task:** F.148 A.1 (the agent check-in endpoint) ·
+**Impact:** none shipped. One design change forced by a measurement, four test
+defects found by controls, one behaviour shipped with no assertion until a
+control said so.
+
+The route itself was close to right. **The tests were not, and nothing but the
+controls would have said so.** Recorded as one entry because it is one theme.
+
+### 1. A GREEN control that is correct, and why the pair beats either half
+
+The four rejections — absent, malformed, unknown, revoked — are asserted
+**IDENTICAL**: status, every header sorted, and the exact body bytes. Two
+controls were run against it.
+
+| control             | injected                                    | result                                  |
+| ------------------- | ------------------------------------------- | --------------------------------------- |
+| per-case divergence | revoked returns `{"error":"token_revoked"}` | **RED** — "unknown differs from absent" |
+| uniform divergence  | an extra header on **all four**             | **GREEN**                               |
+
+**The green one is the correct result, and it is the more informative of the
+two.** A uniform difference cannot distinguish the four cases, so it cannot
+confirm a token value — the property that leaks is _per-case variation_, and
+that is exactly what the assertion is sensitive to.
+
+**The red control alone would have left the test looking stricter than it is.**
+It would have been easy to read "identical responses" as "the response is
+frozen", and to file a bug the next time someone added a `Cache-Control` header
+to all four. The pair establishes the actual shape: **sensitive to the property
+that leaks, insensitive to the one that does not.** A control that should stay
+green staying green is evidence, not a wasted run.
+
+### 2. The static scan passed for the wrong reason, and only the non-vacuity assertion exposed it
+
+A stray `SELECT` changes no row count, so the read half of the request-level
+bound is a static enumeration: the agent's own files must name no table outside
+its allowed set. The candidate list was written in **snake_case**. Drizzle
+exports schema objects in **camelCase** — `tenantSettings`, `creditNotes`,
+`performaInvoices` — so for every table whose two spellings differ, the regex
+could not match and the assertion could not fail.
+
+It passed. It would have passed with a read of `tenant_settings`,
+`credit_notes` or `performa_invoices` sitting in the file.
+
+**What caught it was the non-vacuity assertion** at the bottom of the same test —
+"the allowed tables are genuinely present" — which failed with
+`expected tenant_settings (either spelling) in the agent path`. Without that
+line the test was decoration.
+
+> **A list that matches nothing and a list that matches everything are
+> indistinguishable from a passing test.** The only thing that tells them apart
+> is an assertion that the list matches something it should.
+
+Fixed by generating both spellings from one list. The same non-vacuity line now
+checks either spelling, so it cannot be satisfied by the wrong one.
+
+### 3. The measurement found the exemption was two statements wide, not one
+
+The spec and the module's own docblock both said the agent's unscoped lookup is
+**one statement wide**. The operator asked for that as a measurement rather than
+an intention: `rg -n adminDb` over the agent's paths must return exactly one
+site.
+
+**It returned two** — `resolveAgentToken` and `touchAgentToken`. The heartbeat
+did not need the privilege: by the time it runs the tenant is known, so it now
+goes through `withTenant` on the RLS-enforced connection, and RLS
+_additionally_ constrains the UPDATE to that tenant's rows. One site now, at
+`agent-token.ts:64`.
+
+**The docblock claiming "one statement wide" was written by the author of the
+second statement.** Asking for the number is what found it; reading the sentence
+would not have.
+
+### 4. A fixture with one row per tenant made the row bound vacuous
+
+"The heartbeat changes no OTHER row" was asserted against a fixture holding one
+token per tenant. Deleting the `WHERE id` predicate entirely — `WHERE true` —
+left the statement updating the one row it was supposed to, **and the control
+passed**.
+
+RLS protects the cross-tenant case. Only a sibling row in the same tenant
+protects this one. A second token was added to the fixture, after which the
+control fails as it should:
+`expected ['last_seen_at','agent_version'] to deeply equal []`.
+
+DEV.154's rule, one layer out: **a fixture where the right and wrong
+implementations agree is not a fixture** — and "one row" is that fixture for any
+assertion about which row was touched.
+
+### 5. The static scan read prose, and failed for a true sentence
+
+After the throttle landed, `agent-token.ts`'s docblock explained that every
+heartbeat fires `audit_trg` and writes an `audit_log` row. **The scan read
+comments, so it tripped on its own explanation** — a false positive for a true
+sentence, and a generator of them: it would fire on every future comment
+mentioning a table.
+
+Found while diagnosing a control that appeared to fail. **The control was
+invalid**: the failure predated it. Comments are stripped before scanning now.
+
+**An assertion that fails for correct prose gets deleted by whoever is in a
+hurry**, which makes a false-positive generator more dangerous than a silent
+gap — it removes the gate as well as the signal.
+
+### 6. A behaviour shipped with no assertion, and a control is what said so
+
+The audit throttle (15 minutes, operator ruling: accept the audit, cap the
+write) was implemented, commented and reasoned about. Then the control — remove
+the throttle — **passed everything, 8/8.**
+
+Nothing asserted it. The write-bound test snapshots **one** request, and one
+request writes one audit row with or without a throttle; the throttle's whole
+effect is across two requests inside the window. A two-request assertion was
+added, after which the control fails with
+`the second, inside the window, should write nothing: expected 1 to be +0`.
+
+**The gap was invisible from the code, which was correct, and from the test
+list, which was green.** Only breaking the thing on purpose showed that nothing
+was watching.
+
+### What this says about the ratio
+
+DEV.155 concluded that on the evidence of that session, controls were "doing
+most of the actual detection". This session is sharper than that: **six controls
+on one route, five defects — and all five were in the tests, not the code.** The
+route needed one change (item 3) and it came from a measurement the operator
+asked for rather than from a control.
+
+The practice that produced all five, stated once: **run the control, confirm the
+edit is present before running it (DEV.157's follow-on), and when a control
+passes, ask whether it could have failed.** Items 1 and 6 are the same
+observation from opposite ends — a green control is only good news once you know
+which one it is.
