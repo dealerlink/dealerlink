@@ -7890,3 +7890,131 @@ concluding the controls "are doing most of the actual detection."
 
 They are — where they exist. This is the measurement of what happens where one
 does not.
+
+---
+
+## DEV.157 — the control was invalidated by the fix, running concurrently
+
+**Date:** 2026-10-03 · **Task:** F.180 (merge-status reads an unfetched ref) ·
+**Impact:** none shipped. One control run reported "no bug" for forty seconds.
+
+### What happened
+
+F.180's acceptance criterion was a demonstration: hold the ref deliberately
+behind, and show the script reports against the stale ref. So:
+
+```
+git update-ref refs/remotes/origin/main c1748fe   # one merge behind
+node <pre-fix copy of the script>
+```
+
+Expected: `LATEST MERGE ON main c1748fe`, reported against a tip that is not the
+tip. **Got:**
+
+```
+LATEST MERGE ON main  ef3abe0
+  Merge pull request #91 from dealerlink/f178-tally-ahead-of-gsp
+  staging     ACTIVE  ef3abe0  ✓ settled  ✓ carries the merge
+```
+
+The ref had healed between the `update-ref` and the run. Read at face value, the
+pre-fix script had just reported **correctly against a ref held behind**, which is
+the one result that would have said the defect did not exist.
+
+### The cause, and why it is a new shape
+
+A background shell started earlier in the session was polling
+`pnpm merge-status` every 45 seconds, waiting for #91's deploys to settle. **That
+loop was running the FIXED script** — which fetches. So the fix was repairing the
+exact condition the control existed to create, from another process, on a
+schedule nobody was watching.
+
+Every previous member of the DEV.138 family is a control that could not fail for
+a reason visible in the control itself: a vacuous assertion, a fixture where right
+and wrong agree, a sentinel echoed back, a check satisfied by the wrong route.
+**This one was written correctly and was falsified from outside its own frame.**
+Reading the control, the command, the script and the ref would not have found it.
+What found it was the output being wrong in a way the setup could not explain —
+`c1748fe` was set two seconds earlier and the script printed `ef3abe0`.
+
+The generalisable form, stated as a rule because it reaches well past this
+instance:
+
+> **A control must account for everything that can touch its preconditions during
+> the window it is measuring — not only for its own logic.**
+>
+> A background process, a scheduled task, a file watcher, a dev server or another
+> session appears **nowhere in the control's code** and can falsify it from
+> outside its frame. Reading the control will not find it.
+
+**Why that is a different rule from the ones already written down.** Every earlier
+member of this family fails for a reason **visible inside the control**: a
+`toContain` against a whole document (DEV.155), a fixture where the right and
+wrong implementations agree (DEV.154), a sentinel echoed back in an error message
+(DEV.153), a check satisfiable by the wrong route (DEV.138 row 16), a passing
+negative nothing could have made fail (DEV.156). For all of those, careful
+reading is at least _capable_ of catching the problem — the rule "run the control"
+exists because reading reliably does not, not because it cannot.
+
+**This one is not readable at all.** The control was correct. The command was
+correct. The script was correct. The ref was set two seconds before the run. The
+only signal was an output that the setup could not explain, and the cause was in
+a process that no artefact of the control mentions.
+
+So the practice has a second step, mechanical like the first:
+
+- **Before trusting a control, enumerate what else is running.** Background
+  shells, watch-mode test runners, `next dev`, a polling loop, a cron, a teammate
+  or another session on the same working tree. Stop them, or scope the control to
+  state they cannot reach.
+- **Prefer a precondition the control OWNS** — a temporary directory, a
+  rolled-back transaction, a fixture created and torn down in the test — over a
+  shared one it merely sets. Shared state is where another process meets you; the
+  counter in DEV.154's sibling rule is the same hazard one layer down.
+- **Treat an output the setup cannot explain as a failed control**, not as a
+  result. Here the ref was `c1748fe` and the script printed `ef3abe0`; the correct
+  response is to find out why, not to record the run.
+
+Stopped the background task, re-ran, and the defect reproduced exactly as
+predicted: pre-fix reported `c1748fe` against deploys on `ef3abe0` with two false
+mismatch warnings and exit 1, and **the ref was still `c1748fe` afterwards —
+proving it never fetched.** The fixed script, same held-back ref, printed
+`REF origin/main ef3abe0 — fetched just now, MOVED from c1748fe` and reported both
+deploys as carrying the merge.
+
+### A second thing, recorded because it would have been invented otherwise
+
+The fetch-failure branch — the one that prints `UNVERIFIED` and exits 1 — could
+not at first be exercised, and **`git fetch` in this environment cannot be made to
+fail by pointing the remote somewhere invalid.** Measured, not assumed:
+
+| override                                             | `git fetch origin main` |
+| ---------------------------------------------------- | ----------------------- |
+| `remote.origin.url=https://example.invalid/nope.git` | **exit 0**              |
+| `remote.origin.url=/nonexistent/repo.git`            | **exit 0**              |
+| `core.gitproxy=/bin/false`                           | **exit 0**              |
+| `fetch.parallel=notanumber`                          | **exit 128** ✓          |
+
+`git config --get remote.origin.url` confirms the override is in effect, so the
+URL is being read and ignored — `git` here is evidently mediated rather than
+talking to the URL it is given. **This matters beyond today: any future test that
+expects a network failure by pointing git at a bad host will silently pass
+instead.** The route that works is an invalid `fetch.*` config value, which fails
+the fetch at argument-parsing time while leaving `rev-parse` and `log` working —
+so only the branch under test is affected.
+
+Without that route the honest report would have been "the UNVERIFIED path is
+untested", and it was going to be. It is now executed: the banner printed, the
+closing line read `UNVERIFIED — origin/main could not be fetched, so the
+correspondence above is not evidence`, the exit was 1, **and the ref was still
+held at `c1748fe` afterwards — the failure path does not silently heal the thing
+it is warning about.**
+
+### What F.180's own row got wrong
+
+The row said the script "reads the LOCAL `main` ref". **It reads
+`refs/remotes/origin/main`** — still local data, still stale without a fetch, so
+the phenomenon and the fix are unchanged, but the mechanism sentence named the
+wrong ref. Corrected on the row rather than left, because a wrong detail in a
+closed row is re-baselined as checked (DEV.128), and the next reader would look
+for a bug in the wrong place.

@@ -99,15 +99,30 @@ must never be exposed to the public internet. The correct shape is an
 `localhost:9000`. That also survives a move back on-premise, which is worth
 building for.
 
-**Sequencing within item 5:** the hard part — ledger mapping, rate-wise voucher
-construction, product-name matching — is identical for export and for sync.
-F.11 builds that; the agent is transport on top. So F.11 first, not as a
-substitute but because sync needs something correct to transport.
+**Sequencing within item 5 — CORRECTED 2026-10-03, AND IT IS NOW INVERTED FOR
+HALF OF IT.** This read: "the hard part — ledger mapping, rate-wise voucher
+construction, product-name matching — is identical for export and for sync. F.11
+builds that; the agent is transport on top. So F.11 first, not as a substitute but
+because sync needs something correct to transport." **The first three sentences
+still hold. "F.11 first" does not.** The agent's **READ** path — transport,
+credentials, and fetching ledgers and stock items out of Tally — needs none of the
+mapping, and F.11 now needs it, because the masters come through the integration
+rather than through an exported file. Order: **F.148 (agent transport +
+masters-read) → F.11 (fetch-then-select) → F.12 → F.13 → F.178 (agent write
+path)**, days 54–77. Reasoning on F.148.
 
-**And the constraint that outranks both:** the export or sync only helps once
-**Dealerlink issues the invoices**. While Swipe is the invoice of record there is
-nothing to export, and running both sync paths would double-post every sale. The
-volume measurement above is what makes that switch viable at Phase 1.
+**And the constraint that outranked both — DROPPED 2026-10-03. IT DOES NOT
+ARISE.** This read: "the export or sync only helps once **Dealerlink issues the
+invoices**. While Swipe is the invoice of record there is nothing to export, and
+running both sync paths would double-post every sale." **The second half assumed a
+parallel run. The plan is a migration with a cutover** (operator ruling,
+2026-10-03), so Swipe and Dealerlink are never systems of record at the same time
+and the same sale cannot be posted twice. **The first half survives in a different
+form:** the sync is useful from the **cutover date**, and the cutover needs their
+historical data in Dealerlink first — filed as F.179, extraction route unknown.
+The volume measurement above is what makes the cutover viable before e-invoicing
+is automated, because manual IRN generation at that rate is about ten minutes a
+day (F.154).
 
 ---
 

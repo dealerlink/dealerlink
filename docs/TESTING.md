@@ -48,6 +48,17 @@ So the practice is mechanical rather than attentive:
   the test is not evidence.
 - **Record the red run**, not the possibility of one. "This would fail if…" is a
   hypothesis; a pasted failure message is a measurement.
+- **And check what else is running.** A control can be falsified from **outside its
+  own frame**: a background shell, a watch-mode runner, `next dev`, a polling
+  loop, a cron, or another session on the same working tree appears nowhere in the
+  control's code and can rewrite the precondition mid-run. DEV.157 is the worked
+  example — a poller running the FIXED script healed the state a control had
+  deliberately broken, and the run reported that the defect did not exist. **Every
+  other rule here fails for a reason visible in the test; this one does not.**
+  Prefer a precondition the control OWNS (a temp directory, a rolled-back
+  transaction, a fixture it creates and tears down) over a shared one it merely
+  sets, and **treat an output the setup cannot explain as a failed control rather
+  than as a result.**
 
 A passing negative result is not evidence until something demonstrates it could
 have failed — **and the demonstration must fail for the REASON the check exists**
@@ -103,3 +114,38 @@ calculation give the same total.
 
 **Before trusting a green assertion, ask what value the WRONG implementation would
 produce — and if it is the same value, the fixture is the thing to change.**
+
+---
+
+## An instrument that cannot fail the way you expect
+
+**`git fetch` in this environment exits 0 when pointed at a remote that does not
+exist.** So a test that expects a network failure by breaking the remote URL will
+**silently pass having proved nothing** — the same shape as the two rules above,
+one layer down: the instrument, rather than the value, is what cannot fail.
+
+Measured 2026-10-03 while writing F.180's fetch-failure control:
+
+| override                                             | `git fetch origin main` |
+| ---------------------------------------------------- | ----------------------- |
+| `remote.origin.url=https://example.invalid/nope.git` | **exit 0**              |
+| `remote.origin.url=/nonexistent/repo.git`            | **exit 0**              |
+| `core.gitproxy=/bin/false`                           | **exit 0**              |
+| `fetch.parallel=notanumber`                          | **exit 128** ✓          |
+
+`git config --get remote.origin.url` returns the bogus value, so **the override is
+live and the URL is being read and ignored** — git here is mediated rather than
+dialling the address it is handed. The three zero-exit rows are not "my override
+did not apply"; they are "the fetch reported success without the remote".
+
+**The route that works is an invalid `fetch.*` config value.** It fails the fetch
+at argument-parsing time, before any network, and leaves `git rev-parse` and
+`git log` working — so only the branch under test is affected and the rest of the
+script still runs. `fetch.recurseSubmodules`, `fetch.parallel` and
+`fetch.negotiationAlgorithm` were all measured at exit 128.
+
+**The general point, which outlives this particular shim:** when a test needs an
+operation to FAIL, verify that the chosen method actually makes it fail before
+building an assertion on top — and name the method in the test, so the next reader
+knows what was broken on purpose. An unverified failure-injection is a green test
+with nothing behind it.
