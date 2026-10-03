@@ -100,13 +100,15 @@ the card says so in those words.
   `docs/CLIENT_CONTEXT.md` §1, stated in those words.
 - **There is no second or third prospect on record.** Named absence, not an
   omission from this file.
-- **Go-live scope is disputed between two records.** `docs/CLIENT_CONTEXT.md` §4
-  states "**Go-live scope = SP0 + SP1 + SP2 + e-invoice + e-way bill.** SP2 alone
-  is not a legal go-live point for them." F.24 states e-invoicing is "**NOT ON
-  PHASE 1'S CRITICAL PATH**" because manual IRN generation at 6–7 invoices a day
-  is about ten minutes daily. **Both cannot be the definition of go-live.** See
-  §10, Q1 — this is the sharpest open commercial question in the file and it
-  changes what the pilot can convert into.
+- **Go-live is settled, and e-invoicing is not the gate.** **Operator ruling,
+  2026-10-03.** `docs/CLIENT_CONTEXT.md` §4 previously made e-invoice and e-way
+  bill part of the go-live scope ("SP2 alone is not a legal go-live point for
+  them"). **That was wrong, and it was wrong because it predated the invoice-volume
+  measurement.** At 6–7 invoices a working day, manual IRN generation on the
+  portal is about ten minutes daily — compliant, and what most distributors did
+  before automating. **So e-invoicing is an AUTOMATION milestone, not a go-live
+  blocker.** §4 now carries the correction, dated, with the original claim quoted.
+  Consequence for card G1: **urgency changed, necessity did not.**
 
 ---
 
@@ -196,6 +198,10 @@ turnover is a 5-month figure extended.
 
 > **TO FILL — OPERATOR.** Whether the 2026-09-30 start actually happened. The row
 > carries a start date, not a confirmation; nothing in the repository observes it.
+
+**URGENCY CHANGED; NECESSITY DID NOT** (operator ruling, 2026-10-03). The
+contract keeps this start date and this lead time, because it still gates
+F.23–F.25. It no longer determines when the client can go live — §10, Q1.
 
 ### Card G2 — GSTIN live-status verification (F.150)
 
@@ -363,32 +369,47 @@ the next such decision has somewhere to look.
 
 ## 10. Open questions surfaced while assembling this
 
-**Reported, not resolved** — four of them, and none is a decision this file can
-take.
+**Four were surfaced. Two are now settled — Q1 by an operator ruling the same day
+and Q4 by fixing it — and two remain open.** They are kept numbered, with the
+resolutions in place, because a question that disappears on being answered leaves
+the next reader unable to tell a settled matter from one nobody raised.
 
-**Q1 — What is go-live, exactly?** `docs/CLIENT_CONTEXT.md` §4: "Go-live scope =
-SP0 + SP1 + SP2 + e-invoice + e-way bill. SP2 alone is not a legal go-live point
-for them." F.24: e-invoicing is "NOT ON PHASE 1'S CRITICAL PATH" because manual
-IRNs cost ten minutes a day. Both are defensible — manual IRN generation is
-compliant, so the §4 claim may be about **automation** rather than about
-**compliance** — but as written they define go-live differently, and §3 of this
-file cannot be filled until one of them is the answer. **The GSP start date
-(card G1) only matters under the §4 reading.**
+**Q1 — What is go-live, exactly? SETTLED 2026-10-03 by operator ruling.**
+`docs/CLIENT_CONTEXT.md` §4 stated "Go-live scope = SP0 + SP1 + SP2 + e-invoice +
+e-way bill. SP2 alone is not a legal go-live point for them." F.24 stated
+e-invoicing is "NOT ON PHASE 1'S CRITICAL PATH" because manual IRNs cost ten
+minutes a day. **The ruling: §4 is wrong, and it is wrong because it was written
+before the invoice volume was measured.** Manual IRN generation at the measured
+rate is compliant and is what most distributors did before automating, so
+**e-invoicing is an automation milestone, not a go-live blocker**; the original
+bullet conflated automation with compliance. §4 now carries that as a dated
+correction with the superseded claim quoted in place, and ask 5 was fixed in the
+same pass because it was stale for the same reason.
 
-**Q2 — Is the Phase 1 parallel run sellable at the measured volume?** The filed
-threshold was "40 a month is an irritation, 400 is a reason to refuse". The
-measured rate is roughly 130–150 a month. **Nobody has placed it.**
+**The consequence, recorded on F.154 and on card G1: the GSP contract keeps its
+2026-09-30 start and its 2–4 week lead, because it still gates F.23–F.25. It no
+longer determines when the client can go live. Urgency changed; necessity did
+not.**
 
-**Q3 — Has the ~$40/month target ever been checked against an actual invoice?**
-It appears in `CLAUDE.md:63` as a target and is load-bearing in the stack
+**Q2 — Is the Phase 1 parallel run sellable at the measured volume? OPEN.** The
+filed threshold was "40 a month is an irritation, 400 is a reason to refuse". The
+measured rate is roughly 130–150 a month. **Nobody has placed it**, and it is a
+commercial judgement rather than a missing measurement — the number is known.
+
+**Q3 — Has the ~$40/month target ever been checked against an actual invoice?
+OPEN.** It appears in `CLAUDE.md:63` as a target and is load-bearing in the stack
 decisions (P8). Nothing in the repository records a measured monthly cost.
 
-**Q4 — `docs/CLIENT_CONTEXT.md` §5's ask 5 is stale.** It reads "we currently do
-not know it"; F.11 and F.24 carry the measurement, dated three days later. **Not
-fixed here** — editing another document's content is outside this task's scope
-(CLAUDE.md §11.2), and the correction belongs to whoever owns that file's §5.
-Recorded so the next reader of §5 does not re-ask a client a question that has
-been answered.
+**Q4 — `docs/CLIENT_CONTEXT.md` §5's ask 5 was stale. FIXED 2026-10-03.** It read
+"we currently do not know it" while F.11 and F.24 carried the measurement from
+three days earlier. **This file originally recorded it as reported-not-fixed**, on
+the grounds that editing another document was outside the task (CLAUDE.md §11.2);
+the operator then directed the correction, and ask 5 now reads as answered by
+measurement, struck through rather than deleted so that a citation to "ask 3"
+still points at the serial format. §5's preamble enumerates what the outstanding
+email actually carries — asks 1, 2, 3 and 4 — **because subtraction goes stale as
+silently as addition**, which is the hazard that note already warned about in one
+direction only.
 
 ---
 
@@ -400,9 +421,11 @@ been answered.
   appears, and it carries the subtraction that produced it.
 - **Nothing here is generated.** Unlike `PROJECT_PLAN.md`, this file is
   hand-maintained, so it carries the same staleness risk as every other
-  hand-maintained list in this project (F.100, F.167) — Q4 above is an instance
-  of exactly that failure in a sibling document. **If a card's fact changes in
-  `docs/stage-f-tasks.json` or `docs/CLIENT_CONTEXT.md`, this file will not
-  notice.**
+  hand-maintained list in this project (F.100, F.167) — Q4 above was an instance
+  of exactly that failure in a sibling document, three days old when it was
+  found. **If a card's fact changes in `docs/stage-f-tasks.json` or
+  `docs/CLIENT_CONTEXT.md`, this file will not notice.** Q1 and Q4 were both
+  settled within hours of this file first being written, which is the rate to
+  plan for rather than an unlucky start.
 
 _Assembled 2026-10-03 for F.174. Commercial content is the operator's._

@@ -7788,3 +7788,105 @@ Against that, the same session produced four scripts that reported an outcome th
 had not checked, a `pnpm --filter` that exited 0 having run nothing, and this
 assertion. The ratio is the argument: the controls are not a safety net on top of
 careful work — on this evidence they are doing most of the actual detection.
+
+---
+
+## DEV.156 — the gap below the family: no control at all, and a number read by chance
+
+**Date:** 2026-10-03 · **Task:** F.174 (commercial structure), reporting an
+instance from F.173 · **Impact:** none shipped. One branch built on the wrong
+parent, caught before it merged — by luck.
+
+### What happened
+
+The F.173 branch was created from `main` instead of from `f172-defect-view`, so
+F.172's commits were not in the working tree. The symptom:
+
+```
+Tests  97 passed (97)
+```
+
+where the same command had reported `106 passed (106)` on the previous branch.
+
+**Zero failures.** Every one of the 97 tests that ran passed. The nine that were
+missing were not failing — they were **absent**, because the file F.172 added was
+not there. `pnpm test:scripts` exited 0 and said so in the ordinary way.
+
+Caught because the number looked wrong against one I happened to remember from a
+run twenty minutes earlier. Nothing else in the repository or in CI observed it.
+
+### Why this is one step worse than DEV.155's family
+
+DEV.155's thesis is that **knowing a pattern does not prevent it; running the
+control does** — and its evidence is an author who documented a rule twice and
+then broke it forty minutes later. Every member of that family is a control that
+existed and was not run, or a control that was run and could not have failed.
+
+**This one had no control at all.** There was nothing to run. No gate, no
+assertion, no check anywhere observes a suite's own size, so there was no
+instrument to neglect — only a person reading a number from memory, which is the
+weakest possible detector and is not reproducible by anyone else.
+
+That makes the ordering explicit, worst last:
+
+1. A control exists and fails for the wrong reason (DEV.138 row 16).
+2. A control exists, passes, and could not have failed (DEV.154's lakh grouping).
+3. A control exists and is not run (DEV.155's own instance).
+4. **No control exists, and the finding arrives by chance.**
+
+A passing negative result is not evidence until something demonstrates it could
+have failed. **A result nobody looks at is not even a negative result** — the 97
+was printed, correct, and meaningless, because no expectation was attached to it.
+
+### Three independent routes to green with work that never ran
+
+This is the third recorded way for this repository to report success for a suite
+that did not run, and they are genuinely independent:
+
+| Route                                      | Where it is recorded |
+| ------------------------------------------ | -------------------- |
+| An absent or unmatched test **file**       | this entry, F.177    |
+| `pnpm --filter <name>` matching no package | F.166, measured      |
+| A `describe` whose body never registers    | filed with F.177     |
+
+The common property is the one the family keeps naming: **absence has no
+detector.** F.166, F.167 and F.168 are the three nearest relatives, and F.168's
+own framing — "a table whose stanza was forgotten looks identical to one that has
+it" — is this entry with tables swapped for test files.
+
+### What was done, and what was deliberately not done
+
+**Filed as F.177, not fixed.** The fix is a gate, a gate is work somebody
+schedules, and §11.2's test applies: if it is worth doing it is worth a row, and a
+row costs a line of JSON against a PR, a CI run and a merge decision.
+
+Scoped to a **floor** rather than an exact count, because an exact count turns
+every new test into a two-file change and will be routed around within a week. A
+floor fails only downward, which is the direction that carries information.
+
+Two constraints are written into the row rather than left to whoever picks it up:
+
+1. **The floor is itself a hand-maintained number** — F.167's shape exactly, a
+   literal the compiler cannot keep in step with anything. It needs one home and a
+   named owner, and its failure message must say what to do.
+2. **The gate must be demonstrated RED by deleting a test file**, with the red run
+   pasted. A gate that fails because its JSON reporter is misconfigured has not
+   been shown to detect absence — the demonstration has to fail **for the reason
+   the gate exists** (DEV.138 row 16).
+
+Measured at filing so the row starts from a number rather than a memory:
+`pnpm test:scripts` = **106 tests, 2 files**. The counts for `packages/db`,
+`apps/web` and `apps/workers` were **not** measured, and the row says so rather
+than quoting a figure from a document — several documents carry such figures and a
+quoted count is the thing that goes stale silently (F.100, F.167).
+
+### The honest scope of the lesson
+
+The branching mistake itself is not interesting; it is an ordinary slip with an
+ordinary fix. What is worth the entry is that **the project's own detection
+record now includes a case where the detector was a human remembering a number**,
+and that this happened in the same session that produced DEV.155's scoreboard
+concluding the controls "are doing most of the actual detection."
+
+They are — where they exist. This is the measurement of what happens where one
+does not.
