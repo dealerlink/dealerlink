@@ -1,0 +1,431 @@
+# Dealerlink — Commercial Structure (F.174)
+
+> **Status: ASSEMBLED, NOT DRAFTED. 2026-10-03.**
+>
+> This file is a **structure plus the facts that already exist**. Every
+> commercial decision in it is **deliberately empty** and belongs to the
+> operator: the offer, the price, what the pilot converts into, the onboarding
+> template, and the answers to the client asks. Nothing here was inferred,
+> rounded or filled in to make a section look complete.
+>
+> **Every empty slot is marked the same way:**
+>
+> > **TO FILL — OPERATOR.** _what the slot needs_
+>
+> So the file can be read for what is missing as quickly as for what is known.
+> If a section below has no such marker, it carries only already-recorded facts.
+
+## Why this file exists
+
+F.174's own filing states the problem, and it is not "we have no price":
+
+> Every technical decision taken in the last fortnight has had a commercial
+> premise underneath it, and those premises have been settled ad hoc. F.55's
+> rate-list ruling turned on "a tenant's accountant is unavailable until their
+> deal closes". F.11's whole design changed on the measured invoice volume from
+> three client invoices. F.154 exists because e-invoicing needs a contract
+> nobody has started. **Those are commercial facts doing load-bearing technical
+> work, and they are being discovered one at a time.**
+
+So §9 — the register of load-bearing commercial premises — is the part of this
+document that pays for itself. The rest is scaffolding for the operator's
+content.
+
+**Scope of the assembly.** The cards below carry what is recorded in
+`docs/CLIENT_CONTEXT.md`, `docs/stage-f-tasks.json`, `docs/DEMO_SCRIPT.md`,
+`docs/PLAN_REVISION_PARITY_LIST.md`, `CLAUDE.md` and `.do/app.production.yaml`.
+Each card names its source. Where a figure is **inferred** rather than quoted,
+the card says so in those words.
+
+---
+
+## 1. The offer — what Dealerlink is sold as
+
+> **TO FILL — OPERATOR.** What is being sold, in one paragraph a prospect would
+> recognise: the product, the vertical, the thing it replaces or sits beside,
+> and what it explicitly does not do in Phase 1.
+
+**Known constraints on whatever the offer says** (recorded, not chosen here):
+
+- **Phase 1 is not the moment they switch invoicing systems.** `docs/DEMO_SCRIPT.md`
+  is explicit: under the parallel-run posture Swipe keeps issuing the invoices of
+  record, Dealerlink holds the sale up to the order, and **every confirmed order
+  is keyed into Swipe a second time**. "Do not sell Phase 1 as the moment they
+  switch. It isn't."
+- **The Phase 1 case therefore rests on two things only** — stock that cannot go
+  negative, and serials that can be traced (`docs/DEMO_SCRIPT.md`, Steps 3 and 4).
+- **Do not promise the Tally ledger fix at Phase 1.** Same file, PRESENTER ONLY
+  note; the reasoning is in §9 card P3 below.
+
+---
+
+## 2. Pricing
+
+> **TO FILL — OPERATOR.** The price, and **per what** — per tenant, per user,
+> per invoice, per month, one-off implementation fee, or some combination. Also:
+> what is included, what is billed through at cost, and what the pilot price is
+> if it differs.
+
+**The one input that was filed as pricing-critical, and its current state:**
+
+- `docs/CLIENT_CONTEXT.md` §5 ask 5 — "What is your monthly invoice volume?" —
+  was filed as **the question that prices the Phase 1 proposal**, on the
+  reasoning that the parallel run costs the client one re-keying **per invoice**,
+  so Phase 1's cost to them is a straight multiple of that number. Its own words:
+  "**Ask before quoting Phase 1, not after.**"
+- **It has since been measured, from the client's own documents**: 53 invoices
+  between `INV-40` (17 Sep) and `INV-93` (25 Sep) = **6–7 invoices per working
+  day**. Recorded on F.11 and F.24 in `docs/stage-f-tasks.json`, dated
+  2026-09-29.
+- **`docs/CLIENT_CONTEXT.md` §5 still reads as though the number is unknown**
+  ("we currently do not know it"). That is document drift between two files, not
+  a new fact, and it is **reported rather than fixed here** — see §10, Q4.
+
+> **TO FILL — OPERATOR.** Which side of §5's own threshold the measured number
+> falls on commercially. Its filed framing: "At 40 invoices a month the parallel
+> run is an irritation; at 400 it is a reason to refuse." The measured rate is
+> roughly 130–150 a month.
+
+---
+
+## 3. The pilot — what it is, and what it converts into
+
+> **TO FILL — OPERATOR.** Free or paid; time-boxed or open-ended; what counts as
+> success; what it converts into on success; and what happens to their data and
+> their tenant if it does not convert.
+
+**Known facts that bound the answer:**
+
+- **Maharudra Agencies is a prospect, not the pilot tenant** —
+  `docs/CLIENT_CONTEXT.md` §1, stated in those words.
+- **There is no second or third prospect on record.** Named absence, not an
+  omission from this file.
+- **Go-live is settled, and e-invoicing is not the gate.** **Operator ruling,
+  2026-10-03.** `docs/CLIENT_CONTEXT.md` §4 previously made e-invoice and e-way
+  bill part of the go-live scope ("SP2 alone is not a legal go-live point for
+  them"). **That was wrong, and it was wrong because it predated the invoice-volume
+  measurement.** At 6–7 invoices a working day, manual IRN generation on the
+  portal is about ten minutes daily — compliant, and what most distributors did
+  before automating. **So e-invoicing is an AUTOMATION milestone, not a go-live
+  blocker.** §4 now carries the correction, dated, with the original claim quoted.
+  Consequence for card G1: **urgency changed, necessity did not.**
+
+---
+
+## 4. Prospects
+
+### Card — Maharudra Agencies (prospect, stage: pre-demo)
+
+| Field                | Value                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Business             | Solar panel distribution                                                                                                                    |
+| Current systems      | **Swipe** (invoicing) + **TallyPrime Silver** (accounts), Swipe's Tally Sync **enabled and running**                                        |
+| Measured volume      | **6–7 invoices per working day** (53 invoices, `INV-40` 17 Sep → `INV-93` 25 Sep)                                                           |
+| Measured turnover    | **≈ ₹25.3 crore over 5 months** (1-Apr-26 to 1-Sep-26 sales-ledger closing balances, `docs/client-evidence/2.png`)                          |
+| E-invoicing exposure | **≈ 12× above the ₹5 crore AATO threshold** annualised; threshold in force since 1 Aug 2023                                                 |
+| The measured pain    | Voucher `MA/26-27/1079`: their Tally sync collapses ₹222.94 + ₹334.08 into **one ₹557.02 `SGST - OUTPUT` line**                             |
+| Evidence             | Five screenshots, `docs/client-evidence/` — cite by **filename**, which is the reverse of the original delivery numbering (§2 of that file) |
+| Open against them    | F.115 (real GSTIN), F.112 (migration classification), F.149 (delivery challan), the four asks in §8                                         |
+| Source               | `docs/CLIENT_CONTEXT.md` §1–§5; F.11, F.24, F.112, F.115 in `docs/stage-f-tasks.json`                                                       |
+
+**Two claims on this card are inferred, and both are flagged where they are
+recorded:** the CGST leg of the ₹557.02 voucher is reconstructed, not quoted
+(`docs/CLIENT_CONTEXT.md` §3 says so in those words), and the annualised
+turnover is a 5-month figure extended.
+
+### Card — second prospect
+
+> **TO FILL — OPERATOR.** Who, and at what stage.
+
+### Card — third prospect
+
+> **TO FILL — OPERATOR.** Who, and at what stage.
+
+---
+
+## 5. Costs — fixed versus per-tenant
+
+> **TO FILL — OPERATOR.** The actual monthly figure, and the split. F.174's
+> filing names the two known per-tenant-ish costs as **the GSP contract** and
+> **DO Spaces**; the cards below carry what is recorded about each.
+
+| Cost                          | Fixed or per-tenant        | What is recorded                                                                |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------------------------- |
+| DO App Platform (web)         | Fixed                      | `basic-xs` (1 GB), buildpack — `.do/app.production.yaml:42`                     |
+| DO App Platform (wkrs)        | Fixed                      | `basic-xs` (1 GB) — `.do/app.production.yaml:162`; **see the card below**       |
+| DO Managed Postgres           | Fixed                      | Bangalore region (CLAUDE.md §3)                                                 |
+| DO Spaces                     | Grows with tenants         | Logos, generated PDFs (CLAUDE.md §3, §8 item 7)                                 |
+| Resend                        | Grows with tenants         | Send + inbound (CLAUDE.md §3)                                                   |
+| Sentry / Better Stack / Axiom | Fixed                      | Four observability tools (CLAUDE.md §2)                                         |
+| GSP contract                  | **Unpriced** — see card G1 | F.154                                                                           |
+| GSTIN status lookups          | Priced, mostly free        | See card G2 (F.150)                                                             |
+| **Phase 1 target**            | —                          | **~$40/month operational** — `CLAUDE.md:63`. A **target**, not a measured bill. |
+
+### Card — workers instance size is a live cost lever, with the measurement already taken
+
+- Production workers run `basic-xs` (1 GB) because **Chromium OOM-restarted at
+  512 MB** under PDF rendering (DEV.67).
+- **Chromium is gone** (Typst cutover, ADR-015). Measured after it:
+  **peak RSS 119.6 MB** across ten consecutive renders of the heaviest document
+  in the corpus (the 500-serial dispatch note), 11 MB above a 108.5 MB baseline.
+- `basic-xxs` (512 MB) "would now carry roughly 4x headroom".
+- **Deliberately not applied.** `.do/app.production.yaml:154-161` records it as
+  evidence and leaves the decision to the operator, because it is a
+  cost/reliability call and a live-spec change (DEV.64).
+
+> **TO FILL — OPERATOR.** Whether to take the saving.
+
+---
+
+## 6. Third-party contracts and dependencies
+
+### Card G1 — GSP contract (F.154)
+
+| Field                                   | Value                                                                                                                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Start**                               | **2026-09-30**                                                                                                                                                    |
+| **Expected elapsed**                    | **2–4 weeks of third-party paperwork**                                                                                                                            |
+| Engineering effort during               | **Approximately none**                                                                                                                                            |
+| What it gates                           | F.23 (provider abstraction + credential vault), F.24 (e-invoice / IRN), F.25 (e-way bill)                                                                         |
+| Sequencing                              | Those three move as **one block**, days 76–83, all marked blocked-on-GSP (operator ruling, 2026-09-29)                                                            |
+| Why it has a date, not a queue position | "This one is a counterparty's clock… given a start date it runs in parallel with everything and its elapsed time is spent whether or not anyone is looking at it" |
+| **Cost**                                | **Unpriced.** F.174's filing: "a real third-party cost nobody has priced"                                                                                         |
+| Source                                  | F.154, F.23, F.24, F.25 in `docs/stage-f-tasks.json`; `docs/PLAN_REVISION_PARITY_LIST.md` §5                                                                      |
+
+> **TO FILL — OPERATOR.** (a) Which GSP, (b) its pricing shape — setup fee,
+> monthly, per-IRN, or per-tenant — and (c) whether it is billed to the tenant or
+> absorbed. (c) is a pricing decision, not a procurement one.
+
+> **TO FILL — OPERATOR.** Whether the 2026-09-30 start actually happened. The row
+> carries a start date, not a confirmation; nothing in the repository observes it.
+
+**URGENCY CHANGED; NECESSITY DID NOT** (operator ruling, 2026-10-03). The
+contract keeps this start date and this lead time, because it still gates
+F.23–F.25. It no longer determines when the client can go live — §10, Q1.
+
+### Card G2 — GSTIN live-status verification (F.150)
+
+| Field               | Value                                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Candidate           | **gstinapi.in**, named so evaluation starts from something concrete                                                                |
+| Pricing (at filing) | **100 free lookups monthly, then roughly ₹0.40–0.80 per lookup**                                                                   |
+| Expected usage      | Verification happens **when a dealer is created or edited**, not per invoice — "well inside the free tier" at this client's volume |
+| Scope               | **Scoped to F.5b**, which owns Ship-To GSTIN validation (checksum + state cross-check + required-when-different)                   |
+| Source              | F.150 in `docs/stage-f-tasks.json`                                                                                                 |
+
+---
+
+## 7. Onboarding — the steps already known
+
+> **TO FILL — OPERATOR.** The onboarding template itself. The cards below are
+> the steps that are already established and the facts attached to each; they are
+> inputs to the template, not the template.
+
+### Card O1 — Which legal entity is being onboarded (**the entity question**)
+
+**This is not a client ask. Operator ruling.** It is not sent as a question; it
+goes into the onboarding template, "because 'which legal entity are we
+onboarding' is a standard first field of any onboarding form and asking it as a
+one-off makes it a bespoke conversation instead of a repeatable step." Dropped
+from the client-question list accordingly.
+
+What is established:
+
+- **Two legal entities exist.** The three invoices are issued by **MAHARUDRA
+  SOLAR AGENCIES PRIVATE LIMITED**. On `PFI-2033` that same Pvt Ltd is the
+  **customer**, with **MAHARUDRA AGENCIES** as the seller.
+- Two businesses, two GSTINs, and **in Dealerlink's model two tenants**.
+- **The real values are known: GSTIN `30AAVCM1063F1ZN`, PAN `AAVCM1063F`**
+  (characters 3–12 of the GSTIN, which is how PAN derives, so the two cannot
+  disagree).
+- **That GSTIN belongs to the Pvt Ltd, and F.106 seeded a tenant named
+  "Maharudra Agencies".** Seeding it as-is would produce a tenant whose legal
+  name and GSTIN belong to **different businesses** — worse than the fixture
+  value it replaces.
+- **What F.115 needs is the determination, not the question.**
+- **Ordering constraint:** F.142 — the staging database currently has an empty
+  trusted-sources list and is reachable from anywhere with credentials. A real
+  GSTIN is real client data, so **F.142 closes before this lands on staging**.
+
+> **TO FILL — OPERATOR.** The determination: which entity is the tenant. And, if
+> both eventually are, which one the pilot runs as.
+
+Source: F.115 and F.112 in `docs/stage-f-tasks.json`;
+`docs/PLAN_REVISION_PARITY_LIST.md` §6 item 6 and §7.
+
+### Card O2 — Tally masters export (**an onboarding step, not a client ask**)
+
+**Corrected 2026-09-29 by operator instruction.** The parity list originally
+treated this as "the longest client-side lead time" and said F.11 "cannot be
+specified without it". That was wrong on the facts:
+
+- **What the client actually sent is three tax-analysis reports** — per-invoice
+  HSN summaries. "A tax analysis tells you the rate-wise split of one invoice; it
+  tells you nothing about what their ledgers or stock items are called, which is
+  what a mapping module maps **to**."
+- **So F.11's import-then-select design survives unchanged** and was never
+  blocked on a client deliverable.
+- **The step:** at onboarding, the tenant exports their **ledgers and stock
+  items** (XML or Excel) and imports them; mapping then selects from what was
+  imported.
+- **Consequence:** this removes the longest client-side lead time from the
+  critical path entirely. Dropped from the client-question list.
+
+Source: F.11's amendment of 2026-09-29 in `docs/stage-f-tasks.json`;
+`docs/PLAN_REVISION_PARITY_LIST.md` §7 and the §3 row of its table at line 153;
+`docs/STAGE_F_BUILD_v3.md:205`.
+
+### Card O3 — Warn about the tax reclassification before the first migrated document
+
+**F.112, an open observation kept for onboarding and not for the demo.**
+
+- On `PFI-2033` (`docs/client-evidence/4.png`) the client charges **CGST + SGST**
+  on goods moving Goa → Maharashtra. Dealerlink may classify that supply as
+  **IGST**.
+- **On migration they will report it as a bug on day one.** Raise it before the
+  first migrated document is issued, "not as a defect report but as a question
+  about how they treat deliveries to a third address".
+- **F.5a did not resolve it.** What F.5a built is the ability to **express** both
+  §10 arrangements per document (ADR-016); it did not establish which applies to
+  this client's trade, and ADR-016 records the statutory reading as **unreviewed
+  by a chartered accountant**.
+- **It is now sharper, not softer:** the answer is **per document**, so the
+  onboarding conversation is about teaching whoever raises documents to classify
+  each one — not about setting a flag once.
+
+### Card O4 — Replace the fixture GSTIN before the demo (F.115)
+
+`packages/db/src/seeds/client-demo.ts` currently seeds GSTIN
+`30AAFCM1234K1ZV` — **checksum-valid with Goa's correct state code 30, so it
+passes every validator in the codebase, and the PAN portion is invented.** The
+two dealer GSTINs are fixtures too (state codes 30 and 27). Blocked on card O1,
+and on F.142 for staging.
+
+### Card O5 — Delivery challan: ask, do not build (F.149)
+
+**Filed as a question deliberately — there may be nothing to build.** The
+dispatch note exists and renders; whether it satisfies what they mean by a
+delivery challan is unconfirmed, and treating it as a build item would spend days
+on a document they may already accept. **Raise F.129 in the same
+conversation:** the dispatch note carries **no delivery address at all**, and if
+they do accept it as a challan that gap becomes more serious, not less.
+
+---
+
+## 8. The four open client asks
+
+**Enumerated, not counted.** `docs/CLIENT_CONTEXT.md` §5 numbers **five** asks;
+ask 5 (monthly invoice volume) has been **answered by measurement** since it was
+written — see §2 — so **four remain open**. That file's own instruction is to
+enumerate rather than count, "a count goes stale silently when an ask is added,
+and one was added on 2026-09-26". The same hazard applies to subtraction, which
+is what this heading does.
+
+| #   | Ask                                   | What is known                                                                                                                                                                                                                                       | Answer                    |
+| --- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| 1   | **Serials on the invoice PDF**        | Serials in Tally are **not** required (client-confirmed). `docs/client-evidence/5.png` carries **26 serials under one line item across 4 pages**, so the answer changes the layout. **Confirm before F.7.**                                         | > **TO FILL — OPERATOR.** |
+| 2   | **Barcode symbology → which scanner** | Observed format `NSMG26080006959` — 15 alphanumeric, suggesting Code 128 or DataMatrix. **Specify a 2D imager**; a 1D laser fails on the DataMatrix and QR labels common on solar modules. Confirm against their actual labels **before they buy**. | > **TO FILL — OPERATOR.** |
+| 3   | **Serial format to validate against** | Needs their real label format. Regex or prefix validation, per product or per tenant, **1–2 days** of work once known.                                                                                                                              | > **TO FILL — OPERATOR.** |
+| 4   | **Scanner suffix must send CR/Enter** | Usually the default; some scanners need a configuration barcode. **A setup instruction, not code** — it has to reach whoever configures their hardware.                                                                                             | > **TO FILL — OPERATOR.** |
+
+**Two things recorded alongside the asks that are not asks:**
+
+- **Nothing is blocked on any of them.** `docs/CLIENT_CONTEXT.md` §5, in those
+  words. They are queued so the codebase stops carrying unverified claims as
+  justifications.
+- **Three tax questions need their CA, not the client** — the current slab set,
+  the transitional treatment of pre-22-Sep-2025 rates, and whether GSTR-1
+  Table 12 needs the HSN summary per (HSN, rate) pair. The list is in
+  `docs/GST_RATE_MODEL_AUDIT.md`. **The outstanding email carries both lists,**
+  and is recorded there as **overdue**.
+- **Scanner integration needs no code.** USB and Bluetooth scanners run in HID
+  keyboard mode. Front-end only. Phone-camera scanning depends on the PWA work
+  and is out of scope for this phase.
+
+---
+
+## 9. The register — commercial premises currently doing technical load-bearing work
+
+**This is the section F.174 was filed for.** Each row is a technical decision
+already taken, resting on a commercial fact. The point of the register is that
+the next such decision has somewhere to look.
+
+| Id  | Technical decision                                                                | The commercial premise under it                                                                                                                                                          | State of the premise                                                                                                               |
+| --- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | **F.55 — no allowed-GST-rate list; a rate is validated by shape, not membership** | "A tenant's accountant is unavailable until their deal closes, so any design that must know their slab set cannot be built." Decisive argument was commercial.                           | **Settled and shipped.** `docs/GST_RATE_MODEL_AUDIT.md` §5                                                                         |
+| P2  | **F.11 — import-then-select Tally mapping, specifiable now**                      | The masters export is **their onboarding step**, not a client deliverable (card O2)                                                                                                      | **Settled** by operator correction, 2026-09-29                                                                                     |
+| P3  | **F.11–F.13 do not, by themselves, deliver the ledger fix**                       | Under the parallel run Swipe issues the invoices of record, so Dealerlink has **nothing of record to export from**; exporting alongside Swipe's live sync would post the same sale twice | **OPEN SEQUENCING QUESTION.** `docs/DEMO_SCRIPT.md:91-98` calls it "an inference from the export's design, not a settled decision" |
+| P4  | **F.6 before the GSP block; manual IRNs at Phase 1**                              | **6–7 invoices per working day**, measured — manual IRN generation is ~10 minutes a day                                                                                                  | **Measured.** But see §10 Q1 — it sits against `CLIENT_CONTEXT.md` §4's go-live scope                                              |
+| P5  | **F.154 filed with a start date rather than a queue position**                    | It is a counterparty's clock, and its elapsed time is spent whether or not anyone is looking at it                                                                                       | **Settled**                                                                                                                        |
+| P6  | **F.150 scoped to the free tier**                                                 | GSTIN verification is per dealer-record, not per invoice, so this client's volume stays inside 100 lookups/month                                                                         | **Measured**, on the same volume figure as P4                                                                                      |
+| P7  | **Production workers stay on `basic-xs`**                                         | A cost/reliability call the operator holds; the measurement (119.6 MB peak) is taken and the change is not applied                                                                       | **OPEN — deliberately.** `.do/app.production.yaml:154-161`                                                                         |
+| P8  | **Phase 1 architecture: two processes, one database, three external services**    | **~$40/month operational** target (`CLAUDE.md:63`), which is what rules out Redis, Meilisearch and Kubernetes                                                                            | **A target, never reconciled against a bill.** See §10 Q3                                                                          |
+
+> **TO FILL — OPERATOR.** Rows for any premise this register is missing. The
+> register is useful only if adding to it is cheaper than rediscovering an
+> entry.
+
+---
+
+## 10. Open questions surfaced while assembling this
+
+**Four were surfaced. Two are now settled — Q1 by an operator ruling the same day
+and Q4 by fixing it — and two remain open.** They are kept numbered, with the
+resolutions in place, because a question that disappears on being answered leaves
+the next reader unable to tell a settled matter from one nobody raised.
+
+**Q1 — What is go-live, exactly? SETTLED 2026-10-03 by operator ruling.**
+`docs/CLIENT_CONTEXT.md` §4 stated "Go-live scope = SP0 + SP1 + SP2 + e-invoice +
+e-way bill. SP2 alone is not a legal go-live point for them." F.24 stated
+e-invoicing is "NOT ON PHASE 1'S CRITICAL PATH" because manual IRNs cost ten
+minutes a day. **The ruling: §4 is wrong, and it is wrong because it was written
+before the invoice volume was measured.** Manual IRN generation at the measured
+rate is compliant and is what most distributors did before automating, so
+**e-invoicing is an automation milestone, not a go-live blocker**; the original
+bullet conflated automation with compliance. §4 now carries that as a dated
+correction with the superseded claim quoted in place, and ask 5 was fixed in the
+same pass because it was stale for the same reason.
+
+**The consequence, recorded on F.154 and on card G1: the GSP contract keeps its
+2026-09-30 start and its 2–4 week lead, because it still gates F.23–F.25. It no
+longer determines when the client can go live. Urgency changed; necessity did
+not.**
+
+**Q2 — Is the Phase 1 parallel run sellable at the measured volume? OPEN.** The
+filed threshold was "40 a month is an irritation, 400 is a reason to refuse". The
+measured rate is roughly 130–150 a month. **Nobody has placed it**, and it is a
+commercial judgement rather than a missing measurement — the number is known.
+
+**Q3 — Has the ~$40/month target ever been checked against an actual invoice?
+OPEN.** It appears in `CLAUDE.md:63` as a target and is load-bearing in the stack
+decisions (P8). Nothing in the repository records a measured monthly cost.
+
+**Q4 — `docs/CLIENT_CONTEXT.md` §5's ask 5 was stale. FIXED 2026-10-03.** It read
+"we currently do not know it" while F.11 and F.24 carried the measurement from
+three days earlier. **This file originally recorded it as reported-not-fixed**, on
+the grounds that editing another document was outside the task (CLAUDE.md §11.2);
+the operator then directed the correction, and ask 5 now reads as answered by
+measurement, struck through rather than deleted so that a citation to "ask 3"
+still points at the serial format. §5's preamble enumerates what the outstanding
+email actually carries — asks 1, 2, 3 and 4 — **because subtraction goes stale as
+silently as addition**, which is the hazard that note already warned about in one
+direction only.
+
+---
+
+## 11. How to keep this file honest
+
+- **Every figure names its source**, and inferred figures say so. Two are
+  flagged: the ₹557.02 voucher's CGST leg, and the annualised turnover.
+- **Lists are enumerated, never counted** — §8's heading is the one place a count
+  appears, and it carries the subtraction that produced it.
+- **Nothing here is generated.** Unlike `PROJECT_PLAN.md`, this file is
+  hand-maintained, so it carries the same staleness risk as every other
+  hand-maintained list in this project (F.100, F.167) — Q4 above was an instance
+  of exactly that failure in a sibling document, three days old when it was
+  found. **If a card's fact changes in `docs/stage-f-tasks.json` or
+  `docs/CLIENT_CONTEXT.md`, this file will not notice.** Q1 and Q4 were both
+  settled within hours of this file first being written, which is the rate to
+  plan for rather than an unlucky start.
+
+_Assembled 2026-10-03 for F.174. Commercial content is the operator's._

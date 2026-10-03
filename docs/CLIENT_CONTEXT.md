@@ -126,12 +126,34 @@ Swipe's own PFI-2033 preview, which carries two rate pairs on one document:
   roughly **12× above it annualised**.
 - A B2B invoice **without an IRN is treated as not issued**, and the recipient
   **loses input tax credit**.
-- **Go-live scope = SP0 + SP1 + SP2 + e-invoice + e-way bill.** SP2 alone is not
-  a legal go-live point for them. Payment links stay post-go-live.
+- **E-invoicing is an AUTOMATION milestone, not a go-live blocker.** **Corrected
+  2026-10-03 by operator ruling.** This bullet read "\*\*Go-live scope = SP0 + SP1
+  - SP2 + e-invoice + e-way bill.** SP2 alone is not a legal go-live point for
+    them." **That is wrong, and it is wrong because it was written before the
+    invoice volume was measured.** At the measured **6–7 invoices per working day**
+    (53 between `INV-40` on 17 Sep and `INV-93` on 25 Sep — F.11, F.24), generating
+    IRNs **manually on the portal** costs about **ten minutes a day**. That is
+    compliant — it is what most distributors did before automating — so e-invoicing
+    gates how much typing they do, not whether they may issue invoices at all. The
+    original bullet conflated **automation** with **compliance\*\*. Payment links stay
+    post-go-live, unchanged.
 - **E-way bill:** for AATO above ₹20 crore, generate **within 180 days of the
   invoice date**. Validate before submission rather than failing at the API.
 
-Source and full argument: §0 Go-live scope; the e-way bill window is §6.
+The two bullets above this correction still stand, and they are the reason the
+automation is wanted rather than optional in the long run: they are ~12× above
+the threshold, and a B2B invoice without an IRN is treated as not issued.
+**Nothing here says skip e-invoicing — it says it does not set the go-live date.**
+
+**The consequence, recorded on F.154:** the GSP contract keeps its 2026-09-30
+start and its 2–4 week lead, because it still gates F.23–F.25. It no longer
+determines when the client can go live. **Urgency changed; necessity did not.**
+
+Source and full argument: §0 Go-live scope; the e-way bill window is §6. **Read
+§0 with the correction above** — it argues the go-live scope this section used to
+state, and it predates the invoice-volume measurement for the same reason. These
+are sections of the source analysis this file was condensed from, not of this
+file, which is the convention §7 below also follows.
 
 ---
 
@@ -146,6 +168,11 @@ None of these is a decision we can take for them.
 > - **The client asks** — the numbered list below. Answerable by the client.
 >   Enumerated rather than counted on purpose: a count goes stale silently when an
 >   ask is added, and one was added on 2026-09-26 (ask 5, invoice volume).
+>   **Ask 5 is now ANSWERED by measurement, so what the email carries is asks 1,
+>   2, 3 and 4 — enumerated here too, because subtraction goes stale as silently
+>   as addition.** Ask 5 stays in the list, struck through rather than deleted, so
+>   that a citation to "ask 3" written last week still points at the serial
+>   format.
 > - **Three tax questions** — the numbered list in `docs/GST_RATE_MODEL_AUDIT.md`:
 >   the current slab set, the transitional treatment of pre-22-Sep-2025 rates, and
 >   whether GSTR-1 Table 12 needs the HSN summary per (HSN, rate) pair. These need
@@ -175,20 +202,39 @@ None of these is a decision we can take for them.
 4. **Scanner suffix must send CR/Enter.** Usually the default; some scanners
    need a configuration barcode. A **setup instruction, not code** — it has to
    reach whoever configures their hardware.
-5. **What is your monthly invoice volume?** Added 2026-09-26. This is not a
-   sizing question, it is the question that prices the Phase 1 proposal. The
-   parallel-run posture in `docs/DEMO_SCRIPT.md` has Dealerlink hold the sale up
-   to the order while **Swipe keeps issuing the invoices of record**, so every
-   confirmed order is keyed into Swipe a second time to raise the invoice. That
-   double entry is **per invoice**, so the cost of Phase 1 to them is a straight
-   multiple of this number and we currently do not know it. At 40 invoices a
-   month the parallel run is an irritation; at 400 it is a reason to refuse, and
-   the honest response would be to move F.6 (tax invoice) ahead of the
-   stock-and-serials pitch rather than sell a phase that adds work. It also
-   bounds two other things: whether they are near the **e-invoicing AATO
-   threshold** (§2), and how much the Tally ledger problem is actually costing
-   them per month — the ₹557.02 split on `MA/26-27/1079` is one voucher, and
-   nobody has multiplied it. **Ask before quoting Phase 1, not after.**
+5. **~~What is your monthly invoice volume?~~ ANSWERED 2026-09-29 BY
+   MEASUREMENT — 6–7 per working day.** Added 2026-09-26 and **no longer a
+   client ask**; it is left in place, numbered, so the four above are still
+   numbered as they were cited. **Corrected 2026-10-03:** this still read "the
+   cost of Phase 1 to them is a straight multiple of this number and we
+   currently do not know it" three days after the number was measured, which is
+   exactly the silent staleness the note above this list warns about.
+
+   **The measurement, from their own documents:** 53 invoices between `INV-40`
+   (17 Sep) and `INV-93` (25 Sep) — **6–7 per working day, roughly 130–150 a
+   month.** Recorded on F.11 and F.24.
+
+   **Why it was asked, which still stands:** it was never a sizing question, it
+   is the question that prices the Phase 1 proposal. The parallel-run posture in
+   `docs/DEMO_SCRIPT.md` has Dealerlink hold the sale up to the order while
+   **Swipe keeps issuing the invoices of record**, so every confirmed order is
+   keyed into Swipe a second time to raise the invoice. That double entry is
+   **per invoice**, so the cost of Phase 1 to them is a straight multiple of the
+   figure above. The filed threshold was "at 40 invoices a month the parallel
+   run is an irritation; at 400 it is a reason to refuse" — **the measured rate
+   sits between the two and nobody has placed it.** That judgement is open and
+   is the one thing here still owed; the number is not.
+
+   **What the answer already changed:** F.11's whole design (the Tally masters
+   export became their onboarding step, not a client deliverable); F.24 (manual
+   IRN generation at this rate is about ten minutes a day, so Phase 1 invoicing
+   is viable without the GSP); and **§4's go-live scope above, corrected
+   2026-10-03 — e-invoicing is an automation milestone, not a go-live blocker.**
+
+   **What it was also meant to bound, and still does not:** how much the Tally
+   ledger problem costs them per month. The ₹557.02 split on `MA/26-27/1079` is
+   one voucher and **nobody has multiplied it** — now a multiplication anyone
+   can do, since the multiplier is known.
 
 **Scanner integration needs no code.** USB and Bluetooth scanners run in **HID
 keyboard mode**: they type the decoded string and send Enter. No driver, no SDK,
