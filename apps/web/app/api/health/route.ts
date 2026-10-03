@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
+
 import { adminDb } from '@dealerlink/db';
 import { sql } from 'drizzle-orm';
 import { NextResponse, type NextRequest } from 'next/server';
@@ -186,6 +188,94 @@ async function queueCheck(): Promise<ComponentCheck> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// F.176 — WHO MAY SEE THE DETAIL
+//
+// ## THE DISCLOSURE WAS LATENT AND CORRELATED WITH THE INCIDENT
+//
+// This endpoint is unauthenticated BY DESIGN — `middleware.ts`'s matcher excludes
+// it so Better Stack can ping it every 30s. The detail it returned, however,
+// included `rls.missing` and `auditTrigger.missing`: named arrays of tables
+// lacking tenant isolation or an audit trail.
+//
+// **Those arrays are empty when nothing is wrong, and non-empty exactly when
+// something is.** So the endpoint published a map of unprotected tables at the
+// moment that map was most useful to an attacker, and a reviewer reading the live
+// response on a good day saw two empty arrays and concluded there was nothing to
+// protect. **A field that leaks only when you are vulnerable is worse than one
+// that always leaks**, because nothing in normal operation shows you the risk.
+// Also exposed: `queue.depthByType` (job names + backlog), `resend.keyScope`,
+// and `migrations.applied` — which tells a reader which migrations you have and
+// therefore which you do not.
+//
+// ## THE SHAPE
+//
+// Unauthenticated callers get `{ status, timestamp }` and the same HTTP code.
+// An uptime monitor needs a 200 and a status word; it does not need the names of
+// your unprotected tables. The checks still all RUN — `status` and the 503 are
+// computed from them exactly as before — only the serialisation changes.
+//
+// Rejected alternative (recorded on F.176): keep the detail but reduce `missing`
+// to COUNTS and `depthByType` to a total. A count of missing RLS policies still
+// says "there is a hole" to anyone watching, and it leaves the operator who needs
+// the detail with no way to get it.
+//
+// ## WHY A SHARED SECRET AND NOT AN OPERATOR SESSION
+//
+// The row permitted either. The secret is what got built, for three reasons:
+// `pnpm merge-status` (F.173) is the actual consumer and cannot hold a browser
+// session; a token FAILS CLOSED, because if `HEALTH_TOKEN` is unset nobody can
+// read the detail, whereas a session path is only as good as the session code
+// reached from an unauthenticated route; and a second auth path on a public
+// endpoint is a second thing to get wrong. A human who needs the detail uses the
+// same token. **Not a rejection of the session option on the merits — if an
+// operator-facing health page is ever wanted, that is the moment to add it.**
+//
+// Comparison is timing-safe over SHA-256 digests, which also makes it
+// length-independent: `timingSafeEqual` throws on unequal-length buffers, and
+// catching that throw would itself leak the length.
+// ---------------------------------------------------------------------------
+
+/** Constant-time string equality, via equal-length digests. */
+function secretEquals(a: string, b: string): boolean {
+  const da = createHash('sha256').update(a).digest();
+  const db = createHash('sha256').update(b).digest();
+  return timingSafeEqual(da, db);
+}
+
+/**
+ * True only for a caller presenting the configured bearer token.
+ *
+ * FAILS CLOSED: with `HEALTH_TOKEN` unset, this is always false and the detail
+ * is unreachable by anyone. That is the correct default for a public route — an
+ * absent secret must not mean "no check".
+ */
+function detailAuthorised(req: NextRequest): boolean {
+  const expected = process.env.HEALTH_TOKEN;
+  if (!expected) return false;
+  const presented = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') ?? '')?.[1];
+  if (!presented) return false;
+  return secretEquals(presented, expected);
+}
+
+/**
+ * The build actually running, or `null` when nothing says.
+ *
+ * **It used to fall back to the string `'dev'`, and production reported `'dev'`**
+ * — so from outside you could not tell which build was live, which is F.173's
+ * problem one layer down. `'dev'` is a CLAIM about the environment; `null` with
+ * a named source is the truth. Neither env var is set on either DO app today, so
+ * this reports `{ version: null, versionSource: 'unset' }` until the spec sets
+ * one — a live-spec change, and the operator's (DEV.64).
+ */
+function build(): { version: string | null; versionSource: string } {
+  if (process.env.SENTRY_RELEASE)
+    return { version: process.env.SENTRY_RELEASE, versionSource: 'SENTRY_RELEASE' };
+  if (process.env.NEXT_PUBLIC_GIT_SHA)
+    return { version: process.env.NEXT_PUBLIC_GIT_SHA, versionSource: 'NEXT_PUBLIC_GIT_SHA' };
+  return { version: null, versionSource: 'unset' };
+}
+
 /** Roll component statuses up into one overall status. */
 function aggregate(statuses: CheckStatus[]): 'ok' | 'degraded' | 'down' {
   if (statuses.includes('down')) return 'down';
@@ -230,22 +320,28 @@ export async function GET(req: NextRequest) {
   const status = aggregate(Object.values(checks).map((c) => c.status));
   const httpStatus = status === 'down' ? 503 : 200;
 
-  return NextResponse.json(
-    {
-      status,
-      version: process.env.SENTRY_RELEASE ?? process.env.NEXT_PUBLIC_GIT_SHA ?? 'dev',
-      checks,
-      timestamp: new Date().toISOString(),
-      uptimeSeconds: Math.floor(process.uptime()),
-      responseMs: Date.now() - start,
+  const timestamp = new Date().toISOString();
+
+  // THE PUBLIC BODY. Same `status`, same HTTP code, no detail. The monitor's
+  // contract is unchanged; everything a reader could mine is gone.
+  const body = detailAuthorised(req)
+    ? {
+        status,
+        ...build(),
+        checks,
+        timestamp,
+        uptimeSeconds: Math.floor(process.uptime()),
+        responseMs: Date.now() - start,
+        detail: 'full' as const,
+      }
+    : { status, timestamp, detail: 'withheld' as const };
+
+  return NextResponse.json(body, {
+    status: httpStatus,
+    headers: {
+      'X-RateLimit-Limit': '60',
+      'X-RateLimit-Remaining': rl.remaining.toString(),
+      'X-RateLimit-Reset': Math.floor(rl.resetAt.getTime() / 1000).toString(),
     },
-    {
-      status: httpStatus,
-      headers: {
-        'X-RateLimit-Limit': '60',
-        'X-RateLimit-Remaining': rl.remaining.toString(),
-        'X-RateLimit-Reset': Math.floor(rl.resetAt.getTime() / 1000).toString(),
-      },
-    },
-  );
+  });
 }

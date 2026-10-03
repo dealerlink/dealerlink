@@ -791,8 +791,13 @@ pnpm --filter "@dealerlink/db" db:migrate   # expect "Migrations + RLS + trigger
 # 6. Verify (use packages/db/scripts/verify-0016.mjs as a template; adapt for the
 #    column / RLS / migration-version checks the migration actually needs).
 #    Confirm via the deployed app too:
-curl -fsS https://app.dealerlink.in/api/health
+curl -fsS -H "Authorization: Bearer $HEALTH_TOKEN" https://app.dealerlink.in/api/health
 # expect status:ok, migrations.applied = N (your new count)
+#
+# THE HEADER IS REQUIRED SINCE F.176. Without it the endpoint answers 200 with
+# { status, timestamp, detail: "withheld" } and NO migrations count — which is a
+# correct response, not an outage. HEALTH_TOKEN is the value in the DO app spec.
+# `pnpm merge-status` does the same comparison for both environments at once.
 
 # 7. REMOVE the IP rule. Use the --uuid flag, NOT positional args — DEV.??:
 #    `doctl databases firewalls remove <cluster> <uuid>` errors with
@@ -824,7 +829,10 @@ the authoritative success signal.
 - **`/api/health` reports `migrations: degraded` (count mismatch)** → the
   migration ran but the deployed app's `EXPECTED_MIGRATIONS` constant
   (`apps/web/app/api/health/route.ts`) is stale. Code patch needed; not a
-  rollback signal.
+  rollback signal. **You will only SEE this with the bearer token (F.176);
+  unauthenticated the response carries `status` but no per-check detail, and a
+  `degraded` status with no detail means "get the token", not "nothing is
+  wrong".**
 - **You forgot step 7 and walked away** → the production DB is open to a
   rotated public IP. Run `doctl databases firewalls list $clusterId` from
   any machine to see the leftover rule and remove it.
@@ -1024,8 +1032,11 @@ doctl databases create dealerlink-production-restore \
 pnpm sync-spec:production    # review diff, confirm, applies + redeploys
 
 # 5. Confirm the app is healthy on the new DB.
-curl -fsS https://app.dealerlink.in/api/health
-# expect status:ok, db.status:ok, migrations.applied:17, rls.status:ok
+curl -fsS -H "Authorization: Bearer $HEALTH_TOKEN" https://app.dealerlink.in/api/health
+# expect status:ok, db.status:ok, migrations.applied:N, rls.status:ok
+# (the header is required since F.176; without it you get `detail: "withheld"`.
+#  `applied` was 17 when this runbook was written and is not a fixed number —
+#  compare it against packages/db/migrations/meta/_journal.json, per F.139.)
 
 # 6. Lock the new cluster's firewall to the app (mirror the original):
 doctl databases firewalls append <new-cluster-id> --rule "app:d8a25cb8-e4cb-4035-8413-6baab72398cd"

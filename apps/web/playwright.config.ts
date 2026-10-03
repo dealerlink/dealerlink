@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { defineConfig, devices } from '@playwright/test';
 
+import { VERIFY_HEALTH_TOKEN } from './tests/e2e/health-token';
+
 /**
  * On an arm64 devcontainer the workers process's `@sparticuz/chromium` is an
  * x86-64 binary that cannot launch (DEV.89), so the PDF verify specs would
@@ -164,6 +166,11 @@ export default defineConfig({
           stdout: 'pipe' as const,
           stderr: 'pipe' as const,
           env: {
+            // F.176 — /api/health withholds its detail unless this token is
+            // presented. The Day 1 and Day 17 specs assert on the granular
+            // component status, so the server they talk to must accept it.
+            // Shared from one module so the two processes cannot disagree.
+            HEALTH_TOKEN: VERIFY_HEALTH_TOKEN,
             // The verify server is http://localhost — auth cookies must not be
             // Secure or the browser drops the session and every spec fails at
             // login (DEV.87). This is the explicit, dev-only opt-out; the
