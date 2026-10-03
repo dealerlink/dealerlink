@@ -236,59 +236,168 @@ describe('F.148 A.1 — the heartbeat throttle caps the audit volume', () => {
 
 describe('F.148 A.1 — the request-level bound', () => {
   /**
-   * WHAT THIS COVERS, AND WHAT IT DOES NOT.
+   * WHAT THIS COVERS, WHAT IT DOES NOT, AND WHY IT IS NARROWER THAN IT WAS.
    *
-   * COVERS: a check-in request does not WRITE to any table other than
-   * `agent_tokens` (the heartbeat) and `rate_limit` (the post-auth counter).
-   * Asserted by snapshotting the row count of every public table and comparing.
+   * ## THE FAILURE THAT NARROWED IT
    *
-   * DOES NOT COVER: an extra READ. A `SELECT` against a third table changes no
-   * row count and this test would stay green. **That half is the static
-   * enumeration below**, and saying so here rather than letting the heading
-   * imply more than the assertion delivers.
+   * The first version snapshotted the row count of EVERY public table. It passed
+   * locally and failed in CI with:
+   *
+   *     expected [ 'audit_log', 'email_delivery_log' ] to deeply equal [ 'audit_log' ]
+   *
+   * **Nothing in the check-in path touches `email_delivery_log`.** Another test
+   * file, running in parallel in the same vitest process pool, wrote to it inside
+   * this test's before/after window — and a global snapshot **attributes every
+   * write in the database to this request.**
+   *
+   * Classified as a STATE BUG IN THE TEST, not a flake: the cause is
+   * deterministic (a global-scope assertion under parallel execution) even though
+   * its appearance is not. A green re-run would not be evidence.
+   *
+   * ## THE TWO SIBLING RULES, AND THIS WAS BOTH AT ONCE
+   *
+   * DEV.157: a control must own its preconditions for the window it measures.
+   * DEV.154: an assertion on an absolute value of shared mutable state is an
+   * assertion about test ORDER, not about the code. **They are the same defect
+   * from two sides**, and a global row-count snapshot under parallel execution is
+   * both: it does not own the database, and it reads absolute counts of it.
+   *
+   * ## WHAT IT COVERS NOW
+   *
+   * **COVERS:** of the ENUMERATED tables below, only `agent_tokens`,
+   * `rate_limit` and `audit_log` change — and all three DO change, which is the
+   * half that keeps the narrowing from silently weakening the claim.
+   *
+   * **DOES NOT COVER, AND THIS IS THE COST OF NARROWING:** a write to a table
+   * OUTSIDE the enumerated set. The old version would have caught that; this one
+   * cannot. **The static enumeration below covers it from the other direction**,
+   * by reading the agent's own source for a table name outside its allowed set —
+   * so the two assertions together cover what one global snapshot used to, and
+   * neither covers it alone. Saying so here rather than letting the heading imply
+   * the old reach is the thing already corrected once in this row.
+   *
+   * **ALSO DOES NOT COVER:** an extra READ. A `SELECT` changes no row count.
+   * Same static enumeration, same reason.
    */
-  const counts = async () => {
-    const rows = (await adminDb.execute(sql`
-      SELECT relname, n_live_tup FROM pg_stat_user_tables WHERE schemaname = 'public'`)) as unknown as {
-      relname: string;
-      n_live_tup: number;
-    }[];
-    return rows;
+
+  /**
+   * THE ENUMERATED SET: the three that must change, plus the tables the agent
+   * path could PLAUSIBLY reach if someone widened it carelessly — a join through
+   * `issued_by`, an over-read during resolution, a numbering call, an
+   * auth-adjacent log.
+   *
+   * Deliberately EXCLUDED: `email_delivery_log`, `webhook_events`,
+   * `generated_documents` and the document tables. Not because a write there
+   * would be acceptable, but because **other suites write them**, and including
+   * them is what made this test measure the whole process pool. The static scan
+   * is the instrument for those.
+   */
+  const WATCHED = [
+    'agent_tokens',
+    'rate_limit',
+    'audit_log',
+    'tenant_settings',
+    'tenants',
+    'users',
+    'sessions',
+    'document_counters',
+    'access_log',
+    'auth_events',
+  ] as const;
+
+  /**
+   * ONLY `audit_log` GROWS BY A ROW, and that is a correction the paired
+   * assertion forced on its first run:
+   *
+   *     rate_limit should have grown: expected 208 to be greater than 208
+   *
+   * **`rate_limit` is a FIXED-WINDOW counter** keyed on (key, window_start), so
+   * a second request in the same window INCREMENTS the existing row rather than
+   * inserting one. Row count is the wrong observable for it, exactly as it is
+   * for `agent_tokens` (an UPDATE). I had assumed row growth was the observable
+   * for all three.
+   *
+   * So each of the three is asserted on ITS OWN observable, named:
+   *   `audit_log`    — a row is inserted      -> count grows
+   *   `agent_tokens` — the heartbeat UPDATE   -> `last_seen_at` becomes non-null
+   *   `rate_limit`   — the window counter     -> `count` increases for this key
+   */
+  const MUST_GROW = ['audit_log'] as const;
+  const UPDATED_NOT_GROWN = ['agent_tokens', 'rate_limit'] as const;
+
+  const snapshot = async () => {
+    const out: Record<string, number> = {};
+    for (const t of WATCHED) {
+      const r = (await adminDb.execute(
+        sql`SELECT count(*)::int AS n FROM ${sql.raw(`"${t}"`)}`,
+      )) as unknown as { n: number }[];
+      out[t] = r[0]!.n;
+    }
+    return out;
   };
 
-  it('writes to agent_tokens and rate_limit, and to no other table', async () => {
-    // Exact counts rather than the planner's estimate: n_live_tup is
-    // approximate and updated asynchronously, so it is read for the TABLE LIST
-    // and each table is then counted properly.
-    const tables = (await counts()).map((r) => r.relname).sort();
-    const snapshot = async () => {
-      const out: Record<string, number> = {};
-      for (const t of tables) {
-        const r = (await adminDb.execute(
-          sql`SELECT count(*)::int AS n FROM ${sql.raw(`"${t}"`)}`,
-        )) as unknown as { n: number }[];
-        out[t] = r[0]!.n;
-      }
-      return out;
-    };
+  /**
+   * SUM, not MAX, and that is a second correction from the same assertion:
+   *
+   *     the limiter should have counted this request: expected 9 to be greater than 9
+   *
+   * The limiter is a FIXED WINDOW, so there is one row per (key, window_start)
+   * and several windows accumulate over a suite. `max(count)` is dominated by
+   * whichever window was busiest, so an increment in the CURRENT window is
+   * invisible to it. **A sum rises by one for every counted request, whichever
+   * window row it lands in**, which is the property being asserted.
+   */
+  const limiterCount = async () =>
+    (
+      (await adminDb.execute(sql`
+        SELECT COALESCE(sum(count), 0)::int AS n FROM rate_limit
+        WHERE key LIKE 'agent-checkin:%'`)) as unknown as { n: number }[]
+    )[0]!.n;
+
+  const lastSeenOf = async () =>
+    (
+      (await adminDb.execute(sql`
+        SELECT last_seen_at FROM agent_tokens
+        WHERE secret_token = ${hashAgentToken(VALID)}`)) as unknown as {
+        last_seen_at: Date | null;
+      }[]
+    )[0]!.last_seen_at;
+
+  it('the three expected tables change, and nothing else enumerated does', async () => {
+    // Clear the throttle so the write is guaranteed to land — otherwise a
+    // check-in inside the window is a deliberate no-op and the "must change"
+    // half would be asserting against a design decision.
+    await adminDb.execute(sql`
+      UPDATE agent_tokens SET last_seen_at = NULL, agent_version = NULL
+      WHERE secret_token = ${hashAgentToken(VALID)}`);
 
     const before = await snapshot();
+    const seenBefore = await lastSeenOf();
+    const limiterBefore = await limiterCount();
     await GET(request(`Bearer ${VALID}`, { 'x-agent-version': '1.1.1' }));
     const after = await snapshot();
+    const seenAfter = await lastSeenOf();
+    const limiterAfter = await limiterCount();
 
-    const grew = tables.filter((t) => after[t] !== before[t]);
+    // ── THEY GREW. Immune to other suites: another test writing to `audit_log`
+    //    cannot make THIS request's write disappear, so a false pass here would
+    //    need the request to have done nothing at all.
+    for (const t of MUST_GROW) {
+      expect(after[t]!, `${t} should have grown by a row`).toBeGreaterThan(before[t]!);
+    }
+    // The two whose observable is a COLUMN, not a row count.
+    expect(seenBefore, 'the throttle reset should have nulled last_seen_at').toBeNull();
+    expect(seenAfter, 'the heartbeat should have written last_seen_at').not.toBeNull();
+    expect(limiterAfter, 'the limiter should have counted this request').toBeGreaterThan(
+      limiterBefore,
+    );
 
-    // THE EXPECTED SET IS ENUMERATED, and `audit_log` is in it because the
-    // heartbeat UPDATE fires `audit_trg` on `agent_tokens`. **That was not
-    // predicted and it is reported as F.192, not absorbed here** — one audit row
-    // per poll is a growth question for the operator, and an assertion that
-    // quietly allowed it would be the place the question went to die.
-    //
-    // `agent_tokens` itself does not appear: it is UPDATEd, so its row count
-    // does not move. Its column-level bound is asserted in
-    // packages/db/tests/agent-token.test.ts.
-    expect(grew.sort()).toEqual(['audit_log', 'rate_limit'].filter((t) => grew.includes(t)).sort());
-    expect(grew.filter((t) => t !== 'rate_limit' && t !== 'audit_log')).toEqual([]);
+    // ── AND NOTHING ELSE ENUMERATED MOVED. Equality runs over the enumerated
+    //    set only, which is what makes it survive a parallel run.
+    const changesExpected: readonly string[] = [...MUST_GROW, ...UPDATED_NOT_GROWN];
+    const rest = WATCHED.filter((t) => !changesExpected.includes(t));
+    const moved = rest.filter((t) => after[t] !== before[t]);
+    expect(moved, 'a check-in wrote to a table it has no business writing to').toEqual([]);
   });
 
   it("the agent's OWN code names no table outside its set — the half that catches an extra READ", async () => {

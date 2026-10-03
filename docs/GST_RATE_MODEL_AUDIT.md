@@ -65,6 +65,33 @@
 > independent of the claim and stands whichever slab set turns out to be
 > correct. Findings that depend on the claim are marked `[depends on the claim]`
 > by the auditing agent.
+>
+> 4. **The per-type character budget for document numbers.** **Added 2026-10-04,
+>    from F.192, and bundled here rather than asked separately on the operator's
+>    instruction — it is the same conversation with the same person.**
+>
+>    Rule 46(b) caps a tax invoice number at sixteen characters for the WHOLE
+>    string, and Rule 53 covers credit and debit notes. **The question is whether
+>    that cap applies to the documents that are NOT statutory** — quotations,
+>    proformas, orders, payment receipts, dispatch notes — because the answer
+>    decides whether "maximum useful width" is one number or seven.
+>
+>    Why it matters in code rather than only on paper: the format is
+>    `PREFIX-YYYY-NNNN`, so the digit budget is `16 − len(prefix) − 6`. That is
+>    **7 digits for `INV`, 8 for `CN`/`DN`** — and `docPrefixesSchema` currently
+>    permits an 8-character prefix, which with today's 4-digit pad yields an
+>    **18-character invoice number**. So a wrong answer here is not a missed
+>    optimisation; it is either a compliance breach already reachable through the
+>    settings screen, or six document types constrained for no reason.
+>
+>    **The operator's reading and the main thread's training data agree that the
+>    non-statutory types are unconstrained — which is corroboration from a second
+>    unverified source, not verification**, recorded exactly as the three above.
+>
+>    **A SECOND, NARROWER QUESTION IN THE SAME AREA, which this file does not
+>    own:** whether a delivery challan under Rule 55 carries the same
+>    sixteen-character constraint. It is filed as its own row rather than left
+>    split across F.192, F.149 and F.182 — see F.196.
 
 ---
 

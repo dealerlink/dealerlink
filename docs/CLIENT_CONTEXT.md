@@ -173,10 +173,14 @@ None of these is a decision we can take for them.
 >   as addition.** Ask 5 stays in the list, struck through rather than deleted, so
 >   that a citation to "ask 3" written last week still points at the serial
 >   format.
-> - **Three tax questions** — the numbered list in `docs/GST_RATE_MODEL_AUDIT.md`:
->   the current slab set, the transitional treatment of pre-22-Sep-2025 rates, and
->   whether GSTR-1 Table 12 needs the HSN summary per (HSN, rate) pair. These need
->   their **CA**, not the client.
+> - **Four tax questions** — the numbered list in `docs/GST_RATE_MODEL_AUDIT.md`,
+>   enumerated here rather than counted, because this bullet said "three" for a
+>   fortnight and a count is what goes stale silently: **(1)** the current slab
+>   set; **(2)** the transitional treatment of pre-22-Sep-2025 rates; **(3)**
+>   whether GSTR-1 Table 12 needs the HSN summary per (HSN, rate) pair; and
+>   **(4)** the per-type character budget for document numbers, added 2026-10-04
+>   from F.192 — bundled into the same conversation rather than asked separately,
+>   because it is the same person. These need their **CA**, not the client.
 >
 > **Nothing is blocked on any of them.** They are queued so the codebase stops
 > carrying unverified statutory claims as justifications.

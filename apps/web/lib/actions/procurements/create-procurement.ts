@@ -18,6 +18,19 @@ export const createProcurement = tenantAction(
     const tenantId = auth.user.tenantId!;
     const fy = fiscalYear(new Date(input.procurementDate));
     const seq = await nextCounter(tx, tenantId, 'procurement', fy);
+    // PREFIX IS DELIBERATELY NOT TENANT-CONFIGURABLE, and this is not an
+    // oversight — operator ruling, 2026-10-04 (F.195).
+    //
+    // The other six series read `tenant_settings.doc_prefixes`. These two do
+    // not, because **configurable prefixes exist so a tenant's OUTGOING
+    // PAPERWORK matches their existing conventions** — and a PROCUREMENT NUMBER is purchase-side.
+    // Nothing a customer sees carries this number.
+    //
+    // So: if you are here because the inconsistency looked like a bug, it is
+    // not one. If a tenant ever genuinely needs to set it, that is a product
+    // decision with its own consequences (it would change what new documents
+    // are numbered the moment settings are edited, and `doc_prefixes` would
+    // gain two keys) — raise it, do not fold it into a formatting change.
     const procurementNumber = `PROC-${fy}-${String(seq).padStart(4, '0')}`;
 
     const total = input.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
