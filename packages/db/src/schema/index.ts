@@ -26,3 +26,4 @@ export * from './invoice';
 export * from './payment';
 export * from './dispatch';
 export * from './generated-document';
+export * from './agent-token';

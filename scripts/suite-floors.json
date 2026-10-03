@@ -34,15 +34,35 @@
     "`report` paths are relative to the repo root. NOTE that the scripts suite's",
     "report lands in `scripts/` rather than the root, because vitest resolves",
     "`--outputFile` against its config's directory and that suite runs with",
-    "`--config scripts/vitest.config.ts`. Measured, not assumed."
+    "`--config scripts/vitest.config.ts`. Measured, not assumed.",
+    "",
+    "RAISED 2026-10-03: packages/db 224 -> 233, deliberately, to protect F.148’s nine agent_tokens tests. Raising is optional housekeeping and the gate did not ask for it; it is done here because those nine include the only assertion in the repository that an audit trigger EXISTS on a given table (F.168), and a floor that still read 224 would let all nine disappear without a word."
   ],
   "measuredOn": "2026-10-03",
   "suites": {
-    "packages/db": { "floor": 224, "report": "packages/db/.vitest-report.json" },
-    "packages/schemas": { "floor": 74, "report": "packages/schemas/.vitest-report.json" },
-    "packages/tax": { "floor": 104, "report": "packages/tax/.vitest-report.json" },
-    "apps/web": { "floor": 235, "report": "apps/web/.vitest-report.json" },
-    "apps/workers": { "floor": 85, "report": "apps/workers/.vitest-report.json" },
-    "scripts": { "floor": 106, "report": "scripts/.vitest-report.json" }
+    "packages/db": {
+      "floor": 233,
+      "report": "packages/db/.vitest-report.json"
+    },
+    "packages/schemas": {
+      "floor": 74,
+      "report": "packages/schemas/.vitest-report.json"
+    },
+    "packages/tax": {
+      "floor": 104,
+      "report": "packages/tax/.vitest-report.json"
+    },
+    "apps/web": {
+      "floor": 235,
+      "report": "apps/web/.vitest-report.json"
+    },
+    "apps/workers": {
+      "floor": 85,
+      "report": "apps/workers/.vitest-report.json"
+    },
+    "scripts": {
+      "floor": 106,
+      "report": "scripts/.vitest-report.json"
+    }
   }
 }

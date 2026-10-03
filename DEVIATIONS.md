@@ -8018,3 +8018,156 @@ the phenomenon and the fix are unchanged, but the mechanism sentence named the
 wrong ref. Corrected on the row rather than left, because a wrong detail in a
 closed row is re-baselined as checked (DEV.128), and the next reader would look
 for a bug in the wrong place.
+
+### FOLLOW-ON, 2026-10-03 — the rule failed its author the next day, and what survived was a STEP
+
+**DEV.157 was written on 2026-10-03. On 2026-10-03, during F.148's DDL work,
+its author ran a control that reported a pass it had not earned.**
+
+Control B of five: add a third column to the agent heartbeat's `UPDATE` and
+confirm the "exactly two columns" assertion goes red. The edit was applied with
+`node -e` containing `${'CONTROL B'}` inside a shell-quoted script. **The quoting
+broke, node exited with a `SyntaxError`, the file was never modified, and the
+suite ran against unmodified code and reported `Tests 7 passed (7)`.**
+
+Read as a control result that says: _the assertion does not detect a third
+column._ Which is the opposite of the truth.
+
+**The only signal was node printing a `SyntaxError` into the same output stream
+as the test summary, and nothing was watching for it.** The command was
+`node -e '…' && pnpm test …` — except it was not `&&`; the two were separate
+statements in one block, so node's failure did not stop the run. **The instrument
+failed OPEN.** A failed edit and a successful edit produced the same next line.
+
+#### What actually fixed it, and it is not "be more careful"
+
+> **Confirm the edit is PRESENT before running the control. Every time.**
+>
+> ```
+> sed -i '…' <file>
+> grep -n "CONTROL B" <file> && echo "edit CONFIRMED present before running"
+> pnpm test …
+> ```
+
+That is a mechanical step with an output, and it was used for the remaining four
+controls — A, C, D and E — each of which printed its confirmation before the
+suite ran. **The entry records this rather than restating the principle harder,
+because the principle was already written down, by this author, in this file, the
+previous day, and it did not survive contact with a shell quoting bug.**
+
+The general form, and it is narrower than the rule above it:
+
+- **A control has two halves — breaking the thing, and observing the break — and
+  BOTH need evidence.** DEV.157's original rule covers the second half (own the
+  precondition for the duration). This covers the first: **prove the mutation
+  landed.**
+- **An edit applied through an interpreter can fail silently into a no-op.**
+  `sed -i` with an unmatched pattern changes nothing and exits 0. `node -e` with
+  a quoting error changes nothing and exits non-zero **into a stream nobody
+  checks**. A string `.replace()` whose anchor does not match returns the input.
+  All three leave a green suite that means nothing.
+- **So assert on the FILE, not on the command.** `grep -n` the mutation before
+  running. It costs one line and it is the only thing that distinguishes "the
+  assertion survived the break" from "there was no break".
+
+#### Why this one is worth a follow-on rather than a row
+
+Because the failure mode is **the control's own instrument**, and this project
+has now recorded that shape three times in different clothes: a `grep` shim that
+fails silently on a NUL byte (DEV.117/118), a `pnpm --filter` that exits 0 having
+run nothing (F.166), and an edit that does not apply. **Every one of them turns a
+negative result into a false positive, and every one of them is invisible in the
+output a human actually reads.** The list belongs in one place, which is here.
+
+---
+
+## DEV.158 — a gate set that looked complete and omitted the only one that mattered
+
+**Date:** 2026-10-03 · **Task:** F.148 (the `agent_tokens` DDL) · **Impact:** one
+red CI run, caught by CI. Nothing shipped.
+
+### What happened
+
+The DDL commit was reported as verified against this list, which is the list I
+actually ran:
+
+> `pnpm test` six suites green and all floors met · typecheck 0 · lint 0 ·
+> plan:check, check:ids, check:paths clean.
+
+**`pnpm build` is not in it.** CI's `checks` job failed at `build`:
+
+```
+Failed to compile.
+node:crypto
+Module build failed: UnhandledSchemeError: Reading from "node:crypto"
+is not handled by plugins (Unhandled scheme).
+
+Import trace for requested module:
+node:crypto
+../../packages/db/src/agent-token.ts
+../../packages/db/src/index.ts
+./lib/tenant/resolve.ts
+```
+
+`packages/db/src/agent-token.ts` imports `node:crypto` for `hashAgentToken`. One
+line added it to the package barrel; `apps/web/lib/tenant/resolve.ts` imports
+that barrel; and **that file is inlined into the Next.js Edge middleware
+bundle**, where webpack cannot resolve a `node:` scheme.
+
+### Why every gate I ran was green, and that is the point
+
+- `pnpm typecheck` — `node:crypto` is a perfectly good import to TypeScript.
+- `pnpm lint` — no rule forbids it.
+- `pnpm test` — vitest runs under Node, where `node:crypto` resolves.
+- `plan:check`, `check:ids`, `check:paths`, `check:floors` — unrelated.
+
+**`pnpm build` is the only gate in this repository that exercises webpack's Edge
+bundling.** Nothing else compiles for a runtime where Node built-ins are absent.
+So the one gate omitted was the only one capable of seeing the change.
+
+### The family, and it now has three members
+
+This is the same shape as two already recorded:
+
+|             | the gate                     | what it looked like | what it was                                                    |
+| ----------- | ---------------------------- | ------------------- | -------------------------------------------------------------- |
+| F.166       | `pnpm --filter <name> <cmd>` | a suite passing     | **exit 0 having run nothing**                                  |
+| DEV.153     | `pnpm lint`                  | a typecheck         | **lint is not typecheck**; the entry point is `pnpm typecheck` |
+| **DEV.158** | six green gates              | complete coverage   | **the one gate for the runtime the change reached was absent** |
+
+**The common property: the gate set is assembled from habit, and habit is
+assembled from the last change, not this one.** Every member reports success
+truthfully about something other than what was asked.
+
+### The rule, and it is about selection rather than diligence
+
+> **Run `pnpm build` before claiming green on anything that touches a shared
+> package.**
+
+Not "run everything" — that is advice nobody follows on a doc-only change. The
+trigger is specific and checkable: **a change inside `packages/*` can reach a
+runtime the change's own author never compiled for.** `packages/db`'s barrel is
+imported by an Edge-bundled file (F.190, F.191), so a one-line edit there is a
+change to the Edge bundle whether or not it looks like one.
+
+The narrower, more honest form of the lesson: **when listing what was verified,
+ask what runtime the change reaches, and whether any gate on the list compiles
+for it.** Six green checks are not coverage; they are six specific claims, and
+the question is whether any of them is about the thing that changed.
+
+### The fix, and the control
+
+Narrow, per operator ruling: `./agent-token` is no longer exported from the
+barrel, with the reason written at the barrel. Imported by path instead.
+
+**Measured both directions.** Removing the export: `pnpm build` exits 0 and the
+Edge bundle builds (`ƒ Middleware 151 kB`). Re-adding **a single symbol** —
+`export { hashAgentToken } from './agent-token'` — reproduces the identical
+failure with the same import trace. So the hazard is the module being
+**reachable at all**, not which symbol is named, and "remove only
+`hashAgentToken`" would not have been a fix. The edit was grepped for and
+confirmed present before each build, per DEV.157's follow-on.
+
+Filed, not fixed: F.190 (`resolve.ts` importing the barrel is the real coupling)
+and F.191 (nothing declares the barrel Edge-bundled, and only `next build`
+catches a violation — with three candidate detectors priced and none built).

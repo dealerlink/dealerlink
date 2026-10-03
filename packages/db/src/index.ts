@@ -99,3 +99,30 @@ export {
   type MarkDeliveredDbResult,
   type ReturnDispatchDbResult,
 } from './dispatch/lifecycle';
+// ─────────────────────────────────────────────────────────────────────────────
+// './agent-token' IS DELIBERATELY NOT EXPORTED HERE. DO NOT ADD IT BACK.
+//
+// It imports `node:crypto`, and **this barrel is on the Edge path**:
+// `apps/web/lib/tenant/resolve.ts` imports `@dealerlink/db`, and that file is
+// documented as "suitable for Next.js Edge middleware" and is inlined into the
+// middleware bundle. Webpack cannot resolve a `node:` scheme there, so one
+// export line here turned `pnpm build` into:
+//
+//     Module build failed: UnhandledSchemeError: Reading from "node:crypto"
+//     is not handled by plugins (Unhandled scheme).
+//     Import trace: node:crypto -> packages/db/src/agent-token.ts
+//                   -> packages/db/src/index.ts -> ./lib/tenant/resolve.ts
+//
+// Re-exporting ANY symbol from that module is enough — the module is loaded to
+// satisfy the re-export, so removing only `hashAgentToken` would not have
+// helped. Import it by path instead; inside this package that is
+// `../src/agent-token` (see `tests/agent-token.test.ts`).
+//
+// **FOR WHOEVER BUILDS F.148 A.1:** `apps/web` cannot deep-import this today —
+// `package.json` restricts `exports` to `"."`. Adding a subpath export is one
+// option and it is a decision, not a detail; a web-side module is the other.
+// Do not solve it by re-adding the export.
+//
+// The general problem — nothing inside this package says the barrel is
+// Edge-bundled, and only `next build` catches a violation — is FILED, not fixed.
+// ─────────────────────────────────────────────────────────────────────────────
