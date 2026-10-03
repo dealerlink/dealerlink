@@ -142,6 +142,32 @@ Spec §8.1 requires the fetch "demonstrated against a real TallyPrime rather tha
 
 - **Recommendation:** do not decide this from the chair. Make OD-2 a short spike with a named owner who can run a Windows box, and treat the **upgrade path** as the deciding criterion — it is the one that cannot be retrofitted and the one F.148's notes insist must exist "from day one".
 
+> ### RULED 2026-10-03 — SPIKE, and its first question is whether Windows exists at all
+>
+> **Establish the environment before scoping the spike.** Measured: the
+> devcontainer is Linux, and **all four CI jobs run `ubuntu-latest` —
+> `git grep -ni windows -- .github/` returns nothing.** The operator is on a Mac
+> with a Linux container, and **the client's VPS is the only Windows box in
+> reach.**
+>
+> **The gap is narrower than "none available", and the distinction scopes the
+> spike.** `windows-latest` is a standard GitHub-hosted runner and this repo
+> already runs Actions, so an **ephemeral** Windows box is obtainable by adding a
+> job — packaging, install and a single-file build can be answered there. (Not
+> verified: this account's entitlement or billing for Windows minutes. One look at
+> the billing page settles it.) **What has no home is a PERSISTENT box**, and that
+> is where the deciding criterion lives — reboot survival, and an upgrade applied
+> in situ. **Filed as F.189, scoped to the persistent half**, as a blocker on
+> F.148's DELIVERY half and not on its build half.
+>
+> **THE DECIDING CRITERION IS THE UPGRADE PATH**, stated so the spike cannot
+> drift onto developer convenience. The operator's expectation, recorded as
+> something the spike **tests rather than inherits**: **a single compiled binary
+> over Node — "replacing one file is tractable when you cannot deploy to the
+> machine, a directory tree plus a runtime dependency is not."** Node stays a
+> candidate and must be priced as one. What it may not do is win for being the
+> language the rest of the repo is written in, which buys familiarity only.
+
 **OD-3 — The fourth way to establish scope (spec §9 question 1, and it is bigger than §3's three paragraphs).** The operator's instruction stands: resolve the tenant from the token, use the RLS-enforced connection, not `adminDb`. **That is decided and the prompt does not reopen it.** What I tested is _which existing non-session pattern that follows_, and the honest answer is **none, because the path is two patterns joined and the join is new**:
 
 - **Data access — the pg-boss job fits exactly.** `apps/workers/src/jobs/render-pdf.ts:138-139` calls `withTenant(payload.tenantId, …)` on RLS-enforced `db`. Follow this, verbatim in shape. But note the trust anchor differs: that `tenantId` was written into the payload by an authenticated `tenantAction` on **our** infrastructure. It supplies nothing for the resolution step.
@@ -176,9 +202,62 @@ Spec §8.1 requires the fetch "demonstrated against a real TallyPrime rather tha
 
 **OD-4 — Does the token require a migration? Almost certainly yes, and therefore STOP.** There is no column for it: `tenant_settings` carries `inboundEmailToken` and nothing agent-related, and `.env.example` has no agent token. A **per-tenant**, revocable, hashed, read-scoped credential with an installation identity cannot live in an environment variable — that is what makes it different from `HEALTH_TOKEN`. So this needs a new table or new columns, plus an RLS `.sql`, plus an explicit audit-trigger stanza. **This prompt contains no DDL and the day must not write any before authorisation** (CLAUDE.md §10.1). Present the shape and wait. Decide in the same breath: _(a)_ new `agent_tokens` table (installation identity, issued/revoked timestamps, last-seen — room for F.178's write scope) versus _(b)_ columns on `tenant_settings` (cheaper, no installation identity, and §4's "scoped to the read path … structural rather than remembered" becomes hard). **Recommendation: (a)**, because §4 asks for the read/write scope split to be structural _now_ and (b) cannot carry it.
 
+> ### RULED 2026-10-03 — (a), `agent_tokens` as its own table. STOP IS RIGHT
+>
+> Columns on `tenant_settings` cannot carry an installation identity or a
+> per-installation revocation, and §4 requires the read/write scope split to be
+> **structural now** rather than remembered when F.178 lands.
+>
+> **The DDL is PRESENTED FOR REVIEW AND NOT WRITTEN.** The presentation states
+> explicitly, rather than by implication: the `tenant_id` + RLS policy pair
+> (`ENABLE` + `FORCE` + `tenant_isolation USING/WITH CHECK app_current_tenant()`,
+> with `packages/db/src/rls/inbound-token-history.sql` as the template); the
+> **explicit `audit_trg` stanza**, because `rls.test.ts` derives its population
+> from `pg_class` and covers a new table automatically **while nothing enumerates
+> audit triggers** (F.168); whether the column name lets `audit_redact()` catch it,
+> since `%_token` matches and `*_token_hash` does **not** (F.184); and that the
+> token is stored **hashed** — the opposite of `inbound_email_token`, which is
+> `text()` and shown in the admin UI.
+
 **OD-5 — How is "the token appears in no log, no error report, no structured context" actually enforced?** Nothing existing catches it: `scrub.ts:37-43` has no token pattern, `reportError`'s context is an open `Record<string, unknown>` (`wrap.ts:89`), and `audit_redact` would miss a `*_hash` column (premise-check item 4). Options: _(a)_ never put it in, proven by a test over named sinks with a positive control; _(b)_ also add a token pattern to `scrub.ts` — **note it has a byte-copy twin at `apps/workers/src/observability/scrub.ts` (`scrub.ts:12`), so an edit to one only is the F.108 fork hazard**. **Recommendation: (a) for this row**, and file (b) rather than fold it in (CLAUDE.md §11.2).
 
+> ### RULED 2026-10-03 — (a) for this row; (b) filed as F.184
+>
+> Criterion 7 is enforced by never putting the token in a sink, proven by a test
+> over the named sinks **with a positive control that goes red when a line
+> deliberately logs it.**
+>
+> **And the reason the `scrub.ts` fork is the dangerous kind, recorded on F.184:
+> a scrubber that works in one process and not the other FAILS SILENTLY, in the
+> one direction nobody checks.** A forked view-builder diverges and someone sees
+> a wrong figure. A forked scrubber diverges and the only observable is a secret
+> sitting in Sentry — which is precisely where someone goes looking for the cause
+> of the incident that the credential caused.
+
 **OD-6 — Which host does the agent call, and does the endpoint join the middleware exclusion list?** `apps/web/middleware.ts:107`'s matcher explicitly excludes `api/health` and `api/webhooks` — the latter because it is "signature-verified, not session-gated, so tenant-scope middleware must not touch it" (`:104-105`). A new `/api/agent/*` route falls **inside** the matcher. It would not be redirected (`isProtectedAppPath`/`isAdminPath` do not match it, `:39-45`), but it would get host-derived scope resolution it must not depend on. Decide: _(a)_ add `api/agent` to the matcher exclusion, following the webhook's stated reasoning exactly; _(b)_ leave it in and ignore the headers. Also decide whether the agent calls `app.dealerlink.in` or the tenant subdomain `<slug>.dealerlink.in` — **if the latter, the host becomes a second tenant signal and OD-3's "the token names the tenant" invariant acquires a competitor.** **Recommendation: (a), and the agent calls the non-tenant app host**, so the token is the single source of tenant identity.
+
+> ### RULED 2026-10-03 — (a), and the agent calls the non-tenant app host
+>
+> The operator: **"a host-derived tenant signal competing with the token is the
+> ambiguity OD-3 just removed."**
+>
+> **And the draft's own weakest claim is now verified.** It flagged this reasoning
+> as unchecked because it had not read `apps/web/lib/tenant/resolve.ts`. Read in
+> full, 117 lines, and it holds — with a sharper mechanism than the draft had:
+>
+> - `resolveRequestScope(host, queryParam)` is **string-only, no DB access**.
+> - **`app` is a member of `RESERVED_SUBDOMAINS`** alongside `admin` and `www`
+>   (`resolve.ts:20`), so **`app.dealerlink.in` resolves to `{ kind: 'operator' }`
+>   and carries no tenant signal at all** (`:71-79`).
+> - `<slug>.dealerlink.in` resolves to `{ kind: 'tenant', slug }` from the
+>   leftmost label (`:74-78`) — that is the competing signal, and calling the
+>   non-tenant host **removes** it rather than ignoring it.
+> - An **unknown host falls through to `{ kind: 'operator' }`** (`:82`), so the
+>   `*.ondigitalocean.app` URLs `pnpm merge-status` already uses are
+>   tenant-signal-free too.
+>
+> The matcher exclusion follows the webhook's stated reasoning verbatim
+> (`apps/web/middleware.ts:103-105`).
 
 ### A seventh item, which is a conflict rather than a decision
 
