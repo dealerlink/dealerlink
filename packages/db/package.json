@@ -5,7 +5,8 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./agent-token": "./src/agent-token.ts"
+    "./agent-token": "./src/agent-token.ts",
+    "./agent-token-constants": "./src/agent-token-constants.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

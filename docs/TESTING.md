@@ -149,3 +149,49 @@ operation to FAIL, verify that the chosen method actually makes it fail before
 building an assertion on top — and name the method in the test, so the next reader
 knows what was broken on purpose. An unverified failure-injection is a green test
 with nothing behind it.
+
+---
+
+## Assert count before any click
+
+**A `.click()` on a locator that matches nothing burns the full test timeout and
+then reports `Test timeout exceeded`.** That reads as a slow or hung
+application. The fact is a selector matching zero elements.
+
+```ts
+// Reports "Test timeout of 120000ms exceeded" after two minutes.
+await page.getByRole('link', { name: /Demo/ }).first().click();
+
+// Reports 'no row for the seeded tenant "demo": expected 1, got 0' in a second.
+const row = page.locator('li, tr').filter({ hasText: 'demo.dealerlink.in' });
+await expect(row, 'no row for the seeded tenant "demo"').toHaveCount(1);
+await row.getByRole('link', { name: 'Open' }).first().click();
+```
+
+**Same family as the two value rules above, one layer out: a signal that is
+truthful about something other than what was asked.** `status: ok` is truthful
+about `applied > 0`. `version: 'dev'` is truthful about a fallback. A timeout is
+truthful about elapsed time. In each case the reader takes it as an answer to a
+question it was never measuring.
+
+Worked example (F.148 A.1): a new verify spec clicked a tenant row by display
+text. The admin list renders the slug as `<slug>.dealerlink.in` with a separate
+"Open" link, so nothing matched, the click waited out the whole 120-second
+budget, and the failure named the budget. **Two minutes to learn that a selector
+was wrong, and the message pointed at the wrong suspect.**
+
+So, mechanically:
+
+- **Assert `toHaveCount` before clicking, filling or reading anything** derived
+  from a locator you have not already asserted on. One line, and it fails with
+  the number it found.
+- **Give the assertion a message naming the fixture**, because "expected 1, got
+  0" on its own does not say which row was missing.
+- **Address a fixture by a seeded identifier, not by how it looks on screen.**
+  Display text changes with the design; a slug changes when someone changes the
+  seed, which is a diff you can read. A spec that picks its fixture by
+  appearance is order-dependent by construction — F.134's shape, one layer up.
+
+**And do not reach for a longer timeout.** The budget was not the problem, and
+raising it makes the next instance of this take four minutes to tell you the
+same wrong thing (CLAUDE.md §11.1 ruling 1).

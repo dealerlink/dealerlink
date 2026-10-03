@@ -8308,3 +8308,125 @@ edit is present before running it (DEV.157's follow-on), and when a control
 passes, ask whether it could have failed.** Items 1 and 6 are the same
 observation from opposite ends — a green control is only good news once you know
 which one it is.
+
+---
+
+## DEV.160 — the third sibling: DEV.157 and DEV.154 are one defect from two sides
+
+**Date:** 2026-10-04 · **Task:** F.148 A.1 · **Impact:** one red CI run on a
+test, caught by CI. Nothing shipped.
+
+### What happened
+
+The request-level write bound snapshotted the row count of **every public table**
+before and after one check-in, and asserted that only the expected ones moved.
+It passed locally. CI said:
+
+```
+expected [ 'audit_log', 'email_delivery_log' ] to deeply equal [ 'audit_log' ]
+```
+
+**Nothing in the check-in path touches `email_delivery_log`.** Another test file,
+running in parallel in the same vitest process pool, wrote to it inside this
+test's before/after window. **A global snapshot attributes every write in the
+database to the request under test.**
+
+### Classified before it was fixed
+
+**A state bug in the test, not a flake.** The cause is deterministic — a
+global-scope assertion under parallel execution — even though its appearance is
+not, because it depends on which file happens to run alongside. **A green re-run
+would not have been evidence**, and was not used as any (DEV.93's
+discrimination, applied to a test rather than to a spec).
+
+### The two rules are the same defect from two sides
+
+**DEV.157:** a control must account for everything that can touch its
+preconditions during the window it measures.
+
+**DEV.154 (sibling rule 1):** an assertion on an absolute value of shared
+mutable state is an assertion about test ORDER and corpus HISTORY, not about the
+code under test.
+
+Written separately, a day apart, from different instances. **They are one
+observation.** DEV.157 is about _who else can write_ the state; DEV.154 is about
+_reading it absolutely_. Either alone is survivable: you can read an absolute
+value of state nobody else touches, and you can read a delta of state everyone
+touches. **It is the combination that is always wrong, and a global row-count
+snapshot under a parallel runner is exactly the combination** — it neither owns
+the database nor reads it relatively.
+
+So the composite rule, which is what this entry adds:
+
+> **An assertion is only as scoped as the narrowest of (what it measures, what it
+> owns).** Measuring the whole database while owning one tenant's rows is an
+> assertion about the whole database.
+
+### The fix, and why the narrowing needed a partner
+
+Narrowed the snapshot to an **enumerated** set: the tables that must change, plus
+the ones the agent path could plausibly reach if someone widened it carelessly.
+Deliberately excluded: `email_delivery_log`, `webhook_events` and the document
+tables — **not because a write there would be acceptable, but because other
+suites write them.**
+
+**Narrowing alone would have silently weakened the claim**, so it is paired, per
+the operator's instruction: the expected tables are asserted to **change**, which
+is immune to other suites because another test writing to `audit_log` cannot make
+_this_ request's write disappear. The equality then runs over the enumerated set
+only. A false pass would need the request to have done nothing at all.
+
+**And the cost is stated in the test rather than implied away:** a write to a
+table OUTSIDE the enumerated set is no longer caught there. The static source
+enumeration covers it from the other direction, so the two assertions together
+cover what one global snapshot used to, and **neither covers it alone**. A test
+whose heading claims more than it checks is the defect corrected twice already in
+this row.
+
+### Two more corrections the pairing forced, immediately
+
+The "they changed" half failed on its first two runs, and both failures were my
+premise rather than the code:
+
+1. **`rate_limit should have grown: expected 208 to be greater than 208`.** It is
+   a **fixed-window counter** keyed on `(key, window_start)`, so a second request
+   in the same window INCREMENTS a row rather than inserting one. Row count is
+   the wrong observable for it — as it is for `agent_tokens`, which is an UPDATE.
+   **I had assumed row growth was the observable for all three.**
+2. **`the limiter should have counted this request: expected 9 to be greater than
+9`.** `max(count)` is dominated by whichever window was busiest, so an
+   increment in the current window is invisible to it. **A sum rises by one for
+   every counted request**, whichever window row it lands in.
+
+Each of the three expected tables is now asserted on **its own named
+observable**: `audit_log` gains a row, `agent_tokens.last_seen_at` becomes
+non-null, `rate_limit`'s summed count rises. **Naming the observable per table is
+what the first version skipped**, and the pairing is what exposed it — the
+equality half had been green throughout.
+
+### Control
+
+A succeeding, non-idempotent write to a WATCHED table (`tenants`) injected into
+the route: `a check-in wrote to a table it has no business writing to: expected
+[ 'tenants' ] to deeply equal []`, with the static scan firing from the other
+side. Edit grepped for and confirmed present before the run, per DEV.157's
+follow-on.
+
+**Two earlier attempts at that control failed for the wrong reason** — an
+injected `access_log` INSERT threw on missing columns, so five tests broke and
+the bound never ran. Recorded because it is the third time in two days that an
+injected write was invalid rather than detected: **a control's injection needs to
+succeed before its failure means anything.**
+
+### And a near-miss in the cleanup, which is worth more than the control
+
+Restoring the route after that control, I used `cp $SCRATCH/rt.keep.ts` — **a
+stale snapshot taken before the heartbeat moved inside `withTenant`.** It copied
+cleanly. A successful restore and a silent reversion of an hour-old change look
+identical, and the only reason it was caught is that `git diff --stat` was run
+afterwards and showed `7 insertions, 12 deletions` where it should have shown
+nothing.
+
+> **Restore from HEAD, not from a copy.** `git checkout -- <path>` names the
+> authority; a scratchpad file names whatever was true when it was written. Verify
+> with `git diff` after, because the failure mode is silence.

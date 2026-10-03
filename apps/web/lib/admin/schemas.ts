@@ -205,6 +205,25 @@ export const tenantIdAndUserSchema = z.object({
   userId: z.string().uuid(),
 });
 
+/**
+ * F.148 — issuing an agent token. `label` is REQUIRED and is the whole of the
+ * friction on a second token: the operator has to say what the installation IS
+ * before they can create a credential for it. A tenant may legitimately hold
+ * two (a replacement VPS mid-migration), and two live tokens is also what a
+ * compromise looks like, so the UI makes the legitimate case easy and the
+ * accidental one visible rather than blocking either.
+ */
+export const issueAgentTokenSchema = z.object({
+  tenantId: z.string().uuid(),
+  label: z.string().trim().min(3).max(60),
+});
+
+/** F.148 — revoking one. The row STAYS in the listing, marked. */
+export const revokeAgentTokenSchema = z.object({
+  tenantId: z.string().uuid(),
+  tokenId: z.string().uuid(),
+});
+
 export const regenerateInboundTokenSchema = z.object({
   tenantId: z.string().uuid(),
 });

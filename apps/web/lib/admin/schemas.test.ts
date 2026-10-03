@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { createTenantSchema, slugSchema } from './schemas';
+import {
+  createTenantSchema,
+  issueAgentTokenSchema,
+  revokeAgentTokenSchema,
+  slugSchema,
+} from './schemas';
 
 /**
  * Tests for the slug refinement added by DEV.73 (Stage D D.2). The slug
@@ -114,5 +119,48 @@ describe('createTenantSchema — reservation flows through', () => {
       const issue = result.error.issues.find((i) => i.path[0] === 'slug');
       expect(issue?.message).toMatch(/reserved/i);
     }
+  });
+});
+
+describe('agent token schemas (F.148)', () => {
+  it('requires a label, because naming the installation IS the friction', () => {
+    // A second token is permitted and never blocked — a replacement VPS during a
+    // migration is the case with the deadline. The operator still has to say
+    // what the installation is, which is most of the friction needed.
+    const ok = issueAgentTokenSchema.safeParse({
+      tenantId: '11111111-1111-4111-8111-111111111111',
+      label: 'Ponda VPS',
+    });
+    expect(ok.success).toBe(true);
+
+    for (const label of ['', '  ', 'ab']) {
+      expect(
+        issueAgentTokenSchema.safeParse({
+          tenantId: '11111111-1111-4111-8111-111111111111',
+          label,
+        }).success,
+        `label ${JSON.stringify(label)} should be rejected`,
+      ).toBe(false);
+    }
+  });
+
+  it('trims the label rather than storing the operator’s whitespace', () => {
+    const r = issueAgentTokenSchema.parse({
+      tenantId: '11111111-1111-4111-8111-111111111111',
+      label: '  Ponda VPS  ',
+    });
+    expect(r.label).toBe('Ponda VPS');
+  });
+
+  it('revocation needs both ids — a token id alone could belong to another tenant', () => {
+    expect(
+      revokeAgentTokenSchema.safeParse({ tokenId: '22222222-2222-4222-8222-222222222222' }).success,
+    ).toBe(false);
+    expect(
+      revokeAgentTokenSchema.safeParse({
+        tenantId: '11111111-1111-4111-8111-111111111111',
+        tokenId: '22222222-2222-4222-8222-222222222222',
+      }).success,
+    ).toBe(true);
   });
 });

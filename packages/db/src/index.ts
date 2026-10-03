@@ -1,4 +1,12 @@
 export * from './schema';
+// SAFE ON THE BARREL, unlike `./agent-token`: this module imports NOTHING, so
+// it cannot drag a Node built-in into an Edge or browser bundle. That is the
+// whole reason it exists as a separate file (F.148, DEV.158).
+export {
+  HEARTBEAT_THROTTLE,
+  HEARTBEAT_THROTTLE_MINUTES,
+  STALE_AFTER_MINUTES,
+} from './agent-token-constants';
 export { db, adminDb, closeDbConnection, type DrizzleDb } from './client';
 export {
   withTenant,

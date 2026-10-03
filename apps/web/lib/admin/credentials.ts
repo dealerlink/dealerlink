@@ -40,6 +40,28 @@ export function generateTemporaryPassword(): string {
   return picks.join('');
 }
 
+/**
+ * The Tally agent’s bearer token — F.148.
+ *
+ * 32 random bytes, base64url, ~256 bits. Longer than the inbound email token
+ * below for a reason that is not symmetry: that one is a routing label that
+ * appears in an email address a human types, so it trades entropy for
+ * typeability. **This one is a credential that is never typed and never
+ * displayed twice** — it is copied once into an agent config file — so there is
+ * nothing to trade and no reason to be shorter than the hash that stores it.
+ *
+ * `base64url` rather than hex: same entropy in two-thirds the characters, and
+ * no `+` or `/` to be mangled by a config parser or a shell on their VPS.
+ *
+ * **WHAT IS STORED IS `sha256(this)`**, via `hashAgentToken`. The plaintext
+ * exists only in the response to the issuing request and in whatever the
+ * operator pastes it into. It cannot be recovered — which is a property of how
+ * the credential is protected, not a limitation of the screen.
+ */
+export function generateAgentToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
 /** 32-hex-character token used in inbound email addresses. */
 export function generateInboundToken(): string {
   return randomBytes(16).toString('hex');

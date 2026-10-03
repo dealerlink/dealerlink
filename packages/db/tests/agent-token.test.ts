@@ -24,7 +24,14 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { hashAgentToken, resolveAgentToken, touchAgentToken } from '../src/agent-token';
+import {
+  HEARTBEAT_THROTTLE,
+  HEARTBEAT_THROTTLE_MINUTES,
+  STALE_AFTER_MINUTES,
+  hashAgentToken,
+  resolveAgentToken,
+  touchAgentToken,
+} from '../src/agent-token';
 import { adminDb } from '../src/client';
 import { withTenant } from '../src/with-tenant';
 
@@ -96,6 +103,30 @@ async function clearThrottle(tokenId: string) {
     sql`UPDATE agent_tokens SET last_seen_at = NULL, agent_version = NULL WHERE id = ${tokenId}::uuid`,
   );
 }
+
+describe('F.148 — the staleness threshold is DERIVED, not a parallel constant', () => {
+  /**
+   * Operator instruction: make it a derivation, not a 60 that happens to be
+   * four times fifteen. **The relationship named in the comment should be
+   * enforced by the code**, and this is what enforces it — otherwise someone
+   * tightens the throttle and the threshold silently becomes aggressive.
+   */
+  it('STALE_AFTER_MINUTES is exactly four heartbeat windows', () => {
+    expect(STALE_AFTER_MINUTES).toBe(HEARTBEAT_THROTTLE_MINUTES * 4);
+  });
+
+  it('the SQL interval literal is built from the same number', () => {
+    // Not `‘15 minutes’` typed twice. If the number moves, the interval moves.
+    expect(HEARTBEAT_THROTTLE).toBe(`${HEARTBEAT_THROTTLE_MINUTES} minutes`);
+  });
+
+  it('the threshold clears the window with room — at least three missed check-ins', () => {
+    // The property that matters, not the specific multiple: `last_seen_at` is
+    // a LOWER BOUND by one window, so a threshold of 2x would alarm on an
+    // agent that had just checked in. This fails if someone drops it to 2.
+    expect(STALE_AFTER_MINUTES / HEARTBEAT_THROTTLE_MINUTES).toBeGreaterThanOrEqual(3);
+  });
+});
 
 describe('F.148 — resolution returns a tenant id and nothing else', () => {
   it('resolves a valid token to exactly its own tenant', async () => {
