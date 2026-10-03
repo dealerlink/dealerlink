@@ -26,10 +26,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { hashAgentToken, resolveAgentToken, touchAgentToken } from '../src/agent-token';
 import { adminDb } from '../src/client';
+import { withTenant } from '../src/with-tenant';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
 const TOKEN_A = 'f148-test-token-tenant-a';
+const TOKEN_A2 = 'f148-test-token-tenant-a-second';
 const TOKEN_B = 'f148-test-token-tenant-b';
 
 async function mkTenant(id: string, slug: string) {
@@ -50,6 +52,14 @@ beforeAll(async () => {
   await mkTenant(TENANT_A, 'f148-a');
   await mkTenant(TENANT_B, 'f148-b');
   await mkToken(TENANT_A, TOKEN_A, 'A site');
+  // A SECOND TOKEN IN THE SAME TENANT, load-bearing rather than decorative.
+  // With one row per tenant, "no OTHER row changed" was vacuous for
+  // same-tenant rows: dropping the `WHERE id` predicate left the statement
+  // updating the one row it was meant to, and the control PASSED. RLS
+  // protects the cross-tenant case; only a sibling row protects this one.
+  // DEV.154's rule — a fixture where the right and wrong implementations
+  // agree is not a fixture.
+  await mkToken(TENANT_A, TOKEN_A2, 'A second site');
   await mkToken(TENANT_B, TOKEN_B, 'B site');
 });
 
@@ -61,6 +71,31 @@ afterAll(async () => {
     sql`DELETE FROM tenants WHERE id IN (${TENANT_A}::uuid, ${TENANT_B}::uuid)`,
   );
 });
+
+/**
+ * THE HEARTBEAT IS NOW RLS-SCOPED, so every call goes through `withTenant`.
+ * That is a correction the `rg -n adminDb` measurement forced — it ran on
+ * `adminDb` and made the agent's exemption two statements wide.
+ *
+ * It also makes these assertions STRONGER: they now prove the update works
+ * under RLS, not merely that it works with RLS bypassed. A `WHERE id` that
+ * matched another tenant's row would be stopped by the policy here and was not
+ * before.
+ *
+ * And the heartbeat is THROTTLED (`HEARTBEAT_THROTTLE`, 15 minutes), so a
+ * second call inside the window is a deliberate no-op. Tests that need a write
+ * to land reset `last_seen_at` first rather than hoping.
+ */
+async function touch(tenantId: string, tokenId: string, version: string | null) {
+  await withTenant(tenantId, async (tx) => touchAgentToken(tx, tokenId, version));
+}
+
+/** Clear the throttle so the next touch is guaranteed to write. */
+async function clearThrottle(tokenId: string) {
+  await adminDb.execute(
+    sql`UPDATE agent_tokens SET last_seen_at = NULL, agent_version = NULL WHERE id = ${tokenId}::uuid`,
+  );
+}
 
 describe('F.148 — resolution returns a tenant id and nothing else', () => {
   it('resolves a valid token to exactly its own tenant', async () => {
@@ -123,9 +158,10 @@ describe('F.148 — the heartbeat writes EXACTLY two columns on EXACTLY one row'
   };
 
   it('changes last_seen_at and agent_version, and NOTHING else, on NO other row', async () => {
-    const before = await snapshot();
     const a = await resolveAgentToken(TOKEN_A);
-    await touchAgentToken(a!.tokenId, '1.2.3');
+    await clearThrottle(a!.tokenId);
+    const before = await snapshot();
+    await touch(TENANT_A, a!.tokenId, '1.2.3');
     const after = await snapshot();
 
     expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
@@ -153,14 +189,16 @@ describe('F.148 — the heartbeat writes EXACTLY two columns on EXACTLY one row'
           sql`SELECT updated_at FROM agent_tokens WHERE id = ${a!.tokenId}::uuid`,
         )) as unknown as { updated_at: Date }[]
       )[0]!.updated_at;
+    await clearThrottle(a!.tokenId);
     const before = await read();
-    await touchAgentToken(a!.tokenId, '9.9.9');
+    await touch(TENANT_A, a!.tokenId, '9.9.9');
     expect(String(await read())).toBe(String(before));
   });
 
   it('writes a NULL agent_version rather than inventing one', async () => {
     const a = await resolveAgentToken(TOKEN_A);
-    await touchAgentToken(a!.tokenId, null);
+    await clearThrottle(a!.tokenId);
+    await touch(TENANT_A, a!.tokenId, null);
     const rows = (await adminDb.execute(
       sql`SELECT agent_version FROM agent_tokens WHERE id = ${a!.tokenId}::uuid`,
     )) as unknown as { agent_version: string | null }[];

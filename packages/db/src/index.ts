@@ -118,10 +118,20 @@ export {
 // helped. Import it by path instead; inside this package that is
 // `../src/agent-token` (see `tests/agent-token.test.ts`).
 //
-// **FOR WHOEVER BUILDS F.148 A.1:** `apps/web` cannot deep-import this today —
-// `package.json` restricts `exports` to `"."`. Adding a subpath export is one
-// option and it is a decision, not a detail; a web-side module is the other.
-// Do not solve it by re-adding the export.
+// **RESOLVED 2026-10-03 (operator ruling): a SUBPATH EXPORT.**
+// `package.json` now has `"./agent-token": "./src/agent-token.ts"`, so
+// `apps/web` imports `@dealerlink/db/agent-token` directly.
+//
+// **WHY THE SUBPATH IS NARROWER THAN THE BARREL IN THE WAY THAT MATTERS:**
+// it is reachable only by something that ASKS FOR IT EXPLICITLY. A module that
+// imports `"."` — `lib/tenant/resolve.ts`, and whatever else ends up on the
+// Edge path — cannot drag `node:crypto` in by accident, because the subpath is
+// not part of what `"."` resolves to. **That accidental reachability WAS the
+// failure, and this does not reintroduce it.** The import is now a statement of
+// intent by a file that has declared `runtime = 'nodejs'`.
+//
+// Still do not re-add it to the barrel: that would restore exactly the
+// accidental path the subpath avoids.
 //
 // The general problem — nothing inside this package says the barrel is
 // Edge-bundled, and only `next build` catches a violation — is FILED, not fixed.

@@ -27,6 +27,59 @@ export interface RateLimitResult {
  *
  * Uses ON CONFLICT ... DO UPDATE so increments are atomic per connection.
  * Does NOT throw; soft-fails open so a flaky DB never wedges public endpoints.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * SOFT-FAILING OPEN IS CORRECT HERE AND WRONG FOR A SECURITY SHIELD.
+ * READ THIS BEFORE REACHING FOR THIS HELPER ON AN UNAUTHENTICATED ROUTE.
+ * ═════════════════════════════════════════════════════════════════════════════
+ *
+ * F.148 needs two limits that look alike and are not the same thing. The
+ * distinction is recorded here, at the helper, because the mistake available is
+ * reusing this function for both on the assumption that they are.
+ *
+ * **1 — THE TOKEN-KEYED, POST-AUTHENTICATION LIMIT. MAY fail open. Use this.**
+ *
+ * Its job is to bound ONE INSTALLATION's agent and to make a runaway visible —
+ * the likely failure is our own software in a retry loop on a machine we cannot
+ * see (F.189), not an attacker. It is keyed on the TOKEN, never the IP: several
+ * agents can sit behind one NAT, one agent's IP can change, and the thing being
+ * bounded is an installation, which is exactly what the token identifies.
+ *
+ * Generous enough never to trip in normal polling, **so that a trip is a signal
+ * rather than noise**, with `Retry-After` on the 429 so a well-behaved agent
+ * backs off and a misbehaving one is at least told.
+ *
+ * Failing open is right: if this store is unavailable, a looping agent keeps
+ * looping — bad, bounded, and already authenticated. Failing CLOSED would turn a
+ * storage blip into **every tenant's sync going dark at once**, which is worse
+ * than the thing prevented.
+ *
+ * **2 — THE IP-KEYED, PRE-AUTHENTICATION SHIELD. MUST NOT fail open. DO NOT USE
+ * THIS FUNCTION FOR IT.**
+ *
+ * Its job is to bound UNAUTHENTICATED traffic — token guessing, anonymous
+ * flooding. A shield that disappears under load is absent exactly when it is
+ * being tested, and an attacker can **induce the condition**: pressure the
+ * database and the limiter stops limiting. That is not a safety margin, it is a
+ * trigger. Same shape as F.176 — a protection that is missing precisely when
+ * you are vulnerable.
+ *
+ * **AND THE FIX IS NOT "make it fail closed".** A store-backed limiter that
+ * REJECTS on store failure reaches the same outage by the other door: every
+ * agent offline during the same blip. So the shield **must not depend on the
+ * store at all** — an in-process, per-instance counter, which has no failure
+ * mode to choose. Weaker limit (per instance, not global), unconditional
+ * existence. A shield on an unauthenticated route does not need global
+ * accounting; it needs to exist without conditions.
+ *
+ * **Why it is phrased as "the shield does not call `checkRateLimit`" rather than
+ * as a flag on this function:** a posture flag is one default away from being
+ * wrong, and defaults get changed by people who never read this comment. "Does
+ * not call it" is a property you have to actively destroy, and it shows up in a
+ * diff.
+ *
+ * Settled 2026-10-03 (F.148 A.1). The operator's own first wording was "fail
+ * closed", corrected to this on the grounds above.
  */
 export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const fullKey = `${opts.scope}:${opts.key}`;
