@@ -8018,3 +8018,63 @@ the phenomenon and the fix are unchanged, but the mechanism sentence named the
 wrong ref. Corrected on the row rather than left, because a wrong detail in a
 closed row is re-baselined as checked (DEV.128), and the next reader would look
 for a bug in the wrong place.
+
+### FOLLOW-ON, 2026-10-03 — the rule failed its author the next day, and what survived was a STEP
+
+**DEV.157 was written on 2026-10-03. On 2026-10-03, during F.148's DDL work,
+its author ran a control that reported a pass it had not earned.**
+
+Control B of five: add a third column to the agent heartbeat's `UPDATE` and
+confirm the "exactly two columns" assertion goes red. The edit was applied with
+`node -e` containing `${'CONTROL B'}` inside a shell-quoted script. **The quoting
+broke, node exited with a `SyntaxError`, the file was never modified, and the
+suite ran against unmodified code and reported `Tests 7 passed (7)`.**
+
+Read as a control result that says: _the assertion does not detect a third
+column._ Which is the opposite of the truth.
+
+**The only signal was node printing a `SyntaxError` into the same output stream
+as the test summary, and nothing was watching for it.** The command was
+`node -e '…' && pnpm test …` — except it was not `&&`; the two were separate
+statements in one block, so node's failure did not stop the run. **The instrument
+failed OPEN.** A failed edit and a successful edit produced the same next line.
+
+#### What actually fixed it, and it is not "be more careful"
+
+> **Confirm the edit is PRESENT before running the control. Every time.**
+>
+> ```
+> sed -i '…' <file>
+> grep -n "CONTROL B" <file> && echo "edit CONFIRMED present before running"
+> pnpm test …
+> ```
+
+That is a mechanical step with an output, and it was used for the remaining four
+controls — A, C, D and E — each of which printed its confirmation before the
+suite ran. **The entry records this rather than restating the principle harder,
+because the principle was already written down, by this author, in this file, the
+previous day, and it did not survive contact with a shell quoting bug.**
+
+The general form, and it is narrower than the rule above it:
+
+- **A control has two halves — breaking the thing, and observing the break — and
+  BOTH need evidence.** DEV.157's original rule covers the second half (own the
+  precondition for the duration). This covers the first: **prove the mutation
+  landed.**
+- **An edit applied through an interpreter can fail silently into a no-op.**
+  `sed -i` with an unmatched pattern changes nothing and exits 0. `node -e` with
+  a quoting error changes nothing and exits non-zero **into a stream nobody
+  checks**. A string `.replace()` whose anchor does not match returns the input.
+  All three leave a green suite that means nothing.
+- **So assert on the FILE, not on the command.** `grep -n` the mutation before
+  running. It costs one line and it is the only thing that distinguishes "the
+  assertion survived the break" from "there was no break".
+
+#### Why this one is worth a follow-on rather than a row
+
+Because the failure mode is **the control's own instrument**, and this project
+has now recorded that shape three times in different clothes: a `grep` shim that
+fails silently on a NUL byte (DEV.117/118), a `pnpm --filter` that exits 0 having
+run nothing (F.166), and an edit that does not apply. **Every one of them turns a
+negative result into a false positive, and every one of them is invisible in the
+output a human actually reads.** The list belongs in one place, which is here.
