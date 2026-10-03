@@ -50,3 +50,6 @@ scripts/load-test/.sessions.json
 # Claude Code local session artifacts
 .claude/settings.local.json
 .claude/*.local.json
+
+# F.177 — per-suite JSON test reports, read by `pnpm check:floors`.
+.vitest-report.json

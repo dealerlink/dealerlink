@@ -48,10 +48,64 @@
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * ONE HOME FOR THE TOKEN — the same file the DATABASE_URLs live in.
+ *
+ * `/api/health` withholds its detail without a bearer token (F.176), and this
+ * script needs it to compare `migrations.applied` against `_journal.json`.
+ *
+ * **The value's single authoritative home is
+ * `$DEALERLINK_SECRETS/<env>-secrets.txt`** (default `~/.dealerlink`, mounted
+ * read-only at `/home/node/.dealerlink` in the devcontainer) — the same file
+ * `scripts/sync-app-spec.mjs` and `scripts/staging-app-render-spec.mjs` read to
+ * put secrets into the live DO spec. So the token is written once, in the file
+ * that already decides what the app's env contains, and this script reads it
+ * from there.
+ *
+ * **It is deliberately NOT copied into `.env.local`.** That file is the local
+ * app/test env and holds a DIFFERENT `DATABASE_URL` (the dev database); adding
+ * `HEALTH_TOKEN` there would create a second home for one value, and the two
+ * would drift in a way indistinguishable from the endpoint withholding
+ * correctly.
+ *
+ * PER-APP BY CONSTRUCTION: staging and production each have their own secrets
+ * file, so each gets its own token under the same key name — exactly how
+ * `DATABASE_URL` already differs between them. No `STAGING_`/`PRODUCTION_`
+ * prefixes, and no shared secret across environments.
+ *
+ * `HEALTH_TOKEN` in the process env still wins, for a one-off against an
+ * environment whose secrets file is not on this machine.
+ */
+function healthToken(env) {
+  if (process.env.HEALTH_TOKEN) return process.env.HEALTH_TOKEN;
+  const dir = process.env.DEALERLINK_SECRETS || path.join(os.homedir(), '.dealerlink');
+  const file = path.join(dir, `${env}-secrets.txt`);
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const i = line.indexOf('=');
+    if (i < 0) continue;
+    if (line.slice(0, i).trim() !== 'HEALTH_TOKEN') continue;
+    const value = line.slice(i + 1).trim();
+    // An EMPTY value is not a value. `SENTRY_RELEASE` sits empty in both of
+    // these files today, which is exactly why production reports no build id —
+    // so "present but blank" is a state worth not mistaking for "set".
+    return value.length ? value : null;
+  }
+  return null;
+}
 
 const APPS = {
   staging: {
@@ -156,14 +210,14 @@ function deployment(appId) {
   return { phase: d.phase, sha, createdAt: d.created_at, cause: d.cause };
 }
 
-async function health(url) {
+async function health(url, token) {
   const headers = {};
   // F.176 HAS LANDED, so this is now REQUIRED for the migration comparison.
   // Absence is still not an ERROR — the endpoint answers 200 with
   // `{ status, timestamp, detail: 'withheld' }` and the consumer below reports
-  // "no applied count in the response" rather than a problem. But the
-  // comparison this script exists to make is unavailable until the token is set.
-  if (process.env.HEALTH_TOKEN) headers.authorization = `Bearer ${process.env.HEALTH_TOKEN}`;
+  // it as withheld rather than as a problem. But the comparison this script
+  // exists to make is unavailable until the token is set. See `healthToken`.
+  if (token) headers.authorization = `Bearer ${token}`;
   try {
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
     if (res.status === 401 || res.status === 403) {
@@ -330,7 +384,7 @@ async function main() {
   console.log(`MIGRATIONS — applied vs _journal.json (${journal} entries).`);
   console.log('             Never status:ok, which returns ok at 17 of 21 (F.139).');
   for (const [name, app] of Object.entries(APPS)) {
-    const h = await health(app.health);
+    const h = await health(app.health, healthToken(name));
     if (!h.reachable) {
       console.log(`  ${name.padEnd(11)} unreachable: ${String(h.error).slice(0, 60)}`);
       problems++;
