@@ -7937,12 +7937,43 @@ Reading the control, the command, the script and the ref would not have found it
 What found it was the output being wrong in a way the setup could not explain —
 `c1748fe` was set two seconds earlier and the script printed `ef3abe0`.
 
-The generalisable form:
+The generalisable form, stated as a rule because it reaches well past this
+instance:
 
-> **A control that establishes a precondition must own that precondition for the
-> duration of the run.** If anything else in the session can write the state under
-> test — a watcher, a poller, a dev server, a file watcher, a cron — the control
-> is measuring a race and not the code.
+> **A control must account for everything that can touch its preconditions during
+> the window it is measuring — not only for its own logic.**
+>
+> A background process, a scheduled task, a file watcher, a dev server or another
+> session appears **nowhere in the control's code** and can falsify it from
+> outside its frame. Reading the control will not find it.
+
+**Why that is a different rule from the ones already written down.** Every earlier
+member of this family fails for a reason **visible inside the control**: a
+`toContain` against a whole document (DEV.155), a fixture where the right and
+wrong implementations agree (DEV.154), a sentinel echoed back in an error message
+(DEV.153), a check satisfiable by the wrong route (DEV.138 row 16), a passing
+negative nothing could have made fail (DEV.156). For all of those, careful
+reading is at least _capable_ of catching the problem — the rule "run the control"
+exists because reading reliably does not, not because it cannot.
+
+**This one is not readable at all.** The control was correct. The command was
+correct. The script was correct. The ref was set two seconds before the run. The
+only signal was an output that the setup could not explain, and the cause was in
+a process that no artefact of the control mentions.
+
+So the practice has a second step, mechanical like the first:
+
+- **Before trusting a control, enumerate what else is running.** Background
+  shells, watch-mode test runners, `next dev`, a polling loop, a cron, a teammate
+  or another session on the same working tree. Stop them, or scope the control to
+  state they cannot reach.
+- **Prefer a precondition the control OWNS** — a temporary directory, a
+  rolled-back transaction, a fixture created and torn down in the test — over a
+  shared one it merely sets. Shared state is where another process meets you; the
+  counter in DEV.154's sibling rule is the same hazard one layer down.
+- **Treat an output the setup cannot explain as a failed control**, not as a
+  result. Here the ref was `c1748fe` and the script printed `ef3abe0`; the correct
+  response is to find out why, not to record the run.
 
 Stopped the background task, re-ran, and the defect reproduced exactly as
 predicted: pre-fix reported `c1748fe` against deploys on `ef3abe0` with two false
