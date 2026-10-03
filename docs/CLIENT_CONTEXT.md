@@ -214,19 +214,35 @@ None of these is a decision we can take for them.
    (17 Sep) and `INV-93` (25 Sep) — **6–7 per working day, roughly 130–150 a
    month.** Recorded on F.11 and F.24.
 
-   **Why it was asked, which still stands:** it was never a sizing question, it
-   is the question that prices the Phase 1 proposal. The parallel-run posture in
-   `docs/DEMO_SCRIPT.md` has Dealerlink hold the sale up to the order while
-   **Swipe keeps issuing the invoices of record**, so every confirmed order is
-   keyed into Swipe a second time to raise the invoice. That double entry is
-   **per invoice**, so the cost of Phase 1 to them is a straight multiple of the
-   figure above. The filed threshold was "at 40 invoices a month the parallel
-   run is an irritation; at 400 it is a reason to refuse" — **the measured rate
-   sits between the two and nobody has placed it.** That judgement is open and
-   is the one thing here still owed; the number is not.
+   **Why it was asked — and the pricing reason it was asked for is now VOID.**
+   **Corrected 2026-10-03, hours after the correction above, which is the part
+   worth noticing.** This paragraph read: "it is the question that prices the
+   Phase 1 proposal. The parallel-run posture in `docs/DEMO_SCRIPT.md` has
+   Dealerlink hold the sale up to the order while **Swipe keeps issuing the
+   invoices of record**, so every confirmed order is keyed into Swipe a second
+   time to raise the invoice. That double entry is **per invoice**, so the cost
+   of Phase 1 to them is a straight multiple of the figure above." It then
+   recorded the filed threshold — "at 40 invoices a month the parallel run is an
+   irritation; at 400 it is a reason to refuse" — and called placing the measured
+   rate between them "the one thing here still owed".
 
-   **What the answer already changed:** F.11's whole design (the Tally masters
-   export became their onboarding step, not a client deliverable); F.24 (manual
+   **There is no parallel run.** The plan is a migration from Swipe to Dealerlink
+   with a cutover (operator ruling, 2026-10-03, recorded on F.148). Both systems
+   are never systems of record at the same time, so **nothing is keyed twice and
+   the per-invoice multiple does not exist.** The threshold judgement is not open;
+   it was a judgement about a cost that will not be incurred.
+
+   **What the number is still for**, which is not nothing: it is what makes
+   manual IRN generation about ten minutes a day and therefore makes the cutover
+   viable before F.24 (§4 above, and F.154); it bounds whether they are near the
+   e-invoicing AATO threshold; and it is the multiplier for the ledger problem
+   below.
+
+   **What the answer already changed:** F.11's whole design — the Tally masters
+   stopped being a client deliverable, first becoming a step in their onboarding
+   and then, on 2026-10-03, **a query through the Tally agent itself**: nobody
+   exports anything, the module fetches the masters and the tenant selects from
+   what came back (F.148, F.11); F.24 (manual
    IRN generation at this rate is about ten minutes a day, so Phase 1 invoicing
    is viable without the GSP); and **§4's go-live scope above, corrected
    2026-10-03 — e-invoicing is an automation milestone, not a go-live blocker.**
