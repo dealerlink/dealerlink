@@ -41,7 +41,10 @@
  *
  * Usage:
  *   pnpm merge-status
- *   HEALTH_TOKEN=… pnpm merge-status     # once F.176 lands
+ *   HEALTH_TOKEN=… pnpm merge-status     # REQUIRED since F.176 landed:
+ *                                        # without it the endpoint withholds
+ *                                        # its detail and the migration
+ *                                        # comparison below cannot be made.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -155,7 +158,11 @@ function deployment(appId) {
 
 async function health(url) {
   const headers = {};
-  // F.176 will require this. Absent today, and absence is not an error.
+  // F.176 HAS LANDED, so this is now REQUIRED for the migration comparison.
+  // Absence is still not an ERROR — the endpoint answers 200 with
+  // `{ status, timestamp, detail: 'withheld' }` and the consumer below reports
+  // "no applied count in the response" rather than a problem. But the
+  // comparison this script exists to make is unavailable until the token is set.
   if (process.env.HEALTH_TOKEN) headers.authorization = `Bearer ${process.env.HEALTH_TOKEN}`;
   try {
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
@@ -330,7 +337,10 @@ async function main() {
       continue;
     }
     if (h.withheld) {
-      // Expected once F.176 lands and no HEALTH_TOKEN is set. NOT a failure.
+      // A 401/403 is not the shape F.176 chose — it answers 200 and withholds —
+      // so this branch is defensive rather than expected. Kept because an
+      // intermediary or a future change could produce it, and because silently
+      // treating an auth failure as a healthy 200 is the error worth avoiding.
       console.log(
         `  ${name.padEnd(11)} detail withheld (HTTP ${h.status}) — set HEALTH_TOKEN to compare`,
       );
@@ -342,7 +352,10 @@ async function main() {
       continue;
     }
     if (h.applied === null) {
-      console.log(`  ${name.padEnd(11)} status ${h.status} — no applied count in the response`);
+      console.log(
+        `  ${name.padEnd(11)} status ${h.status} — detail withheld (F.176); ` +
+          `set HEALTH_TOKEN to compare applied vs ${journal}`,
+      );
       continue;
     }
     const inStep = h.applied === journal;

@@ -58,6 +58,27 @@ services:
         scope: RUN_TIME
         type: SECRET
       # --- Auth ---
+      # --- /api/health detail gate (F.176) ---
+      #
+      # WITHOUT THIS, /api/health ANSWERS { status, timestamp, detail: "withheld" }
+      # TO EVERYONE, INCLUDING THE OPERATOR. The endpoint fails closed on purpose:
+      # an absent secret must not mean "no check" on a route the middleware
+      # matcher deliberately leaves unauthenticated.
+      #
+      # The uptime monitor is unaffected — it needs a 200 and a status word, and
+      # it still gets both. What it loses is the detail that named the tables
+      # lacking RLS or an audit trigger, which were named precisely when some
+      # were missing (F.176).
+      #
+      # `pnpm merge-status` READS this to compare migrations.applied against
+      # _journal.json (F.173). Until the value is set in the DO dashboard, that
+      # comparison reports "detail withheld" instead of a count.
+      #
+      # DECLARED HERE, NOT APPLIED: a spec change needs `doctl apps update`,
+      # which is the operator's (DEV.64) and is denied to the build agent.
+      - key: HEALTH_TOKEN
+        scope: RUN_TIME
+        type: SECRET
       - key: SESSION_SECRET
         scope: RUN_TIME
         type: SECRET
