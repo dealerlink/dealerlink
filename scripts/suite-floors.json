@@ -37,12 +37,13 @@
     "`--config scripts/vitest.config.ts`. Measured, not assumed.",
     "",
     "RAISED 2026-10-03: packages/db 224 -> 233, deliberately, to protect F.148’s nine agent_tokens tests. Raising is optional housekeeping and the gate did not ask for it; it is done here because those nine include the only assertion in the repository that an audit trigger EXISTS on a given table (F.168), and a floor that still read 224 would let all nine disappear without a word.",
-    "RAISED 2026-10-03: apps/web 235 -> 245, deliberately, for F.148 A.1’s ten agent tests. Those include the only assertion in the repository that four rejection responses are IDENTICAL rather than merely all 401, and the two-request assertion that the heartbeat throttle actually throttles — which a control showed was unasserted. packages/db stays at 233: its nine agent_token tests were already counted when that floor was set."
+    "RAISED 2026-10-03: apps/web 235 -> 245, deliberately, for F.148 A.1’s ten agent tests. Those include the only assertion in the repository that four rejection responses are IDENTICAL rather than merely all 401, and the two-request assertion that the heartbeat throttle actually throttles — which a control showed was unasserted. packages/db stays at 233: its nine agent_token tests were already counted when that floor was set.",
+    "RAISED 2026-10-03 (second time today): packages/db 233 -> 236 for the STALE_AFTER derivation tests, apps/web 245 -> 259 for the agent-token generation, schema, and bucketed last-seen tests. Raising is optional housekeeping; these are raised because each group contains an assertion nothing else makes — the derived staleness multiple, and that `describeLastSeen` never emits an exact timestamp."
   ],
   "measuredOn": "2026-10-03",
   "suites": {
     "packages/db": {
-      "floor": 233,
+      "floor": 236,
       "report": "packages/db/.vitest-report.json"
     },
     "packages/schemas": {
@@ -54,7 +55,7 @@
       "report": "packages/tax/.vitest-report.json"
     },
     "apps/web": {
-      "floor": 245,
+      "floor": 259,
       "report": "apps/web/.vitest-report.json"
     },
     "apps/workers": {

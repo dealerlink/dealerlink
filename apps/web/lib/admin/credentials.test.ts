@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { generateInboundToken, generateTemporaryPassword, tenantLoginUrl } from './credentials';
+import {
+  generateAgentToken,
+  generateInboundToken,
+  generateTemporaryPassword,
+  tenantLoginUrl,
+} from './credentials';
 
 describe('generateTemporaryPassword', () => {
   it('returns a 12-character string', () => {
@@ -47,5 +52,28 @@ describe('tenantLoginUrl', () => {
     const url = tenantLoginUrl('acme');
     // In test environment NODE_ENV is "test", so dev branch fires.
     expect(url).toContain('/login?tenant=acme');
+  });
+});
+
+describe('generateAgentToken (F.148)', () => {
+  it('is 43 base64url characters — 32 bytes, no padding', () => {
+    const t = generateAgentToken();
+    expect(t).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // NO `+`, `/` or `=`: this value is pasted into a config file on someone
+    // else's VPS and read back by a shell and a config parser. base64url is
+    // chosen so neither can mangle it.
+    expect(t).not.toMatch(/[+/=]/);
+  });
+
+  it('does not repeat', () => {
+    const seen = new Set(Array.from({ length: 200 }, () => generateAgentToken()));
+    expect(seen.size).toBe(200);
+  });
+
+  it('is longer than the inbound email token, and the asymmetry is deliberate', () => {
+    // The inbound token is a routing label that appears in an address a human
+    // types, so it trades entropy for typeability. This one is never typed and
+    // never shown twice, so there is nothing to trade.
+    expect(generateAgentToken().length).toBeGreaterThan(generateInboundToken().length);
   });
 });

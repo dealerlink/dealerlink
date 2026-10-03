@@ -1,5 +1,13 @@
-import { adminDb, inboundTokenHistory, tenantSettings, tenants, users } from '@dealerlink/db';
+import {
+  adminDb,
+  agentTokens,
+  inboundTokenHistory,
+  tenantSettings,
+  tenants,
+  users,
+} from '@dealerlink/db';
 import { count, desc, eq, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { ArrowLeft, Eye, Users2 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -54,6 +62,30 @@ export default async function TenantDetailPage({ params, searchParams }: PagePro
     .orderBy(desc(inboundTokenHistory.retiredAt))
     .limit(5);
 
+  // F.148 — the Tally agent tokens. ALL of them, revoked included: a revoked
+  // token absent from this screen is indistinguishable from one never issued,
+  // which puts the screen and `audit_log` in disagreement with no way to
+  // settle it. Ordered newest first; filtering is a view concern if it grows.
+  const issuer = alias(users, 'issuer');
+  const revoker = alias(users, 'revoker');
+  const agentTokenRows = await adminDb
+    .select({
+      id: agentTokens.id,
+      label: agentTokens.label,
+      scope: agentTokens.scope,
+      issuedAt: agentTokens.issuedAt,
+      issuedByEmail: issuer.email,
+      revokedAt: agentTokens.revokedAt,
+      revokedByEmail: revoker.email,
+      lastSeenAt: agentTokens.lastSeenAt,
+      agentVersion: agentTokens.agentVersion,
+    })
+    .from(agentTokens)
+    .leftJoin(issuer, eq(issuer.id, agentTokens.issuedBy))
+    .leftJoin(revoker, eq(revoker.id, agentTokens.revokedBy))
+    .where(eq(agentTokens.tenantId, tenant.id))
+    .orderBy(desc(agentTokens.issuedAt));
+
   // The welcome email is enqueued to pg-boss at provisioning time (R.13 —
   // async via the workers process); no inline dispatch needed here.
 
@@ -97,6 +129,12 @@ export default async function TenantDetailPage({ params, searchParams }: PagePro
       {searchParams.provisioned === '1' ? <ProvisionedBanner tenantId={tenant.id} /> : null}
 
       <TenantDetailSections
+        agentTokens={agentTokenRows.map((t) => ({
+          ...t,
+          issuedAt: t.issuedAt.toISOString(),
+          revokedAt: t.revokedAt ? t.revokedAt.toISOString() : null,
+          lastSeenAt: t.lastSeenAt ? t.lastSeenAt.toISOString() : null,
+        }))}
         tenant={{
           id: tenant.id,
           slug: tenant.slug,

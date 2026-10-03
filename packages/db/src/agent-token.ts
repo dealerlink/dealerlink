@@ -2,6 +2,16 @@ import { createHash } from 'node:crypto';
 
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
+// Re-exported so existing importers of this module keep working, and so the
+// SQL below and the UI read the same numbers from the same place. The values
+// live in a module with NO imports — see that file for why.
+export {
+  HEARTBEAT_THROTTLE,
+  HEARTBEAT_THROTTLE_MINUTES,
+  STALE_AFTER_MINUTES,
+} from './agent-token-constants';
+
+import { HEARTBEAT_THROTTLE } from './agent-token-constants';
 import { adminDb } from './client';
 import { agentTokens } from './schema/agent-token';
 import type { DrizzleTx } from './with-tenant';
@@ -129,7 +139,6 @@ export async function resolveAgentToken(
  * `updated_at` is deliberately untouched — it describes operator changes to the
  * credential, and an agent would make it meaningless.
  */
-export const HEARTBEAT_THROTTLE = '15 minutes';
 
 export async function touchAgentToken(
   tx: DrizzleTx,

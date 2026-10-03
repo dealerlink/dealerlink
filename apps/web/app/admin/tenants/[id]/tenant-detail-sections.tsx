@@ -20,6 +20,8 @@ import {
 import { useRouter } from 'next/navigation';
 
 import { regenerateInboundToken } from '@/lib/actions/admin/inbound-token';
+
+import { AgentTokensSection, type AgentTokenView } from './agent-tokens-section';
 import {
   updateTenantAddress,
   updateTenantBank,
@@ -71,9 +73,10 @@ interface Props {
   tenant: TenantSummary;
   settings: TenantSettingsView | null;
   tokenHistory: TokenHistory;
+  agentTokens: AgentTokenView[];
 }
 
-export function TenantDetailSections({ tenant, settings, tokenHistory }: Props) {
+export function TenantDetailSections({ tenant, settings, tokenHistory, agentTokens }: Props) {
   const router = useRouter();
   const refresh = () => router.refresh();
 
@@ -95,6 +98,7 @@ export function TenantDetailSections({ tenant, settings, tokenHistory }: Props) 
       <BrandingSection tenant={tenant} settings={settings} onSaved={refresh} />
       <DocPrefixesSection tenant={tenant} settings={settings} onSaved={refresh} />
       <DefaultsSection tenant={tenant} settings={settings} onSaved={refresh} />
+      <AgentTokensSection tenantId={tenant.id} tokens={agentTokens} onChanged={refresh} />
       <InboundTokenSection
         tenant={tenant}
         settings={settings}

@@ -58,6 +58,11 @@ export default async function TenantsListPage() {
           rows.map((t) => (
             <div
               key={t.id}
+              /* Test seam. A spec that locates this row by element type or by
+                 Tailwind class is coupled to styling; one that locates it by
+                 display text is coupled to copy. The slug is the stable
+                 identifier and it is what the seed writes. */
+              data-testid={`tenant-row-${t.slug}`}
               className="border-line grid grid-cols-[1.6fr_1fr_0.6fr_0.6fr] items-center border-t px-4 py-3 text-[13px]"
             >
               <div>
