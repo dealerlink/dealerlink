@@ -77,6 +77,54 @@ const sh = (cmd, args) =>
     maxBuffer: 64 * 1024 * 1024,
   });
 
+/**
+ * REFRESH `origin/main` BEFORE ANYTHING IS COMPARED AGAINST IT — F.180.
+ *
+ * ## THE FAILURE THAT WOULD HAVE SHIPPED IS THE QUIET ONE
+ *
+ * `origin/main` is a REMOTE-TRACKING REF. It is local data, and it only moves
+ * when something fetches. This script never fetched, so it compared the live
+ * deployed SHA against whatever the last `git fetch` or `git pull` happened to
+ * leave behind.
+ *
+ * **A stale ref that happens to MATCH the deployed SHA produces a clean report
+ * for the wrong reason — and nothing distinguishes it from a real pass.** That is
+ * the ordinary case: the ref is stale, nothing has merged since it was last
+ * fetched, so the deployed SHA equals the stale tip and every line reads `✓`. The
+ * script says the deploys carry the latest merge while being structurally unable
+ * to know whether a newer merge exists. For a tool whose ONLY job is
+ * correspondence (F.173), that is the defect that matters.
+ *
+ * The loud half — a FALSE MISMATCH, warning that production runs the wrong SHA
+ * when it does not — is how the bug was found (measured 2026-10-03: it claimed
+ * production ran `c1748fe` where `153c0ad` was expected; `c1748fe` WAS the
+ * merge). A false alarm gets investigated in five minutes. A false pass gets
+ * believed.
+ *
+ * So the ref is fetched here, the before/after SHAs are PRINTED whether or not it
+ * moved, and a fetch that fails does NOT fall back to the stale ref silently: the
+ * report is marked UNVERIFIED and exits non-zero. "Cannot verify" and "verified
+ * correct" must not look alike.
+ */
+function refreshOriginMain() {
+  const read = () => {
+    try {
+      return sh('git', ['rev-parse', 'refs/remotes/origin/main']).trim();
+    } catch {
+      return null;
+    }
+  };
+  const before = read();
+  try {
+    // Updates the remote-tracking ref only. No working tree, no local branch.
+    sh('git', ['fetch', 'origin', 'main', '--quiet']);
+  } catch (err) {
+    return { ok: false, before, after: before, reason: String(err).split('\n')[0].slice(0, 90) };
+  }
+  const after = read();
+  return { ok: true, before, after, moved: before !== after };
+}
+
 /** The latest MERGE commit on main — the thing a deploy is supposed to carry. */
 function latestMergeOnMain() {
   const line = sh('git', [
@@ -199,11 +247,32 @@ const mark = (state) => (state === true ? '✓' : state === false ? '✗' : PEND
 const IN_FLIGHT = new Set(['BUILDING', 'DEPLOYING', 'PENDING_BUILD', 'PENDING_DEPLOY']);
 
 async function main() {
+  // F.180 — fetch BEFORE reading, and never compare against an unverified ref.
+  const ref = refreshOriginMain();
   const merge = latestMergeOnMain();
   const journal = journalLength();
   let problems = 0;
   let inflight = 0;
 
+  console.log('');
+  if (ref.ok) {
+    const where = ref.after ? ref.after.slice(0, 7) : '?';
+    console.log(
+      `REF  origin/main ${where} — fetched just now${
+        ref.moved
+          ? `, MOVED from ${ref.before ? ref.before.slice(0, 7) : 'nothing'}`
+          : ', unchanged'
+      }`,
+    );
+  } else {
+    console.log(`REF  ⚠ COULD NOT FETCH origin/main — ${ref.reason}`);
+    console.log('     Everything below is compared against a ref that may be BEHIND');
+    console.log('     the real tip. A stale ref that happens to MATCH the deployed SHA');
+    console.log('     reports a clean pass for the wrong reason, and nothing here can');
+    console.log('     tell that apart from a real one.');
+    console.log('     TREAT THIS REPORT AS UNVERIFIED, NOT AS GREEN.');
+    problems++;
+  }
   console.log('');
   if (!merge) {
     console.log('No merge commit found on origin/main.');
@@ -321,6 +390,13 @@ async function main() {
   }
   console.log('');
 
+  if (!ref.ok) {
+    console.log(
+      `UNVERIFIED — origin/main could not be fetched, so the correspondence above ` +
+        `is not evidence.${problems > 1 ? ` ${problems - 1} other problem(s) reported.` : ''}`,
+    );
+    process.exit(1);
+  }
   if (problems > 0) {
     console.log(`${problems} problem(s) above.`);
   } else if (inflight > 0) {
