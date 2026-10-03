@@ -23,7 +23,7 @@
     "verify:latest": "pnpm --filter web exec playwright test --project=chromium --grep verify-day-8",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .prettierignore",
-    "test": "pnpm -r test && pnpm test:scripts",
+    "test": "pnpm -r test && pnpm test:scripts && pnpm check:floors",
     "test:e2e": "pnpm --filter web test:e2e",
     "db:generate": "pnpm --filter @dealerlink/db db:generate",
     "db:migrate": "pnpm --filter @dealerlink/db db:migrate",
@@ -32,12 +32,13 @@
     "db:studio": "pnpm --filter @dealerlink/db db:studio",
     "prepare": "husky",
     "playwright:install": "pnpm --filter web exec playwright install chromium",
-    "test:scripts": "vitest run --config scripts/vitest.config.ts",
+    "test:scripts": "vitest run --config scripts/vitest.config.ts --reporter=default --reporter=json --outputFile.json=.vitest-report.json",
     "typst:install": "node scripts/install-typst.mjs",
     "typst:check": "node scripts/install-typst.mjs --check",
     "check:ids": "node scripts/check-id-references.mjs",
     "check:paths": "node scripts/check-path-references.mjs",
-    "merge-status": "node scripts/merge-status.mjs"
+    "merge-status": "node scripts/merge-status.mjs",
+    "check:floors": "node scripts/check-suite-floors.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

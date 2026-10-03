@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --reporter=default --reporter=json --outputFile.json=.vitest-report.json",
     "test:e2e": "playwright test"
   },
   "dependencies": {
